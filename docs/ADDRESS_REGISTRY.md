@@ -2,6 +2,21 @@
 
 Only confirmed or explicitly provisional build-specific locations belong here. Prefer a signature plus validation recipe over an RVA alone.
 
+### View-rotation static additions — 2026-10-11
+
+No R-number: static only, nothing called live yet. Supported Steam hash;
+`tools/re/verify_view_rotation.py`: 11 exact-byte/vtable checks. Purpose and design
+in [the body-yaw investigation](BODY-YAW-2026-10-11.md).
+
+| RVA / field | Purpose and constraint |
+| --- | --- |
+| ArkPlayer primary vtable `0x1E56B30` | Stored at `+0` by the constructor (`0x157A43C`). RTTI is stripped; the slot pair below matches the IActor `SetViewRotation`/`GetViewRotation` shape, which is a name by shape, not by symbol. |
+| slot 52 `+0x1A0` -> `0x1584CC0` | View-rotation setter, `this` = ArkPlayer, `RDX` = `const Quat*`. Copies q to `+0x13F0`, calls entity (`+0x38`) virtual `+0x118` with `(q, 0)`, tail-calls `0x1327050` on the component at `+0x1468`. |
+| slot 53 `+0x1A8` -> `0x157CE80` | Getter: returns the `+0x13F0` quaternion through the hidden return pointer. |
+| ArkPlayer `+0x13F0` (= ArkPlayerCamera `+0x150`) | World view rotation, Quat x y z w; saved as `"rotation"` (`0x157C490`); read by `UpdateView` at `0x148B927`. Third-party EGS headers name it `ArkPlayerCamera::m_rotation`. |
+| component `+0x1468`, copy at `+0x08` | Holds its own copy of the rotation (`0x1327050`); `0x1327070` is its per-frame update. **Writing `+0x13F0` alone leaves this copy stale; use the setter.** |
+| `0x1580AE4` | Entity rotation event copies entity `GetRotation` (virtual `+0x120`) back into `+0x13F0`. |
+
 ### H-018 static additions — 2026-09-06
 
 No R-number allocation while the other agent owns live testing. Supported Steam

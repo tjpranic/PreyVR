@@ -230,7 +230,8 @@ dead zone and relaxation, but only for the arm solver, never applied to the body
 Fix candidates: drive the player entity's yaw toward that torso yaw and subtract
 the same rotation from the head-tracking reference so the view does not jump (aim,
 head-relative movement and IK all read the body frame, so check each), or hide
-the body mesh in VR.
+the body mesh in VR. Investigated, with a native seam and a design, in
+[BODY-YAW-2026-10-11.md](BODY-YAW-2026-10-11.md).
 
 ### Smaller items
 
