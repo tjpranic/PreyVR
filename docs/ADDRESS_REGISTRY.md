@@ -5,7 +5,7 @@ Only confirmed or explicitly provisional build-specific locations belong here. P
 ### View-rotation static additions — 2026-10-11
 
 No R-number: static only, nothing called live yet. Supported Steam hash;
-`tools/re/verify_view_rotation.py`: 14 exact-byte/vtable checks. Purpose and design
+`tools/re/verify_view_rotation.py`: 27 exact-byte/vtable checks. Purpose and design
 in [the body-yaw investigation](BODY-YAW-2026-10-11.md); `src/dll/BodyFollow.cpp`
 compares the same bytes in memory before its first call.
 
@@ -18,6 +18,8 @@ compares the same bytes in memory before its first call.
 | ArkPlayer `+0x13F0` (= ArkPlayerCamera `+0x150`) | World view rotation, Quat x y z w; saved as `"rotation"` (`0x157C490`); read by `UpdateView` at `0x148B927`. Third-party EGS headers name it `ArkPlayerCamera::m_rotation`. |
 | component `+0x1468`, copy at `+0x08` | Holds its own copy of the rotation (`0x1327050`); `0x1327070` is its per-frame update. **Writing `+0x13F0` alone leaves this copy stale; use the setter.** |
 | `0x1580AE4` | Entity rotation event copies entity `GetRotation` (virtual `+0x120`) back into `+0x13F0`. |
+| Concrete `CEntity` vtable `0x1D30BD0` | The one holding the hash-gated `GetPhysics` `0x9042B0` at `+0x228`. `+0xE8` GetWorldTM `0x10EA260` (matrix at `+0x60`); `+0x108` SetPos `0x90AF40`; `+0x110` GetPos `0x10EA250` (`m_vPos` at `+0x38`); `+0x118` SetRotation `0x90B220`; `+0x120` GetRotation `0x9043A0` (`+0x44`). |
+| `0x90AF40` SetPos(pos, whyFlags, recalcPhys, force) | Returns if unchanged; else stores `m_vPos`, `flags \|= 2`, tail-calls the transform update `+0x350`. The player's stance change (`0x157B980`) uses it after a `RayWorldIntersection(Game)`. Room-scale seam, [ROOMSCALE-2026-10-11.md](ROOMSCALE-2026-10-11.md). |
 
 ### H-018 static additions — 2026-09-06
 

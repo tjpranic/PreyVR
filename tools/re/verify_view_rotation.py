@@ -1,4 +1,4 @@
-"""Verify Steam ArkPlayer view-rotation contracts offline; never opens a process.
+"""Verify Steam ArkPlayer view-rotation and entity-transform contracts offline; never opens a process.
 
 Usage: py -3 tools/re/verify_view_rotation.py [out.json]
 PREYVR_PREYDLL overrides the module path (a fork's machine may not use DEFAULT_MODULE).
@@ -58,6 +58,28 @@ def verify():
  proof('save game serialises +0x13F0 as "rotation"',0x157c490,'4d8d86f01300004533c9488d153f1c7400488b01ff90c8000000')
  proof('"rotation" name string',0x1cbe0e0,'726f746174696f6e00')
  proof('UpdateView reads the camera +0x150 quaternion',0x148b927,'4881c750010000')
+ # The concrete CEntity transform (docs/ROOMSCALE-2026-10-11.md). Its vtable is the
+ # one holding the hash-gated GetPhysics (SceneQueryNative.h) at +0x228.
+ ENTITY=0x1d30bd0
+ slot('CEntity +0x228 is the hash-gated GetPhysics 0x9042B0',ENTITY,0x228//8,0x9042b0)
+ slot('CEntity +0xE8 is GetWorldTM 0x10EA260',ENTITY,0xe8//8,0x10ea260)
+ slot('CEntity +0x108 is SetPos 0x90AF40',ENTITY,0x108//8,0x90af40)
+ slot('CEntity +0x110 is GetPos 0x10EA250',ENTITY,0x110//8,0x10ea250)
+ slot('CEntity +0x118 is SetRotation 0x90B220',ENTITY,0x118//8,0x90b220)
+ slot('CEntity +0x120 is GetRotation 0x9043A0',ENTITY,0x120//8,0x9043a0)
+ proof('GetPos returns &m_vPos (+0x38)',0x10ea250,'488d4138c3')
+ proof('GetWorldTM returns the matrix at +0x60',0x10ea260,'488d4160c3')
+ proof('GetRotation returns &m_qRotation (+0x44)',0x9043a0,'488d4144c3')
+ proof('SetPos: unchanged returns; else m_vPos, flags|=2 (POS), transform update +0x350',0x90af40,
+  'f30f1002458bd00f2e41387516f30f1042040f2e413c750bf30f1042080f2e41407424f20f10024183ca02f20f114138'
+  '450fb6c18b4208418bd2894140488b0148ffa050030000c3')
+ proof('SetRotation: m_qRotation, flags|=4 (ROT), transform update +0x350',0x90b220,
+  'f30f100a458bc80f2e49447521f30f1042040f2e41487516f30f1042080f2e414c750bf30f10420c0f2e4150742bf30f1149'
+  '444183c9048b42044533c08941488b420889414c8b420c418bd1894150488b0148ffa050030000c3')
+ # The game's own use: the stance change moves the player entity by SetPos(pos,0,0,0)
+ # after a RayWorldIntersection(Game) against the ceiling.
+ proof('stance change takes the player entity (+0x38)',0x157b9dc,'4c8b7138')
+ proof('stance change calls entity SetPos (+0x108)',0x157bacd,'ff9008010000')
  return dict(target=str(MODULE),sha256=digest,checks=checks,
   evidence='static byte contracts; no in-game or headset acceptance',game_launched=False)
 if __name__=='__main__':
