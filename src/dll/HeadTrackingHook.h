@@ -1,6 +1,8 @@
 #pragma once
 
 #include "preyvr/VrMath.h"
+#include <functional>
+#include <optional>
 #include <string>
 
 #include <windows.h>
@@ -162,6 +164,27 @@ DWORD SetHeadTrackingEnabled(unsigned int enabled);
 // player somewhere arbitrary. A refusal leaves the previous reference in place.
 DWORD RecenterHeadTracking(bool recalibrateHeight = false);
 DWORD SnapTurnHeadTracking(int steps, unsigned degrees);
+
+// Turns the reference yaw with a native turn of the player (BodyFollow), so the
+// play space P = G - R does not move. `turnNative` runs under the recenter lock,
+// is given the reference yaw, and returns the angle it actually turned the
+// native player by -- nothing if it did not turn it.
+//
+// **No generation bump**, unlike a snap or a recenter. The generation announces
+// a change of P, and some 25 consumers reset on it (IK calibration, the two-hand
+// hold, gestures, panel fits); this changes R and G together and never P.
+// 0 turned, 1 no reference, 2 busy (lock or a reference change in flight),
+// 3 the native turn was refused.
+int TurnHeadTrackingReferenceWithNative(const std::function<std::optional<float>(float referenceYaw)>& turnNative);
+
+// Bumped by recenter, runtime rebase and reset: the events that redefine which
+// way the tracking space faces, after which a torso estimate is stale. Not by a
+// snap turn, which turns the world and leaves the player's torso where it was.
+unsigned long long HeadTrackingRecenterEpoch();
+
+// View frames that reused the last reference because its publisher held the
+// lock. Non-zero is fine; the alternative is a frame without head tracking.
+unsigned long long HeadTrackingRoomReadFallbacks();
 void ResetHeadTrackingReference();
 bool RebaseHeadTrackingSpace(const Pose& previousFromNew, bool valid);
 std::string HeadHeightReport();

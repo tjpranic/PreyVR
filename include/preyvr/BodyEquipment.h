@@ -12,13 +12,16 @@ inline constexpr std::array<Vec3,2> Zones{{{.25f,-.65f,.02f},{-.20f,-.30f,-.13f}
 class HolsterGesture {
 public:
  explicit HolsterGesture(std::array<Vec3,2> zones=Zones):zones_(zones){}
- int Update(Pose head,Vec3 hand,bool squeeze,bool valid,float dt) {
+ // `torso`: the shared torso yaw the visible body faces (BodyFollow), in this
+ // frame's yaw convention; null keeps the gesture's own head-following estimate.
+ int Update(Pose head,Vec3 hand,bool squeeze,bool valid,float dt,const float* torso=nullptr) {
   if(!valid||!std::isfinite(dt)||dt<=0||dt>.2f){Reset();return -1;}
   auto forward=Rotate(head.orientation,{0,0,-1});
   const float length=std::hypot(forward.x,forward.z);
   if(length<.2f){Reset();return -1;}
   const float yaw=std::atan2(-forward.x,-forward.z);
-  if(!bodyValid_){bodyYaw_=yaw;bodyValid_=true;}
+  const bool shared=torso!=nullptr&&std::isfinite(*torso);
+  if(!bodyValid_){bodyYaw_=shared?*torso:yaw;bodyValid_=true;}
   const auto local=[&](){return Rotate(Quaternion{0,-std::sin(bodyYaw_/2),0,std::cos(bodyYaw_/2)},
       Vec3{hand.x-head.position.x,hand.y-head.position.y,hand.z-head.position.z});};
   auto distance=[](Vec3 a,Vec3 b){return std::sqrt((a.x-b.x)*(a.x-b.x)+(a.y-b.y)*(a.y-b.y)+(a.z-b.z)*(a.z-b.z));};
@@ -27,8 +30,12 @@ public:
   // A head turn alone cannot drag an already-reached holster under the hand.
   // Outside both zones follow only beyond a 45-degree head/body deadband.
   if(!squeeze&&zone<0){
-   const float delta=std::remainder(yaw-bodyYaw_,6.283185307f);
-   if(std::fabs(delta)>.78539816f)bodyYaw_+=std::copysign(std::min(std::fabs(delta)-.78539816f,dt*1.57f),delta);
+   // The slots sit on the body the player sees when it is turned to the torso.
+   if(shared)bodyYaw_=*torso;
+   else{
+    const float delta=std::remainder(yaw-bodyYaw_,6.283185307f);
+    if(std::fabs(delta)>.78539816f)bodyYaw_+=std::copysign(std::min(std::fabs(delta)-.78539816f,dt*1.57f),delta);
+   }
   }
   if(!squeeze){armed_=true;owned_=false;return -1;}
   if(!armed_)return -1;

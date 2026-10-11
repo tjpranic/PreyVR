@@ -1,4 +1,5 @@
 #include "VrMode.h"
+#include "BodyFollow.h"
 #include "VrOptionsRuntime.h"
 #include "Logger.h"
 #include "XrSessionHost.h"
@@ -60,6 +61,7 @@ void StopFeatures() {
     SetAnimIkControllerDrive(0); SetAnimIkMode(0);
     SetMenuNavigation(0); SetMoveLaneMode(0);
     SetTurnLaneEnabled(0); SetFireLaneEnabled(0); SetInteractionEnabled(0);
+    SetBodyFollowActive(0);
     // Leave the input drain alive to deliver the owned releases on the next frame.
     StopXrSession();
 }
@@ -207,6 +209,10 @@ void TickVrMode() {
         // motion (GrenadeLane.h). Not fatal: without the hooks the game's own
         // charged throw along the view stays.
         if(SetGrenadeHand(1)!=0) Log("grenade_hand=native reason=hooks_unavailable");
+        // The body turns with the player (BodyFollow.h; the VR options switch
+        // it off). Not fatal: without the hook the body keeps the native yaw,
+        // as before.
+        if(SetBodyFollowActive(1)!=0) Log("body_follow=unavailable body=native_yaw");
         // The arms stay at the controllers with no weapon drawn: holstered (the
         // right grip held) or carrying (AnimIkTakeover arms.free; arms.free 0 =
         // the game lowers them out of view, as before).
@@ -231,7 +237,8 @@ void TickVrMode() {
         if(GetTickCount64()>=nextStatusReport) {
             nextStatusReport=GetTickCount64()+kStatusReportMs;
             // The same text dual.report and hud.layer answer with.
-            Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+" }");
+            Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
+                " } body={"+BodyFollowReport()+" }");
         }
         const auto owner=AnimIkOwnerGeneration();
         const auto reference=HeadTrackingReferenceGeneration();

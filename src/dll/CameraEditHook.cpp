@@ -8,6 +8,7 @@
 #include "UiPointer.h"
 #include "AimTakeover.h"
 #include "MoveLane.h"
+#include "BodyFollow.h"
 
 #include "HeadTrackingHook.h"
 
@@ -1020,6 +1021,7 @@ void __fastcall RenderWithCameraEdit(void* system)
     // case menu navigation needs. Deliberately ahead of the armed check below:
     // driving a menu must not require stereo or head tracking to be enabled
     // first, and the early return would otherwise skip it.
+    NoteBodyFollowRender();
     DrainQueuedInput();
     DrainQueuedHudCalls();
     DrainUiPointer();

@@ -178,11 +178,12 @@ bool GrabPointLocal(const float worldTm[12], const Box& local, Vec3 rayOrigin, V
 // centre 0.38 m from the hand; a placement "ahead of the hand by its half
 // length" drove it into the wall and the grabber dropped it as stuck) -- moved
 // by where the hand has gone since the grab: the hand's offset from the head
-// now, minus that offset at the grab turned with the play space. One hand
+// now, minus that offset at the grab turned with the body -- the frame the
+// game's own target turns in. One hand
 // steers it around and up and down; letting the hand rest leaves it native.
 struct HeavyGrab {
     Vec3 handOffset{};   // hand - head at the grab, world
-    float yaw = 0;       // the play space's yaw then
+    float yaw = 0;       // the yaw the body faced in the world then
 };
 Vec3 HeavyShift(Vec3 hand, Vec3 head, float yaw, const HeavyGrab& grab, const HoldSettings& settings = {});
 

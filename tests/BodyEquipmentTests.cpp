@@ -26,6 +26,22 @@ int main(){
  // A small glance changes head yaw but does not move the reached hip zone.
  head.orientation={0,std::sin(.3f),0,std::cos(.3f)};
  Check(tick(hip,true)==0,"head glance does not drag reached zone");
+ // The shared torso (BodyFollow): the slots sit on the body the player sees,
+ // whatever the head is doing, and still never move under a reaching hand.
+ {
+  head.orientation={0,0,0,1};g.Reset();
+  const float left=1.5707963f;
+  const auto torsoHip=[&](float yaw){auto v=Rotate(Quaternion{0,std::sin(yaw/2),0,std::cos(yaw/2)},Zones[0]);
+   return Vec3{v.x+head.position.x,v.y+head.position.y,v.z+head.position.z};};
+  g.Update(head,{0,1.5f,-.7f},false,true,.01f,&left);
+  g.Update(head,torsoHip(left),false,true,.01f,&left);
+  Check(g.Update(head,torsoHip(left),true,true,.01f,&left)==0,"slots follow the shared torso, not the head");
+  g.Reset();const float ahead=0,turned=.5f;
+  g.Update(head,hip,false,true,.01f,&ahead);
+  Check(g.Update(head,hip,true,true,.01f,&turned)==0,"a reached slot is not dragged by the torso");
+  const float none=NAN;g.Reset();g.Update(head,hip,false,true,.01f,&none);
+  Check(g.Update(head,hip,true,true,.01f,&none)==0,"a non-finite torso falls back to the head estimate");
+ }
  Check(DisplayValue(753.f,.1f)==76&&DisplayValue(0)==0,"HUD rounding and real zero preserved");
  Check(DisplayValue(NAN)==-1&&DisplayValue(-1)==-1,"unknown value distinct from zero");
  Pose eye{},card{};card.position={0,0,-.5f};

@@ -2,8 +2,10 @@
 #include "HeadTrackingHook.h"
 #include "XrInput.h"
 #include "MinHookInit.h"
+#include "BodyFollow.h"
 
 #include "Logger.h"
+#include "preyvr/BodyFollow.h"
 #include "preyvr/CameraEdit.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/StereoCamera.h"
@@ -104,6 +106,8 @@ struct RoomReference { float yaw = 0; Vec3 origin{}; };
 LatestSnapshot<RoomReference> gRoomReference;
 std::mutex gRecenterMutex;
 std::atomic<unsigned long long> gReferenceGeneration{0};
+std::atomic<unsigned long long> gRecenterEpoch{0};
+std::atomic<unsigned long long> gRoomReadFallbacks{0};
 
 std::int64_t QpcNow()
 {
@@ -420,9 +424,24 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     std::memcpy(&gameRotation, viewParams + kViewRotation, sizeof(gameRotation));
     const stereo::Matrix34 gameMatrix =
         stereo::MatrixFromPose(Pose{gameRotation, Vec3{}});
+    // The body follower publishes the reference every frame it turns the body
+    // (BodyFollow.h). A read refused for contention reuses this thread's last
+    // reference of the same generation -- at most one follower step stale --
+    // rather than drop to the untracked view for a frame.
+    thread_local RoomReference lastRoom{};
+    thread_local unsigned long long lastRoomReference = ~0ull;
     RoomReference room{};
-    if (!gRoomReference.TryRead(room)) { return; }
+    if (gRoomReference.TryRead(room)) {
+        lastRoom = room;
+        lastRoomReference = renderReference;
+    } else if (renderReference % 2 == 0 && lastRoomReference == renderReference) {
+        room = lastRoom;
+        gRoomReadFallbacks.fetch_add(1, std::memory_order_relaxed);
+    } else {
+        return;
+    }
     const float playSpaceYaw = stereo::CameraYawOf(gameMatrix) - room.yaw;
+    NoteBodyFollowView(playSpaceYaw, renderReference);
 
     // **Position is gated separately from rotation on purpose.** They fail in
     // completely different ways -- a wrong rotation reads as the world spinning,
@@ -665,6 +684,7 @@ DWORD RecenterHeadTracking(bool recalibrateHeight)
     gRoomReference.Publish(RoomReference{*yaw, origin});
     gReferenceYaw.store(*yaw, std::memory_order_release);
     gHaveReference.store(true, std::memory_order_release);
+    gRecenterEpoch.fetch_add(1);
     gReferenceGeneration.fetch_add(1);
     std::ostringstream line;
     line << "result=0 detail=recentered yawRadians=" << *yaw
@@ -695,7 +715,7 @@ DWORD SnapTurnHeadTracking(int steps,unsigned degrees) {
 }
 void ResetHeadTrackingReference() {
     std::lock_guard lock(gRecenterMutex);
-    gReferenceGeneration.fetch_add(1);gHaveReference=false;
+    gReferenceGeneration.fetch_add(1);gHaveReference=false;gRecenterEpoch.fetch_add(1);
     gPoseSlot.Clear();gHeadSpaceEpoch.fetch_add(1);gReferenceGeneration.fetch_add(1);
 }
 bool RebaseHeadTrackingSpace(const Pose& previousFromNew,bool valid) {
@@ -711,9 +731,26 @@ bool RebaseHeadTrackingSpace(const Pose& previousFromNew,bool valid) {
     // Clear old-space controller snapshots before publishing the even generation.
     // A concurrent recenter must not combine new reference + previous-space head.
     InvalidateTrackingSamples();
+    gRecenterEpoch.fetch_add(1);
     gPoseSlot.Clear();gHeadSpaceEpoch.fetch_add(1);gReferenceGeneration.fetch_add(1);
     return true;
 }
+int TurnHeadTrackingReferenceWithNative(const std::function<std::optional<float>(float referenceYaw)>& turnNative) {
+    const auto sampledReference=gReferenceGeneration.load();
+    if(!gHaveReference.load(std::memory_order_acquire)) return 1;
+    std::unique_lock lock(gRecenterMutex,std::try_to_lock);
+    RoomReference room{};
+    if(!lock.owns_lock() || sampledReference%2 || sampledReference!=gReferenceGeneration.load() ||
+       !gRoomReference.TryRead(room)) return 2;
+    const auto turned=turnNative(room.yaw);
+    if(!turned) return 3;
+    // R and G move together, so P = G - R stays where it was: no generation bump.
+    room.yaw=bodyfollow::Wrap(room.yaw+*turned);
+    gRoomReference.Publish(room);gReferenceYaw.store(room.yaw,std::memory_order_release);
+    return 0;
+}
+unsigned long long HeadTrackingRecenterEpoch() { return gRecenterEpoch.load(); }
+unsigned long long HeadTrackingRoomReadFallbacks() { return gRoomReadFallbacks.load(std::memory_order_relaxed); }
 std::string HeadHeightReport() {
     RoomReference room{};TrackingFrame frame{};
     std::ostringstream out;out<<"space="<<XrTrackingSpaceName()<<" calibrated="<<gHaveReference.load();

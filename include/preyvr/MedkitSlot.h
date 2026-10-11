@@ -4,9 +4,9 @@ namespace preyvr::equipment {
 // Same torso estimate as holsters, with one logical left-hip slot.
 class MedkitSlot {
 public:
- bool Update(Pose head,Vec3 hand,bool grip,bool trigger,bool valid,float dt){
+ bool Update(Pose head,Vec3 hand,bool grip,bool trigger,bool valid,float dt,const float* torso=nullptr){
     if(!valid){Reset();return false;}
-    const int zone=zone_.Update(head,hand,grip,valid,dt);
+    const int zone=zone_.Update(head,hand,grip,valid,dt,torso);
     if(zone>=0){selected_=true;triggerArmed_=!trigger;used_=false;}
     if(!grip||!zone_.OwnsGrip()){selected_=triggerArmed_=used_=false;return false;}
     if(!trigger&&!used_)triggerArmed_=true;

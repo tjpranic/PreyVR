@@ -75,6 +75,7 @@ add_library(preyvr_core STATIC
     src/common/AnimIk.cpp
     src/common/HandPose.cpp
     src/common/ArmPose.cpp
+    src/common/BodyFollow.cpp
     src/common/DebugDraw.cpp
     src/common/DebugOverlayScene.cpp
     src/common/ShotRay.cpp
@@ -158,6 +159,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/VrOptionsRuntime.cpp
         src/dll/Psychoscope.cpp
         src/dll/BodyEquipment.cpp
+        src/dll/BodyFollow.cpp
         src/dll/DebugOverlay.cpp
         src/dll/ShotRay.cpp
         src/dll/InteractionLane.cpp
@@ -405,6 +407,11 @@ if(PREYVR_BUILD_TESTS)
     target_link_libraries(preyvr_arm_pose_tests PRIVATE preyvr_core)
     preyvr_enable_warnings(preyvr_arm_pose_tests)
     add_test(NAME arm_pose COMMAND preyvr_arm_pose_tests)
+
+    add_executable(preyvr_body_follow_tests tests/BodyFollowTests.cpp)
+    target_link_libraries(preyvr_body_follow_tests PRIVATE preyvr_core)
+    preyvr_enable_warnings(preyvr_body_follow_tests)
+    add_test(NAME body_follow COMMAND preyvr_body_follow_tests)
 
     add_executable(preyvr_debug_draw_tests tests/DebugDrawTests.cpp)
     target_link_libraries(preyvr_debug_draw_tests PRIVATE preyvr_core)

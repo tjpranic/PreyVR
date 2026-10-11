@@ -292,7 +292,7 @@ bool GrabPointLocal(const float m[12], const Box& local, Vec3 origin, Vec3 direc
 Vec3 HeavyShift(Vec3 hand, Vec3 head, float yaw, const HeavyGrab& grab, const HoldSettings& s)
 {
     // Where the hand would be had it not moved: the grab's offset, turned with
-    // the play space (a snap turn swings it round with the player).
+    // the body, as the game's own target is.
     const Vec3 neutral = Rotate(YawRotation(yaw - grab.yaw), grab.handOffset);
     const Vec3 d = Sub(Sub(hand, head), neutral);
     Vec3 h = Horizontal(d);

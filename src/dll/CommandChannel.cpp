@@ -3,6 +3,7 @@
 #include "VrOptionsRuntime.h"
 #include "Psychoscope.h"
 #include "BodyEquipment.h"
+#include "BodyFollow.h"
 
 #include "AimTakeover.h"
 #include "AnimIkTakeover.h"
@@ -429,6 +430,23 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
             << HandPoseReport();
     } else if (verb == "arm.report") {
         out << "arm.report result=0" << ArmReport();
+    } else if (verb == "body.report") {
+        // docs/BODY-YAW-2026-10-11.md: the body turned to the torso.
+        out << "body.report result=0" << BodyFollowReport();
+    } else if (verb == "body.follow") {
+        out << "body.follow result=" << (args.size() > 1 ? SetBodyFollow(static_cast<unsigned>(arg(1, 1))) : 0)
+            << BodyFollowReport();
+    } else if (verb == "body.level") {
+        out << "body.level result=" << (args.size() > 1 ? SetBodyFollowLevel(static_cast<unsigned>(arg(1, 1))) : 0)
+            << BodyFollowReport();
+    } else if (verb == "body.torso") {
+        // body.torso <deadzoneDeg> <relax per mille per second>; arm.torso sets the same filter.
+        out << "body.torso result=" << (args.size() > 2 ? SetBodyTorso(arg(1, 35), arg(2, 600)) : 0)
+            << BodyFollowReport();
+    } else if (verb == "body.turn") {
+        // body.turn <degrees>: one native turn with the reference -- the body
+        // turns, the view must not.
+        out << "body.turn result=" << RequestBodyTurn(arg(1, 0)) << BodyFollowReport();
     } else if (verb.rfind("arm.", 0) == 0) {
         int values[4]{};
         unsigned count = 0;

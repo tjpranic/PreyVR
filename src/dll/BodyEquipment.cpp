@@ -1,5 +1,6 @@
 #include "BodyEquipment.h"
 #include "AimTakeover.h"
+#include "BodyFollow.h"
 #include "DebugOverlay.h"
 #include "HeadTrackingHook.h"
 #include "HudBridge.h"
@@ -126,7 +127,9 @@ void UpdateHolsterInput(const TrackingFrame& f,bool valid){
   FreshSample(MonotonicNanoseconds(),f.publishedNs)&&
   IsPoseUsable(f.head,f.headValidity,200000000)&&IsPoseUsable(r.gripPose,r.gripValidity,200000000)&&
   !TwoHandedAimHeld()&&l.squeezeValue<.45f&&!r.triggerPressed&&!r.menuAccept&&!r.menuCancel&&!r.weaponWheelPressed;
- const int slot=gesture.Update(f.head,r.gripPose.position,r.gripPressed,valid,dt);
+ // The slots sit on the body the player sees (BodyFollow's torso).
+ float torso=0;const bool shared=BodyTorsoYaw(torso);
+ const int slot=gesture.Update(f.head,r.gripPose.position,r.gripPressed,valid,dt,shared?&torso:nullptr);
  gripOwned=gesture.OwnsGrip();
  DebugOverlayHolsters(gesture.BodyValid(),{gesture.ZoneCentre(f.head.position,0),gesture.ZoneCentre(f.head.position,1)},
   r.gripPose.position,r.gripPressed,gesture.Armed(),gesture.OwnsGrip());

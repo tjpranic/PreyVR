@@ -2,6 +2,7 @@
 
 #include "AimTakeover.h"
 #include "Haptics.h"
+#include "HeadTrackingHook.h"
 #include "InteractionLane.h"
 #include "Logger.h"
 #include "MinHookInit.h"
@@ -476,7 +477,11 @@ struct HandNow {
     Vec3 forward{};       // the controller's pointing axis (grip -Z)
     Vec3 aimDirection{};  // the aim pose's ray
     Vec3 head{};          // camera centre
-    float yaw = 0;
+    // The yaw the body faces in the world: the play space plus the reference.
+    // The game's own carry target turns with it, so a heavy object's neutral
+    // offset must too -- with the body following the torso, a physical turn
+    // turns it, and a snap turn does (BodyFollow.h).
+    float bodyYaw = 0;
     std::uint64_t reference = 0;
 };
 HandNow LeftHandNow(const GameplayPoseFrame& f)
@@ -496,7 +501,7 @@ HandNow LeftHandNow(const GameplayPoseFrame& f)
         h.aimDirection = h.forward;
     }
     h.head = f.cameraCentre;
-    h.yaw = f.yaw;
+    h.bodyYaw = f.yaw + HeadTrackingReferenceYaw();
     h.reference = f.referenceGeneration;
     h.valid = true;
     return h;
@@ -557,7 +562,7 @@ void CaptureGrab(std::uintptr_t entity)
         const Quaternion object = carry::FromMatrix34(tm);
         g.handToObject = Normalize(Multiply(carry::Inverse(hand.grip.orientation), object));
         g.heavy.handOffset = Sub(hand.grip.position, hand.head);
-        g.heavy.yaw = hand.yaw;
+        g.heavy.yaw = hand.bodyYaw;
         // The point the left hand's ray met it at, if this carry is what it pointed at.
         UsePointer pointer{};
         if (TryGetUsePointer(pointer) && pointer.valid && pointer.entity == g.entity &&
@@ -731,7 +736,7 @@ float* __fastcall TargetHook(std::uintptr_t carry, float* out, std::uintptr_t en
     } else {
         // The game's own place for it, moved by the hand; eased in from zero
         // and smoothed a little on top of the grabber's lag: weight, not jitter.
-        const Vec3 shift = carry::HeavyShift(hand.grip.position, hand.head, hand.yaw, g.heavy, hold);
+        const Vec3 shift = carry::HeavyShift(hand.grip.position, hand.head, hand.bodyYaw, g.heavy, hold);
         const float blend = std::clamp(static_cast<float>(now - g.startNs) * 1e-9f / Get(gBlendSeconds), 0.0f, 1.0f);
         const float dt = g.lastTargetNs ? static_cast<float>(now - g.lastTargetNs) * 1e-9f : 0.0f;
         if (!g.follow.Primed()) { g.follow.Reset({}); }

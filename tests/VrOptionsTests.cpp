@@ -27,7 +27,10 @@ void MenuChecks(){
  i.y=0;m.Update(i);i.y=-1;m.Update(i);Check(m.row==2,"neutral rearm stick");
  i.y=0;i.x=1;auto change=m.Update(i);Check(change.setting==SupportSnap&&change.direction==1,"selected grip preference");
  i.x=0;i.trigger=true;i.hover=4;m.Update(i);Check(m.page==0,"ray tab click");
- i.trigger=false;m.Update(i);i.trigger=true;i.hover=3;Check(m.Update(i).recenter,"ray recenter action");
+ i.trigger=false;m.Update(i);i.trigger=true;i.hover=3;
+{const auto row3=m.Update(i);Check(row3.setting==BodyFollow&&!row3.recenter,"ray edits body following on the comfort page");}
+i.trigger=false;m.Update(i);i.trigger=true;i.hover=static_cast<int>(Rows)+7;m.Update(i);Check(m.page==7,"ray setup tab");
+i.trigger=false;m.Update(i);i.trigger=true;i.hover=1;Check(m.Update(i).recenter,"ray recenter action");
  i.trigger=false;i.cancel=true;m.Update(i);Check(!m.Open()&&m.OwnsInput(),"closing press remains quarantined");
  m.Update(i);Check(m.OwnsInput(),"held close never leaks");
  i.cancel=false;m.Update(i);Check(!m.OwnsInput(),"neutral gives input back");
@@ -81,6 +84,9 @@ void SettingsChecks(){
  Check(Item(7,2)==DebugOverlay&&Defaults()[DebugOverlay]==0,"debug overlay is an opt-in setup row");
  Check(Item(7,3)==MuzzleAim&&Defaults()[MuzzleAim]==0,"shots from the muzzle are an opt-in setup row");
  Check(Parse("version=1\nmuzzle_aim=1\n",parsed)&&parsed[MuzzleAim]==1&&!Valid(MuzzleAim,2),"muzzle aim persists as on/off");
+ Check(Item(0,3)==BodyFollow&&Defaults()[BodyFollow]==1,"body following is a comfort row, on by default");
+ Check(Parse("version=1\nbody_follow=0\n",parsed)&&parsed[BodyFollow]==0&&!Valid(BodyFollow,2),"body following persists as on/off");
+ Check(Parse("version=1\nturn=45\n",parsed)&&parsed[BodyFollow]==1,"settings saved before body following default it on");
  Check(Parse("version=1\ndebug_overlay=1\n",parsed)&&parsed[DebugOverlay]==1&&!Valid(DebugOverlay,2),"debug overlay persists as on/off");
 }
 void GestureChecks(){

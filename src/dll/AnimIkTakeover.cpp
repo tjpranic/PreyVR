@@ -4,6 +4,7 @@
 
 #include "HandRigTakeover.h"
 #include "AimTakeover.h"
+#include "BodyFollow.h"
 #include "WeaponAttachment.h"
 #include "CarryLane.h"
 #include "GrenadeLane.h"
@@ -747,7 +748,12 @@ void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& locatio
         const std::uint64_t now = preyvr::timing::MonotonicNanoseconds();
         const float dt = gTorsoNs != 0 ? static_cast<float>(now - gTorsoNs) * 1e-9f : 0.0f;
         gTorsoNs = now;
-        const float yaw = gTorsoYaw.Update(headYaw, dt, pose.torsoDeadzone, pose.torsoRelax);
+        // The torso the body is turned to (BodyFollow), so the shoulders sit on
+        // the body the player sees; this filter only while that lane is not
+        // running.
+        float yaw = 0.0f;
+        if (BodyTorsoYaw(yaw)) { gTorsoYaw.Reset(); }
+        else { yaw = gTorsoYaw.Update(headYaw, dt, pose.torsoDeadzone, pose.torsoRelax); }
         // Two hands on a long weapon: the shooter's bladed stance, left
         // shoulder forward (the torso turns right), so the drawn support arm
         // reaches the foregrip. Eased by the hold's own blend.
@@ -1732,6 +1738,7 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
         auto* const ch = static_cast<std::uint8_t*>(character);
         if (IdentifyRig(ch)) {
             gMatched.fetch_add(1, std::memory_order_relaxed);
+            NoteBodyFollowIk();
             gCalibration.Tick();   // settles an auto re-take past the equip animation
             int gate = 0;
             if (ReadInt(ch + kCharAnimPlaying, &gate)) {
@@ -2217,6 +2224,7 @@ DWORD SetArmSetting(const std::string& what, const int* v, unsigned n)
         p.wrist.holdSigmaDeg = static_cast<float>(v[0]); p.poleTau = v[1] / 1000.0f;
     } else if (what == "torso" && n >= 2 && v[0] >= 0 && v[0] <= 180 && v[1] >= 0 && v[1] <= 10000) {
         p.torsoDeadzone = v[0] * 3.14159265f / 180.0f; p.torsoRelax = v[1] / 1000.0f;
+        SetBodyTorso(v[0], v[1]);   // one torso: the body follows the same filter
     } else if (what == "knee" && n >= 1 && v[0] >= 500 && v[0] <= 1000) {
         p.armKnee = v[0] / 1000.0f;
     } else {

@@ -51,6 +51,7 @@ bool EnsureMinHook(){return false;}
 bool EnsureGameplayPoseObservation(){return true;}
 DWORD InputDrainThreadId(){return drainThread;}
 unsigned long long HeadTrackingReferenceGeneration(){return reference;}
+bool BodyTorsoYaw(float&){return false;}
 bool HudGameplayInputAllowed(){return !modal;}
 unsigned long long HudMenuEpoch(){return menuEpoch;}
 bool TryGetGameplayPoseFrame(GameplayPoseFrame& out,bool){out=published;return poseAvailable;}

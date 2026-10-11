@@ -1,5 +1,6 @@
 #include "PsiMedkit.h"
 #include "AimTakeover.h"
+#include "BodyFollow.h"
 #include "HeadTrackingHook.h"
 #include "HudBridge.h"
 #include "InputPost.h"
@@ -301,7 +302,9 @@ void UpdatePsiMedkit(const GameplayPoseFrame& frame,bool valid){
     const auto& left=f.hands[0];
     const bool slotAllowed=valid&&medkit.load()&&!left.menuAccept&&!left.menuCancel&&!f.hands[1].gripPressed;
     const bool wasOwned=slot.OwnsGrip();
-    const bool use=slot.Update(f.head,left.gripPose.position,left.gripPressed,left.triggerPressed,slotAllowed,dt);
+    float torso=0;const bool shared=BodyTorsoYaw(torso);
+    const bool use=slot.Update(f.head,left.gripPose.position,left.gripPressed,left.triggerPressed,slotAllowed,dt,
+                               shared?&torso:nullptr);
     medkitGrip=slot.OwnsGrip();
     {
         // Inside the slot's sphere, owned or not: a squeeze there is the medkit's.
