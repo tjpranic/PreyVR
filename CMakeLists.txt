@@ -76,6 +76,7 @@ add_library(preyvr_core STATIC
     src/common/HandPose.cpp
     src/common/ArmPose.cpp
     src/common/BodyFollow.cpp
+    src/common/RoomScale.cpp
     src/common/DebugDraw.cpp
     src/common/DebugOverlayScene.cpp
     src/common/ShotRay.cpp
@@ -412,6 +413,11 @@ if(PREYVR_BUILD_TESTS)
     target_link_libraries(preyvr_body_follow_tests PRIVATE preyvr_core)
     preyvr_enable_warnings(preyvr_body_follow_tests)
     add_test(NAME body_follow COMMAND preyvr_body_follow_tests)
+
+    add_executable(preyvr_room_scale_tests tests/RoomScaleTests.cpp)
+    target_link_libraries(preyvr_room_scale_tests PRIVATE preyvr_core)
+    preyvr_enable_warnings(preyvr_room_scale_tests)
+    add_test(NAME room_scale COMMAND preyvr_room_scale_tests)
 
     add_executable(preyvr_debug_draw_tests tests/DebugDrawTests.cpp)
     target_link_libraries(preyvr_debug_draw_tests PRIVATE preyvr_core)

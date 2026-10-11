@@ -1,6 +1,7 @@
 # The body does not follow the player across the room — investigation, 11 October 2026
 
-Branch `playability-improvements`. Investigation and plan only; nothing here is implemented.
+Branch `playability-improvements`. Investigation, plan, and a first stage implemented (see
+Implementation); not yet run in the game.
 Follows [BODY-YAW-2026-10-11.md](BODY-YAW-2026-10-11.md): the body now turns with the player,
 but it does not move with them. Reported in the headset: step back and the player model is in
 front of you.
@@ -128,6 +129,73 @@ From a survey of every use of the origin and the head-anchored world positions.
    0.35 m, and measure the gap left when walking into a wall.
 6. **Gates as for yaw:** camera mode 0, no custom view, the cinematic gate. No move on a tracking
    jump.
+
+## Implementation, first stage (11 October 2026, not yet run in the game)
+
+Steps 1 and 2 of the order below, and the option from step 5. The head-in-wall layer (step 4) is
+still to come. Until then, walking into a wall stops the body and the head carries on, as it does
+today.
+
+| Part | Where |
+|---|---|
+| Follower (deadzone, speed cap, jump refusal), sweep rays and clamp, compensation | `include/preyvr/RoomScale.h`, `src/common/RoomScale.cpp` |
+| Origin moved with a native move, under the recenter lock, no generation bump; refused unless positional tracking is in the view | `MoveHeadTrackingOriginWithNative`, `src/dll/HeadTrackingHook.{h,cpp}` |
+| The position step after the turn, in the same `ArkPlayer::Update` hook | `src/dll/BodyFollow.cpp` |
+
+**How the position step works:**
+- **Byte gates.** The complete `SetPos`/`GetPos` bodies and the concrete entity vtable slots are
+  compared at install. A mismatch disables room-scale and leaves turning available.
+- **Per call.** The player's entity must carry that vtable.
+- **Sweep.** It uses `QuerySegment`, and a refused sweep means no move.
+- **Play-space yaw.** It is the one the latest view of the same reference generation composed
+  with.
+
+**The option.** **Body Follows You**, COMFORT row 4: Off, Turn Only, Turn and Move (the default).
+Settings files saved before it existed load as Turn and Move.
+
+**Tests.**
+- `room_scale` (new) checks:
+  - the shift takes exactly the move off the head offset, for any yaw and scale;
+  - a 2 m walk never moves the view, and the body ends within the deadzone of the head;
+  - native moves are never absorbed;
+  - the deadzone, the speed cap and jump refusal;
+  - the sweep stops at a wall, at a post to the side, and not at all for a far wall.
+- `vr_options` was extended.
+- All 69 CTest tests pass.
+
+### Commands
+
+| Command | Effect |
+|---|---|
+| `body.roomscale 0\|1` | Room-scale on or off; turning is separate (`body.follow`) |
+| `body.zone <startMm> <stopMm>` | Deadzone (default 120, 30) |
+| `body.radius <mm>` | Capsule radius for the sweep (default 350) |
+| `body.nudge <rightCm> <forwardCm>` | Diagnostic: one swept, compensated move relative to the body's facing. **Run it with `body.roomscale 0`**, or the follower walks the body straight back under the head |
+| `body.report` | Also reports the room-scale counters below |
+
+### Reading `body.report` (room-scale)
+
+| Field | Good | Otherwise |
+|---|---|---|
+| `roomAvailable` | 1 | 0: the log names the byte mismatch (`detail=room_scale_...`) |
+| `moved`, `movedM` | Climb while walking | Flat: read the refusals below |
+| `viewDriftMaxMm`, `viewDrift` | Under 5, and 0 | The entity is not where `SetPos` left it by the time of the view, so the view judders |
+| `nudgeDriftMaxMm` | Under 5, standing still with the stick idle | The position snaps back after a move |
+| `sweepRefused` | 0 | The raycast refused: wrong thread, or out of gameplay |
+| `positionOff` | 0 | Positional head tracking is not in the view, so room-scale cannot work |
+| `blocked` | Climbs only at walls | Climbing in open space: the radius is too large, or the rays hit something unseen |
+| `residualMm` | Under 120 while standing | Large while blocked by a wall; this is what the head-in-wall layer will act on |
+| `jumps` | 0, or one per tracking-space change | |
+
+### First live check (risk 1, the decision rule)
+
+1. `body.roomscale 0`, stand still, right stick idle.
+2. `body.nudge 20 0`. Expect `nudges=1` and `lastMoveMm` near 200. Looking down, the body has
+   moved 20 cm to the right and the view has not moved.
+3. Wait 5 s, then `body.report`. Expect `nudgeDriftMaxMm` under 5 and `viewDriftMaxMm` under 5.
+4. `body.nudge -20 0` returns it. Then `body.roomscale 1` and walk around the room.
+5. **Decision rule:** if the body jumps back, or `nudgeDriftMaxMm` is near 200, the position
+   snaps back. Stop: the move has to go through the physical entity (risk 1).
 
 ## Implementation order
 

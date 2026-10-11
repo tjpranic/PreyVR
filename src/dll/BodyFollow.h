@@ -5,7 +5,8 @@
 #include <string>
 
 // Body following (docs/BODY-YAW-2026-10-11.md; the arithmetic is
-// preyvr/BodyFollow.h): **the player's body turns with the player.**
+// preyvr/BodyFollow.h): **the player's body turns with the player** -- and,
+// with room-scale below, moves with them (preyvr/RoomScale.h).
 //
 // The body mesh, capsule and arms rig face the native player yaw, which
 // neither a physical turn nor a snap turn changed: look down after turning
@@ -40,6 +41,27 @@ DWORD SetBodyTorso(int deadzoneDegrees, int relaxPerMille);
 // same angle -- the body turns and the view does not. Next frame, even with
 // following off.
 DWORD RequestBodyTurn(int degrees);
+
+// Room-scale (docs/ROOMSCALE-2026-10-11.md): the capsule follows the head
+// across the room -- swept for walls, through the entity's own SetPos -- and
+// the play-space origin moves by exactly the move applied, so the view does
+// not. Only this move shifts the origin: stick walking, lifts and scripted
+// moves move the capsule natively and the view with it. Needs positional head
+// tracking in the view; refused, and counted, without it.
+DWORD SetRoomScale(unsigned enabled);
+unsigned RoomScaleEnabled();
+// Idle until the head is `startMm` from the body, then follow to `stopMm`.
+DWORD SetRoomScaleZone(int startMm, int stopMm);
+// The capsule radius the sweep assumes (not read from the engine).
+DWORD SetRoomScaleRadius(int radiusMm);
+// Diagnostic: one swept, compensated move of the capsule relative to the
+// body's facing -- the body moves, the view must not. Next frame.
+DWORD RequestBodyNudge(int rightCm, int forwardCm);
+
+// The VR option: 0 off, 1 turn only, 2 turn and move.
+DWORD SetBodyFollowMode(unsigned mode);
+unsigned BodyFollowMode();
+
 std::string BodyFollowReport();
 
 // The torso yaw the body is turned to (tracking space, armpose::YawOf

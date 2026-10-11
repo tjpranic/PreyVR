@@ -177,6 +177,16 @@ DWORD SnapTurnHeadTracking(int steps, unsigned degrees);
 // 3 the native turn was refused.
 int TurnHeadTrackingReferenceWithNative(const std::function<std::optional<float>(float referenceYaw)>& turnNative);
 
+// The positional twin (room-scale, docs/ROOMSCALE-2026-10-11.md): moves the
+// native player and the play-space origin together, so the view does not move.
+// `moveNative` runs under the recenter lock, is given the head's offset from the
+// native eye in the world (engine axes, metres) at `playSpaceYaw`, and returns
+// the world move it applied -- nothing if it applied none. The origin shifts by
+// exactly that move. No generation bump, for the same reason as the turn.
+// 0 moved, 1 no reference, 2 busy, 3 nothing applied, 4 positional tracking off.
+int MoveHeadTrackingOriginWithNative(const Pose& head, float playSpaceYaw,
+                                     const std::function<std::optional<Vec3>(const Vec3& headOffsetWorld)>& moveNative);
+
 // Bumped by recenter, runtime rebase and reset: the events that redefine which
 // way the tracking space faces, after which a torso estimate is stale. Not by a
 // snap turn, which turns the world and leaves the player's torso where it was.

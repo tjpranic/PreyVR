@@ -6,6 +6,7 @@
 
 #include "Logger.h"
 #include "preyvr/BodyFollow.h"
+#include "preyvr/RoomScale.h"
 #include "preyvr/CameraEdit.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/StereoCamera.h"
@@ -747,6 +748,27 @@ int TurnHeadTrackingReferenceWithNative(const std::function<std::optional<float>
     // R and G move together, so P = G - R stays where it was: no generation bump.
     room.yaw=bodyfollow::Wrap(room.yaw+*turned);
     gRoomReference.Publish(room);gReferenceYaw.store(room.yaw,std::memory_order_release);
+    return 0;
+}
+int MoveHeadTrackingOriginWithNative(const Pose& head, float playSpaceYaw,
+                                     const std::function<std::optional<Vec3>(const Vec3& headOffsetWorld)>& moveNative) {
+    // Without the head's position in the view, moving the player would move it.
+    if(!viewhook::gApplying.load(std::memory_order_acquire) ||
+       !viewhook::gApplyingPosition.load(std::memory_order_acquire)) return 4;
+    const float scale=viewhook::gPositionScale.load(std::memory_order_relaxed);
+    const auto sampledReference=gReferenceGeneration.load();
+    if(!gHaveReference.load(std::memory_order_acquire)) return 1;
+    std::unique_lock lock(gRecenterMutex,std::try_to_lock);
+    RoomReference room{};
+    if(!lock.owns_lock() || sampledReference%2 || sampledReference!=gReferenceGeneration.load() ||
+       !gRoomReference.TryRead(room)) return 2;
+    const auto applied=moveNative(roomscale::HeadOffsetWorld(head.position,room.origin,playSpaceYaw,scale));
+    if(!applied) return 3;
+    // The head's offset drops by exactly the move, so the eye stays put: no
+    // generation bump.
+    const Vec3 shift=roomscale::OriginShift(*applied,playSpaceYaw,scale);
+    room.origin={room.origin.x+shift.x,room.origin.y+shift.y,room.origin.z+shift.z};
+    gRoomReference.Publish(room);
     return 0;
 }
 unsigned long long HeadTrackingRecenterEpoch() { return gRecenterEpoch.load(); }

@@ -33,7 +33,7 @@ constexpr Spec specs[]={
  {"belt_hints",L"BODY SLOT FEEDBACK",L"Brief feedback for holster requests and medkit selection/use. Requires the corresponding body slot feature.",1,0,1,1},
  {"debug_overlay",L"DEBUG OVERLAY (TESTING)",L"Draws each hand's ray and target, body slots, the wrist test and the foregrip region in the world.",0,0,1,1},
  {"muzzle_aim",L"SHOTS FROM THE MUZZLE (EXPERIMENTAL)",L"Shots leave the weapon's muzzle along your controller's aim, so they land where the barrel points at any distance.",0,0,1,1},
- {"body_follow",L"BODY FOLLOWS HEAD",L"Your body turns with you once you look past a short deadzone. Off keeps the game's facing.",1,0,1,1}
+ {"body_follow",L"BODY FOLLOWS YOU",L"Turn: your body faces you once you look past a short deadzone. Turn and move: it also steps to stay under you as you walk.",2,0,2,1}
 };
 }
 const Spec& Describe(unsigned id){return specs[id<Count?id:0];}
@@ -73,6 +73,7 @@ int Item(unsigned page,unsigned row){
 const wchar_t* PageName(unsigned p){constexpr const wchar_t* names[]={L"COMFORT",L"HANDS",L"INTERFACE",L"EQUIPMENT",L"FEEDBACK",L"PHYSICAL",L"ABILITIES",L"SETUP"};return names[p%Pages];}
 std::wstring Display(unsigned id,int v){
  if(id==PsiTarget)return v==1?L"HEAD":v==2?L"LEFT CONTROLLER":L"ORIGINAL";
+ if(id==BodyFollow)return v==2?L"TURN AND MOVE":v==1?L"TURN ONLY":L"OFF";
  if(id==SwingSpeed)return std::to_wstring(v)+L" CM/S";
  if(id==ContactStrength)return std::to_wstring(v)+L"%";
  if(id==Turn)return v?std::to_wstring(v)+L" DEGREES":L"SMOOTH";

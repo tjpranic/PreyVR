@@ -84,7 +84,7 @@ void Apply(unsigned id,int v){
  case options::UiGuide:SetUiGuideEnabled(v);break;
  case options::DebugOverlay:SetDebugOverlay(v?debugdraw::kAllLayers:0u);break;
  case options::MuzzleAim:SetShotRay(v);break;
- case options::BodyFollow:SetBodyFollow(v);break;
+ case options::BodyFollow:SetBodyFollowMode(v);break;
  }
 }
 void Save(){
@@ -108,7 +108,7 @@ options::Values VrOptionsValues(){
  v[options::Haptics]=HapticsEnabled();v[options::HapticStrength]=HapticStrength();
  v[options::Turn]=SnapTurnDegrees();v[options::HeadRelative]=HeadRelativeMovementEnabled();
  v[options::TwoHand]=TwoHandedAimEnabled();v[options::GripToggle]=TwoHandGripToggle();v[options::SupportSnap]=TwoHandSupportSnap();
- v[options::TurnSpeed]=TurnLaneScalePercent();v[options::BodyFollow]=BodyFollowEnabled();
+ v[options::TurnSpeed]=TurnLaneScalePercent();v[options::BodyFollow]=BodyFollowMode();
  v[options::UiScale]=UiScalePercent();v[options::UiMargin]=UiFitMarginPercent();
  v[options::UiCurve]=UiCurveDegrees();v[options::UiGuide]=UiGuideEnabled();
  v[options::Psychoscope]=scope.load();

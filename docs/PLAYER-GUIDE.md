@@ -72,9 +72,14 @@ before they can operate the screen behind it. F10 is a desktop shortcut while a
 native menu is already open; `vr.options 1` is the diagnostic equivalent.
 
 - **Comfort:** snap angle / smooth turning, head-relative movement, smooth-turn
-  speed, and **Body Follows Head** (on by default): the character's body turns to
-  face you once you look past a short deadzone, so looking down after turning
-  round shows your front, not your back. Reset VR view is on the Setup page.
+  speed, and **Body Follows You**:
+  - **Turn and Move** (the default): the character's body turns to face you once
+    you look past a short deadzone, and steps to stay under you as you walk round
+    the room. Walls stop the body, not your head.
+  - **Turn Only:** it turns but stays where it is when you walk.
+  - **Off:** the game's own facing.
+
+  Reset VR view is on the Setup page.
 - **Hands:** two-hand aim on/off, hold/toggle foregrip, snapped/free support hand,
   and the optional psychoscope gesture.
 - **Interface:** size, visible-area limit, panel curvature and controls guide.

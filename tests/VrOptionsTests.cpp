@@ -84,9 +84,13 @@ void SettingsChecks(){
  Check(Item(7,2)==DebugOverlay&&Defaults()[DebugOverlay]==0,"debug overlay is an opt-in setup row");
  Check(Item(7,3)==MuzzleAim&&Defaults()[MuzzleAim]==0,"shots from the muzzle are an opt-in setup row");
  Check(Parse("version=1\nmuzzle_aim=1\n",parsed)&&parsed[MuzzleAim]==1&&!Valid(MuzzleAim,2),"muzzle aim persists as on/off");
- Check(Item(0,3)==BodyFollow&&Defaults()[BodyFollow]==1,"body following is a comfort row, on by default");
- Check(Parse("version=1\nbody_follow=0\n",parsed)&&parsed[BodyFollow]==0&&!Valid(BodyFollow,2),"body following persists as on/off");
- Check(Parse("version=1\nturn=45\n",parsed)&&parsed[BodyFollow]==1,"settings saved before body following default it on");
+ Check(Item(0,3)==BodyFollow&&Defaults()[BodyFollow]==2,"body following is a comfort row, turn and move by default");
+ Check(Parse("version=1\nbody_follow=1\n",parsed)&&parsed[BodyFollow]==1&&Valid(BodyFollow,0)&&!Valid(BodyFollow,3),
+       "body following persists as off, turn only, turn and move");
+ Check(Display(BodyFollow,0)==L"OFF"&&Display(BodyFollow,1)==L"TURN ONLY"&&Display(BodyFollow,2)==L"TURN AND MOVE",
+       "body following reads as what it does");
+ Check(Adjust(BodyFollow,2,1)==2&&Adjust(BodyFollow,2,-1)==1,"body following steps between its three settings");
+ Check(Parse("version=1\nturn=45\n",parsed)&&parsed[BodyFollow]==2,"settings saved before body following default it on");
  Check(Parse("version=1\ndebug_overlay=1\n",parsed)&&parsed[DebugOverlay]==1&&!Valid(DebugOverlay,2),"debug overlay persists as on/off");
 }
 void GestureChecks(){
