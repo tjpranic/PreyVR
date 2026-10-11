@@ -38,9 +38,10 @@ DWORD SetBodyFollowLevel(unsigned enabled);
 // second (arm.torso sets the same filter).
 DWORD SetBodyTorso(int deadzoneDegrees, int relaxPerMille);
 // Diagnostic: one native turn of `degrees`, with the reference turned by the
-// same angle -- the body turns and the view does not. Next frame, even with
-// following off.
-DWORD RequestBodyTurn(int degrees);
+// same angle -- the body turns and the view does not. Even with following off.
+// Runs `delaySeconds` after the request, in gameplay (typed in the tuner, the
+// game is paused until refocused); dropped if not run within a minute of that.
+DWORD RequestBodyTurn(int degrees, int delaySeconds = 5);
 
 // Room-scale (docs/ROOMSCALE-2026-10-11.md): the capsule follows the head
 // across the room -- swept for walls, through the entity's own SetPos -- and
@@ -50,13 +51,19 @@ DWORD RequestBodyTurn(int degrees);
 // tracking in the view; refused, and counted, without it.
 DWORD SetRoomScale(unsigned enabled);
 unsigned RoomScaleEnabled();
-// Idle until the head is `startMm` from the body, then follow to `stopMm`.
-DWORD SetRoomScaleZone(int startMm, int stopMm);
+// Idle until the head is `startMm` from the body, then follow to `stopMm`,
+// closing the gap with time constant `followMs` (negative: unchanged).
+DWORD SetRoomScaleZone(int startMm, int stopMm, int followMs = -1);
 // The capsule radius the sweep assumes (not read from the engine).
 DWORD SetRoomScaleRadius(int radiusMm);
 // Diagnostic: one swept, compensated move of the capsule relative to the
-// body's facing -- the body moves, the view must not. Next frame.
-DWORD RequestBodyNudge(int rightCm, int forwardCm);
+// body's facing -- the body moves, the view must not. Deferred like the turn.
+DWORD RequestBodyNudge(int rightCm, int forwardCm, int delaySeconds = 5);
+
+// The head-in-wall layer: true while the head is through geometry, or far from
+// a body the sweep stopped. The XR fade blacks the view out; fire and use are
+// held off. Fresh within 100 ms, and only with room-scale on.
+bool BodyHeadOut();
 
 // The VR option: 0 off, 1 turn only, 2 turn and move.
 DWORD SetBodyFollowMode(unsigned mode);

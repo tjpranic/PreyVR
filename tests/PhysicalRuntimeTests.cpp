@@ -31,6 +31,7 @@ namespace preyvr::dll {
 bool EnsureMinHook(){return false;}
 DWORD InputDrainThreadId(){return drainThread;}
 bool HudGameplayInputAllowed(){return !modal;}
+bool BodyHeadOut(){return false;}
 unsigned long long HeadTrackingReferenceGeneration(){return 2;}
 bool TryGetEquippedRig(std::uintptr_t,EquippedRig& rig){rig=currentRig;return true;}
 bool QueryPhysicalSegment(const GameplayPoseFrame&,Vec3 origin,Vec3 delta,scene::Hit& h){

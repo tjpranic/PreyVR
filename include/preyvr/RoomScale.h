@@ -18,9 +18,13 @@
 // Engine axes are Z up; tracking space is OpenXR (Y up). Metres throughout.
 namespace preyvr::roomscale {
 
+// Defaults from the first headset run: a 12 cm deadzone caught up at full
+// speed read as the body lurching after the player. A small deadzone and a
+// proportional glide keep it under them without visible steps.
 struct Settings {
-    float startRadius = 0.12f;   // idle until the head is this far from the body
-    float stopRadius = 0.03f;    // then follow until it is this close
+    float startRadius = 0.03f;   // idle until the head is this far from the body
+    float stopRadius = 0.005f;   // then follow until it is this close
+    float followTime = 0.05f;    // s: the glide's time constant (0: at the speed cap)
     float maxSpeed = 3.0f;       // m/s: a tracking glitch never teleports the body
     float maxJump = 0.5f;        // m in one frame: a tracking-space change, not a step
     float radius = 0.35f;        // the capsule, for the sweep
@@ -36,8 +40,9 @@ Vec3 HeadOffsetWorld(const Vec3& headXr, const Vec3& originXr, float playSpaceYa
 Vec3 OriginShift(const Vec3& appliedWorld, float playSpaceYaw, float scale);
 
 // The horizontal move wanted this frame (engine axes, z = 0), with hysteresis:
-// idle until the head is startRadius away, then towards the head at up to
-// maxSpeed until it is within stopRadius.
+// idle until the head is startRadius away, then towards the head -- closing
+// the gap with time constant followTime, never faster than maxSpeed -- until
+// it is within stopRadius.
 class Follower {
 public:
     Vec3 Update(const Vec3& headOffsetWorld, float dtSeconds, const Settings& settings);

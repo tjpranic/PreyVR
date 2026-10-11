@@ -444,23 +444,24 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
         out << "body.torso result=" << (args.size() > 2 ? SetBodyTorso(arg(1, 35), arg(2, 600)) : 0)
             << BodyFollowReport();
     } else if (verb == "body.turn") {
-        // body.turn <degrees>: one native turn with the reference -- the body
-        // turns, the view must not.
-        out << "body.turn result=" << RequestBodyTurn(arg(1, 0)) << BodyFollowReport();
+        // body.turn <degrees> [delayS=5]: one native turn with the reference --
+        // the body turns, the view must not. Waits for gameplay and the delay.
+        out << "body.turn result=" << RequestBodyTurn(arg(1, 0), arg(2, 5)) << BodyFollowReport();
     } else if (verb == "body.roomscale") {
         // docs/ROOMSCALE-2026-10-11.md: the capsule follows the head.
         out << "body.roomscale result=" << (args.size() > 1 ? SetRoomScale(static_cast<unsigned>(arg(1, 1))) : 0)
             << BodyFollowReport();
     } else if (verb == "body.zone") {
-        // body.zone <startMm> <stopMm>: idle until the head is start away, follow to stop.
-        out << "body.zone result=" << (args.size() > 2 ? SetRoomScaleZone(arg(1, 120), arg(2, 30)) : 0)
+        // body.zone <startMm> <stopMm> [followMs]: idle until the head is start
+        // away, then glide to stop with that time constant.
+        out << "body.zone result=" << (args.size() > 2 ? SetRoomScaleZone(arg(1, 30), arg(2, 5), arg(3, -1)) : 0)
             << BodyFollowReport();
     } else if (verb == "body.radius") {
         out << "body.radius result=" << (args.size() > 1 ? SetRoomScaleRadius(arg(1, 350)) : 0) << BodyFollowReport();
     } else if (verb == "body.nudge") {
-        // body.nudge <rightCm> <forwardCm>: one swept move with the origin --
-        // the body moves, the view must not.
-        out << "body.nudge result=" << RequestBodyNudge(arg(1, 0), arg(2, 0)) << BodyFollowReport();
+        // body.nudge <rightCm> <forwardCm> [delayS=5]: one swept move with the
+        // origin -- the body moves, the view must not. Waits like body.turn.
+        out << "body.nudge result=" << RequestBodyNudge(arg(1, 0), arg(2, 0), arg(3, 5)) << BodyFollowReport();
     } else if (verb.rfind("arm.", 0) == 0) {
         int values[4]{};
         unsigned count = 0;

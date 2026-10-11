@@ -18,6 +18,7 @@
 #include "VrOptionsRuntime.h"
 #include "VrOptionsPanel.h"
 #include "BodyEquipment.h"
+#include "BodyFollow.h"
 #include "SlotFeedback.h"
 #include "NativeWristTexture.h"
 #include "WristLane.h"
@@ -132,6 +133,15 @@ struct Host {
     DXGI_FORMAT slotFormat=DXGI_FORMAT_UNKNOWN;
     bool slotAttempted=false,slotReady=false;
     equipment::SlotNotice slotPainted=equipment::SlotNotice::None;
+    // The head-in-wall fade (BodyFollow.h): a black quad in front of the eyes,
+    // repainted only when its quantised alpha changes.
+    std::unique_ptr<InventorySwapchain> fadeSwapchain;
+    ID3D11Texture2D* fadeTexture=nullptr;
+    DXGI_FORMAT fadeFormat=DXGI_FORMAT_UNKNOWN;
+    bool fadeAttempted=false;
+    int fadePainted=-1;
+    float fadeAlpha=0;
+    long long fadeTime=0;
     bool guideReady = false, guideAttempted = false;
     std::vector<ID3D11Texture2D*> images;
 
@@ -697,6 +707,8 @@ void Teardown()
     if(gHost.optionsTexture)gHost.optionsTexture->Release();
     gHost.slotSwapchain.reset();
     if(gHost.slotTexture)gHost.slotTexture->Release();
+    gHost.fadeSwapchain.reset();
+    if(gHost.fadeTexture)gHost.fadeTexture->Release();
     ClearSlotFeedback();
     gHost.wristSwapchain.reset();
     gHost.wristFitter.reset();
@@ -2231,6 +2243,70 @@ void ServiceXrFrame(void* renderer)
             }
         }
     }
+    // The head-in-wall fade (docs/ROOMSCALE-2026-10-11.md): while the head is
+    // through geometry the view goes black -- in over 0.1 s, out over 0.2 s --
+    // so walking into a wall cannot show what is behind it. Over everything.
+    XrCompositionLayerQuad fadeLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
+    bool fadeActive=false;
+    {
+        constexpr unsigned kFadeSize=4, kFadeLevels=16;
+        const long long fadeNow=frameState.predictedDisplayTime;
+        const float fadeDt=gHost.fadeTime&&fadeNow>gHost.fadeTime?
+            std::min(.1f,static_cast<float>(fadeNow-gHost.fadeTime)*1e-9f):0.f;
+        gHost.fadeTime=fadeNow;
+        const bool fadeWanted=rendered&&haveViews&&!panelActive&&!optionsActive&&BodyHeadOut();
+        gHost.fadeAlpha=fadeWanted?std::min(1.f,gHost.fadeAlpha+fadeDt/.1f):std::max(0.f,gHost.fadeAlpha-fadeDt/.2f);
+        const int level=static_cast<int>(gHost.fadeAlpha*kFadeLevels+.5f);
+        if(level>0&&rendered&&haveViews){
+            if(!gHost.fadeAttempted){
+                gHost.fadeAttempted=true;
+                uint32_t count=0;
+                if(xrEnumerateSwapchainFormats(gHost.session,0,&count,nullptr)==XR_SUCCESS&&count&&count<256){
+                    std::vector<int64_t> formats(count);
+                    if(xrEnumerateSwapchainFormats(gHost.session,count,&count,formats.data())==XR_SUCCESS)
+                        for(auto format:{DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB})
+                            if(std::find(formats.begin(),formats.end(),format)!=formats.end()){gHost.fadeFormat=format;break;}
+                }
+                if(gHost.fadeFormat!=DXGI_FORMAT_UNKNOWN){
+                    D3D11_TEXTURE2D_DESC d{};d.Width=d.Height=kFadeSize;d.Format=gHost.fadeFormat;
+                    d.SampleDesc.Count=d.ArraySize=d.MipLevels=1;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+                    if(SUCCEEDED(gHost.device->CreateTexture2D(&d,nullptr,&gHost.fadeTexture))){
+                        gHost.fadeSwapchain=std::make_unique<InventorySwapchain>(InventorySwapchainApi{
+                            xrEnumerateSwapchainFormats,xrCreateSwapchain,xrEnumerateSwapchainImages,
+                            xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,xrDestroySwapchain});
+                        if(!gHost.fadeSwapchain->Prepare(gHost.session,d,gHost.fadeFormat))gHost.fadeSwapchain.reset();
+                    }
+                }
+            }
+            if(gHost.fadeTexture&&gHost.fadeSwapchain&&level!=gHost.fadePainted){
+                // Black is zero in either channel order; alpha is linear even in sRGB.
+                const auto alpha=static_cast<unsigned char>(level*255/kFadeLevels);
+                std::array<unsigned char,kFadeSize*kFadeSize*4> pixels{};
+                for(size_t n=3;n<pixels.size();n+=4)pixels[n]=alpha;
+                ID3D11DeviceContext* context=nullptr;gHost.device->GetImmediateContext(&context);
+                if(context){
+                    context->UpdateSubresource(gHost.fadeTexture,0,nullptr,pixels.data(),kFadeSize*4,0);
+                    const auto upload=gHost.fadeSwapchain->Copy(context,gHost.fadeTexture);
+                    if(upload==InventorySwapchain::Upload::ready)gHost.fadePainted=level;
+                    if(upload==InventorySwapchain::Upload::sessionFault)gStopRequested.store(true);
+                    context->Release();
+                }
+            }
+            if(gHost.fadeSwapchain&&gHost.fadePainted==level){
+                // 0.1 m ahead of the head, 2.4 m square: about 85 degrees each way.
+                const auto& q=inputHead.orientation;
+                const Vec3 ahead=Rotate(q,Vec3{0,0,-.1f});
+                fadeLayer.space=gHost.space;fadeLayer.eyeVisibility=XR_EYE_VISIBILITY_BOTH;
+                fadeLayer.layerFlags=XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+                fadeLayer.pose={{q.x,q.y,q.z,q.w},{inputHead.position.x+ahead.x,inputHead.position.y+ahead.y,
+                    inputHead.position.z+ahead.z}};
+                fadeLayer.size={2.4f,2.4f};
+                fadeLayer.subImage.swapchain=gHost.fadeSwapchain->Handle();
+                fadeLayer.subImage.imageRect={{0,0},{static_cast<int32_t>(kFadeSize),static_cast<int32_t>(kFadeSize)}};
+                fadeActive=true;
+            }
+        }
+    }
     std::vector<const XrCompositionLayerBaseHeader*> layers;
     if(optionsActive)layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&optionsLayer));
     else if(panelActive)layers.push_back(surface.angle>0?reinterpret_cast<const XrCompositionLayerBaseHeader*>(&cylinderLayer):
@@ -2244,6 +2320,7 @@ void ServiceXrFrame(void* renderer)
     if(cursorActive)layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&cursorLayer));
     if(wristActive)layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&wristLayer));
     if(slotActive)layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&slotLayer));
+    if(fadeActive)layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&fadeLayer));
 
     XrFrameEndInfo endInfo{XR_TYPE_FRAME_END_INFO};
     endInfo.displayTime = frameState.predictedDisplayTime;

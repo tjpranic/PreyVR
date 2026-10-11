@@ -57,7 +57,8 @@ Vec3 Follower::Update(const Vec3& headOffsetWorld, float dtSeconds, const Settin
         following_ = false;
         return {};
     }
-    const float step = std::min(distance, settings.maxSpeed * dtSeconds);
+    float step = std::min(distance, settings.maxSpeed * dtSeconds);
+    if (settings.followTime > 0.0f) { step = std::min(step, distance * std::min(1.0f, dtSeconds / settings.followTime)); }
     return {offset.x / distance * step, offset.y / distance * step, 0.0f};
 }
 

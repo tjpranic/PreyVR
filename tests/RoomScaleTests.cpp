@@ -100,11 +100,30 @@ void TestDeadzoneSpeedAndJumps()
     Settings s;
     Follower f;
     const float dt = 1.0f / 90.0f;
-    Require(Length(f.Update({0.10f, 0, 0}, dt, s)) == 0.0f && !f.Following(), "inside the deadzone: still");
-    const Vec3 m = f.Update({0.13f, 0, 0}, dt, s);
-    Require(f.Following() && m.x > 0 && std::fabs(Length(m) - s.maxSpeed * dt) < 1e-5f, "past it: follows at the speed cap");
-    Require(Length(f.Update({0.025f, 0, 0}, dt, s)) == 0.0f && !f.Following(), "close enough: stops");
-    Require(Length(f.Update({0.10f, 0, 0}, dt, s)) == 0.0f, "and stays stopped inside the deadzone");
+    Require(Length(f.Update({0.025f, 0, 0}, dt, s)) == 0.0f && !f.Following(), "inside the deadzone: still");
+    const Vec3 m = f.Update({0.04f, 0, 0}, dt, s);
+    Require(f.Following() && m.x > 0 && std::fabs(Length(m) - 0.04f * dt / s.followTime) < 1e-6f,
+            "past it: glides, closing the gap at the time constant");
+    Follower capped;   // a fresh one: from 4 cm to 1.2 m in one frame is a jump
+    const Vec3 far = capped.Update({1.2f, 0, 0}, dt, s);
+    Require(std::fabs(Length(far) - s.maxSpeed * dt) < 1e-5f, "never faster than the speed cap");
+    Require(Length(f.Update({0.004f, 0, 0}, dt, s)) == 0.0f && !f.Following(), "close enough: stops");
+    Require(Length(f.Update({0.025f, 0, 0}, dt, s)) == 0.0f, "and stays stopped inside the deadzone");
+    // The glide converges: a 4 cm gap is closed to the stop radius within 0.2 s.
+    {
+        Follower g;
+        float gap = 0.04f;
+        int frames = 0;
+        for (; frames < 90 && (frames == 0 || g.Following()); ++frames) {
+            gap -= Length(g.Update({gap, 0, 0}, dt, s));
+        }
+        Require(gap <= s.stopRadius && frames <= 18, "the glide settles quickly");
+    }
+    Settings snap = s;
+    snap.followTime = 0.0f;
+    Follower h;
+    Require(std::fabs(Length(h.Update({0.04f, 0, 0}, dt, snap)) - snap.maxSpeed * dt) < 1e-6f,
+            "no time constant: at the speed cap");
     // A tracking jump: refused for the frame, then followed normally.
     f.Reset();
     f.Update({0.0f, 0, 0}, dt, s);

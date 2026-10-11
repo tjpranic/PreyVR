@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <mutex>
 #include <sstream>
 #include <string_view>
@@ -98,11 +99,21 @@ std::atomic<bool> gRoomAvailable{false}, gRoomScale{true}, gNudgePending{false};
 std::atomic<SetPosFn> gSetPos{nullptr};
 std::atomic<GetPosFn> gGetPos{nullptr};
 std::atomic<std::uintptr_t> gEntityVtable{0};
-std::atomic<int> gStartMm{120}, gStopMm{30}, gRadiusMm{350};
+std::atomic<int> gStartMm{30}, gStopMm{5}, gFollowMs{50}, gRadiusMm{350};
 std::atomic<int> gNudgeRightMm{0}, gNudgeForwardMm{0};
 std::atomic<int> gDeadzoneMilliDeg{35000};
 std::atomic<int> gRelaxPerMille{600};
 std::atomic<int> gTurnRequestMdeg{0};
+// Diagnostic requests wait for gameplay -- typed in the tuner, the game is
+// unfocused and paused -- and for their delay, so the wearer can be back in
+// the headset and looking down. Dropped a minute after they fell due.
+std::atomic<std::uint64_t> gTurnDueNs{0}, gNudgeDueNs{0};
+constexpr std::uint64_t kRequestLifeNs = 60000000000ull;
+// The head-in-wall layer: out while the head is through geometry, or far
+// from a body the sweep stopped. Published for the XR fade and the inputs.
+std::atomic<bool> gHeadOut{false};
+std::atomic<std::uint64_t> gHeadOutNs{0};
+constexpr float kOutResidual = 0.30f, kInResidual = 0.25f;
 
 // The game thread's own.
 armpose::TorsoYaw gTorso;
@@ -143,7 +154,7 @@ std::atomic<float> gViewP{0.0f};
 std::atomic<unsigned long long> gViewPGeneration{~0ull};
 std::atomic<std::uint64_t> gViewPNs{0};
 Counter gMoved{0}, gMovedMm{0}, gBlocked{0}, gSweepRefused{0}, gRoomBusy{0}, gPositionOff{0}, gNoView{0};
-Counter gNoPose{0}, gJumps{0}, gNudges{0}, gViewDrift{0};
+Counter gNoPose{0}, gJumps{0}, gNudges{0}, gViewDrift{0}, gHeadOutEvents{0}, gHeadOutFrames{0}, gHeadHits{0};
 std::atomic<int> gLastMoveMm{0}, gResidualMm{0}, gViewDriftMaxMm{0}, gNudgeDriftMaxMm{0};
 // Where SetPos left the entity, for the view of the same frame to read back;
 // and after a nudge, for the next views. Under gViewMutex.
@@ -262,6 +273,7 @@ roomscale::Settings RoomSettings()
     roomscale::Settings settings;
     settings.startRadius = gStartMm.load(std::memory_order_relaxed) / 1000.0f;
     settings.stopRadius = gStopMm.load(std::memory_order_relaxed) / 1000.0f;
+    settings.followTime = gFollowMs.load(std::memory_order_relaxed) / 1000.0f;
     settings.radius = gRadiusMm.load(std::memory_order_relaxed) / 1000.0f;
     return settings;
 }
@@ -302,7 +314,7 @@ bool InGameplay(void* player)
 
 // Turns the native player -- by `requested`, or to the torso when `toTorso` --
 // and the reference with it, by what the setter actually applied.
-void Turn(void* player, float torso, float requested, bool toTorso)
+int Turn(void* player, float torso, float requested, bool toTorso)
 {
     const SetViewRotationFn set = gSet.load(std::memory_order_acquire);
     const GetViewRotationFn get = gGet.load(std::memory_order_acquire);
@@ -349,17 +361,19 @@ void Turn(void* player, float torso, float requested, bool toTorso)
     } else if (result == 2) {
         gBusy.fetch_add(1, std::memory_order_relaxed);
     }
+    return result;
 }
 
 // Moves the player's capsule -- towards the head, or by `nudge` -- swept for
 // walls first, and the origin with it by exactly what SetPos applied.
-void Move(void* player, const GameplayPoseFrame& pose, float playSpaceYaw, const Pose& head, float dt,
-          const Vec3* nudge)
+int Move(void* player, const GameplayPoseFrame& pose, float playSpaceYaw, const Pose& head, float dt,
+         const Vec3* nudge, float& residual)
 {
+    residual = std::numeric_limits<float>::quiet_NaN();
     void* const entity = PlayerEntity(player);
     if (entity == nullptr) {
         gNotPlayer.fetch_add(1, std::memory_order_relaxed);
-        return;
+        return -1;
     }
     const SetPosFn set = gSetPos.load(std::memory_order_acquire);
     const GetPosFn get = gGetPos.load(std::memory_order_acquire);
@@ -369,7 +383,7 @@ void Move(void* player, const GameplayPoseFrame& pose, float playSpaceYaw, const
     Vec3 applied{};
     Vec3 movedTo{};
     const int result = MoveHeadTrackingOriginWithNative(head, playSpaceYaw, [&](const Vec3& offset) -> std::optional<Vec3> {
-        gResidualMm.store(Mm(std::hypot(offset.x, offset.y)), std::memory_order_relaxed);
+        residual = std::hypot(offset.x, offset.y);   // until a move takes some of it off
         const Vec3 move = nudge != nullptr ? *nudge : gRoomFollower.Update(offset, dt, settings);
         if (nudge == nullptr && gRoomFollower.Jumped()) { gJumps.fetch_add(1, std::memory_order_relaxed); }
         const float length = std::hypot(move.x, move.y);
@@ -405,8 +419,10 @@ void Move(void* player, const GameplayPoseFrame& pose, float playSpaceYaw, const
         }
         // Horizontal only: height stays the view's and the engine's business.
         applied = {movedTo.x - feet.x, movedTo.y - feet.y, 0.0f};
+        residual = std::hypot(offset.x - applied.x, offset.y - applied.y);
         return applied;
     });
+    if (std::isfinite(residual)) { gResidualMm.store(Mm(residual), std::memory_order_relaxed); }
     if (blocked) { gBlocked.fetch_add(1, std::memory_order_relaxed); }
     if (sweepRefused) { gSweepRefused.fetch_add(1, std::memory_order_relaxed); }
     if (result == 0) {
@@ -430,6 +446,43 @@ void Move(void* player, const GameplayPoseFrame& pose, float playSpaceYaw, const
     } else if (result == 4) {
         gPositionOff.fetch_add(1, std::memory_order_relaxed);
     }
+    if (result == 0 && nudge != nullptr) {
+        Log("result=0 detail=nudge_done movedMm=" + std::to_string(Mm(std::hypot(applied.x, applied.y))));
+    } else if (nudge != nullptr) {
+        Log("result=" + std::to_string(result) + " detail=nudge_refused blocked=" + std::to_string(blocked) +
+            " sweepRefused=" + std::to_string(sweepRefused));
+    }
+    return result;
+}
+
+// The head-in-wall layer (docs/ROOMSCALE-2026-10-11.md): is the head through
+// geometry? The segment from the capsule's axis at head height to the head --
+// inside the capsule at one end, so a wall between them is one the head went
+// through -- or a head far from a body the sweep stopped.
+void HeadCheck(void* player, const GameplayPoseFrame& pose, float residual)
+{
+    bool hit = false;
+    void* const entity = PlayerEntity(player);
+    Vec3 feet{};
+    if (entity != nullptr && pose.cameraCentreValid && CallGetPos(gGetPos.load(std::memory_order_acquire), entity, feet)) {
+        const Vec3 head = pose.cameraCentre;
+        const Vec3 axis{feet.x, feet.y, head.z};
+        const float span = std::hypot(head.x - axis.x, head.y - axis.y);
+        if (span > 2.0f) {
+            hit = true;
+        } else if (span >= 0.01f) {
+            scene::Hit h{};
+            hit = QuerySegment(pose, axis, head, h) && h.distance >= 0.0f;
+        }
+    }
+    if (hit) { gHeadHits.fetch_add(1, std::memory_order_relaxed); }
+    const float away = std::isfinite(residual) ? residual : 0.0f;
+    const bool wasOut = gHeadOut.load(std::memory_order_relaxed);
+    const bool out = hit || away > (wasOut ? kInResidual : kOutResidual);
+    if (out && !wasOut) { gHeadOutEvents.fetch_add(1, std::memory_order_relaxed); }
+    if (out) { gHeadOutFrames.fetch_add(1, std::memory_order_relaxed); }
+    gHeadOut.store(out, std::memory_order_release);
+    gHeadOutNs.store(MonotonicNanoseconds(), std::memory_order_release);
 }
 
 void Tick(void* player)
@@ -471,24 +524,45 @@ void Tick(void* player)
     gHeadMdeg.store(Mdeg(head), std::memory_order_relaxed);
     gTorsoMdeg.store(Mdeg(torso), std::memory_order_relaxed);
 
-    const int requestMdeg = gTurnRequestMdeg.exchange(0);
-    const bool nudge = gNudgePending.exchange(false);
+    // Diagnostics run when due, in gameplay; until then they stay pending.
+    int requestMdeg = gTurnRequestMdeg.load(std::memory_order_acquire);
+    if (requestMdeg != 0 && now > gTurnDueNs.load() + kRequestLifeNs) {
+        gTurnRequestMdeg.store(0, std::memory_order_release);
+        Log("result=expired detail=turn");
+        requestMdeg = 0;
+    }
+    const bool turnDue = requestMdeg != 0 && now >= gTurnDueNs.load();
+    bool nudge = gNudgePending.load(std::memory_order_acquire);
+    if (nudge && now > gNudgeDueNs.load() + kRequestLifeNs) {
+        gNudgePending.store(false, std::memory_order_release);
+        Log("result=expired detail=nudge");
+        nudge = false;
+    }
+    const bool nudgeDue = nudge && now >= gNudgeDueNs.load();
     const bool following = gEnabled.load(std::memory_order_acquire);
     const bool roomScale = gRoomScale.load(std::memory_order_acquire) && gRoomAvailable.load(std::memory_order_acquire);
-    if (requestMdeg == 0 && !nudge && !following && !roomScale) { return; }
+    if (!roomScale) { gHeadOut.store(false, std::memory_order_release); }
+    if (!turnDue && !nudgeDue && !following && !roomScale) { return; }
     if (!InGameplay(player)) {
         gNotGameplay.fetch_add(1, std::memory_order_relaxed);
         gRoomFollower.Reset();
+        gHeadOut.store(false, std::memory_order_release);
         return;
     }
     // The turn first: it changes G and R together and leaves the play space,
     // and so the head's offset, alone.
-    if (requestMdeg != 0) { Turn(player, torso, requestMdeg * 1e-3f * kRadians, false); }
+    if (turnDue) {
+        gTurnRequestMdeg.store(0, std::memory_order_release);
+        const int result = Turn(player, torso, requestMdeg * 1e-3f * kRadians, false);
+        Log("result=" + std::to_string(result) + " detail=turn_done degrees=" + std::to_string(requestMdeg / 1000) +
+            " appliedMdeg=" + std::to_string(gLastDeltaMdeg.load()));
+    }
     if (following && !gFault.load(std::memory_order_acquire)) { Turn(player, torso, 0.0f, true); }
 
-    if ((!roomScale && !nudge) || !gRoomAvailable.load(std::memory_order_acquire) ||
+    if ((!roomScale && !nudgeDue) || !gRoomAvailable.load(std::memory_order_acquire) ||
         gFault.load(std::memory_order_acquire) || !HudGameplayInputAllowed()) {
         gRoomFollower.Reset();
+        gHeadOut.store(false, std::memory_order_release);
         return;
     }
     float playSpaceYaw = 0.0f;
@@ -502,7 +576,9 @@ void Tick(void* player)
         gNoPose.fetch_add(1, std::memory_order_relaxed);
         return;
     }
-    if (nudge) {
+    float residual = std::numeric_limits<float>::quiet_NaN();
+    if (nudgeDue) {
+        gNudgePending.store(false, std::memory_order_release);
         // Right and forward of the body's facing.
         Quaternion facing{};
         const auto yaw = CallGet(gGet.load(std::memory_order_acquire), player, &facing)
@@ -513,11 +589,15 @@ void Tick(void* player)
             const float c = std::cos(*yaw), sn = std::sin(*yaw);
             // A yaw of t sends +X to (cos t, sin t) and +Y to (-sin t, cos t).
             const Vec3 move{right * c - forward * sn, right * sn + forward * c, 0.0f};
-            Move(player, pose, playSpaceYaw, frame.head, dt, &move);
+            Move(player, pose, playSpaceYaw, frame.head, dt, &move, residual);
         }
     }
-    if (roomScale) { Move(player, pose, playSpaceYaw, frame.head, dt, nullptr); }
-    else { gRoomFollower.Reset(); }
+    if (roomScale) {
+        Move(player, pose, playSpaceYaw, frame.head, dt, nullptr, residual);
+        HeadCheck(player, pose, residual);
+    } else {
+        gRoomFollower.Reset();
+    }
 }
 
 void __fastcall PlayerUpdateDetour(void* player, void* context, int slot)
@@ -595,7 +675,7 @@ void ResetStats()
                        &gNativeRefused, &gTurnedMdeg, &gViewAfterFollow, &gViewWithoutFollow, &gThreadMismatch,
                        &gIkBetween, &gIkAfterView, &gIkAfterRender, &gStepFollowed, &gStepIdle, &gMoved,
                        &gMovedMm, &gBlocked, &gSweepRefused, &gRoomBusy, &gPositionOff, &gNoView, &gNoPose,
-                       &gJumps, &gNudges, &gViewDrift}) {
+                       &gJumps, &gNudges, &gViewDrift, &gHeadOutEvents, &gHeadOutFrames, &gHeadHits}) {
         c->store(0, std::memory_order_relaxed);
     }
     gReadbackMaxMdeg.store(0, std::memory_order_relaxed);
@@ -662,11 +742,14 @@ DWORD SetRoomScale(unsigned enabled)
 
 unsigned RoomScaleEnabled() { return gRoomScale.load(std::memory_order_relaxed) ? 1u : 0u; }
 
-DWORD SetRoomScaleZone(int startMm, int stopMm)
+DWORD SetRoomScaleZone(int startMm, int stopMm, int followMs)
 {
-    if (startMm < 20 || startMm > 500 || stopMm < 0 || stopMm >= startMm) { return ERROR_INVALID_PARAMETER; }
+    if (startMm < 5 || startMm > 500 || stopMm < 0 || stopMm >= startMm || followMs > 1000) {
+        return ERROR_INVALID_PARAMETER;
+    }
     gStartMm.store(startMm, std::memory_order_relaxed);
     gStopMm.store(stopMm, std::memory_order_relaxed);
+    if (followMs >= 0) { gFollowMs.store(followMs, std::memory_order_relaxed); }
     return 0;
 }
 
@@ -677,9 +760,10 @@ DWORD SetRoomScaleRadius(int radiusMm)
     return 0;
 }
 
-DWORD RequestBodyNudge(int rightCm, int forwardCm)
+DWORD RequestBodyNudge(int rightCm, int forwardCm, int delaySeconds)
 {
-    if ((rightCm == 0 && forwardCm == 0) || std::abs(rightCm) > 100 || std::abs(forwardCm) > 100) {
+    if ((rightCm == 0 && forwardCm == 0) || std::abs(rightCm) > 100 || std::abs(forwardCm) > 100 ||
+        delaySeconds < 0 || delaySeconds > 60) {
         return ERROR_INVALID_PARAMETER;
     }
     if (!gActive.load(std::memory_order_acquire) || !gRoomAvailable.load(std::memory_order_acquire)) {
@@ -687,6 +771,7 @@ DWORD RequestBodyNudge(int rightCm, int forwardCm)
     }
     gNudgeRightMm.store(rightCm * 10, std::memory_order_relaxed);
     gNudgeForwardMm.store(forwardCm * 10, std::memory_order_relaxed);
+    gNudgeDueNs.store(MonotonicNanoseconds() + static_cast<std::uint64_t>(delaySeconds) * 1000000000ull);
     gNudgePending.store(true, std::memory_order_release);
     return 0;
 }
@@ -705,12 +790,21 @@ unsigned BodyFollowMode()
     return gRoomScale.load(std::memory_order_relaxed) ? 2u : 1u;
 }
 
-DWORD RequestBodyTurn(int degrees)
+DWORD RequestBodyTurn(int degrees, int delaySeconds)
 {
-    if (degrees == 0 || degrees < -180 || degrees > 180) { return ERROR_INVALID_PARAMETER; }
+    if (degrees == 0 || degrees < -180 || degrees > 180 || delaySeconds < 0 || delaySeconds > 60) {
+        return ERROR_INVALID_PARAMETER;
+    }
     if (!gActive.load(std::memory_order_acquire)) { return ERROR_NOT_READY; }
+    gTurnDueNs.store(MonotonicNanoseconds() + static_cast<std::uint64_t>(delaySeconds) * 1000000000ull);
     gTurnRequestMdeg.store(degrees * 1000, std::memory_order_release);
     return 0;
+}
+
+bool BodyHeadOut()
+{
+    return gActive.load(std::memory_order_acquire) && gHeadOut.load(std::memory_order_acquire) &&
+           FreshSample(MonotonicNanoseconds(), gHeadOutNs.load(std::memory_order_acquire), kTorsoFreshNs);
 }
 
 bool BodyTorsoYaw(float& yaw)
@@ -812,14 +906,18 @@ std::string BodyFollowReport()
         << " ikAfterRender=" << gIkAfterRender.load()
         << " roomReadFallbacks=" << HeadTrackingRoomReadFallbacks()
         << " roomScale=" << gRoomScale.load() << " roomAvailable=" << gRoomAvailable.load()
-        << " zoneMm=" << gStartMm.load() << '/' << gStopMm.load() << " radiusMm=" << gRadiusMm.load()
+        << " zoneMm=" << gStartMm.load() << '/' << gStopMm.load() << " followMs=" << gFollowMs.load()
+        << " radiusMm=" << gRadiusMm.load()
         << " moved=" << gMoved.load() << " movedM=" << gMovedMm.load() / 1000.0
         << " lastMoveMm=" << gLastMoveMm.load() << " residualMm=" << gResidualMm.load()
         << " blocked=" << gBlocked.load() << " sweepRefused=" << gSweepRefused.load()
         << " roomBusy=" << gRoomBusy.load() << " positionOff=" << gPositionOff.load()
         << " noView=" << gNoView.load() << " noPose=" << gNoPose.load() << " jumps=" << gJumps.load()
         << " viewDrift=" << gViewDrift.load() << " viewDriftMaxMm=" << gViewDriftMaxMm.load()
-        << " nudges=" << gNudges.load() << " nudgeDriftMaxMm=" << gNudgeDriftMaxMm.load();
+        << " nudges=" << gNudges.load() << " nudgeDriftMaxMm=" << gNudgeDriftMaxMm.load()
+        << " pendingTurnDeg=" << gTurnRequestMdeg.load() / 1000 << " pendingNudge=" << gNudgePending.load()
+        << " headOut=" << BodyHeadOut() << " headOutEvents=" << gHeadOutEvents.load()
+        << " headOutFrames=" << gHeadOutFrames.load() << " headHits=" << gHeadHits.load();
     return out.str();
 }
 

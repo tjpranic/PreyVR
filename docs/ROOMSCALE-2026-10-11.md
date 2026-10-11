@@ -1,7 +1,7 @@
 # The body does not follow the player across the room — investigation, 11 October 2026
 
-Branch `playability-improvements`. Investigation, plan, and a first stage implemented (see
-Implementation); not yet run in the game.
+Branch `playability-improvements`. Investigation, plan, and implementation in two stages (see
+Implementation); the first stage has run in a headset, the second not yet.
 Follows [BODY-YAW-2026-10-11.md](BODY-YAW-2026-10-11.md): the body now turns with the player,
 but it does not move with them. Reported in the headset: step back and the player model is in
 front of you.
@@ -35,8 +35,9 @@ moves the native player by the same distance as the origin, so the view never mo
 thread):
 
 1. **Offset.** `offset` = the horizontal part of `Yaw(P) · (head − origin)`, in the world.
-   - **Deadzone:** idle until `|offset|` exceeds 12 cm, then follow until it is under 3 cm.
-     Leaning over a table does not step the feet.
+   - **Deadzone and glide:** idle until `|offset|` exceeds 3 cm, then glide towards the head
+     (time constant 50 ms) until it is under 0.5 cm. The first stage used 12 cm and a
+     full-speed catch-up, which read as the body lurching (see the headset result).
    - **Speed cap:** 3 m/s, so a tracking glitch never teleports the body.
    - **Jumps:** no move when the head jumped more than 0.5 m in one frame, which is a
      tracking-space change; the recenter that follows re-baselines.
@@ -71,9 +72,11 @@ A blocked capsule leaves the head free to walk into geometry. Proposed:
   30 cm.
 - **Fade.** While the head is out, fade the view to black over about 0.1 s with an OpenXR layer
   in front of the eyes. Coming back restores it.
-- **Refuse what would cheat.** While the head is out, refuse shots and interaction from beyond
-  the wall: the ShotRay, grenade, wrist and interaction checks start from the native eye instead
-  of the head.
+- **Refuse what would cheat.** While the head is out, hold off the trigger and the use button,
+  so nothing is shot or used from beyond the wall. Built that way in the second stage, in place
+  of re-rooting each line-of-sight check at the native eye. Physical melee swings are held off
+  too. Known gap: a grenade already charging when the head goes out is released (thrown), as it
+  is when a menu opens.
 
 This is a second step after the follower, but it belongs to the same fix. Without it, room-scale
 makes walking into a wall a way to see through it.
@@ -130,15 +133,15 @@ From a survey of every use of the origin and the head-anchored world positions.
 6. **Gates as for yaw:** camera mode 0, no custom view, the cinematic gate. No move on a tracking
    jump.
 
-## Implementation, first stage (11 October 2026, not yet run in the game)
+## Implementation (11 October 2026)
 
-Steps 1 and 2 of the order below, and the option from step 5. The head-in-wall layer (step 4) is
-still to come. Until then, walking into a wall stops the body and the head carries on, as it does
-today.
+### First stage
+
+Steps 1 and 2 of the order below, and the option from step 5.
 
 | Part | Where |
 |---|---|
-| Follower (deadzone, speed cap, jump refusal), sweep rays and clamp, compensation | `include/preyvr/RoomScale.h`, `src/common/RoomScale.cpp` |
+| Follower (deadzone, glide, speed cap, jump refusal), sweep rays and clamp, compensation | `include/preyvr/RoomScale.h`, `src/common/RoomScale.cpp` |
 | Origin moved with a native move, under the recenter lock, no generation bump; refused unless positional tracking is in the view | `MoveHeadTrackingOriginWithNative`, `src/dll/HeadTrackingHook.{h,cpp}` |
 | The position step after the turn, in the same `ArkPlayer::Update` hook | `src/dll/BodyFollow.cpp` |
 
@@ -153,24 +156,52 @@ today.
 **The option.** **Body Follows You**, COMFORT row 4: Off, Turn Only, Turn and Move (the default).
 Settings files saved before it existed load as Turn and Move.
 
-**Tests.**
-- `room_scale` (new) checks:
-  - the shift takes exactly the move off the head offset, for any yaw and scale;
-  - a 2 m walk never moves the view, and the body ends within the deadzone of the head;
-  - native moves are never absorbed;
-  - the deadzone, the speed cap and jump refusal;
-  - the sweep stops at a wall, at a post to the side, and not at all for a far wall.
-- `vr_options` was extended.
-- All 69 CTest tests pass.
+### Headset result, first stage
+
+Package `PreyVR-roomscale-wip` (DLL `A1AC8064…`), Steam Frame. Two runs, standing then seated.
+The wearer reported **"The body follows the headset as expected."**
+
+**Run `player-20261011-160434` (standing), last status line:**
+- `moved=396`, `movedM=11.453`;
+- **`viewDrift=0`, `viewDriftMaxMm=0`**;
+- `sweepRefused=0`, `roomBusy=0`, `positionOff=0`, `jumps=0`;
+- `stepFollowedMaxMdeg=36`;
+- `blocked=1815` (frames pressing against something).
+
+**Risk 1 does not occur.** On every one of the 396 moves, the entity was where `SetPos` left it
+when the view composed. The multi-frame `body.nudge` check did not run: typed in the tuner, the
+game was unfocused and paused, and the first stage dropped requests outside gameplay. The second
+stage fixes that.
+
+**What the wearer reported:**
+- **The following was very noticeable.** With a 12 cm deadzone caught up at 3 m/s, the body
+  visibly lurched after them. They want it to move more often, by less.
+- **Leaning into a wall puts the head through it,** as this stage expected.
+- **The Steam Frame's own boundary** switched to passthrough ("outside the playable area") when
+  leaning far. That is the runtime's play-area guard, not the mod's.
+- **27 runtime tracking-space changes in the seated run,** in bursts of up to 11 a second around
+  taking the headset off and on. Each forced a recenter. The mod handles such bursts clumsily;
+  this is not room-scale's fault, but it is worth an item of its own.
+
+### Second stage
+
+| Change | Detail |
+|---|---|
+| **Follow more often, by less** | Deadzone 3 cm, stop at 0.5 cm, and a proportional glide (time constant 50 ms, still capped at 3 m/s) in place of the full-speed catch-up. Walking, the body trails by about speed × 50 ms |
+| **Diagnostics wait for gameplay** | `body.turn` and `body.nudge` run after a delay (default 5 s) at the first gameplay frame, so they can be typed in the tuner and watched in the headset. Dropped a minute after falling due. Each logs `detail=turn_done`, `nudge_done` or `nudge_refused` |
+| **The head-in-wall layer** (step 4) | Each frame with room-scale on, the head is "out" when the segment from the capsule's axis at head height to the head hits geometry, or when the head is more than 30 cm from a body the sweep stopped (back in under 25 cm) |
+| **Fade** | While the head is out, a black quad 0.1 m in front of the eyes covers the view. It fades in over 0.1 s and out over 0.2 s, on top of every other layer, and never over the menus |
+| **No shots from beyond the wall** | While the head is out, the trigger and the use button are held off. A trigger held when the head comes back must be released first |
 
 ### Commands
 
 | Command | Effect |
 |---|---|
 | `body.roomscale 0\|1` | Room-scale on or off; turning is separate (`body.follow`) |
-| `body.zone <startMm> <stopMm>` | Deadzone (default 120, 30) |
+| `body.zone <startMm> <stopMm> [followMs]` | Deadzone and glide (default 30, 5, 50) |
 | `body.radius <mm>` | Capsule radius for the sweep (default 350) |
-| `body.nudge <rightCm> <forwardCm>` | Diagnostic: one swept, compensated move relative to the body's facing. **Run it with `body.roomscale 0`**, or the follower walks the body straight back under the head |
+| `body.nudge <rightCm> <forwardCm> [delayS]` | Diagnostic: one swept, compensated move relative to the body's facing, after the delay (default 5 s) in gameplay. **Use it with `body.roomscale 0`**, or the follower walks the body straight back under the head |
+| `body.turn <degrees> [delayS]` | The same for a turn |
 | `body.report` | Also reports the room-scale counters below |
 
 ### Reading `body.report` (room-scale)
@@ -183,19 +214,25 @@ Settings files saved before it existed load as Turn and Move.
 | `nudgeDriftMaxMm` | Under 5, standing still with the stick idle | The position snaps back after a move |
 | `sweepRefused` | 0 | The raycast refused: wrong thread, or out of gameplay |
 | `positionOff` | 0 | Positional head tracking is not in the view, so room-scale cannot work |
-| `blocked` | Climbs only at walls | Climbing in open space: the radius is too large, or the rays hit something unseen |
-| `residualMm` | Under 120 while standing | Large while blocked by a wall; this is what the head-in-wall layer will act on |
+| `blocked` | Climbs only against walls and furniture | Climbing in open space: the radius is too large, or the rays hit something unseen |
+| `residualMm` | Under 30 while standing in the open | Large while blocked |
+| `headOut`, `headOutEvents`, `headOutFrames`, `headHits` | Events only when the head goes into geometry | Events in the open: a false fade |
+| `pendingTurnDeg`, `pendingNudge` | 0 once run | A request still waiting for gameplay |
 | `jumps` | 0, or one per tracking-space change | |
 
-### First live check (risk 1, the decision rule)
+### Next live checks
 
-1. `body.roomscale 0`, stand still, right stick idle.
-2. `body.nudge 20 0`. Expect `nudges=1` and `lastMoveMm` near 200. Looking down, the body has
-   moved 20 cm to the right and the view has not moved.
-3. Wait 5 s, then `body.report`. Expect `nudgeDriftMaxMm` under 5 and `viewDriftMaxMm` under 5.
-4. `body.nudge -20 0` returns it. Then `body.roomscale 1` and walk around the room.
-5. **Decision rule:** if the body jumps back, or `nudgeDriftMaxMm` is near 200, the position
-   snaps back. Stop: the move has to go through the physical entity (risk 1).
+1. **Feel:** walk about and lean. The body should stay under you with no visible lurch. If it lags
+   or swims, try `body.zone 30 5 25` (or `0` for no glide) and say which reads better.
+2. **Walls:** lean or walk into a wall. The view should go black as the head enters it, come back
+   when you step back, and the trigger should do nothing while black.
+3. **Tables and low furniture:** lean over a desk. A fade there is a false positive: the head is
+   above the top but more than 30 cm from a body the desk stopped. Report it if it happens.
+4. **Optional, multi-frame snap-back:**
+   - Type `body.roomscale 0`, then `body.nudge 20 0`, refocus the game and stand still.
+   - Five seconds later the body should step 20 cm to the right. After another five seconds,
+     `body.report` should show `nudgeDriftMaxMm` under 5.
+   - `body.nudge -20 0` returns it, then `body.roomscale 1`.
 
 ## Implementation order
 

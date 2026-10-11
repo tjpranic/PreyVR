@@ -1,5 +1,6 @@
 #include "PhysicalInteractions.h"
 #include "AimTakeover.h"
+#include "BodyFollow.h"
 #include "HeadTrackingHook.h"
 #include "HudBridge.h"
 #include "InputPost.h"
@@ -179,7 +180,8 @@ void UpdatePhysicalInteractionsImpl(const GameplayPoseFrame& frame,bool allowed)
     Geometry g{};EquippedRig owner{};
     const auto generation=settings.load();
     if(generation!=seenSettings){swing.Reset();seenSettings=generation;}
-    if(!allowed||!PhysicalInteractionsEnabled()||!HudGameplayInputAllowed()||!frame.cameraCentreValid||!frame.headYawUsable||
+    // No swings from a head through a wall (BodyFollow.h).
+    if(!allowed||!PhysicalInteractionsEnabled()||!HudGameplayInputAllowed()||BodyHeadOut()||!frame.cameraCentreValid||!frame.headYawUsable||
        !FreshSample(MonotonicNanoseconds(),frame.tracking.publishedNs,100000000)||
        !IsPoseUsable(frame.tracking.head,frame.tracking.headValidity,100000000)||
        !IsPoseUsable(frame.tracking.hands[1].gripPose,frame.tracking.hands[1].gripValidity,100000000)||

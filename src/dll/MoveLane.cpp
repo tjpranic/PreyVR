@@ -2,6 +2,7 @@
 #include "ArmsLane.h"
 #include "AimTakeover.h"
 #include "BodyEquipment.h"
+#include "BodyFollow.h"
 #include "InteractionLane.h"
 #include "CarryLane.h"
 #include "GrenadeLane.h"
@@ -455,7 +456,9 @@ void UpdateTurnAndFireLanes()
     }
 
     static bool awaitTriggerRelease=false;
-    if (!HudGameplayInputAllowed()) { awaitTriggerRelease=true; }
+    // A head through a wall is blacked out (BodyFollow.h): no shots from the
+    // far side, and a held trigger waits for release after it comes back.
+    if (!HudGameplayInputAllowed() || BodyHeadOut()) { awaitTriggerRelease=true; }
     if (haveInput && right.triggerValue<=.05f) { awaitTriggerRelease=false; }
     const bool fireOn = gFireEnabled.load(std::memory_order_acquire) &&
                        HudGameplayInputAllowed() && !awaitTriggerRelease;
@@ -543,7 +546,7 @@ void UpdateTurnAndFireLanes()
         // the right grip only reloads, clearing the selection first; with
         // use.hand 0 the right grip is the button, as before.
         use::ButtonInput useIn{};
-        useIn.gameplay = actionsOn && !releaseActions && haveInput;
+        useIn.gameplay = actionsOn && !releaseActions && haveInput && !BodyHeadOut();
         useIn.leftHand = UseHandLeft() != 0;
         useIn.leftGrip = haveLeftHand && leftHand.gripPressed;
         useIn.rightGrip = haveInput && right.gripPressed;
