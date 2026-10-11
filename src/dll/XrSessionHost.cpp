@@ -76,6 +76,8 @@ std::atomic<DWORD> gStatus{static_cast<DWORD>(XrSessionStatus::idle)};
 std::atomic<bool> gStopRequested{false};
 std::atomic<bool> gStopAcknowledged{false};
 std::atomic<unsigned long long> gSubmitted{0};
+// Frames the head-in-wall fade was drawn (BodyFollow.h).
+std::atomic<unsigned long long> gFadeFrames{0};
 std::atomic<unsigned int> gUiPanelMode{0};
 std::atomic<unsigned long long> gUiPanelFrames{0};
 std::atomic<unsigned long long> gInventoryLayerFrames{0};
@@ -1340,6 +1342,8 @@ DWORD XrSessionStatusValue()
     return gStatus.load(std::memory_order_acquire);
 }
 
+unsigned long long XrFadeFrames() { return gFadeFrames.load(std::memory_order_relaxed); }
+
 unsigned long long XrSubmittedFrameCount()
 {
     return gSubmitted.load(std::memory_order_acquire);
@@ -2249,7 +2253,10 @@ void ServiceXrFrame(void* renderer)
     XrCompositionLayerQuad fadeLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
     bool fadeActive=false;
     {
-        constexpr unsigned kFadeSize=4, kFadeLevels=16;
+        // InventorySwapchain takes nothing under 640x480 (Supported): the first
+        // fade, at 4x4, was refused at creation and never drew. Repainted per
+        // level change only, so the size costs nothing per frame.
+        constexpr unsigned kFadeWidth=640, kFadeHeight=480, kFadeLevels=8;
         const long long fadeNow=frameState.predictedDisplayTime;
         const float fadeDt=gHost.fadeTime&&fadeNow>gHost.fadeTime?
             std::min(.1f,static_cast<float>(fadeNow-gHost.fadeTime)*1e-9f):0.f;
@@ -2268,24 +2275,35 @@ void ServiceXrFrame(void* renderer)
                             if(std::find(formats.begin(),formats.end(),format)!=formats.end()){gHost.fadeFormat=format;break;}
                 }
                 if(gHost.fadeFormat!=DXGI_FORMAT_UNKNOWN){
-                    D3D11_TEXTURE2D_DESC d{};d.Width=d.Height=kFadeSize;d.Format=gHost.fadeFormat;
+                    D3D11_TEXTURE2D_DESC d{};d.Width=kFadeWidth;d.Height=kFadeHeight;d.Format=gHost.fadeFormat;
                     d.SampleDesc.Count=d.ArraySize=d.MipLevels=1;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
                     if(SUCCEEDED(gHost.device->CreateTexture2D(&d,nullptr,&gHost.fadeTexture))){
                         gHost.fadeSwapchain=std::make_unique<InventorySwapchain>(InventorySwapchainApi{
                             xrEnumerateSwapchainFormats,xrCreateSwapchain,xrEnumerateSwapchainImages,
                             xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,xrDestroySwapchain});
-                        if(!gHost.fadeSwapchain->Prepare(gHost.session,d,gHost.fadeFormat))gHost.fadeSwapchain.reset();
+                        if(!gHost.fadeSwapchain->Prepare(gHost.session,d,gHost.fadeFormat)){
+                            std::ostringstream line;
+                            line<<"result=refused detail=fade_swapchain reason="
+                                <<InventorySwapchain::RefusalName(gHost.fadeSwapchain->LastRefusal())
+                                <<" xrResult="<<gHost.fadeSwapchain->LastResult()<<" format="<<gHost.fadeFormat;
+                            Log(line.str());
+                            gHost.fadeSwapchain.reset();
+                        } else {
+                            Log("result=0 detail=fade_swapchain format="+std::to_string(gHost.fadeFormat));
+                        }
                     }
+                } else {
+                    Log("result=refused detail=fade_swapchain reason=no_srgb_format");
                 }
             }
             if(gHost.fadeTexture&&gHost.fadeSwapchain&&level!=gHost.fadePainted){
                 // Black is zero in either channel order; alpha is linear even in sRGB.
                 const auto alpha=static_cast<unsigned char>(level*255/kFadeLevels);
-                std::array<unsigned char,kFadeSize*kFadeSize*4> pixels{};
+                std::vector<unsigned char> pixels(static_cast<size_t>(kFadeWidth)*kFadeHeight*4,0);
                 for(size_t n=3;n<pixels.size();n+=4)pixels[n]=alpha;
                 ID3D11DeviceContext* context=nullptr;gHost.device->GetImmediateContext(&context);
                 if(context){
-                    context->UpdateSubresource(gHost.fadeTexture,0,nullptr,pixels.data(),kFadeSize*4,0);
+                    context->UpdateSubresource(gHost.fadeTexture,0,nullptr,pixels.data(),kFadeWidth*4,0);
                     const auto upload=gHost.fadeSwapchain->Copy(context,gHost.fadeTexture);
                     if(upload==InventorySwapchain::Upload::ready)gHost.fadePainted=level;
                     if(upload==InventorySwapchain::Upload::sessionFault)gStopRequested.store(true);
@@ -2293,17 +2311,19 @@ void ServiceXrFrame(void* renderer)
                 }
             }
             if(gHost.fadeSwapchain&&gHost.fadePainted==level){
-                // 0.1 m ahead of the head, 2.4 m square: about 85 degrees each way.
+                // 0.2 m ahead of the head -- clear of any compositor near plane --
+                // and 5 m square: about 85 degrees each way.
                 const auto& q=inputHead.orientation;
-                const Vec3 ahead=Rotate(q,Vec3{0,0,-.1f});
+                const Vec3 ahead=Rotate(q,Vec3{0,0,-.2f});
                 fadeLayer.space=gHost.space;fadeLayer.eyeVisibility=XR_EYE_VISIBILITY_BOTH;
                 fadeLayer.layerFlags=XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
                 fadeLayer.pose={{q.x,q.y,q.z,q.w},{inputHead.position.x+ahead.x,inputHead.position.y+ahead.y,
                     inputHead.position.z+ahead.z}};
-                fadeLayer.size={2.4f,2.4f};
+                fadeLayer.size={5.f,5.f};
                 fadeLayer.subImage.swapchain=gHost.fadeSwapchain->Handle();
-                fadeLayer.subImage.imageRect={{0,0},{static_cast<int32_t>(kFadeSize),static_cast<int32_t>(kFadeSize)}};
+                fadeLayer.subImage.imageRect={{0,0},{static_cast<int32_t>(kFadeWidth),static_cast<int32_t>(kFadeHeight)}};
                 fadeActive=true;
+                gFadeFrames.fetch_add(1,std::memory_order_relaxed);
             }
         }
     }

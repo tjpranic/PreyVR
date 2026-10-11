@@ -39,6 +39,18 @@ Vec3 HeadOffsetWorld(const Vec3& headXr, const Vec3& originXr, float playSpaceYa
 // `appliedWorld`: the head offset drops by exactly that move.
 Vec3 OriginShift(const Vec3& appliedWorld, float playSpaceYaw, float scale);
 
+// The neck's pivot from the eyes, head-local OpenXR (+Y up, +Z back), metres.
+// Turning or tipping the head swings the eyes about it by several centimetres:
+// a body following the eyes stepped at every glance, and its SetPos calls
+// stalled the stick's walking (second headset run).
+inline constexpr Vec3 kNeckFromEye{0.0f, -0.075f, 0.0805f};
+
+// The point the body follows, in tracking space: the head moved by where its
+// neck is now, less where the neck would be with the head level and facing
+// the torso. Rotating the head alone leaves it where it was; facing the torso
+// it is the head itself, so the native eye still lands under the eyes.
+Vec3 FollowPoint(const Pose& headXr, float torsoYaw);
+
 // The horizontal move wanted this frame (engine axes, z = 0), with hysteresis:
 // idle until the head is startRadius away, then towards the head -- closing
 // the gap with time constant followTime, never faster than maxSpeed -- until

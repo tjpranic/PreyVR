@@ -42,6 +42,30 @@ void TestShiftCancelsTheMove()
     Require(Near(HeadOffsetWorld({0, 0, -1}, {}, 0.0f, 1.0f), {0, 1, 0}, 1e-5f), "forward is engine +Y");
 }
 
+Quaternion AboutY(float a) { return {0, std::sin(a / 2), 0, std::cos(a / 2)}; }
+Quaternion AboutX(float a) { return {std::sin(a / 2), 0, 0, std::cos(a / 2)}; }
+
+void TestFollowPointIgnoresHeadRotation()
+{
+    const float torso = 25.0f * kDeg;
+    const Vec3 neck{0.3f, 1.5f, -0.4f};
+    // Facing the torso, level: the eyes themselves.
+    const Pose level{AboutY(torso), Sub(neck, Rotate(AboutY(torso), kNeckFromEye))};
+    Require(Near(FollowPoint(level, torso), level.position, 1e-6f), "facing the torso: the head itself");
+    // Turn and tip the head about a fixed neck: the eyes swing, the point does not.
+    for (float yaw : {-70.0f, -30.0f, 0.0f, 45.0f, 80.0f}) {
+        for (float pitch : {-50.0f, -10.0f, 0.0f, 30.0f}) {
+            const Quaternion q = Normalize(Multiply(AboutY(torso + yaw * kDeg), AboutX(pitch * kDeg)));
+            const Pose head{q, Sub(neck, Rotate(q, kNeckFromEye))};
+            Require(Near(FollowPoint(head, torso), level.position, 1e-5f), "a glance does not move the body");
+        }
+    }
+    // Walking moves it one for one.
+    const Pose walked{level.orientation, Add(level.position, Vec3{0.4f, 0.0f, -0.2f})};
+    Require(Near(FollowPoint(walked, torso), Add(level.position, Vec3{0.4f, 0.0f, -0.2f}), 1e-6f), "a step does");
+    Require(Near(FollowPoint(Pose{Quaternion{NAN, 0, 0, 1}, {1, 2, 3}}, torso), {1, 2, 3}), "no orientation: the head");
+}
+
 // The lane reduced to its arithmetic: the view eye is the native eye plus the
 // head offset, the follower moves the capsule and the origin together.
 struct World {
@@ -177,6 +201,7 @@ void TestSweep()
 int main()
 {
     TestShiftCancelsTheMove();
+    TestFollowPointIgnoresHeadRotation();
     TestWalkingNeverMovesTheView();
     TestNativeMovesAreNotAbsorbed();
     TestDeadzoneSpeedAndJumps();

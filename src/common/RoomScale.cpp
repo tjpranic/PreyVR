@@ -31,6 +31,18 @@ Vec3 OriginShift(const Vec3& appliedWorld, float playSpaceYaw, float scale)
     return {xr.x / scale, xr.y / scale, xr.z / scale};
 }
 
+Vec3 FollowPoint(const Pose& headXr, float torsoYaw)
+{
+    const Quaternion& q = headXr.orientation;
+    const float lengthSquared = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
+    if (!std::isfinite(lengthSquared) || lengthSquared < 0.5f || !std::isfinite(torsoYaw)) { return headXr.position; }
+    const Vec3 now = Rotate(Normalize(q), kNeckFromEye);
+    const Quaternion torso{0.0f, std::sin(torsoYaw * 0.5f), 0.0f, std::cos(torsoYaw * 0.5f)};
+    const Vec3 rest = Rotate(torso, kNeckFromEye);
+    return {headXr.position.x + now.x - rest.x, headXr.position.y + now.y - rest.y,
+            headXr.position.z + now.z - rest.z};
+}
+
 Vec3 Follower::Update(const Vec3& headOffsetWorld, float dtSeconds, const Settings& settings)
 {
     jumped_ = false;

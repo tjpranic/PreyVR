@@ -6,6 +6,7 @@
 #include "Logger.h"
 #include "MinHookInit.h"
 #include "SceneQuery.h"
+#include "XrSessionHost.h"
 #include "XrInput.h"
 #include "preyvr/ArmPose.h"
 #include "preyvr/BodyFollow.h"
@@ -120,6 +121,11 @@ armpose::TorsoYaw gTorso;
 std::uint64_t gTorsoNs = 0;
 unsigned long long gTorsoEpoch = ~0ull;
 roomscale::Follower gRoomFollower;
+// Where the capsule was after the last tick, to tell a capsule the engine is
+// moving -- stick walking, a jump, a fall, a lift -- from one at rest.
+Vec3 gLastFeet{};
+std::uint64_t gLastFeetNs = 0;
+constexpr float kNativeMovingSpeed = 0.25f;   // m/s
 
 struct TorsoSample {
     float yaw = 0.0f;
@@ -155,6 +161,7 @@ std::atomic<unsigned long long> gViewPGeneration{~0ull};
 std::atomic<std::uint64_t> gViewPNs{0};
 Counter gMoved{0}, gMovedMm{0}, gBlocked{0}, gSweepRefused{0}, gRoomBusy{0}, gPositionOff{0}, gNoView{0};
 Counter gNoPose{0}, gJumps{0}, gNudges{0}, gViewDrift{0}, gHeadOutEvents{0}, gHeadOutFrames{0}, gHeadHits{0};
+Counter gNativeMoving{0};
 std::atomic<int> gLastMoveMm{0}, gResidualMm{0}, gViewDriftMaxMm{0}, gNudgeDriftMaxMm{0};
 // Where SetPos left the entity, for the view of the same frame to read back;
 // and after a nudge, for the next views. Under gViewMutex.
@@ -419,6 +426,7 @@ int Move(void* player, const GameplayPoseFrame& pose, float playSpaceYaw, const 
         }
         // Horizontal only: height stays the view's and the engine's business.
         applied = {movedTo.x - feet.x, movedTo.y - feet.y, 0.0f};
+        gLastFeet = movedTo;   // our move is not the engine's
         residual = std::hypot(offset.x - applied.x, offset.y - applied.y);
         return applied;
     });
@@ -577,6 +585,29 @@ void Tick(void* player)
         return;
     }
     float residual = std::numeric_limits<float>::quiet_NaN();
+    // The engine is moving the capsule: leave it be. A SetPos while the stick
+    // walks the player stalled the walk (second headset run).
+    bool nativeMoving = false;
+    if (void* const entity = PlayerEntity(player)) {
+        Vec3 feet{};
+        if (CallGetPos(gGetPos.load(std::memory_order_acquire), entity, feet)) {
+            if (gLastFeetNs != 0 && now > gLastFeetNs && now - gLastFeetNs < kTorsoFreshNs) {
+                const float seconds = static_cast<float>(now - gLastFeetNs) * 1e-9f;
+                const float travelled = std::sqrt((feet.x - gLastFeet.x) * (feet.x - gLastFeet.x) +
+                                                  (feet.y - gLastFeet.y) * (feet.y - gLastFeet.y) +
+                                                  (feet.z - gLastFeet.z) * (feet.z - gLastFeet.z));
+                nativeMoving = travelled > kNativeMovingSpeed * seconds;
+            }
+            gLastFeet = feet;
+            gLastFeetNs = now;
+        }
+    }
+    if (nativeMoving) {
+        gNativeMoving.fetch_add(1, std::memory_order_relaxed);
+        gRoomFollower.Reset();
+    }
+    // The body follows the neck, not the eyes.
+    const Pose followHead{frame.head.orientation, roomscale::FollowPoint(frame.head, torso)};
     if (nudgeDue) {
         gNudgePending.store(false, std::memory_order_release);
         // Right and forward of the body's facing.
@@ -589,11 +620,11 @@ void Tick(void* player)
             const float c = std::cos(*yaw), sn = std::sin(*yaw);
             // A yaw of t sends +X to (cos t, sin t) and +Y to (-sin t, cos t).
             const Vec3 move{right * c - forward * sn, right * sn + forward * c, 0.0f};
-            Move(player, pose, playSpaceYaw, frame.head, dt, &move, residual);
+            Move(player, pose, playSpaceYaw, followHead, dt, &move, residual);
         }
     }
     if (roomScale) {
-        Move(player, pose, playSpaceYaw, frame.head, dt, nullptr, residual);
+        if (!nativeMoving) { Move(player, pose, playSpaceYaw, followHead, dt, nullptr, residual); }
         HeadCheck(player, pose, residual);
     } else {
         gRoomFollower.Reset();
@@ -675,7 +706,8 @@ void ResetStats()
                        &gNativeRefused, &gTurnedMdeg, &gViewAfterFollow, &gViewWithoutFollow, &gThreadMismatch,
                        &gIkBetween, &gIkAfterView, &gIkAfterRender, &gStepFollowed, &gStepIdle, &gMoved,
                        &gMovedMm, &gBlocked, &gSweepRefused, &gRoomBusy, &gPositionOff, &gNoView, &gNoPose,
-                       &gJumps, &gNudges, &gViewDrift, &gHeadOutEvents, &gHeadOutFrames, &gHeadHits}) {
+                       &gJumps, &gNudges, &gViewDrift, &gHeadOutEvents, &gHeadOutFrames, &gHeadHits,
+                       &gNativeMoving}) {
         c->store(0, std::memory_order_relaxed);
     }
     gReadbackMaxMdeg.store(0, std::memory_order_relaxed);
@@ -917,7 +949,8 @@ std::string BodyFollowReport()
         << " nudges=" << gNudges.load() << " nudgeDriftMaxMm=" << gNudgeDriftMaxMm.load()
         << " pendingTurnDeg=" << gTurnRequestMdeg.load() / 1000 << " pendingNudge=" << gNudgePending.load()
         << " headOut=" << BodyHeadOut() << " headOutEvents=" << gHeadOutEvents.load()
-        << " headOutFrames=" << gHeadOutFrames.load() << " headHits=" << gHeadHits.load();
+        << " headOutFrames=" << gHeadOutFrames.load() << " headHits=" << gHeadHits.load()
+        << " fadeFrames=" << XrFadeFrames() << " nativeMoving=" << gNativeMoving.load();
     return out.str();
 }
 

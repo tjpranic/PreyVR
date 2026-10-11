@@ -1,7 +1,7 @@
 # The body does not follow the player across the room — investigation, 11 October 2026
 
 Branch `playability-improvements`. Investigation, plan, and implementation in two stages (see
-Implementation); the first stage has run in a headset, the second not yet.
+Implementation); the first two stages have run in a headset, the third not yet.
 Follows [BODY-YAW-2026-10-11.md](BODY-YAW-2026-10-11.md): the body now turns with the player,
 but it does not move with them. Reported in the headset: step back and the player model is in
 front of you.
@@ -193,6 +193,44 @@ stage fixes that.
 | **Fade** | While the head is out, a black quad 0.1 m in front of the eyes covers the view. It fades in over 0.1 s and out over 0.2 s, on top of every other layer, and never over the menus |
 | **No shots from beyond the wall** | While the head is out, the trigger and the use button are held off. A trigger held when the head comes back must be released first |
 
+### Headset result, second stage
+
+Package `PreyVR-roomscale-2-wip` (DLL `7954E8CF…`), run `player-20261011-164559`. The wearer
+started standing, then sat down.
+
+**Risk 1 is closed.** `body.nudge 20 0` ran in gameplay (`detail=nudge_done movedMm=200`). The
+body stayed where it was put for the 300 frames watched (`nudgeDriftMaxMm=0`), and `viewDrift`
+was 0 throughout.
+
+**The two faults the wearer reported:**
+- **"The player seems to get momentarily stuck in place, especially while turning."**
+  - With a 3 cm deadzone the follower chased the eyes, which swing several centimetres about the
+    neck whenever the head turns or tips.
+  - It moved 934–1863 times a minute, about once every two to four frames, through `SetPos`.
+  - A `SetPos` while the engine walks the capsule stalls the walk.
+- **The fade never appeared.**
+  - Detection worked: `headOutEvents=7`, `headHits=814`, the head up to 46 cm from a blocked
+    body.
+  - The layer never drew: `InventorySwapchain` refuses textures under 640×480, and the fade's
+    4×4 texture was refused at creation, silently.
+
+**Not a fault:** a 9° view-yaw step on a frame the body turned (`stepFollowedMaxMdeg=9145`).
+It fell in the minute of tuner use. The tabbing run before showed the same size on idle frames;
+that is native mouse look on refocus.
+
+### Third stage
+
+| Change | Detail |
+|---|---|
+| **Follow the neck, not the eyes** | The body follows the head moved by where its neck is now, less where it would be facing the torso, level (`FollowPoint`, neck 7.5 cm below and 8 cm behind the eyes). Turning or tipping the head alone no longer moves the body |
+| **Stand aside while the engine moves the capsule** | When the capsule moved more than 0.25 m/s natively since the last frame (stick walking, a jump, a fall, a lift), no room-scale move that frame (`nativeMoving`) |
+| **The fade draws** | 640×480, repainted per alpha level (8 levels), 0.2 m ahead and 5 m square. The swapchain logs `detail=fade_swapchain` with its result. `fadeFrames` in `body.report` counts frames it was submitted |
+
+**New `body.report` fields:**
+- `fadeFrames` should climb whenever `headOut` is 1. If it does not, read the `fade_swapchain`
+  log line.
+- `nativeMoving` climbs while stick walking.
+
 ### Commands
 
 | Command | Effect |
@@ -228,11 +266,9 @@ stage fixes that.
    when you step back, and the trigger should do nothing while black.
 3. **Tables and low furniture:** lean over a desk. A fade there is a false positive: the head is
    above the top but more than 30 cm from a body the desk stopped. Report it if it happens.
-4. **Optional, multi-frame snap-back:**
-   - Type `body.roomscale 0`, then `body.nudge 20 0`, refocus the game and stand still.
-   - Five seconds later the body should step 20 cm to the right. After another five seconds,
-     `body.report` should show `nudgeDriftMaxMm` under 5.
-   - `body.nudge -20 0` returns it, then `body.roomscale 1`.
+4. **Stick walking and turning:** walk and turn with the sticks and your head. Nothing should
+   stall, and `nativeMoving` should climb while the stick walks. (The multi-frame snap-back check
+   passed in the second stage.)
 
 ## Implementation order
 
