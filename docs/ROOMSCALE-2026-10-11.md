@@ -1,7 +1,7 @@
 # The body does not follow the player across the room — investigation, 11 October 2026
 
 Branch `playability-improvements`. Investigation, plan, and implementation in two stages (see
-Implementation); the first two stages have run in a headset, the third not yet.
+Implementation); all three stages have run in a headset, and the third was accepted.
 Follows [BODY-YAW-2026-10-11.md](BODY-YAW-2026-10-11.md): the body now turns with the player,
 but it does not move with them. Reported in the headset: step back and the player model is in
 front of you.
@@ -230,6 +230,23 @@ that is native mouse look on refocus.
 - `fadeFrames` should climb whenever `headOut` is 1. If it does not, read the `fade_swapchain`
   log line.
 - `nativeMoving` climbs while stick walking.
+
+### Headset result, third stage
+
+Package `PreyVR-roomscale-3-wip` (DLL `8174D1B9…`), run `player-20261011-165905`: about two
+minutes of gameplay, Steam Frame, headset kept on. The wearer reported **"everything works as
+expected."** From the last status line:
+
+| Area | Counters | Reading |
+|---|---|---|
+| Turning | `applied=7056`, `turnedDeg=2390` over 26 snaps; `readbackMaxMdeg=0`; `stepFollowedMaxMdeg=1` against `stepIdleMaxMdeg=0` | The body turned throughout and the view never moved for it. The 9° steps of earlier runs were absent; this run had no tuner use, consistent with mouse look on refocus |
+| Room-scale | `moved=1354`, `movedM=7.4`; `viewDrift=0`; `sweepRefused=0`, `roomBusy=0`, `jumps=0` | 541 then 813 moves a minute, against 934–1863 before the neck model |
+| Standing aside | `nativeMoving=2696` | Frames the engine moved the capsule (stick walking) and room-scale left it alone. No stalls reported |
+| Walls | `blocked=1611`, `headOutEvents=9`, `headOutFrames=759`, `headHits=382`, `fadeFrames=872`; `fade_swapchain format=91` on the first fade | The fade drew. It counts more frames than the head was out, because it draws at display rate and fades out over 0.2 s |
+| Health | `faults=0`, `busy=0`, `threadMismatch=0`, `noView=26` | |
+
+No runtime tracking-space changes this run. The `head_missing` lines at the end are the pause
+menu (there is no gameplay view to pair), as before this branch.
 
 ### Commands
 
