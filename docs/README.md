@@ -21,6 +21,10 @@ The notebook separates evidence from plans so implementation follows demonstrate
 > Both eyes rendered in one frame (the render view submitted twice), with the HUD, text
 > popups, markers, fades and the reticle in both eyes:
 > [`STEREO-DUAL-SUBMISSION-2026-10-10.md`](STEREO-DUAL-SUBMISSION-2026-10-10.md).
+> The player's body turns with the player, through the engine's own view-rotation setter,
+> without moving the view: [`BODY-YAW-2026-10-11.md`](BODY-YAW-2026-10-11.md). It also
+> walks with them across the room, swept for walls, and the view goes black when the head
+> goes through one: [`ROOMSCALE-2026-10-11.md`](ROOMSCALE-2026-10-11.md).
 >
 > [`HANDOVER-2026-08-07-HARDENING.md`](HANDOVER-2026-08-07-HARDENING.md) remains
 > the record of binary identity and lifecycle decisions.

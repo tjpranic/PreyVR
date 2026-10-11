@@ -10,8 +10,12 @@ The artifact `BN-STE-001` names as its exit proof.
 > no noticeable doubling. **2026-10-11:** what Prey draws after the world (HUD,
 > reticle, text popups, markers, fades) now reaches both eyes -- the HUD and text
 > on floating panels, the rest redrawn into the held first eye. Open: frame rate,
-> body yaw, marker depth, UI in VR space. See
+> marker depth, UI in VR space. See
 > [`STEREO-DUAL-SUBMISSION-2026-10-10.md`](STEREO-DUAL-SUBMISSION-2026-10-10.md).
+> **2026-10-11 (branch `playability-improvements`):** body yaw is closed, and
+> room-scale with it. The body turns and walks with the player without moving the
+> view ([`BODY-YAW-2026-10-11.md`](BODY-YAW-2026-10-11.md),
+> [`ROOMSCALE-2026-10-11.md`](ROOMSCALE-2026-10-11.md)).
 
 **Rung 1b has been opened by the CryEngine source and is not yet priced.** See
 `CRYENGINE_SOURCE_FINDINGS.md`: `CD3DStereoRenderer::RenderScene` traverses the

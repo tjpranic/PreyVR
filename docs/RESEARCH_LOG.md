@@ -3667,3 +3667,67 @@ frames, 0 refused; 3,635 2D images and 41,605 marker draws redrawn, 0 refused;
 84% of reticle samples on a scene hit; the wearer confirmed every element in both
 eyes. Markers have no depth yet and the reticle is generic rather than Prey's own
 art. See [after-world overlays](STEREO-DUAL-SUBMISSION-2026-10-10.md#after-world-overlays-in-both-eyes-2026-10-11).
+
+## 2026-10-11 — The player's body turns with the player
+
+Reported in a headset: after a physical 180° or a snap, looking down showed the character's back.
+
+**Cause.** The view is the play space's yaw P = G − R plus the head, and the body faces the
+native yaw G. Neither a physical turn (the head) nor a snap turn (R) ever changed G.
+
+**The seam.** ArkPlayer's primary vtable `0x1E56B30`, slot 52 `0x1584CC0`, is a view-rotation
+setter of the IActor `SetViewRotation` shape. It writes ArkPlayer `+0x13F0`
+(`ArkPlayerCamera::m_rotation`, saved as `"rotation"`), calls the entity's `SetRotation` slot,
+and updates a component at `+0x1468` that keeps its own copy. A field write would leave that copy
+stale. `tools/re/verify_view_rotation.py` pins the seam.
+
+**The design.**
+- At `ArkPlayer::Update` entry (slot 19), the native player is turned to the torso yaw T (the
+  head behind a 35° deadzone).
+- R turns by exactly the angle the setter applied, so R = T and P never moves. There is no
+  generation bump.
+- Snap turn, recenter and smooth turn needed nothing of their own.
+- The shoulders, holsters and medkit slot share the torso. Heavy carry turns with the body.
+
+**Evidence.** Steam Frame, `player-20261011-152301`:
+- 10752 turns and 41 snaps;
+- `readbackMaxMdeg=0`;
+- the view's yaw stepped at most 0.001° on a frame the body turned, against 0 on idle frames;
+- no hand flash.
+
+See [body yaw](BODY-YAW-2026-10-11.md).
+
+## 2026-10-11 — Room-scale: the body walks with the player
+
+With the body turning, stepping back still left the player model in front of the wearer. The
+view placed the eye at the native eye plus the head's offset from the play-space origin, so
+walking only grew the offset.
+
+**The seam.** The concrete `CEntity` vtable `0x1D30BD0` (the one holding SceneQuery's
+hash-gated `GetPhysics`) has `SetPos` at `+0x108` (`0x90AF40`) and `GetPos` at `+0x110`. The
+player's stance change moves the player with this same pair after a ceiling raycast.
+
+**The design.**
+- Each frame the capsule moves towards the neck under the head. The neck point means head
+  rotation alone does not move it.
+- It follows past a 3 cm deadzone, with a 50 ms glide, capped at 3 m/s.
+- The move is swept by nine rays through the verified `RayWorldIntersection` adapter.
+- The play-space origin shifts by exactly the displacement `SetPos` applied, with no generation
+  bump, so the view does not move. Stick walking, lifts and scripted moves still move the view.
+- Room-scale stands aside while the engine moves the capsule.
+- A head through geometry, or 30 cm from a body the sweep stopped, fades the view to black and
+  holds off the trigger, use and melee.
+
+**Three headset iterations.** Each found something:
+- `SetPos` holds: zero view-time drift over 396 moves, and a 20 cm nudge kept for 300 frames.
+- Following the eyes stalled the stick's walking (F-019).
+- The fade's texture was refused silently (F-018).
+- Typed diagnostics were dropped while the game was paused (F-020).
+
+**The accepted run** (`player-20261011-165905`):
+- 1354 moves (7.4 m), `viewDrift=0`;
+- 2696 frames stood aside for the engine;
+- 9 head-out events and 872 fade frames;
+- no faults.
+
+See [room-scale](ROOMSCALE-2026-10-11.md).

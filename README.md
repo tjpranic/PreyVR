@@ -52,6 +52,15 @@ evaluating whether this accelerates your own work, read the open list first.
   of `ProcessAnimationDrivenIK`, makes Prey's two-bone solver solve the arm.
   Wrist rotation, finger travel and elbow bend are the engine's, not ours.
 - **Motion controls.** Left stick moves, right stick turns, trigger fires.
+- **The body turns and walks with the player** (2026-10-11, branch
+  `playability-improvements`).
+  - The native player is turned to the torso through its own view-rotation
+    setter, and moved under the neck through its entity's `SetPos`, swept for
+    walls.
+  - The play space moves by exactly what was applied, so the view never does.
+  - A head through a wall is blacked out.
+  - Accepted on a Steam Frame; see [`docs/BODY-YAW-2026-10-11.md`](docs/BODY-YAW-2026-10-11.md)
+    and [`docs/ROOMSCALE-2026-10-11.md`](docs/ROOMSCALE-2026-10-11.md).
 - **The reticle follows the controller.** Prey's HUD draws into a 16:9 canvas
   scaled to *cover* the frame, so a viewport fraction is correct at the centre and
   increasingly wrong outward — measured at up to 271 px of error at 2688x2880,

@@ -12,7 +12,9 @@ Turning changes the shared tracking reference used by view, aim and rig ownershi
 The reference origin rotates around the current tracked head position, preserving
 world head position even when leaning away from the calibrated origin. The native
 body yaw is not directly rewritten. Movement uses head yaw relative to this same
-reference, so forward follows the resulting view after a snap.
+reference, so forward follows the resulting view after a snap. (Superseded
+2026-10-11: the body now turns to the torso after a snap or a physical turn; see
+[BODY-YAW-2026-10-11.md](BODY-YAW-2026-10-11.md).)
 
 `move.headrelative 1` is enabled by default. `move.headrelative 0` restores native
 body-axis inputs. Directional engine speed modifiers are preserved by default.

@@ -283,7 +283,10 @@ the body mesh in VR. Investigated, with a native seam and a design, in
 1. Measure frame time and GPU time at headset resolution with both eyes; skip the
    second submission and the overlay redraws while the menu panel is up; decide
    whether shadow maps and other per-frame work can be shared between submissions.
-2. Body yaw following the headset, or hiding the body.
+2. ~~Body yaw following the headset, or hiding the body.~~ Done on
+   `playability-improvements`: the body turns with the player
+   ([BODY-YAW-2026-10-11.md](BODY-YAW-2026-10-11.md)) and walks with them
+   ([ROOMSCALE-2026-10-11.md](ROOMSCALE-2026-10-11.md)).
 3. Marker depth, if markers look wrong in play (see the limits above).
 4. A proper fix for UI in VR space, the crosshair included (the VR reticle was
    removed ahead of it).

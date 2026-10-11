@@ -75,7 +75,10 @@ native menu is already open; `vr.options 1` is the diagnostic equivalent.
   speed, and **Body Follows You**:
   - **Turn and Move** (the default): the character's body turns to face you once
     you look past a short deadzone, and steps to stay under you as you walk round
-    the room. Walls stop the body, not your head.
+    the room. Turning or tilting your head alone does not move it. Walls stop the
+    body, not your head: if your head goes into a wall, or more than about 30 cm
+    past a body the wall has stopped, the view fades to black and the trigger and
+    use button do nothing until you step back.
   - **Turn Only:** it turns but stays where it is when you walk.
   - **Off:** the game's own facing.
 
@@ -180,6 +183,15 @@ For this session only, use `move.snap 30` or `move.headrelative 0` in
 **Tune Prey VR.cmd**. Their bare commands report the current setting. Runtime
 commands do not update the JSON. Return the stick to neutral after changing modes.
 
+Body following can be tuned the same way, for this session only:
+- `body.zone 30 5 50` sets how far your head moves before the body follows, how
+  close it brings it, and how quickly it glides (millimetres, millimetres,
+  milliseconds; lower is tighter, `0` for no glide).
+- `body.follow 0|1` and `body.roomscale 0|1` switch turning and moving separately.
+- `body.report` prints the counters.
+
+The in-headset option is what persists.
+
 `view.height` reports the chosen reference space and calibrated height.
 `view.calibrate` sets a new standing/seated baseline from the current tracked
 head position. Ordinary recenter preserves that height baseline. Floor tracking
@@ -201,7 +213,7 @@ Both eyes are rendered from the same game frame by default (`DualStereo: 1`). `D
 
 ## Recovery and support
 
-If startup fails, the launcher names the failed stage and the diagnostic folder under `%LOCALAPPDATA%\PreyVR\runs`. While VR is running, that folder's `PreyVR.log` also records the rendering and HUD counters once a minute (lines starting `preyvr_vr status`); include it when reporting a problem. Resolve the headset/runtime issue, return focus to Prey, and press F11 to retry. Reconnect the runtime before retrying a lost XR session. F12 and the grip chord need a fresh tracked headset pose.
+If startup fails, the launcher names the failed stage and the diagnostic folder under `%LOCALAPPDATA%\PreyVR\runs`. While VR is running, that folder's `PreyVR.log` also records the rendering, HUD and body-following counters once a minute (lines starting `preyvr_vr status`, with `body={...}` last); include it when reporting a problem. Resolve the headset/runtime issue, return focus to Prey, and press F11 to retry. Reconnect the runtime before retrying a lost XR session. F12 and the grip chord need a fresh tracked headset pose.
 
 This package supports the verified **Steam Prey 2017 x64 build** only. The launcher checks `PreyDll.dll` before loading anything; it does not patch game files. Keep the package files together. It also refuses to launch over another detected fleet game.
 

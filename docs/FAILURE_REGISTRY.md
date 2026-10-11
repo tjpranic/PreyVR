@@ -869,6 +869,68 @@ is the shape to perfect rather than abandon.
 - **Recovery:** Fixed 2026-10-11; first SteamVR session: `hud_swapchain format=29 captureFormat=28`, no
   refusals. That 28 itself was refused is the strong inference (the old path never logged the XrResult).
 
+## F-018 - The head-in-wall fade's 4x4 texture was refused by InventorySwapchain, silently
+
+- **Date:** found and fixed 2026-10-11, the day it was written.
+- **Target:** SteamVR/OpenXR on a Steam Frame; Steam `PreyDll.dll` `7D6E322F...`.
+- **Intent:** Black out the view with a quad layer while the head is through a wall (the
+  head-in-wall layer, `ROOMSCALE-2026-10-11.md`).
+- **Mechanism:** The fade used a 4x4 black texture through `InventorySwapchain::Prepare`, built the
+  same way as the slot card. `Supported()` refuses any source under 640x480. The fade code reset
+  the swapchain on refusal without logging it.
+- **Result:** In headset run `player-20261011-164559` the detector worked (`headOutEvents=7`,
+  `headHits=814`, the head up to 46 cm from a blocked body), but nothing drew, and no log line
+  said why.
+- **Rule:**
+  - `InventorySwapchain` sources are at least 640x480.
+  - Log every `Prepare` refusal with `LastRefusal` and `LastResult`.
+  - Count the frames a layer is actually submitted, so a detector that works and a layer that
+    never draws can be told apart from the counters.
+- **Recovery:** The fade is now 640x480, logs `detail=fade_swapchain`, and counts `fadeFrames`.
+  The next run logged `fade_swapchain format=91` and `fadeFrames=872`, and the wearer saw the
+  fade.
+
+## F-019 - A room-scale follower that chased the eyes stalled the stick's walking
+
+- **Date:** found and fixed 2026-10-11.
+- **Target:** Steam `PreyDll.dll` `7D6E322F...`; the player entity's `SetPos` (`0x90AF40`).
+- **Intent:** Keep the player's capsule under the head with a small (3 cm) deadzone, after a
+  12 cm one read as the body lurching after the player.
+- **Mechanism:**
+  - The follower tracked the eye position, which swings several centimetres about the neck
+    whenever the head turns or tips.
+  - With a 3 cm deadzone it called `SetPos` once every two to four frames (934–1863 moves a
+    minute).
+  - A `SetPos` while the engine is walking the living entity stalls that walk.
+- **Result:** The wearer: "The player seems to get momentarily stuck in place, especially
+  noticeable while turning."
+- **Rule:**
+  - Follow the neck's pivot, not the eyes (`roomscale::FollowPoint`).
+  - Never `SetPos` the capsule while the engine is moving it: stand aside above 0.25 m/s of
+    native motion (stick walking, jumps, falls, lifts).
+- **Recovery:** The next run made 541–813 moves a minute, stood aside for 2696 frames
+  (`nativeMoving`), and no stall was reported.
+
+## F-020 - Diagnostic requests consumed outside gameplay are lost
+
+- **Date:** found and fixed 2026-10-11.
+- **Target:** The `body.nudge` and `body.turn` diagnostics, typed in **Tune Prey VR.cmd**.
+- **Intent:** Move the body by a known amount from the tuner, to test whether the physics puts
+  it back.
+- **Mechanism:**
+  - The tuner needs the desktop. Losing focus pauses Prey, so gameplay input is not allowed.
+  - The lane exchanged the request out of its slot before checking for gameplay, then dropped
+    it at that check.
+- **Result:** Two nudges typed, `nudges=0`, no log line. A headset test cycle was spent on a
+  check that never ran.
+- **Rule:** A diagnostic meant to be typed in the tuner must:
+  - stay pending until it can run in gameplay;
+  - wait a delay, so the wearer can get back into the headset first;
+  - expire visibly;
+  - log when it runs.
+- **Recovery:** `body.nudge` and `body.turn` take `[delayS]` (default 5). The next run logged
+  `detail=nudge_done movedMm=200`, with `nudgeDriftMaxMm=0`.
+
 ---
 
 # F-009 -- the viewmodel character pointer is EPHEMERAL, and pinning it is a trap
