@@ -16,6 +16,12 @@
 #include "XrSessionHost.h"
 #include "DebugOverlay.h"
 #include "ShotRay.h"
+#include "AnimIkTakeover.h"
+#include "CarryLane.h"
+#include "GrenadeLane.h"
+#include "HudLayer.h"
+#include "InteractionLane.h"
+#include "WristLane.h"
 #include "preyvr/DebugOverlayScene.h"
 #include "Logger.h"
 #include <atomic>
@@ -33,7 +39,15 @@ std::atomic<bool> ready{false},open{false},owned{false},saveFailed{false},scope{
 std::atomic<bool> holsters{false},wrist{true}; // wrist: options::Defaults()
 std::atomic<bool> beltHints{true};
 std::atomic<unsigned> wristSize{100};
-std::atomic<unsigned> dirty{0},page{0},row{0};
+// One changed-flag per setting: no cap on how many there are.
+std::array<std::atomic<bool>,options::Count> dirty{};
+// **What the save file holds**: values chosen in the menu, or read from the
+// file -- never the live lane values, so a tuner change stays in its session
+// even after something else is saved. Only `present` settings are written and
+// applied; the rest keep their built-in values.
+std::mutex savedMutex;
+options::Values saved=options::Defaults();
+options::Present present{};
 std::atomic<int> request{0};
 // Latest explicit request wins. Busy reference locks retry for at most one
 // second, within the same tracking session; a stale request never fires later.
@@ -50,96 +64,195 @@ void QueueViewRequest(int action,std::uint64_t epoch){
 std::optional<ui::Surface> pointerSurface;
 std::uint64_t surfaceReference=0;
 long long previousTime=0;
+// The panel (VrOptionsUi) draws and navigates; the menu state machine opens,
+// closes and owns the controls.
+VrOptionsUiInput uiInput;      // XR thread: this frame's controls, for the panel
+TrackingFrame uiFrame{};       // XR thread: the sample they came from (haptics)
+bool stickUp=false,stickDown=false,stickLeft=false,stickRight=false;
+bool previousGripWas=false,nextGripWas=false;
+bool grabbing=false;unsigned grabSerial=0;float grabPush=0; // XR thread: VrOptionsGrab
+// One change from the panel: buttons queue their action, a setting takes its
+// value and saves on the command worker, and a changed value pulses `hand`.
+void HandleChange(const options::Change& change,const TrackingFrame& f,Hand hand){
+ if(change.recenter||change.calibrate){
+  QueueViewRequest(change.calibrate?2:1,f.epoch);
+ }
+ if(change.clearHolsters)ClearHolsters();
+ if(change.setting>=0){
+  const auto id=static_cast<unsigned>(change.setting);
+  // A value outside the setting's range is refused: not applied, not saved.
+  if(!options::Valid(id,change.value))return;
+  const auto before=VrOptionsValues()[id];
+  values[id]=change.value;dirty[id]=true;
+  if(before!=change.value)QueueHaptic(hand,haptics::Event::MenuChange,f);
+ }
+}
+// The panel's navigation (TrackingFrame::navigate) as four held directions,
+// with the navigator's hysteresis: engage past 0.6, release under 0.35, so a
+// resting stick cannot chatter. ImGui does the repeat. Buttons stay up until
+// the menu is armed (the opening hold, or a press carried in from the game
+// menu, must not also act on the panel).
+void CaptureUiInput(const TrackingFrame& f,const std::optional<ui::RayHit>& hit,bool armed,float dt,bool trigger){
+ VrOptionsUiInput in;in.dt=dt;
+ if(hit&&hit->inside){in.pointer=true;in.u=hit->u;in.v=hit->v;}
+ const auto& l=f.hands[0];const auto& r=f.hands[1];
+ const auto held=[](bool& state,float value){state=state?value>.35f:value>.6f;return state;};
+ const bool up=held(stickUp,f.navigate.y),down=held(stickDown,-f.navigate.y);
+ const bool left=held(stickLeft,-f.navigate.x),right=held(stickRight,f.navigate.x);
+ const bool previous=l.gripPressed&&!previousGripWas,next=r.gripPressed&&!nextGripWas;
+ previousGripWas=l.gripPressed;nextGripWas=r.gripPressed;
+ if(armed){
+  in.click=trigger;in.accept=r.menuAccept;in.up=up;in.down=down;in.left=left;in.right=right;
+  in.previousPage=previous;in.nextPage=next;
+  // The left stick scrolls the list; it moves nothing else while the panel is open.
+  if(std::isfinite(l.thumbstickY)&&std::fabs(l.thumbstickY)>.2f)in.scroll=l.thumbstickY;
+ }
+ // **While the panel is held**, the trigger holds it rather than clicking, and
+ // the laser hand's stick pushes it away or pulls it in; the sticks navigate
+ // and scroll nothing meanwhile. Letting go of the trigger drops it.
+ const auto hand=UiPointerHand();
+ if(grabbing&&(!armed||!trigger||hand>=2)) {
+  grabbing=false;
+  if(hand<2)QueueHaptic(static_cast<Hand>(hand),haptics::Event::MenuChange,f);
+ }
+ grabPush=0;
+ if(grabbing) {
+  in.click=false;in.up=in.down=in.left=in.right=false;in.scroll=0;in.held=true;
+  const float y=f.hands[hand].thumbstickY;
+  if(std::isfinite(y)&&std::fabs(y)>.2f)grabPush=std::clamp(y,-1.f,1.f);
+ }
+ uiInput=in;uiFrame=f;
+}
 std::filesystem::path SettingsPath(){
  wchar_t path[32768]{};const auto n=GetEnvironmentVariableW(L"LOCALAPPDATA",path,32768);
  if(!n||n>=32768)return {};
  return std::filesystem::path(path)/L"PreyVR"/L"vr-options.ini";
 }
-void Apply(unsigned id,int v){
- switch(id){
- case options::PsiTarget:SetPsiTargetMode(v);break;
- case options::Medkit:SetMedkitSlot(v);break;
- case options::PhysicalMelee:SetPhysicalMelee(v);break;
- case options::PhysicalContacts:SetPhysicalContacts(v);break;
- case options::SwingSpeed:SetSwingSpeed(v);break;
- case options::ContactStrength:SetContactStrength(v);break;
- case options::SceneReticle:SetSceneReticle(v);break;
- case options::ReticleFallback:SetReticleConvergenceMillimetres(v);break;
- case options::Haptics:SetHapticsEnabled(v);break;
- case options::HapticStrength:SetHapticStrength(v);break;
- case options::Turn:SetSnapTurnDegrees(v);break;
- case options::HeadRelative:SetHeadRelativeMovement(v);break;
- case options::TurnSpeed:SetTurnLaneScale(v);break;
- case options::TwoHand:SetTwoHandedAim(v);break;
- case options::GripToggle:SetTwoHandGripToggle(v);break;
- case options::SupportSnap:SetTwoHandSupportSnap(v);break;
- case options::Psychoscope:scope.store(v!=0);break;
- case options::Holsters:holsters.store(v!=0);ClearHolsters();break;
- case options::Wrist:wrist.store(v!=0);break;
- case options::WristSize:wristSize=v;break;
- case options::BeltHints:beltHints=v!=0;break;
- case options::UiScale:SetUiScalePercent(v);break;
- case options::UiMargin:SetUiFitMarginPercent(v);break;
- case options::UiCurve:SetUiCurveDegrees(v);break;
- case options::UiGuide:SetUiGuideEnabled(v);break;
- case options::DebugOverlay:SetDebugOverlay(v?debugdraw::kAllLayers:0u);break;
- case options::MuzzleAim:SetShotRay(v);break;
- case options::BodyFollow:SetBodyFollowMode(v);break;
- }
+// Most settings are one lane setter and its getter.
+template<class R,class P> P ParameterOf(R(*)(P));
+template<auto Setter> void Set(int v){Setter(static_cast<decltype(ParameterOf(Setter))>(v));}
+template<auto Getter> int Get(){return static_cast<int>(Getter());}
+// **How each setting reaches its lane, and is read back from it**, in Setting
+// order. Read back from the lane rather than from what the menu last set, so
+// the panel shows a command's change (Tune Prey VR.cmd) as it stands.
+struct Wiring { options::Setting id; void (*apply)(int); int (*read)(); };
+constexpr Wiring wiring[]={
+ {options::Turn,Set<SetSnapTurnDegrees>,Get<SnapTurnDegrees>},
+ {options::HeadRelative,Set<SetHeadRelativeMovement>,Get<HeadRelativeMovementEnabled>},
+ {options::TurnSpeed,Set<SetTurnLaneScale>,Get<TurnLaneScalePercent>},
+ {options::TwoHand,Set<SetTwoHandedAim>,Get<TwoHandedAimEnabled>},
+ {options::GripToggle,Set<SetTwoHandGripToggle>,Get<TwoHandGripToggle>},
+ {options::SupportSnap,Set<SetTwoHandSupportSnap>,Get<TwoHandSupportSnap>},
+ {options::Psychoscope,[](int v){scope.store(v!=0);},[]{return static_cast<int>(scope.load());}},
+ {options::UiScale,Set<SetUiScalePercent>,Get<UiScalePercent>},
+ {options::UiMargin,Set<SetUiFitMarginPercent>,Get<UiFitMarginPercent>},
+ {options::UiCurve,Set<SetUiCurveDegrees>,Get<UiCurveDegrees>},
+ {options::UiGuide,Set<SetUiGuideEnabled>,Get<UiGuideEnabled>},
+ // A change of mind clears the slots, so no weapon is left in a disabled one.
+ {options::Holsters,[](int v){holsters.store(v!=0);ClearHolsters();},[]{return static_cast<int>(holsters.load());}},
+ {options::Wrist,[](int v){wrist.store(v!=0);},[]{return static_cast<int>(wrist.load());}},
+ {options::WristSize,[](int v){wristSize=static_cast<unsigned>(v);},[]{return static_cast<int>(wristSize.load());}},
+ {options::SceneReticle,Set<SetSceneReticle>,Get<SceneReticleEnabled>},
+ {options::ReticleFallback,Set<SetReticleConvergenceMillimetres>,Get<ReticleConvergenceMillimetres>},
+ {options::Haptics,Set<SetHapticsEnabled>,Get<HapticsEnabled>},
+ {options::HapticStrength,Set<SetHapticStrength>,Get<HapticStrength>},
+ {options::PhysicalMelee,Set<SetPhysicalMelee>,Get<PhysicalMeleeEnabled>},
+ {options::PhysicalContacts,Set<SetPhysicalContacts>,Get<PhysicalContactsEnabled>},
+ {options::SwingSpeed,Set<SetSwingSpeed>,Get<SwingSpeed>},
+ {options::ContactStrength,Set<SetContactStrength>,Get<ContactStrength>},
+ {options::PsiTarget,Set<SetPsiTargetMode>,Get<PsiTargetMode>},
+ {options::Medkit,Set<SetMedkitSlot>,Get<MedkitSlotEnabled>},
+ {options::BeltHints,[](int v){beltHints=v!=0;},[]{return static_cast<int>(beltHints.load());}},
+ // On is every layer; the menu's row cannot pick layers (dbg.draw can).
+ {options::DebugOverlay,[](int v){SetDebugOverlay(v?debugdraw::kAllLayers:0u);},
+  []{return static_cast<int>(DebugOverlayMask()!=0);}},
+ {options::MuzzleAim,Set<SetShotRay>,Get<ShotRayEnabled>},
+ {options::BodyFollow,Set<SetBodyFollowMode>,Get<BodyFollowMode>},
+ {options::UiDistance,Set<SetUiDistanceCm>,Get<UiDistanceCm>},
+ // The offsets are set as a pair: each keeps the other's current value.
+ {options::UiOffsetRight,[](int v){SetUiOffsetDegrees(v,UiOffsetUpDegrees());},Get<UiOffsetRightDegrees>},
+ {options::UiOffsetUp,[](int v){SetUiOffsetDegrees(UiOffsetRightDegrees(),v);},Get<UiOffsetUpDegrees>},
+ {options::UiText,Set<SetTextPanelDistanceCm>,Get<TextPanelDistanceCm>},
+ {options::PointerHand,Set<SetUiPointerHand>,Get<UiPointerHand>},
+ {options::HudLayer,Set<SetHudLayerEnabled>,Get<HudLayerEnabled>},
+ {options::MoveDeadzone,Set<SetMoveLaneDeadzone>,Get<MoveLaneDeadzone>},
+ {options::TurnDeadzone,Set<SetTurnLaneDeadzone>,Get<TurnLaneDeadzone>},
+ // Sideways and backward speed are set as a pair, like the offsets.
+ {options::StrafeSpeed,[](int v){SetMovementAxisScales(static_cast<unsigned>(v),MovementBackwardPercent());},
+  Get<MovementStrafePercent>},
+ {options::BackwardSpeed,[](int v){SetMovementAxisScales(MovementStrafePercent(),static_cast<unsigned>(v));},
+  Get<MovementBackwardPercent>},
+ {options::BodyTurnDeadzone,Set<SetTorsoDeadzone>,Get<TorsoDeadzoneDegrees>},
+ // The stop distance stays below the new start, as the zone requires.
+ {options::BodyStep,[](int v){SetRoomScaleZone(v,std::min(RoomScaleStopMm(),v-1),-1);},Get<RoomScaleStartMm>},
+ {options::BodyGlide,[](int v){SetRoomScaleZone(RoomScaleStartMm(),RoomScaleStopMm(),v);},Get<RoomScaleFollowMs>},
+ {options::ArmsFree,Set<SetAnimIkFreeArms>,Get<AnimIkFreeArms>},
+ {options::CarryHold,Set<SetCarryHoldToHold>,Get<CarryHoldPreference>},
+ {options::GrenadeHand,Set<SetGrenadeHand>,Get<GrenadeHandEnabled>},
+ {options::CarryThrowStrength,Set<SetCarryThrowGainPercent>,Get<CarryThrowGainPercent>},
+ {options::GrenadeThrowStrength,Set<SetGrenadeThrowStrengthPercent>,Get<GrenadeThrowStrengthPercent>},
+ {options::WristOnHud,Set<SetWristStatusOnHud>,Get<WristStatusOnHud>},
+ {options::WristTick,Set<SetWristTick>,Get<WristTickEnabled>},
+ {options::WristAlong,Set<SetWristAlongMm>,Get<WristAlongMm>},
+ {options::WristHover,Set<SetWristHoverMm>,Get<WristHoverMm>},
+ {options::WristTilt,Set<SetWristTiltDegrees>,Get<WristTiltDegrees>},
+ // Carrying in the hand rides on the left hand's use, as VR start arms it.
+ {options::CarryHand,[](int v){if(!v||UseHandLeft())SetCarryHand(static_cast<unsigned>(v));},Get<CarryHandEnabled>},
+ {options::GrenadeDeploy,Set<SetGrenadeDeploy>,Get<GrenadeDeployEnabled>},
+ {options::LongReach,Set<SetAnimIkLongReachEnabled>,Get<AnimIkLongReachEnabled>},
+ {options::InventoryLayer,Set<SetInventoryCaptureEnabled>,Get<InventoryCaptureEnabled>},
+ {options::InventoryStereo,Set<SetInventoryStereoEnabled>,Get<InventoryStereoEnabled>},
+ {options::InventoryDepth,Set<SetInventoryDepthPercent>,Get<InventoryDepthPercent>},
+};
+constexpr bool InSettingOrder(){
+ for(unsigned i=0;i<std::size(wiring);++i)if(wiring[i].id!=i)return false;
+ return std::size(wiring)==options::Count;
 }
+static_assert(InSettingOrder(),"one wiring per setting, in Setting order");
+void Apply(unsigned id,int v){if(id<options::Count)wiring[id].apply(v);}
 void Save(){
  try{
   const auto path=SettingsPath();if(path.empty()){saveFailed=true;return;}
   std::filesystem::create_directories(path.parent_path());
   auto temp=path;temp+=L".tmp";
-  {std::ofstream out(temp,std::ios::binary|std::ios::trunc);out<<options::Serialize(VrOptionsValues());out.flush();if(!out){saveFailed=true;return;}}
+  std::string text;
+  {std::lock_guard lock(savedMutex);text=options::Serialize(saved,&present);}
+  {std::ofstream out(temp,std::ios::binary|std::ios::trunc);out<<text;out.flush();if(!out){saveFailed=true;return;}}
   saveFailed=!MoveFileExW(temp.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH);
  }catch(...){saveFailed=true;}
  if(saveFailed.load())lifecycle::Log("preyvr_options save=failed settings_remain_active=1");
 }
 }
 options::Values VrOptionsValues(){
- auto v=options::Defaults();
- v[options::PsiTarget]=PsiTargetMode();v[options::Medkit]=MedkitSlotEnabled();
- v[options::PhysicalMelee]=PhysicalMeleeEnabled();v[options::PhysicalContacts]=PhysicalContactsEnabled();
- v[options::SwingSpeed]=SwingSpeed();v[options::ContactStrength]=ContactStrength();
- v[options::SceneReticle]=SceneReticleEnabled();
- v[options::ReticleFallback]=static_cast<int>(ReticleConvergenceMillimetres());
- v[options::Haptics]=HapticsEnabled();v[options::HapticStrength]=HapticStrength();
- v[options::Turn]=SnapTurnDegrees();v[options::HeadRelative]=HeadRelativeMovementEnabled();
- v[options::TwoHand]=TwoHandedAimEnabled();v[options::GripToggle]=TwoHandGripToggle();v[options::SupportSnap]=TwoHandSupportSnap();
- v[options::TurnSpeed]=TurnLaneScalePercent();v[options::BodyFollow]=BodyFollowMode();
- v[options::UiScale]=UiScalePercent();v[options::UiMargin]=UiFitMarginPercent();
- v[options::UiCurve]=UiCurveDegrees();v[options::UiGuide]=UiGuideEnabled();
- v[options::Psychoscope]=scope.load();
- v[options::Holsters]=holsters.load();v[options::Wrist]=wrist.load();v[options::WristSize]=wristSize.load();
- v[options::BeltHints]=beltHints.load();
- v[options::DebugOverlay]=DebugOverlayMask()!=0;
- v[options::MuzzleAim]=ShotRayEnabled();
- // Read the actual lane settings, including changes made through the command
- // channel. Pending menu edits override only their own row until applied.
- const auto pending=dirty.load();
- for(unsigned i=0;i<options::Count;++i)if(pending&(1u<<i))v[i]=values[i].load();
+ // The lanes' own values, including changes made through the command channel;
+ // a menu edit not yet applied stands in for its own setting until it is.
+ options::Values v{};
+ for(unsigned i=0;i<options::Count;++i)v[i]=dirty[i].load()?values[i].load():wiring[i].read();
  return v;
 }
 void LoadVrOptions(){
  if(ready.load())return;
- auto v=VrOptionsValues();
+ // Read only: the values apply when VR starts (ApplySavedVrOptions), after VR
+ // start's own defaults, so a saved choice is the one in force.
  try{
   std::ifstream in(SettingsPath(),std::ios::binary);
   if(in){std::string data;char chunk[8193]{};in.read(chunk,sizeof(chunk));data.assign(chunk,static_cast<size_t>(in.gcount()));
-   options::Values parsed{};if(options::Parse(data,parsed))v=parsed;else lifecycle::Log("preyvr_options load=invalid defaults_retained=1");
+   options::Values parsed{};options::Present marked{};
+   if(options::Parse(data,parsed,&marked)){std::lock_guard lock(savedMutex);saved=parsed;present=marked;}
+   else lifecycle::Log("preyvr_options load=invalid defaults_retained=1");
   }
  }catch(...){lifecycle::Log("preyvr_options load=failed defaults_retained=1");}
- for(unsigned i=0;i<options::Count;++i){
-  values[i]=v[i];
-  // A saved "off" must not undo a debug overlay the launcher or a command enabled.
-  if(i==options::DebugOverlay&&!v[i])continue;
-  // Same for shots from the muzzle: off by default, on by a launcher or a command.
-  if(i==options::MuzzleAim&&!v[i])continue;
-  Apply(i,v[i]);
- }
  ready.store(true);
+}
+void ApplySavedVrOptions(){
+ options::Values v;options::Present p;
+ {std::lock_guard lock(savedMutex);v=saved;p=present;}
+ unsigned applied=0;
+ for(unsigned i=0;i<options::Count;++i){
+  if(!p[i])continue;
+  Apply(i,v[i]);++applied;
+ }
+ lifecycle::Log("preyvr_options applied="+std::to_string(applied));
 }
 void ServiceVrOptions(){
  if(!ready.load())return;
@@ -159,41 +272,42 @@ void ServiceVrOptions(){
    }
   }
  }
- const auto mask=dirty.exchange(0);
- if(mask){for(unsigned i=0;i<options::Count;++i)if(mask&(1u<<i))Apply(i,values[i].load());Save();}
+ bool changed=false;
+ for(unsigned i=0;i<options::Count;++i){
+  if(!dirty[i].exchange(false))continue;
+  const int v=values[i].load();
+  Apply(i,v);
+  {std::lock_guard lock(savedMutex);saved[i]=v;present[i]=true;}
+  changed=true;
+ }
+ if(changed)Save();
 }
 bool ProcessVrOptionsInput(const TrackingFrame& f){
  options::Input i;const auto& l=f.hands[0];const auto& r=f.hands[1];
  i.valid=ready.load()&&FreshSample(MonotonicNanoseconds(),f.publishedNs)&&IsPoseUsable(f.head,f.headValidity,200000000);
  i.modal=HudMenuStateKnown()&&HudMenuIsOpen();i.epoch=f.epoch;
  i.start=l.menuStart||r.menuStart;i.accept=r.menuAccept;i.cancel=r.menuCancel;
- i.previous=l.gripPressed;i.next=r.gripPressed;i.x=r.thumbstickX;i.y=r.thumbstickY;
+ i.previous=l.gripPressed;i.next=r.gripPressed;
+ // Navigation held is not "at rest" when the panel arms.
+ i.x=f.navigate.x;i.y=f.navigate.y;
  const auto hand=UiPointerHand();i.trigger=hand<2?f.hands[hand].triggerPressed:false;
  i.dt=previousTime&&f.displayTime>previousTime?static_cast<float>(f.displayTime-previousTime)*1e-9f:0;
  previousTime=f.displayTime;
  // Intersect the current controller sample with the anchored panel; never use
  // a previous frame's hover location to decide a new trigger press.
+ std::optional<ui::RayHit> hit;
  if(pointerSurface&&surfaceReference==HeadTrackingReferenceGeneration()&&hand<2&&
     IsPoseUsable(f.hands[hand].aimPose,f.hands[hand].aimValidity,200000000)){
-  const auto hit=ui::Intersect(*pointerSurface,f.hands[hand].aimPose);
-  if(hit&&hit->inside){i.hover=options::Hit(hit->u,hit->v);i.decrease=hit->u<.70f;}
+  hit=ui::Intersect(*pointerSurface,f.hands[hand].aimPose);
  }
  const auto wanted=request.exchange(0);
- if(wanted>0&&i.modal)menu.RequestOpen();else if(wanted<0)menu.Close();
+ if(wanted>0)menu.RequestOpen();else if(wanted<0)menu.Close();
  const bool wasOwned=menu.OwnsInput();
- const auto change=menu.Update(i);
+ menu.Update(i);
  if(menu.PauseTap())PostMenuAction(static_cast<unsigned>(input::MenuAction::Start),0);
- if(change.recenter||change.calibrate){
-  QueueViewRequest(change.calibrate?2:1,f.epoch);
- }
- if(change.clearHolsters)ClearHolsters();
- if(change.setting>=0){
-  const auto id=static_cast<unsigned>(change.setting);
-  const auto before=VrOptionsValues()[id],after=options::Adjust(id,before,change.direction);
-  values[id]=after;dirty.fetch_or(1u<<id);
-  if(before!=after)QueueHaptic(i.trigger&&hand<2?static_cast<Hand>(hand):Hand::right,haptics::Event::MenuChange,f);
- }
- open=menu.Open();owned=menu.OwnsInput();page=menu.page;row=menu.row;
+ if(menu.Open())CaptureUiInput(f,hit,menu.Armed(),i.dt,i.trigger);
+ else {uiInput={};grabbing=false;grabPush=0;}
+ open=menu.Open();owned=menu.OwnsInput();
  if(wasOwned!=menu.OwnsInput())ClearUiPointer();
  return wasOwned||menu.OwnsInput(); // closing frame belongs to this menu too
 }
@@ -210,13 +324,31 @@ void SetVrOptionsSurface(const ui::Surface* surface,std::uint64_t reference){
  if(surface)pointerSurface=*surface;else pointerSurface.reset();
  surfaceReference=reference;
 }
+VrOptionsUiInput VrOptionsUiFrameInput(){return uiInput;}
+VrOptionsGrab VrOptionsGrabState(){return {grabbing&&menu.Open(),grabSerial,grabPush};}
+void ApplyVrOptionsUi(const VrOptionsUiResult& result){
+ if(!menu.Open())return; // a frame drawn after closing changes nothing
+ const auto hand=UiPointerHand();
+ const Hand pulse=uiInput.click&&hand<2?static_cast<Hand>(hand):Hand::right;
+ for(const auto& change:result.changes)HandleChange(change,uiFrame,pulse);
+ if(result.grabStarted&&!grabbing&&!result.close&&hand<2) {
+  grabbing=true;++grabSerial;
+  QueueHaptic(static_cast<Hand>(hand),haptics::Event::MenuChange,uiFrame);
+ }
+ if(result.close){
+  grabbing=false;grabPush=0;
+  // Closed here rather than by request, so no further frame acts on it. The
+  // menu keeps input until the controls are neutral, as a B press would.
+  menu.Close();open=false;owned=menu.OwnsInput();uiInput={};ClearUiPointer();
+ }
+}
 bool VrOptionsOpen(){return open.load();}
 bool VrOptionsReady(){return ready.load();}
 bool VrOptionsInputOwned(){return owned.load();}
 void RequestVrOptions(bool on){request=on?1:-1;}
-void ResetVrOptionsSession(){menu={};open=false;owned=false;request=0;{std::lock_guard lock(viewMutex);viewPending.reset();++viewGeneration;viewResult=-1;}pointerSurface.reset();previousTime=0;ClearUiPointer();}
-unsigned VrOptionsPage(){return page.load();}
-unsigned VrOptionsRow(){return row.load();}
+void ResetVrOptionsSession(){menu={};open=false;owned=false;request=0;{std::lock_guard lock(viewMutex);viewPending.reset();++viewGeneration;viewResult=-1;}pointerSurface.reset();previousTime=0;
+ uiInput={};uiFrame={};stickUp=stickDown=stickLeft=stickRight=false;previousGripWas=nextGripWas=false;
+ grabbing=false;grabPush=0;ClearUiPointer();}
 bool VrOptionsSaveFailed(){return saveFailed.load();}
 std::wstring VrSetupMessage(){
  const auto result=viewResult.load();
@@ -233,7 +365,7 @@ bool HolstersEnabled(){return holsters.load();}
 bool WristDisplayEnabled(){return wrist.load();}
 unsigned WristSizePercent(){return wristSize.load();}
 bool BeltHintsEnabled(){return beltHints.load();}
-std::string VrOptionsReport(){return " open="+std::to_string(open.load())+" inputOwned="+std::to_string(owned.load())+
+std::string VrOptionsReport(){return std::string(" open=")+std::to_string(open.load())+" inputOwned="+std::to_string(owned.load())+
  " saved="+std::to_string(!saveFailed.load())+" psychoscope="+std::to_string(scope.load())+
  " holsters="+std::to_string(holsters.load())+" wrist="+std::to_string(wrist.load())+
  " wristSize="+std::to_string(wristSize.load());}

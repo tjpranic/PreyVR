@@ -785,6 +785,10 @@ DWORD SetRoomScaleZone(int startMm, int stopMm, int followMs)
     return 0;
 }
 
+int RoomScaleStartMm() { return gStartMm.load(std::memory_order_relaxed); }
+int RoomScaleStopMm() { return gStopMm.load(std::memory_order_relaxed); }
+int RoomScaleFollowMs() { return gFollowMs.load(std::memory_order_relaxed); }
+
 DWORD SetRoomScaleRadius(int radiusMm)
 {
     if (radiusMm < 100 || radiusMm > 600) { return ERROR_INVALID_PARAMETER; }

@@ -32,6 +32,11 @@ unsigned CarryHandEnabled();
 // carry.hold 1: held while the grip is (VR); 0: press to pick up, press to drop.
 DWORD SetCarryHoldToHold(unsigned enabled);
 unsigned CarryHoldToHold();
+// The hold preference itself, whether or not carrying is in the hand.
+unsigned CarryHoldPreference();
+// carry.throw's gain alone, percent 50..300: how hard thrown objects fly.
+DWORD SetCarryThrowGainPercent(unsigned percent);
+unsigned CarryThrowGainPercent();
 
 // XR thread, once per located frame: the hands' motion history.
 void RecordCarryMotion(const TrackingFrame& frame);

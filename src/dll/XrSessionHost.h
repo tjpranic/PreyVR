@@ -205,6 +205,24 @@ DWORD UiScalePercent();
 // angle and its small text less minified. 200 matches the HUD panel exactly.
 DWORD SetTextPanelDistanceCm(unsigned int centimetres);
 DWORD TextPanelDistanceCm();
+// The native menu panel's distance (main/pause menus, options, save/load, the
+// inventory), 100..400 cm, default 200. The panel keeps its apparent size, so
+// this moves it nearer or further without making it bigger or smaller; ui.scale
+// is the size. The VR Options menu saves it; the command alone is session only.
+// Applying it refits an open menu about where that menu opened (ui::MenuAnchor).
+// Not the VR Options panel itself, which the laser places (VrOptionsLayer).
+DWORD SetUiDistanceCm(unsigned int centimetres);
+DWORD UiDistanceCm();
+// The native menu panel's offset from straight ahead, in whole degrees around
+// the wearer: `right` -90..90 (positive right), `up` -45..45 (positive up; the
+// centre seen that far above eye level). It moves around a cylinder about the
+// head: the panel keeps ui.distance horizontally, its size, and stays upright,
+// never pitched toward the eyes. Both are checked
+// before either is stored, so a refused pair changes nothing. Saved by the VR
+// Options menu, like ui.distance, and like it refits an open menu in place.
+DWORD SetUiOffsetDegrees(int right, int up);
+int UiOffsetRightDegrees();
+int UiOffsetUpDegrees();
 // The fraction of the RUNTIME-REPORTED frustum a panel must stay inside, 30..100.
 // This, not ui.scale, is what caps panel size: the fit loops shrink the panel
 // until it satisfies this, so past the point where it binds, raising the scale

@@ -57,19 +57,38 @@ anything. `use.hand 0` restores the previous layout (right grip uses and reloads
 
 To equip a weapon, open inventory with **X**, highlight it with the right stick, press **X** for Prey's Equip action, then **B** to return to the game. Follow the native button prompts for other items. B backs out one level at a time in nested screens.
 
-The Touch profile has been tested in the injected game through xr-sim; physical controller acceptance remains. Index bindings are included: left A/B correspond to X/Y, and **left stick click** opens pause. Other controller profiles do not yet have dedicated mappings. Headset rendering uses OpenXR; the panel fits both runtime eye frusta, including their asymmetry.
+The Touch profile has been tested in the injected game through xr-sim; physical controller acceptance remains. Index bindings are included: left A/B correspond to X/Y, and **left stick click** opens pause. **Steam Frame** controllers get their own profile when SteamVR offers it (`xr_input_extension name=XR_VALVE_frame_controller_interaction enabled=1`, `detail=bindings profile=frame`, and `interaction_profile ... valve/frame_controller` in the log): the buttons do what they did before, and the left **D-pad** also works in VR Options -- left/right adjust, up/down move. Without it SteamVR presents them as Touch, and the D-pad arrives only as left X/Y. Other controller profiles do not yet have dedicated mappings. Headset rendering uses OpenXR; the panel fits both runtime eye frusta, including their asymmetry.
 
 ## Comfort settings
 
 ### In-headset VR options (integration build)
 
-Hold the **left menu button for about 0.65 seconds**, then release it. In gameplay,
-the mod first requests the native pause menu and waits until it is observed.
-Point at the options panel and pull the trigger, or use the **right stick** to
-select rows and adjust values. **A** changes the selected value, **grips** change
-tabs, and **B** returns to the native menu. Releasing the controls is required
-before they can operate the screen behind it. F10 is a desktop shortcut while a
-native menu is already open; `vr.options 1` is the diagnostic equivalent.
+Hold the **left menu button for about 0.65 seconds**. VR Options opens over
+whatever you are looking at: the game itself, or a game menu such as the pause
+menu. **The game is not paused** -- in play it keeps running behind the panel,
+with the HUD hidden and your movement, turning, firing and use held until you
+close it. A short tap of the same button is still the game's own pause. If a
+game menu opens or closes under VR Options (a cutscene, a loading screen, the
+menu you opened it from), VR Options closes.
+F10 is a desktop shortcut; `vr.options 1` is the diagnostic equivalent. Both
+work in play and in menus.
+
+Each setting is a checkbox, a choice list or a slider, on eight tabs (listed
+below). The panel opens 2 metres straight ahead of where you faced, over the
+game menu if one is up. **To move it, hold the trigger with the laser on any blank part of it** --
+a setting's name or help text, empty space, not a control (the hint line says
+so when you are on one). It follows the laser round you, staying upright and
+facing you, and slides straight up or down rather than tilting; push the laser
+hand's stick forward to send it further away, back to bring it closer (nearer
+reads larger). Let go of the trigger to leave it there. It opens there again,
+relative to where you face, until VR restarts (F11) or the game closes. The game menus' distance and
+offset settings do not move it. Point and pull the trigger or press **A**, or move
+with the **right stick** up/down (or a Steam Frame's left **D-pad**) and press
+**A**; **right stick left/right** steps the slider or list under the laser (or
+the one last selected), and repeats while held; the **left stick** scrolls a
+long list; **grips** change tabs and **B** closes it, back to the game or the
+game menu. Releasing the controls is required before they can operate what is
+behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
 
 - **Comfort:** snap angle / smooth turning, head-relative movement, smooth-turn
   speed, and **Body Follows You**:
@@ -82,23 +101,43 @@ native menu is already open; `vr.options 1` is the diagnostic equivalent.
   - **Turn Only:** it turns but stays where it is when you walk.
   - **Off:** the game's own facing.
 
+  Also the move and turn stick deadzones, sideways and backward walking speed,
+  and for the body its turn deadzone, how far your head moves before it steps
+  under you, and how quickly it catches up.
+
   Reset VR view is on the Setup page.
 - **Hands:** two-hand aim on/off, hold/toggle foregrip, snapped/free support hand,
-  and the optional psychoscope gesture.
-- **Interface:** size, visible-area limit, panel curvature and controls guide.
-- **Equipment:** optional body holsters, wrist status, wrist-hologram size and clear
-  holster assignments. Holsters default off; the wrist status defaults on.
-- **Abilities:** psychic targeting (Original / Head / Left Controller) and the
-  optional left-hip medkit slot. Original targeting and slot off are the defaults.
+  the optional psychoscope gesture, the hands without a weapon, the carry grip
+  (hold, or press to toggle), hand or game grenade throwing, and how hard thrown
+  objects and grenades fly.
+- **Interface:** size, visible-area limit, panel curvature, controls guide, where
+  the game's menus float (distance, left/right, up/down), the text panel's
+  distance, which hand's laser points at menus, and the HUD style (floating
+  panel, or in the world as Prey draws it).
+- **Equipment:** optional body holsters, clear holster assignments, wrist status,
+  wrist-hologram size, keeping health, suit and psi on the HUD too, the wrist
+  tick, and the display's position along the forearm, height and tilt. Holsters
+  default off; the wrist status defaults on.
+- **Feedback:** the reticle's fallback distance, controller feedback and its
+  strength.
+- **Abilities:** psychic targeting (Original / Head / Left Controller), the
+  optional left-hip medkit slot, and body slot feedback. Original targeting and
+  slot off are the defaults.
 - **Setup:** calibrate posture, reset VR view, and **Debug Overlay (Testing)**,
   which draws each hand's ray and target, the body slots, the wrist test and the
   foregrip region in the world. Off by default; see
   [the overlay note](DEBUG-OVERLAY-2026-10-06.md).
-  **Shots from the Muzzle (Experimental)** makes every shot leave the weapon's
-  muzzle along your controller's aim, so it lands where the barrel points at any
-  distance, also from the hip or around a corner (otherwise the shot is aimed from
-  your eyes and misses by up to several degrees close by). Off by default;
-  `Start-PreyVR.ps1 -MuzzleAim` turns it on for a session. See
+- **Experimental**, features still being proven: physical carrying in the left
+  hand (on by default; off restores the game's carry in front of you), sticking
+  charges to the surface you look at, long weapons held back toward the body,
+  **Shots from the Muzzle**, **Scene Reticle**, the **Physical Wrench** and
+  **Object Nudges** with their swing speed and strength, and the inventory on a
+  layer of its own, with optional depth.
+  **Shots from the Muzzle** makes every shot leave the weapon's muzzle along
+  your controller's aim, so it lands where the barrel points at any distance,
+  also from the hip or around a corner (otherwise the shot is aimed from your
+  eyes and misses by up to several degrees close by). Off by default;
+  `aim.shot 1` in **Tune Prey VR.cmd** turns it on for a session. See
   [the shot note](SHOT-RAY-2026-10-06.md).
 
 **Psychic targeting:** equip a power using Prey's normal quick wheel. Choose Head
@@ -158,32 +197,48 @@ away. Each deliberate stroke requests one toggle; the game retains its unlock,
 cinematic and movement restrictions. This does not add a visible visor prop.
 Gesture feel and native acceptance still need headset testing.
 
-Menu choices save automatically to **`%LOCALAPPDATA%\PreyVR\vr-options.ini`**.
-They take precedence over launcher defaults for the settings listed above.
-To return those settings to launcher defaults, rename that file with Prey closed.
-Resolution, runtime, reference-space and stereo-mode selection remain launcher settings.
+Menu choices save automatically to **`%LOCALAPPDATA%\PreyVR\vr-options.ini`**:
+every setting the panel shows, once you have changed it. That file is the
+one place they are kept: they are applied each time VR starts (F11 included),
+over VR start's own defaults. A setting you never changed in the menu keeps its
+default. **Tune Prey VR.cmd** changes a setting for this session only, until the
+next VR start; it never changes the file. To return a setting to its default,
+delete its line from that file with Prey closed, or rename the file to reset
+them all. `PreyVR.json` keeps only the launch settings below. Every tuning
+command, and what the menu saves, is in [the tuning reference](TUNING-COMMANDS.md).
 
-This batch has offline tests and a production-rendered menu preview, but **has
-not been run in Prey or accepted in a headset**. See
-[implementation and validation](VR-OPTIONS-2026-09-27.md).
+The panel has been worn in a headset (2026-10-13 and 2026-10-14); this build's
+tidy-up -- one panel, the eight tabs above, each controller's own bindings --
+has offline tests only. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md)
+and, for the original card, [its validation](VR-OPTIONS-2026-09-27.md).
 
 ### Launcher settings
 
-The launcher saves these options in `PreyVR.json` beside the launcher. Edit the
-existing fields with Prey closed, or pass the corresponding PowerShell parameter
-to `Start-PreyVR.ps1`. Explicit parameters override saved values.
+The launcher saves its launch settings in `PreyVR.json` beside the launcher.
+Edit the existing fields with Prey closed, or pass the corresponding PowerShell
+parameter to `Start-PreyVR.ps1`. Explicit parameters override saved values.
 
 | Setting | Default | Accepted values |
 | --- | --- | --- |
-| `SnapTurnDegrees` | `45` | `15`..`90`; `0` selects smooth turning |
-| `HeadRelativeMovement` | `1` | `1` follows headset yaw; `0` uses native body axes |
+| `Width`, `Height` | `2016`, `2160` | Per-eye render size (see Display below) |
 | `ReferenceSpace` | `"auto"` | `"auto"` prefers LOCAL_FLOOR, then STAGE, then LOCAL; `"local"` forces LOCAL |
+| `DualStereo` | `1` | `1` both eyes from one frame; `0` alternate eyes (see Display below) |
 
-For this session only, use `move.snap 30` or `move.headrelative 0` in
-**Tune Prey VR.cmd**. Their bare commands report the current setting. Runtime
-commands do not update the JSON. Return the stick to neutral after changing modes.
+Everything else is a VR Options setting. An older `PreyVR.json` may still hold
+`SnapTurnDegrees`, `HeadRelativeMovement`, `UiScalePercent`, `UiCurveDegrees`,
+`UiGuide`, `PointerHand` or `HudLayer`: the launcher moves any you had changed
+into `vr-options.ini` once (unless the menu already holds that setting, which
+wins), removes them from `PreyVR.json`, and says what it moved. It also drops
+`NewVROptionsUI`, which chose between two VR Options panels before there was
+one.
 
-Body following can be tuned the same way, for this session only:
+Turning and movement direction are on the Comfort tab. For this session only,
+use `move.snap 30` or `move.headrelative 0` in **Tune Prey VR.cmd**. A command
+typed without a value reports the current setting and changes nothing. Return
+the stick to neutral after changing modes.
+
+Body following can be tuned the same way, for this session only (the new
+panel's Comfort tab saves the step distance and glide):
 - `body.zone 30 5 50` sets how far your head moves before the body follows, how
   close it brings it, and how quickly it glides (millimetres, millimetres,
   milliseconds; lower is tighter, `0` for no glide).
@@ -199,15 +254,15 @@ does not yet implement physical crouch, avatar-height matching or a vignette.
 
 ## Display
 
-Menus and inventory open on a panel about **2 metres** away, anchored where you opened them. Reset view to bring a panel back in front of you. An optional card shows the menu controls (`UiGuide: 1`; hidden by default). The combined layout stays within conservative limits of **60° horizontally and 40° vertically**, shrinking further for narrower runtime frusta.
+Menus and inventory open on a floating panel **2 metres** away, straight ahead of the way you are facing, at eye level and square to you, however your head is tilted when it opens. It stays where it opened until the menu closes. The new VR Options panel opens 2 metres ahead and can be dragged aside (see VR options above). Changing menu distance or offset moves an open menu relative to where you faced when it opened, not where you are looking now. Reset view to bring a panel back in front of you. The new VR Options panel's **Interface** tab sets the game menus' distance and offset and saves them; for this session only, `ui.distance 150` in **Tune Prey VR.cmd** moves it (100 to 400 cm); it keeps the same apparent size, so `ui.scale` stays the size control. A bare `ui.distance` reports the current distance. `ui.offset 15 -20` (also this session only) moves it around you in degrees: the first number to your right (negative is left, -90 to 90), the second up (negative is down, -45 to 45). It slides straight up or down rather than tilting toward you, so it stays upright, at the same distance across the floor and the same size; `ui.offset 0 0` brings it back to straight ahead, and a bare `ui.offset` reports the current offset. An optional card shows the menu controls (VR Options, Interface tab, Controls Guide; hidden by default). The combined layout stays within conservative limits of **60° horizontally and 40° vertically**, shrinking further for narrower runtime frusta.
 
-The native gameplay HUD is captured once into a transparent target and displayed on a floating panel about 2 metres in front of you. Its graphics and interaction prompts stay Prey's own. The reticle is remapped to the smaller HUD canvas; when aiming beyond the panel it clips out instead of marking its edge. This is a HUD reticle at a fixed depth, not a world-surface hit marker. Book and note popups, subtitles and tutorial cards appear on a panel of their own, 1.4 metres away and in front of the HUD, while the world stays visible around them; being nearer, their text is larger and sharper. For this session only, `ui.text 120` in **Tune Prey VR.cmd** moves it (100 to 200 cm; nearer is larger, 200 matches the HUD panel).
+The native gameplay HUD is captured once into a transparent target and displayed on a floating panel about 2 metres in front of you. Its graphics and interaction prompts stay Prey's own. The reticle is remapped to the smaller HUD canvas; when aiming beyond the panel it clips out instead of marking its edge. This is a HUD reticle at a fixed depth, not a world-surface hit marker. Book and note popups, subtitles and tutorial cards appear on a panel of their own, 1.4 metres away and in front of the HUD, while the world stays visible around them; being nearer, their text is larger and sharper. The new VR Options panel's Text Panel Distance row moves it and saves it; `ui.text 120` in **Tune Prey VR.cmd** moves it for this session (100 to 200 cm; nearer is larger, 200 matches the HUD panel).
 
 Objective markers stay in the world view, in both eyes, at no particular depth: they read as far away, which suits distant objectives better than nearby ones.
 
 The default render size is **2016 × 2160 per eye**, independent of monitor DPI. This restores the tall aspect used in earlier headset testing; **2688 × 2880** offers more detail at the same aspect and higher GPU cost. Edit `Width` and `Height` in `PreyVR.json`, then restart Prey. Menus can have unused space within their floating panel; do not switch the world render to 16:9 just to fill that panel. This is a starting preset, not automatic headset-resolution detection or a guarantee of complete FOV coverage on every headset.
 
-The launcher migrates the old, unversioned **2560 × 1440** default once, backing up `PreyVR.json` first. Custom sizes remain unchanged. To intentionally retain that old size, add `"ResolutionDefaultsVersion": 1` to the JSON, or launch with both `-Width 2560 -Height 1440`. A single command-line dimension is rejected. `HudLayer` remains `1` for floating HUD or `0` for the native scene HUD.
+The launcher migrates the old, unversioned **2560 × 1440** default once, backing up `PreyVR.json` first. Custom sizes remain unchanged. To intentionally retain that old size, add `"ResolutionDefaultsVersion": 1` to the JSON, or launch with both `-Width 2560 -Height 1440`. A single command-line dimension is rejected. The HUD style -- a floating panel, or drawn in the world as Prey draws it -- is on VR Options' Interface tab.
 
 Both eyes are rendered from the same game frame by default (`DualStereo: 1`). `DualStereo: 0` (or launching with `-DualStereo 0`, which is also saved) returns to the earlier method that renders one eye per frame; it shows doubled edges when you or the scene move. Use it only to check whether a problem belongs to the both-eyes method, and report what you find. Fades, markers and anything else Prey draws over the world are drawn into both eyes; `dual.overlay 0` in **Tune Prey VR.cmd** leaves them in the right eye only, for comparison, and `dual.overlay 1` restores them. Once VR is ready, the launcher prints which method is running. If the both-eyes method is unavailable, it says so and Prey continues with alternate eyes.
 

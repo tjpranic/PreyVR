@@ -97,10 +97,9 @@ param(
     # before the panel counter was read.
     #
     # Two bring-up paths existing side by side is the real defect here. This
-    # switch is the bridge until they are reconciled; the player package's own
-    # Start-PreyVR.ps1 sets PREYVR_UI_CURVE_DEGREES / PREYVR_POINTER_HAND in the
-    # environment and lets vr.enable read them, which this script cannot do
-    # because the game is already running by the time it is invoked.
+    # switch is the bridge until they are reconciled. In the player package the
+    # curvature and laser hand are VR Options settings, applied from
+    # vr-options.ini at VR start; these send them as commands, for this session.
     [switch]$PlayerUi,
     [int]$UiCurveDegrees = 35,
     [int]$PointerHand = 1,

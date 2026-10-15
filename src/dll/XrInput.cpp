@@ -3,6 +3,7 @@
 #include "HapticsXr.h"
 #include "VrOptionsRuntime.h"
 #include "UiPointer.h"
+#include "preyvr/ControllerProfiles.h"
 #include "preyvr/LatestSnapshot.h"
 
 #include "InputPost.h"
@@ -18,10 +19,16 @@
 // reference D3D11 types and demand <d3d11.h> for no benefit here.
 #include <openxr/openxr.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstring>
+#include <iterator>
+#include <mutex>
 #include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace preyvr::dll {
 namespace {
@@ -44,17 +51,41 @@ struct HandActions {
     XrSpace aimSpace = XR_NULL_HANDLE;
 };
 
+using input::Role;
 XrActionSet gActionSet = XR_NULL_HANDLE;
-XrAction gGripPose = XR_NULL_HANDLE;
-XrAction gAimPose = XR_NULL_HANDLE;
-XrAction gThumbstick = XR_NULL_HANDLE;
-XrAction gWeaponWheel = XR_NULL_HANDLE;
-XrAction gMenuAccept = XR_NULL_HANDLE;
-XrAction gMenuCancel = XR_NULL_HANDLE;
-XrAction gMenuStart = XR_NULL_HANDLE;
-XrAction gTrigger = XR_NULL_HANDLE;
-XrAction gSqueeze = XR_NULL_HANDLE;
-XrAction gHaptic = XR_NULL_HANDLE;
+// **One action per role** (ControllerProfiles.h): what the mod asks of every
+// controller, named for what it does. Each controller's profile binds them.
+std::array<XrAction, static_cast<std::size_t>(Role::count)> gActions{};
+XrAction& Action(Role role) { return gActions[static_cast<std::size_t>(role)]; }
+// Grip and aim are separate on purpose: grip is the palm, which a held weapon
+// hangs off; aim is the pointing axis, which a ray follows. Haptics and
+// navigation are optional: without them the session runs as before.
+struct RoleAction { Role role; XrActionType type; const char* name; const char* label; bool required; };
+constexpr RoleAction kRoleActions[] = {
+    {Role::gripPose, XR_ACTION_TYPE_POSE_INPUT, "grip_pose", "Grip Pose", true},
+    {Role::aimPose, XR_ACTION_TYPE_POSE_INPUT, "aim_pose", "Aim Pose", true},
+    {Role::thumbstick, XR_ACTION_TYPE_VECTOR2F_INPUT, "thumbstick", "Thumbstick", true},
+    {Role::trigger, XR_ACTION_TYPE_FLOAT_INPUT, "trigger", "Trigger", true},
+    {Role::squeeze, XR_ACTION_TYPE_FLOAT_INPUT, "squeeze", "Squeeze", true},
+    {Role::haptic, XR_ACTION_TYPE_VIBRATION_OUTPUT, "feedback", "Controller Feedback", false},
+    {Role::accept, XR_ACTION_TYPE_BOOLEAN_INPUT, "menu_accept", "Menu Accept", true},
+    {Role::cancel, XR_ACTION_TYPE_BOOLEAN_INPUT, "menu_cancel", "Menu Cancel", true},
+    {Role::start, XR_ACTION_TYPE_BOOLEAN_INPUT, "menu_start", "Menu Start", true},
+    {Role::weaponWheel, XR_ACTION_TYPE_BOOLEAN_INPUT, "weapon_wheel", "Weapon Wheel", true},
+    {Role::navigateUp, XR_ACTION_TYPE_BOOLEAN_INPUT, "navigate_up", "Navigate Up", false},
+    {Role::navigateDown, XR_ACTION_TYPE_BOOLEAN_INPUT, "navigate_down", "Navigate Down", false},
+    {Role::navigateLeft, XR_ACTION_TYPE_BOOLEAN_INPUT, "navigate_left", "Navigate Left", false},
+    {Role::navigateRight, XR_ACTION_TYPE_BOOLEAN_INPUT, "navigate_right", "Navigate Right", false},
+};
+static_assert(std::size(kRoleActions) == static_cast<std::size_t>(Role::count), "one action per role");
+// The controller profiles' extensions the instance enabled (SetXrInputEnabledExtensions).
+std::mutex gExtensionsMutex;
+std::vector<std::string> gEnabledExtensions;
+bool ExtensionEnabled(const char* name)
+{
+    std::lock_guard lock(gExtensionsMutex);
+    return std::find(gEnabledExtensions.begin(), gEnabledExtensions.end(), name) != gEnabledExtensions.end();
+}
 XrSession gHapticSession = XR_NULL_HANDLE;
 std::array<HandActions, 2> gHands{};
 
@@ -155,87 +186,63 @@ bool CreateXrInput(void* instanceHandle, void* sessionHandle)
     gHands[0].subactionPath = subactions[0];
     gHands[1].subactionPath = subactions[1];
     gHapticSession=session;
-    gHaptic=CreateAction(XR_ACTION_TYPE_VIBRATION_OUTPUT,"feedback","Controller Feedback",subactions);
-
-    // Grip and aim are separate actions on purpose. Grip is the palm, which a
-    // held weapon hangs off; aim is the pointing axis, which a ray follows.
-    gGripPose = CreateAction(XR_ACTION_TYPE_POSE_INPUT, "grip_pose", "Grip Pose", subactions);
-    gAimPose = CreateAction(XR_ACTION_TYPE_POSE_INPUT, "aim_pose", "Aim Pose", subactions);
-    gThumbstick = CreateAction(XR_ACTION_TYPE_VECTOR2F_INPUT, "thumbstick", "Thumbstick", subactions);
-    gWeaponWheel = CreateAction(XR_ACTION_TYPE_BOOLEAN_INPUT, "weapon_wheel", "Weapon Wheel", subactions);
-    gTrigger = CreateAction(XR_ACTION_TYPE_FLOAT_INPUT, "trigger", "Trigger", subactions);
-    gSqueeze = CreateAction(XR_ACTION_TYPE_FLOAT_INPUT, "squeeze", "Squeeze", subactions);
-    gMenuAccept = CreateAction(XR_ACTION_TYPE_BOOLEAN_INPUT, "menu_accept", "Menu Accept",
-                               subactions);
-    gMenuCancel = CreateAction(XR_ACTION_TYPE_BOOLEAN_INPUT, "menu_cancel", "Menu Cancel",
-                               subactions);
-    gMenuStart = CreateAction(XR_ACTION_TYPE_BOOLEAN_INPUT, "menu_start", "Menu Start",
-                              subactions);
-    if (gGripPose == XR_NULL_HANDLE || gAimPose == XR_NULL_HANDLE ||
-        gThumbstick == XR_NULL_HANDLE || gWeaponWheel == XR_NULL_HANDLE || gTrigger == XR_NULL_HANDLE ||
-        gSqueeze == XR_NULL_HANDLE || gMenuAccept == XR_NULL_HANDLE ||
-        gMenuCancel == XR_NULL_HANDLE || gMenuStart == XR_NULL_HANDLE) {
-        Log("result=failed step=create_pose_actions");
-        return false;
+    for (const auto& role : kRoleActions) {
+        Action(role.role) = CreateAction(role.type, role.name, role.label, subactions);
+        if (role.required && Action(role.role) == XR_NULL_HANDLE) {
+            Log("result=failed step=create_actions");
+            return false;
+        }
     }
 
-    // Core Touch and Index profiles. Component paths are checked against the
-    // bundled Khronos xr.xml registry; runtime acceptance is logged separately.
-    // A/B are right-hand only on Touch and X/Y are left-hand only, so accept and
-    // cancel bind to one controller rather than both. The menu button is the
-    // left one; its right-hand counterpart is reserved by the runtime.
-    const std::array<XrActionSuggestedBinding, 18> bindings = {{
-        {gGripPose, StringToPath(instance, "/user/hand/left/input/grip/pose")},
-        {gGripPose, StringToPath(instance, "/user/hand/right/input/grip/pose")},
-        {gAimPose, StringToPath(instance, "/user/hand/left/input/aim/pose")},
-        {gAimPose, StringToPath(instance, "/user/hand/right/input/aim/pose")},
-        {gThumbstick, StringToPath(instance, "/user/hand/left/input/thumbstick")},
-        {gThumbstick, StringToPath(instance, "/user/hand/right/input/thumbstick")},
-        {gTrigger, StringToPath(instance, "/user/hand/left/input/trigger/value")},
-        {gTrigger, StringToPath(instance, "/user/hand/right/input/trigger/value")},
-        {gSqueeze, StringToPath(instance, "/user/hand/left/input/squeeze/value")},
-        {gSqueeze, StringToPath(instance, "/user/hand/right/input/squeeze/value")},
-        {gMenuAccept, StringToPath(instance, "/user/hand/right/input/a/click")},
-        {gMenuCancel, StringToPath(instance, "/user/hand/right/input/b/click")},
-        {gMenuAccept, StringToPath(instance, "/user/hand/left/input/x/click")},
-        {gMenuCancel, StringToPath(instance, "/user/hand/left/input/y/click")},
-        {gMenuStart, StringToPath(instance, "/user/hand/left/input/menu/click")},
-        {gWeaponWheel, StringToPath(instance, "/user/hand/right/input/thumbstick/click")},
-        {gHaptic, StringToPath(instance, "/user/hand/left/output/haptic")},
-        {gHaptic, StringToPath(instance, "/user/hand/right/output/haptic")},
-    }};
-    XrInteractionProfileSuggestedBinding suggested{
-        XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING};
-    suggested.interactionProfile =
-        StringToPath(instance, "/interaction_profiles/oculus/touch_controller");
-    suggested.suggestedBindings = bindings.data();
-    suggested.countSuggestedBindings = gHaptic?static_cast<std::uint32_t>(bindings.size()):16u;
-    result = xrSuggestInteractionProfileBindings(instance, &suggested);
-    bool haveProfile=XR_SUCCEEDED(result);
-    if (XR_FAILED(result)) LogResult("touch_bindings",result);
-    auto indexBindings=bindings;
-    indexBindings[12].binding=StringToPath(instance,"/user/hand/left/input/a/click");
-    indexBindings[13].binding=StringToPath(instance,"/user/hand/left/input/b/click");
-    // Index's system button belongs to the runtime. Left stick click opens pause.
-    indexBindings[14].binding=StringToPath(instance,"/user/hand/left/input/thumbstick/click");
-    suggested.interactionProfile=StringToPath(instance,"/interaction_profiles/valve/index_controller");
-    suggested.suggestedBindings=indexBindings.data();
-    result=xrSuggestInteractionProfileBindings(instance,&suggested);
-    haveProfile=haveProfile || XR_SUCCEEDED(result);
-    if(XR_FAILED(result))LogResult("index_bindings",result);
-    if(!haveProfile)return false;
+    // **Each controller's bindings, from its own profile** (ControllerProfiles).
+    // A profile that needs an instance extension is suggested only when the
+    // instance enabled it. A role whose optional action could not be created is
+    // left out of every set; each set stays complete for the rest. The first set
+    // a runtime accepts is the profile's; if none is, that controller is not
+    // bound (for the Steam Frame, SteamVR's Touch emulation then carries on).
+    bool haveProfile = false;
+    std::string profiles;
+    for (const auto& profile : input::ControllerProfiles()) {
+        if (profile.extension != nullptr && !ExtensionEnabled(profile.extension)) { continue; }
+        bool bound = false;
+        for (const auto& set : profile.attempts) {
+            std::vector<XrActionSuggestedBinding> bindings;
+            for (const auto& binding : set.bindings) {
+                if (Action(binding.role) != XR_NULL_HANDLE) {
+                    bindings.push_back({Action(binding.role), StringToPath(instance, binding.path)});
+                }
+            }
+            XrInteractionProfileSuggestedBinding suggestion{XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING};
+            suggestion.interactionProfile = StringToPath(instance, profile.path);
+            suggestion.suggestedBindings = bindings.data();
+            suggestion.countSuggestedBindings = static_cast<std::uint32_t>(bindings.size());
+            result = xrSuggestInteractionProfileBindings(instance, &suggestion);
+            if (XR_SUCCEEDED(result)) {
+                Log(std::string("result=0 detail=bindings profile=") + profile.name + " set=" + set.name);
+                bound = true;
+                break;
+            }
+        }
+        if (!bound) {
+            LogResult((std::string(profile.name) + "_bindings").c_str(), result);
+            continue;
+        }
+        haveProfile = true;
+        profiles += (profiles.empty() ? "" : ",") + std::string(profile.name);
+    }
+    if (!haveProfile) { return false; }
 
     for (std::size_t hand = 0; hand < 2; ++hand) {
         XrActionSpaceCreateInfo spaceInfo{XR_TYPE_ACTION_SPACE_CREATE_INFO};
         spaceInfo.poseInActionSpace.orientation.w = 1.0f;
         spaceInfo.subactionPath = gHands[hand].subactionPath;
 
-        spaceInfo.action = gGripPose;
+        spaceInfo.action = Action(Role::gripPose);
         if (XR_FAILED(xrCreateActionSpace(session, &spaceInfo, &gHands[hand].gripSpace))) {
             Log("result=failed step=create_grip_space");
             return false;
         }
-        spaceInfo.action = gAimPose;
+        spaceInfo.action = Action(Role::aimPose);
         if (XR_FAILED(xrCreateActionSpace(session, &spaceInfo, &gHands[hand].aimSpace))) {
             Log("result=failed step=create_aim_space");
             return false;
@@ -255,8 +262,33 @@ bool CreateXrInput(void* instanceHandle, void* sessionHandle)
     }
 
     gCreated.store(true, std::memory_order_release);
-    Log("result=0 detail=input_created profile=oculus/touch_controller");
+    // Which profiles were bound, not which one the runtime picked: that
+    // arrives later as an interaction profile event (LogXrInputProfiles).
+    Log("result=0 detail=input_created profiles=" + profiles);
     return true;
+}
+
+void LogXrInputProfiles(void* instanceHandle, void* sessionHandle)
+{
+    const auto instance = static_cast<XrInstance>(instanceHandle);
+    const auto session = static_cast<XrSession>(sessionHandle);
+    if (instance == XR_NULL_HANDLE || session == XR_NULL_HANDLE) { return; }
+    std::string line = "result=0 detail=interaction_profile";
+    for (const char* hand : {"left", "right"}) {
+        XrInteractionProfileState state{XR_TYPE_INTERACTION_PROFILE_STATE};
+        const std::string user = std::string("/user/hand/") + hand;
+        line += std::string(" ") + hand + "=";
+        if (XR_FAILED(xrGetCurrentInteractionProfile(session, StringToPath(instance, user.c_str()), &state)) ||
+            state.interactionProfile == XR_NULL_PATH) {
+            line += "none";
+            continue;
+        }
+        char name[XR_MAX_PATH_LENGTH]{};
+        std::uint32_t length = 0;
+        line += XR_SUCCEEDED(xrPathToString(instance, state.interactionProfile, XR_MAX_PATH_LENGTH, &length, name))
+            ? std::string(name) : std::string("unknown");
+    }
+    Log(line);
 }
 
 void UpdateXrInput(void* sessionHandle, void* spaceHandle, long long predictedDisplayTime,
@@ -289,13 +321,13 @@ void UpdateXrInput(void* sessionHandle, void* spaceHandle, long long predictedDi
     // the call returned, not that it did anything.
     const XrResult syncResult = xrSyncActions(session, &sync);
     if (XR_FAILED(syncResult)) {
-        ResetHaptics(session,gHaptic,{gHands[0].subactionPath,gHands[1].subactionPath});
+        ResetHaptics(session,Action(Role::haptic),{gHands[0].subactionPath,gHands[1].subactionPath});
         gTrackingEpoch.fetch_add(1);
         gTrackingFrame.Clear();
         return;
     }
     if (syncResult == XR_SESSION_NOT_FOCUSED) {
-        ResetHaptics(session,gHaptic,{gHands[0].subactionPath,gHands[1].subactionPath});
+        ResetHaptics(session,Action(Role::haptic),{gHands[0].subactionPath,gHands[1].subactionPath});
         gSyncsNotFocused.fetch_add(1, std::memory_order_relaxed);
         gTrackingEpoch.fetch_add(1);
         gTrackingFrame.Clear();
@@ -332,13 +364,13 @@ void UpdateXrInput(void* sessionHandle, void* spaceHandle, long long predictedDi
         XrActionStateGetInfo get{XR_TYPE_ACTION_STATE_GET_INFO};
         get.subactionPath = subaction;
 
-        get.action = gThumbstick;
+        get.action = Action(Role::thumbstick);
         XrActionStateVector2f stick{XR_TYPE_ACTION_STATE_VECTOR2F};
         if (XR_SUCCEEDED(xrGetActionStateVector2f(session, &get, &stick)) && stick.isActive) {
             state.thumbstickX = stick.currentState.x;
             state.thumbstickY = stick.currentState.y;
         }
-        get.action = gTrigger;
+        get.action = Action(Role::trigger);
         XrActionStateFloat analog{XR_TYPE_ACTION_STATE_FLOAT};
         if (XR_SUCCEEDED(xrGetActionStateFloat(session, &get, &analog)) && analog.isActive) {
             state.triggerValue = analog.currentState;
@@ -348,25 +380,25 @@ void UpdateXrInput(void* sessionHandle, void* spaceHandle, long long predictedDi
             state.triggerPressed = analog.currentState >= 0.5f;
         }
         XrActionStateBoolean button{XR_TYPE_ACTION_STATE_BOOLEAN};
-        get.action = gSqueeze;
+        get.action = Action(Role::squeeze);
         XrActionStateFloat squeeze{XR_TYPE_ACTION_STATE_FLOAT};
         if (XR_SUCCEEDED(xrGetActionStateFloat(session, &get, &squeeze)) && squeeze.isActive) {
             state.gripPressed = std::isfinite(squeeze.currentState) && squeeze.currentState >= .55f;
             state.squeezeValue = std::isfinite(squeeze.currentState) ? squeeze.currentState : 0.0f;
         }
-        get.action = gMenuAccept;
+        get.action = Action(Role::accept);
         if (XR_SUCCEEDED(xrGetActionStateBoolean(session, &get, &button)) && button.isActive) {
             state.menuAccept = button.currentState == XR_TRUE;
         }
-        get.action = gMenuCancel;
+        get.action = Action(Role::cancel);
         if (XR_SUCCEEDED(xrGetActionStateBoolean(session, &get, &button)) && button.isActive) {
             state.menuCancel = button.currentState == XR_TRUE;
         }
-        get.action = gMenuStart;
+        get.action = Action(Role::start);
         if (XR_SUCCEEDED(xrGetActionStateBoolean(session, &get, &button)) && button.isActive) {
             state.menuStart = button.currentState == XR_TRUE;
         }
-        get.action = gWeaponWheel;
+        get.action = Action(Role::weaponWheel);
         if (XR_SUCCEEDED(xrGetActionStateBoolean(session, &get, &button)) && button.isActive) {
             state.weaponWheelPressed = button.currentState == XR_TRUE;
         }
@@ -382,12 +414,28 @@ void UpdateXrInput(void* sessionHandle, void* spaceHandle, long long predictedDi
         }
     }
 
+    // **The mod's panels navigate with one device-neutral input**: the right
+    // stick, plus a controller's own navigation buttons from either hand.
+    {
+        XrActionStateGetInfo any{XR_TYPE_ACTION_STATE_GET_INFO};
+        const auto held = [&](Role role) {
+            XrActionStateBoolean pressed{XR_TYPE_ACTION_STATE_BOOLEAN};
+            any.action = Action(role);
+            return any.action != XR_NULL_HANDLE && XR_SUCCEEDED(xrGetActionStateBoolean(session, &any, &pressed)) &&
+                   pressed.isActive && pressed.currentState == XR_TRUE;
+        };
+        const float x = rightState.thumbstickX + (held(Role::navigateRight) ? 1.0f : 0.0f) -
+                        (held(Role::navigateLeft) ? 1.0f : 0.0f);
+        const float y = rightState.thumbstickY + (held(Role::navigateUp) ? 1.0f : 0.0f) -
+                        (held(Role::navigateDown) ? 1.0f : 0.0f);
+        frame.navigate = {std::clamp(x, -1.0f, 1.0f), std::clamp(y, -1.0f, 1.0f)};
+    }
     frame.sequence = gTrackingSequence.fetch_add(1, std::memory_order_relaxed) + 1;
     frame.epoch = gTrackingEpoch.load();
     frame.publishedNs = MonotonicNanoseconds();
     gTrackingFrame.Publish(frame);
     RecordCarryMotion(frame);
-    ServiceHaptics(session,gHaptic,{gHands[0].subactionPath,gHands[1].subactionPath},frame,true);
+    ServiceHaptics(session,Action(Role::haptic),{gHands[0].subactionPath,gHands[1].subactionPath},frame,true);
     if((gMenuNavigation.load()||VrOptionsInputOwned())&&VrOptionsReady()&&ProcessVrOptionsInput(frame)) {
         gNavigator.Reset();gLastDisplayTime.store(predictedDisplayTime);
         return;
@@ -448,6 +496,26 @@ void UpdateXrInput(void* sessionHandle, void* spaceHandle, long long predictedDi
     }
 }
 
+std::vector<const char*> XrInputExtensions()
+{
+    std::vector<const char*> wanted;
+    for (const auto& profile : input::ControllerProfiles()) {
+        if (profile.extension != nullptr &&
+            std::find_if(wanted.begin(), wanted.end(), [&](const char* name) {
+                return std::strcmp(name, profile.extension) == 0;
+            }) == wanted.end()) {
+            wanted.push_back(profile.extension);
+        }
+    }
+    return wanted;
+}
+
+void SetXrInputEnabledExtensions(const std::vector<std::string>& enabled)
+{
+    std::lock_guard lock(gExtensionsMutex);
+    gEnabledExtensions = enabled;
+}
+
 void SetMenuNavigationGate(unsigned int enabled)
 {
     gMenuNavGate.store(enabled != 0, std::memory_order_release);
@@ -477,8 +545,8 @@ void InvalidateTrackingSamples() { gTrackingEpoch.fetch_add(1); gTrackingFrame.C
 
 void DestroyXrInput()
 {
-    ResetHaptics(gHapticSession,gHaptic,{gHands[0].subactionPath,gHands[1].subactionPath});
-    gHaptic=XR_NULL_HANDLE;gHapticSession=XR_NULL_HANDLE;
+    ResetHaptics(gHapticSession,Action(Role::haptic),{gHands[0].subactionPath,gHands[1].subactionPath});
+    gHapticSession=XR_NULL_HANDLE;
     for (auto& hand : gHands) {
         if (hand.gripSpace != XR_NULL_HANDLE) xrDestroySpace(hand.gripSpace);
         if (hand.aimSpace != XR_NULL_HANDLE) xrDestroySpace(hand.aimSpace);
@@ -488,9 +556,7 @@ void DestroyXrInput()
         xrDestroyActionSet(gActionSet);
         gActionSet = XR_NULL_HANDLE;
     }
-    gGripPose = gAimPose = gThumbstick = gTrigger = gSqueeze = XR_NULL_HANDLE;
-    gWeaponWheel = XR_NULL_HANDLE;
-    gMenuAccept = gMenuCancel = gMenuStart = XR_NULL_HANDLE;
+    gActions.fill(XR_NULL_HANDLE); // destroyed with the action set
     gCreated.store(false, std::memory_order_release);
     gSyncs.store(0, std::memory_order_relaxed);
     gSyncsNotFocused.store(0, std::memory_order_relaxed);

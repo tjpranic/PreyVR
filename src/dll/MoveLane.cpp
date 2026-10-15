@@ -303,6 +303,7 @@ DWORD SetMoveLaneDeadzone(unsigned int hundredths)
     Log("result=0 detail=deadzone value=" + std::to_string(hundredths));
     return 0;
 }
+unsigned MoveLaneDeadzone() { return gDeadzoneHundredths.load(std::memory_order_relaxed); }
 
 void UpdateMoveLane()
 {
@@ -634,6 +635,7 @@ DWORD SetTurnLaneDeadzone(unsigned int hundredths)
     gTurnDeadzoneHundredths.store(hundredths, std::memory_order_relaxed);
     return 0;
 }
+unsigned TurnLaneDeadzone() { return gTurnDeadzoneHundredths.load(std::memory_order_relaxed); }
 
 DWORD SetTurnLaneScale(unsigned int percent)
 {
@@ -739,4 +741,6 @@ DWORD SetMovementAxisScales(unsigned strafe,unsigned backward) {
     if(strafe<1 || strafe>200 || backward<1 || backward>200) return 1;
     gStrafeScale=strafe/100.f;gBackwardScale=backward/100.f;gMoveNeutralize=true;return 0;
 }
+unsigned MovementStrafePercent() {return static_cast<unsigned>(std::lround(gStrafeScale.load()*100.f));}
+unsigned MovementBackwardPercent() {return static_cast<unsigned>(std::lround(gBackwardScale.load()*100.f));}
 } // namespace preyvr::dll

@@ -1,56 +1,113 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace preyvr::options {
+// **Every VR Options setting.** The save file names each by its Spec key, so
+// these ids are this build's alone and their order is free to change.
 enum Setting : unsigned { Turn, HeadRelative, TurnSpeed, TwoHand, GripToggle,
     SupportSnap, Psychoscope, UiScale, UiMargin, UiCurve, UiGuide, Holsters, Wrist, WristSize,
     SceneReticle, ReticleFallback, Haptics, HapticStrength, PhysicalMelee, PhysicalContacts, SwingSpeed, ContactStrength,
-    PsiTarget, Medkit, BeltHints, DebugOverlay, MuzzleAim, BodyFollow, Count };
-static_assert(Count<=32); // runtime dirty mailbox is a 32-bit mask
-struct Spec { const char* key; const wchar_t* label; const wchar_t* help; int initial,min,max,step; };
-const Spec& Describe(unsigned id);
-bool Valid(unsigned id,int value);
-using Values=std::array<int,Count>;
-Values Defaults();
-std::string Serialize(const Values&);
-// Transactional parse: malformed/unknown fields refuse the whole file.
-bool Parse(std::string_view text,Values& result);
-std::wstring Display(unsigned id,int value);
-constexpr unsigned Width=1400,Height=1100,Pages=8,Rows=4;
-constexpr int CloseHit=Rows+Pages;
-// -1 = recenter, -2 = empty, -3 = clear holsters, -4 = calibrate posture.
-int Item(unsigned page,unsigned row);
-const wchar_t* PageName(unsigned page);
-struct Input {
-    bool valid=false,modal=false,start=false,accept=false,cancel=false;
-    bool previous=false,next=false,trigger=false;
-    float x=0,y=0,dt=0;
-    int hover=-1; // rows 0..Rows-1; tabs Rows..Rows+Pages-1; close CloseHit
-    bool decrease=false;
-    std::uint64_t epoch=0;
+    PsiTarget, Medkit, BeltHints, DebugOverlay, MuzzleAim, BodyFollow,
+    UiDistance, UiOffsetRight, UiOffsetUp, UiText, PointerHand, HudLayer,
+    MoveDeadzone, TurnDeadzone, StrafeSpeed, BackwardSpeed, BodyTurnDeadzone, BodyStep, BodyGlide,
+    ArmsFree, CarryHold, GrenadeHand, CarryThrowStrength, GrenadeThrowStrength,
+    WristOnHud, WristTick, WristAlong, WristHover, WristTilt,
+    CarryHand, GrenadeDeploy, LongReach, InventoryLayer, InventoryStereo, InventoryDepth,
+    Count };
+// What a value counts, for Display. `metresInMm` shows millimetres as metres;
+// the two directional units name the side instead of a sign.
+enum class Unit : unsigned char { none, percent, cm, mm, metresInMm, degrees, degreesRightLeft, degreesUpDown, ms,
+    cmPerSecond };
+// **One setting, described once**: the key it is saved under, its label and
+// help, its default, range and step, and how its value reads -- `names` for a
+// named choice (one per value, from `min`), `choices` for a fixed set of
+// values, `zero` for what 0 reads as, `unit` for the rest. A 0..1 setting with
+// none of these is on/off. The panel edits each as what it is (KindOf).
+struct Spec {
+    const char* key;
+    const wchar_t* label;
+    const wchar_t* help;
+    int initial, min, max, step;
+    Unit unit = Unit::none;
+    std::span<const wchar_t* const> names{};
+    std::span<const int> choices{};
+    const wchar_t* zero = nullptr;
 };
-struct Change { int setting=-1; int direction=0; bool recenter=false,clearHolsters=false,calibrate=false; };
+const Spec& Describe(unsigned id);
+// In range; with fixed choices, the first or any whole value from the second
+// up -- a command can set turning to 75 degrees, but 1..14 is no angle at all.
+bool Valid(unsigned id, int value);
+enum class Kind : unsigned char { toggle, choice, range };
+Kind KindOf(unsigned id);
+// A choice's values, in order: its fixed choices, or each named value.
+std::vector<int> Choices(unsigned id);
+std::wstring Display(unsigned id, int value);
+using Values = std::array<int, Count>;
+// Which settings a saved file holds. Only those are applied, so a setting
+// never chosen in the menu keeps its built-in value.
+using Present = std::array<bool, Count>;
+Values Defaults();
+// `present` null writes every setting; otherwise only those marked.
+std::string Serialize(const Values&, const Present* present = nullptr);
+// Transactional parse: malformed/unknown fields refuse the whole file. Keys
+// the file lacks take their defaults in `result` and are unmarked in `present`.
+bool Parse(std::string_view text, Values& result, Present* present = nullptr);
+// The panel's size in pixels: its texture, and the laser's mapping onto it.
+constexpr unsigned Width = 1400, Height = 1100;
+// **The panel's buttons**, which act rather than set: the negative entries of
+// MenuEntries, beside the settings.
+enum Button : int { RecenterView = -1, ClearHolsterSlots = -2, CalibratePosture = -3 };
+// **The panel's layout**: its tabs and the rows on each, any number per tab
+// (the list scrolls). Every setting appears exactly once, each button once.
+unsigned MenuPages();
+const wchar_t* MenuPageName(unsigned page);
+std::span<const int> MenuEntries(unsigned page);
+// The controls, as the state machine needs them: the opening hold, B, and
+// whether everything else is at rest -- no press may carry into or out of the
+// panel. `x`/`y` are the panel's navigation (TrackingFrame::navigate).
+struct Input {
+    bool valid = false, modal = false, start = false, accept = false, cancel = false;
+    bool previous = false, next = false, trigger = false;
+    float x = 0, y = 0, dt = 0;
+    std::uint64_t epoch = 0;
+};
+// What the panel did: a setting given `value` (refused unless Valid), or one
+// of its buttons.
+struct Change {
+    int setting = -1;
+    int value = 0;
+    bool recenter = false, clearHolsters = false, calibrate = false;
+};
+// **When VR Options is open, and who has the controls.** A long hold of left
+// Menu (or RequestOpen) opens it over whatever is shown: the running game or a
+// game menu alike -- the game is not paused for it. A short tap is still the
+// game's own pause (PauseTap). If a game menu opens or closes under it, it
+// closes: it was opened over the other. It owns the controls while open and
+// until they are at rest after, arms only once they are at rest after opening,
+// and closes on B. The panel (VrOptionsUi) does everything else.
 class Menu {
 public:
-    Change Update(const Input&);
-    bool Open() const {return open_;}
-    bool OwnsInput() const {return open_||quarantine_||pending_;}
-    bool PauseTap() const {return pauseTap_;}
-    void RequestOpen(){requested_=true;}
+    void Update(const Input&);
+    bool Open() const { return open_; }
+    // Opened over a game menu (true) or the running game.
+    bool OverMenu() const { return overMenu_; }
+    // Open, and the controls have been at rest since it opened: only then may
+    // a press act on it (the hold that opened it must not also click).
+    bool Armed() const { return open_ && armed_; }
+    bool OwnsInput() const { return open_ || quarantine_; }
+    bool PauseTap() const { return pauseTap_; }
+    void RequestOpen() { requested_ = true; }
     void Close();
-    unsigned page=0,row=0;
 private:
-    bool open_=false,quarantine_=false,armed_=false,requested_=false;
-    bool startArmed_=false,startUsed_=false;
-    bool startWas_=false,pending_=false,pauseTap_=false;
-    bool accept_=false,cancel_=false,trigger_=false,previous_=false,next_=false;
-    int stickX_=0,stickY_=0;
-    float hold_=0,pendingTime_=0;
-    std::uint64_t epoch_=0;
+    bool open_ = false, quarantine_ = false, armed_ = false, requested_ = false;
+    bool startArmed_ = false, startUsed_ = false;
+    bool startWas_ = false, pauseTap_ = false, overMenu_ = false;
+    float hold_ = 0;
+    std::uint64_t epoch_ = 0;
 };
-int Hit(float u,float v);
-int Adjust(unsigned id,int value,int direction);
 }

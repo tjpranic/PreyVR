@@ -99,6 +99,13 @@ DWORD SetAnimIkSupportLatch(unsigned enabled);
 // difference (at most maxBackMm), its grab region reaches supportBackMm behind
 // the foregrip, and the drawn torso turns twistDeg while it is held two-handed.
 DWORD SetAnimIkLongReach(int enabled, int comfortMm, int maxBackMm, int supportBackMm, int twistDeg);
+// The same switch alone, keeping the distances and the twist.
+DWORD SetAnimIkLongReachEnabled(unsigned enabled);
+unsigned AnimIkLongReachEnabled();
+// The shared torso filter's deadzone alone (arm.torso without the relax):
+// the arms and the body turn together. Degrees, 0..180.
+DWORD SetTorsoDeadzone(int degrees);
+int TorsoDeadzoneDegrees();
 std::string AnimIkLongReachReport();
 unsigned AnimIkSupportLatch();
 

@@ -354,6 +354,18 @@ const char* ObserverStatusName(DWORD value)
     }
 }
 
+// **A verb given no value reports and changes nothing** (docs/TUNING-COMMANDS.md).
+// A setter verb used to set something when bare -- its default, or "on", or for
+// ik.mode and move.mode "off" -- so asking what was set overwrote it, the VR
+// Options menu's saved choice included. Each now calls its setter only when
+// Valued, and then shows what is set where its lane exposes that, or says that
+// nothing changed (NoValue).
+bool Valued(const std::vector<std::string>& args) { return args.size() > 1; }
+const char* NoValue(const std::vector<std::string>& args)
+{
+    return Valued(args) ? "" : " note=no_value_nothing_changed";
+}
+
 // The hand-pose verbs (jordi/hand-pose). Kept out of Execute's chain, which is
 // at MSVC's block-nesting limit (C1061).
 bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
@@ -374,7 +386,7 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
         // Bare verbs report; a value sets. use.hand 1 = left hand points and
         // uses, right grip reloads (default); 0 = right grip, weapon ray.
         DWORD result = 0;
-        if (args.size() > 1) {
+        if (Valued(args)) {
             const unsigned v = static_cast<unsigned>(arg(1, 1));
             result = verb == "use.hand" ? SetUseHand(v) : verb == "use.hold" ? SetUseHold(v)
                    : verb == "use.trace" ? SetUseTrace(v) : SetUseBackMillimetres(v);
@@ -384,7 +396,7 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
         // use.filter <0|1> [minCutoffCentiHz 100] [betaHundredths 200] [backlashCentiDegrees 75]:
         // One Euro then a dead band on the pointer.
         DWORD result = 0;
-        if (args.size() > 1) {
+        if (Valued(args)) {
             result = SetUseFilter(static_cast<unsigned>(arg(1, 1)), static_cast<float>(arg(2, 100)) * .01f,
                                   static_cast<float>(arg(3, 200)) * .01f, static_cast<float>(arg(4, 75)) * .01f);
         }
@@ -392,25 +404,25 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
     } else if (verb == "ik.skel") {
         out << "ik.skel result=" << RequestAnimIkSkeletonDump();
     } else if (verb == "ik.widesupport") {
-        out << "ik.widesupport result=" << (args.size() > 1 ? SetAnimIkWideSupport(static_cast<unsigned>(arg(1, 1))) : 0)
+        out << "ik.widesupport result=" << (Valued(args) ? SetAnimIkWideSupport(static_cast<unsigned>(arg(1, 1))) : 0)
             << " wide=" << AnimIkWideSupport();
     } else if (verb == "ik.supportlatch") {
-        out << "ik.supportlatch result=" << (args.size() > 1 ? SetAnimIkSupportLatch(static_cast<unsigned>(arg(1, 1))) : 0)
+        out << "ik.supportlatch result=" << (Valued(args) ? SetAnimIkSupportLatch(static_cast<unsigned>(arg(1, 1))) : 0)
             << " latch=" << AnimIkSupportLatch();
     } else if (verb == "ik.longreach") {
         // ik.longreach [on comfortMm maxBackMm supportBackMm twistDeg]; bare reports.
         DWORD result = 0;
-        if (args.size() > 1) {
+        if (Valued(args)) {
             result = SetAnimIkLongReach(arg(1, 1), arg(2, 450), arg(3, 200), arg(4, 100), arg(5, 30));
         }
         out << "ik.longreach result=" << result << AnimIkLongReachReport();
     } else if (verb == "ik.helpers") {
         out << "ik.helpers result=" << RequestAnimIkHelperDump() << " (see PreyVR.log: preyvr_anim_ik helper)";
     } else if (verb == "pose.mode") {
-        out << "pose.mode result=" << (args.size() > 1 ? SetHandPoseMode(static_cast<unsigned>(arg(1, 1))) : 0)
+        out << "pose.mode result=" << (Valued(args) ? SetHandPoseMode(static_cast<unsigned>(arg(1, 1))) : 0)
             << HandPoseReport();
     } else if (verb == "pose.curl") {
-        out << "pose.curl result=" << (args.size() > 1 ? SetHandPoseCurlPercent(arg(1, 100)) : 0) << HandPoseReport();
+        out << "pose.curl result=" << (Valued(args) ? SetHandPoseCurlPercent(arg(1, 100)) : 0) << HandPoseReport();
     } else if (verb == "pose.grip") {
         out << "pose.grip result="
             << (args.size() > 4 ? SetHandPoseGrip(arg(1, 550), arg(2, 35), arg(3, 0), arg(4, 150)) : 0)
@@ -420,13 +432,13 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
             << (args.size() > 2 ? SetHandPoseReach(static_cast<unsigned>(arg(1, 1)), arg(2, 85)) : 0)
             << HandPoseReport();
     } else if (verb == "near.follow") {
-        out << "near.follow result=" << (args.size() > 1 ? SetNearFovFollow(static_cast<unsigned>(arg(1, 1))) : 0)
+        out << "near.follow result=" << (Valued(args) ? SetNearFovFollow(static_cast<unsigned>(arg(1, 1))) : 0)
             << " followedDeci=" << NearFovFollowed();
     } else if (verb == "pose.roll") {
-        out << "pose.roll result=" << (args.size() > 1 ? SetHandPoseWeaponRoll(static_cast<unsigned>(arg(1, 1))) : 0)
+        out << "pose.roll result=" << (Valued(args) ? SetHandPoseWeaponRoll(static_cast<unsigned>(arg(1, 1))) : 0)
             << HandPoseReport();
     } else if (verb == "pose.stretch") {
-        out << "pose.stretch result=" << (args.size() > 1 ? SetHandPoseStretchPercent(arg(1, 120)) : 0)
+        out << "pose.stretch result=" << (Valued(args) ? SetHandPoseStretchPercent(arg(1, 120)) : 0)
             << HandPoseReport();
     } else if (verb == "arm.report") {
         out << "arm.report result=0" << ArmReport();
@@ -434,10 +446,10 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
         // docs/BODY-YAW-2026-10-11.md: the body turned to the torso.
         out << "body.report result=0" << BodyFollowReport();
     } else if (verb == "body.follow") {
-        out << "body.follow result=" << (args.size() > 1 ? SetBodyFollow(static_cast<unsigned>(arg(1, 1))) : 0)
+        out << "body.follow result=" << (Valued(args) ? SetBodyFollow(static_cast<unsigned>(arg(1, 1))) : 0)
             << BodyFollowReport();
     } else if (verb == "body.level") {
-        out << "body.level result=" << (args.size() > 1 ? SetBodyFollowLevel(static_cast<unsigned>(arg(1, 1))) : 0)
+        out << "body.level result=" << (Valued(args) ? SetBodyFollowLevel(static_cast<unsigned>(arg(1, 1))) : 0)
             << BodyFollowReport();
     } else if (verb == "body.torso") {
         // body.torso <deadzoneDeg> <relax per mille per second>; arm.torso sets the same filter.
@@ -449,7 +461,7 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
         out << "body.turn result=" << RequestBodyTurn(arg(1, 0), arg(2, 5)) << BodyFollowReport();
     } else if (verb == "body.roomscale") {
         // docs/ROOMSCALE-2026-10-11.md: the capsule follows the head.
-        out << "body.roomscale result=" << (args.size() > 1 ? SetRoomScale(static_cast<unsigned>(arg(1, 1))) : 0)
+        out << "body.roomscale result=" << (Valued(args) ? SetRoomScale(static_cast<unsigned>(arg(1, 1))) : 0)
             << BodyFollowReport();
     } else if (verb == "body.zone") {
         // body.zone <startMm> <stopMm> [followMs]: idle until the head is start
@@ -457,7 +469,7 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
         out << "body.zone result=" << (args.size() > 2 ? SetRoomScaleZone(arg(1, 30), arg(2, 5), arg(3, -1)) : 0)
             << BodyFollowReport();
     } else if (verb == "body.radius") {
-        out << "body.radius result=" << (args.size() > 1 ? SetRoomScaleRadius(arg(1, 350)) : 0) << BodyFollowReport();
+        out << "body.radius result=" << (Valued(args) ? SetRoomScaleRadius(arg(1, 350)) : 0) << BodyFollowReport();
     } else if (verb == "body.nudge") {
         // body.nudge <rightCm> <forwardCm> [delayS=5]: one swept move with the
         // origin -- the body moves, the view must not. Waits like body.turn.
@@ -475,7 +487,7 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
         // Bare `dbg.draw` only reports. `on`/`all` = every layer, `off` = 0,
         // otherwise a layer mask (see DebugOverlayScene.h).
         DWORD result = 0;
-        if (args.size() > 1) {
+        if (Valued(args)) {
             const std::string& value = args[1];
             int mask = -1;
             if (value == "on" || value == "all") { mask = 255; }
@@ -485,17 +497,17 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
         }
         out << "dbg.draw result=" << result << DebugOverlayReport();
     } else if (verb == "move.firehold") {
-        out << "move.firehold result=" << (args.size() > 1 ? SetFireLaneHold(static_cast<unsigned>(arg(1, 1))) : 0)
+        out << "move.firehold result=" << (Valued(args) ? SetFireLaneHold(static_cast<unsigned>(arg(1, 1))) : 0)
             << " hold=" << FireLaneHold() << " posted=" << FireLaneHoldPosted();
     } else if (verb == "aim.shotprobe") {
-        out << "aim.shotprobe result=" << (args.size() > 1 ? SetShotProbe(static_cast<unsigned>(arg(1, 0))) : 0)
+        out << "aim.shotprobe result=" << (Valued(args) ? SetShotProbe(static_cast<unsigned>(arg(1, 0))) : 0)
             << ShotProbeReport();
     } else if (verb == "aim.shot") {
         // Bare `aim.shot` only reports (and installs the observers, so a shot
         // with the lane off is measured too). 1 = the shot leaves the muzzle
         // along the aim; 0 = the native eye-origin query.
         DWORD result = 0;
-        if (args.size() > 1) {
+        if (Valued(args)) {
             const int value = arg(1, -1);
             result = value == 0 || value == 1 ? SetShotRay(static_cast<unsigned>(value)) : ERROR_INVALID_PARAMETER;
         }
@@ -508,17 +520,18 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
         // Bare `near.fx` only reports. 1 = DrawNear particles in the weapon's
         // camera space (default), 0 = native, for A/B.
         DWORD result = 0;
-        if (args.size() > 1) {
+        if (Valued(args)) {
             const int value = arg(1, -1);
             result = value == 0 || value == 1 ? SetNearParticleStereo(static_cast<unsigned>(value))
                                               : ERROR_INVALID_PARAMETER;
         }
         out << "near.fx result=" << result << " " << NearParticleStereoReport();
     } else if (verb == "near.fxbridge") {
-        out << "near.fxbridge result=" << (args.size() > 1 ? SetNearParticleBridge(static_cast<unsigned>(arg(1, 1))) : 0)
+        out << "near.fxbridge result=" << (Valued(args) ? SetNearParticleBridge(static_cast<unsigned>(arg(1, 1))) : 0)
             << " " << NearParticleStereoReport();
     } else if (verb == "near.fxhide") {
-        out << "near.fxhide result=" << SetNearParticleHide(static_cast<unsigned>(arg(1, 1)));
+        out << "near.fxhide result=" << (Valued(args) ? SetNearParticleHide(static_cast<unsigned>(arg(1, 1))) : 0)
+            << NoValue(args);
     } else if (verb == "dbg.report") {
         out << "dbg.report result=0" << DebugOverlayReport();
     } else if (verb == "dbg.marks") {
@@ -543,21 +556,21 @@ bool ExecuteDualCommand(const std::vector<std::string>& args, std::ostringstream
     };
     if (verb == "dual.observe") {
         // Pass-through logging of RT_RenderScene submissions.
-        out << "dual.observe result=" << SetDualSceneObserve(arg(1, 1)) << DualSceneReport();
+        out << "dual.observe result=" << (Valued(args) ? SetDualSceneObserve(arg(1, 1)) : 0) << DualSceneReport();
     } else if (verb == "dual.mode") {
         // 0 off, 1 the same-camera control, 2 per-eye cameras. Second argument:
         // frame budget.
-        out << "dual.mode result=" << SetDualSceneMode(arg(1, 0), arg(2, 0)) << DualSceneReport();
+        out << "dual.mode result=" << (Valued(args) ? SetDualSceneMode(arg(1, 0), arg(2, 0)) : 0) << DualSceneReport();
     } else if (verb == "dual.ipd") {
-        out << "dual.ipd result=" << SetDualSceneIpdMillimetres(arg(1, 64)) << DualSceneReport();
+        out << "dual.ipd result=" << (Valued(args) ? SetDualSceneIpdMillimetres(arg(1, 64)) : 0) << DualSceneReport();
     } else if (verb == "dual.vr") {
         // Headset A/B: 1 both eyes per frame, 0 the alternate-eye path. Ordered so
         // no both-eyes contract is ever published without its second submission.
         DWORD result = 0;
-        if (arg(1, 1) != 0) {
+        if (Valued(args) && arg(1, 1) != 0) {
             result = SetDualSceneMode(3, 0);
             if (result == 0) SetDualStereoContract(1);
-        } else {
+        } else if (Valued(args)) {
             SetDualStereoContract(0);
             result = SetDualSceneMode(0, 0);
         }
@@ -567,7 +580,7 @@ bool ExecuteDualCommand(const std::vector<std::string>& args, std::ostringstream
     } else if (verb == "dual.overlay") {
         // Step 2 A/B: 1 repeats the after-world overlays into the held eye, 0
         // leaves them in the second eye only. No argument: report.
-        out << "dual.overlay result=" << (args.size() > 1 ? SetDualOverlayRedraw(arg(1, 1)) : 0)
+        out << "dual.overlay result=" << (Valued(args) ? SetDualOverlayRedraw(arg(1, 1)) : 0)
             << DualOverlayReport();
     } else if (verb == "dual.report") {
         out << "dual.report result=0" << DualSceneReport() << DualOverlayReport();
@@ -595,7 +608,7 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         return;
     }
     if (verb == "vr.options") {
-        if(args.size()>1)RequestVrOptions(arg(1,0)!=0);
+        if(Valued(args))RequestVrOptions(arg(1,0)!=0);
         out << "vr.options" << VrOptionsReport() << PsychoscopeReport() << BodyEquipmentReport();
     } else if (verb == "vr.enable") {
         EnableVrMode(); out << VrModeReport();
@@ -614,7 +627,7 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
     } else if (verb == "hud.setvar" && args.size() >= 3) {
         out << "hud.setvar result=" << QueueHudVariable(args[1], true, std::atof(args[2].c_str()));
     } else if (verb == "hud.layer") {
-        const auto result=args.size()>1?SetHudLayerEnabled(arg(1,0)):0;
+        const auto result=Valued(args)?SetHudLayerEnabled(arg(1,0)):0;
         out << "hud.layer result=" << result << ' ' << HudLayerReport();
     } else if (verb == "input.hotkeys") {
         // **Nothing started this thread.** SetHotkeysEnabled was reachable only
@@ -622,18 +635,18 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         // every keyboard binding in the bridge -- including the ~ console key --
         // was dead in the player package. Building a binding and never checking
         // the path that arms it is the same mistake twice in one session.
-        out << "input.hotkeys result=" << (args.size()>1?SetHotkeysEnabled(arg(1,1)):0)
+        out << "input.hotkeys result=" << (Valued(args)?SetHotkeysEnabled(arg(1,1)):0)
             << " consoleToggles=" << HotkeyConsoleToggles();
     } else if (verb == "ui.stereo") {
-        out << "ui.stereo result=" << (args.size()>1?SetInventoryStereoEnabled(arg(1,0)):0)
+        out << "ui.stereo result=" << (Valued(args)?SetInventoryStereoEnabled(arg(1,0)):0)
             << ' ' << InventoryStereoReport();
     } else if (verb == "ui.depth") {
-        out << "ui.depth result=" << (args.size()>1?SetInventoryDepthPercent(arg(1,25)):0)
+        out << "ui.depth result=" << (Valued(args)?SetInventoryDepthPercent(arg(1,25)):0)
             << ' ' << InventoryStereoReport();
     } else if (verb == "ui.inventory") {
         // Opt-in separate inventory layer; native redirection is additionally
         // gated on a compatible, recently serviced XR swapchain consumer.
-        out << "ui.inventory result=" << (args.size()>1?SetInventoryCaptureEnabled(arg(1,0)):0)
+        out << "ui.inventory result=" << (Valued(args)?SetInventoryCaptureEnabled(arg(1,0)):0)
             << ' ' << HudLayerReport()
             // Frames actually submitted through the separate inventory swapchain.
             // captured= above says the redirect happened; this says the layer
@@ -641,16 +654,17 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
             // upload-refusal fallback.
             << " layerFrames=" << InventoryLayerFrameCount();
     } else if (verb == "ui.panel") {
-        out << "ui.panel result=" << SetUiPanelMode(arg(1,1)) << ' ' << VrModeReport();
+        out << "ui.panel result=" << (Valued(args) ? SetUiPanelMode(arg(1,1)) : 0)
+            << " mode=" << UiPanelMode() << ' ' << VrModeReport();
     } else if (verb == "ui.pointer") {
-        out << "ui.pointer result=" << (args.size()>1?SetUiPointerHand(arg(1,1)):0) << ' ' << UiPointerReport();
+        out << "ui.pointer result=" << (Valued(args)?SetUiPointerHand(arg(1,1)):0) << ' ' << UiPointerReport();
     } else if (verb == "ui.scale") {
         // The stored percent was already echoed here; `margin` and `guide` join
         // it because they are what actually decide the panel's size. A wearer
         // reading "percent=160" while the panel refused to grow had no way to
         // see that the fit margin was shrinking it straight back off, which is
         // the whole reason ui.scale looked as though it capped at 130.
-        if (args.size() > 1) { out << "ui.scale result=" << SetUiScalePercent(arg(1, 100)); }
+        if (Valued(args)) { out << "ui.scale result=" << SetUiScalePercent(arg(1, 100)); }
         else { out << "ui.scale result=0"; }
         out << " percent=" << UiScalePercent()
             << " margin=" << UiFitMarginPercent()
@@ -658,50 +672,73 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
     } else if (verb == "ui.text") {
         // Text panel distance in cm (100..200, default 140), at the HUD panel's
         // physical size. No argument: report.
-        out << "ui.text result=" << (args.size() > 1 ? SetTextPanelDistanceCm(arg(1, 140)) : 0)
+        out << "ui.text result=" << (Valued(args) ? SetTextPanelDistanceCm(arg(1, 140)) : 0)
             << " cm=" << TextPanelDistanceCm();
+    } else if (verb == "ui.distance") {
+        // Native menu panel distance in cm (100..400, default 200), at the same
+        // apparent size. The VR Options menu saves it. No argument: report.
+        out << "ui.distance result=" << (Valued(args) ? SetUiDistanceCm(arg(1, 200)) : 0)
+            << " cm=" << UiDistanceCm();
+    } else if (verb == "ui.offset") {
+        // Native menu panel offset in whole degrees: right (-90..90), up
+        // (-45..45). Both or neither: one value, or one that does not parse,
+        // is refused rather than guessed. The VR Options menu saves it. No
+        // argument: report.
+        DWORD result = 0;
+        if (Valued(args)) {
+            int right = 0, up = 0;
+            result = args.size() == 3 && ParseInt(args[1], right) && ParseInt(args[2], up)
+                ? SetUiOffsetDegrees(right, up) : ERROR_INVALID_PARAMETER;
+        }
+        out << "ui.offset result=" << result
+            << " right=" << UiOffsetRightDegrees() << " up=" << UiOffsetUpDegrees();
     } else if (verb == "ui.margin") {
         // The real size ceiling. ui.scale above ~130 was being absorbed by the
         // fit loops shrinking the panel back inside 72% of the reported frustum.
-        out << "ui.margin result=" << SetUiFitMarginPercent(arg(1, 72))
+        out << "ui.margin result=" << (Valued(args) ? SetUiFitMarginPercent(arg(1, 72)) : 0)
             << " percent=" << UiFitMarginPercent();
     } else if (verb == "ui.guide") {
         // Reports when given no argument. It used to default the argument to 1,
         // which was harmless while the card was on by default and would now mean
         // a bare `ui.guide` silently switched it back on.
-        out << "ui.guide result=" << (args.size() > 1 ? SetUiGuideEnabled(arg(1, 0)) : 0)
+        out << "ui.guide result=" << (Valued(args) ? SetUiGuideEnabled(arg(1, 0)) : 0)
             << " enabled=" << UiGuideEnabled();
     } else if (verb == "ui.curve") {
-        out << "ui.curve result=" << SetUiCurveDegrees(arg(1,35));
+        out << "ui.curve result=" << (Valued(args) ? SetUiCurveDegrees(arg(1,35)) : 0)
+            << " degrees=" << UiCurveDegrees();
     } else if (verb == "observer") {
-        const DWORD status = SetFrameObserverEnabled(arg(1, 1));
+        const DWORD status = Valued(args) ? SetFrameObserverEnabled(arg(1, 1)) : FrameObserverStatus();
         out << "observer status=" << ObserverStatusName(status) << "(" << status << ")";
     } else if (verb == "xr.runtime" && args.size() >= 2) {
         out << "xr.runtime result=" << SetXrRuntimeManifest(args[1].c_str());
     } else if (verb == "xr.srgb") {
-        out << "xr.srgb result=" << SetXrPreferSrgbFormat(arg(1, 1));
+        out << "xr.srgb result=" << (Valued(args) ? SetXrPreferSrgbFormat(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "xr.start") {
         const DWORD status = StartXrSession();
         out << "xr.start status=" << XrStatusName(status) << "(" << status << ")";
     } else if (verb == "xr.native") {
-        out << "xr.native result=" << SetNativeProjection(arg(1, 1));
+        out << "xr.native result=" << (Valued(args) ? SetNativeProjection(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "xr.stereo") {
         // Millimetres and degrees, so the file never carries a float.
         const float ipd = static_cast<float>(arg(1, 64)) / 1000.0f;
         const float halfFov = static_cast<float>(arg(2, 50));
-        out << "xr.stereo result=" << SetSyntheticStereo(ipd, halfFov);
+        out << "xr.stereo result=" << (Valued(args) ? SetSyntheticStereo(ipd, halfFov) : 0) << NoValue(args);
     } else if (verb == "xr.mirrorfov") {
         // How much of the headset's view the flat mirror's image spans, as a
         // percentage of Prey's own declared field. 100 is the honest projection.
         // Only affects frames with no held eye pair -- the menu, and anything
         // else not rendered as alternating eyes.
-        out << "xr.mirrorfov result=" << SetMirrorFovPercent(static_cast<unsigned int>(arg(1, 100)))
+        out << "xr.mirrorfov result=" << (Valued(args) ? SetMirrorFovPercent(static_cast<unsigned int>(arg(1, 100))) : 0)
             << " percent=" << MirrorFovPercent();
     } else if (verb == "xr.submit") {
-        const DWORD status = SetXrStereoSubmission(arg(1, 1));
-        out << "xr.submit status=" << XrStatusName(status) << "(" << status << ")";
+        if (Valued(args)) {
+            const DWORD status = SetXrStereoSubmission(arg(1, 1));
+            out << "xr.submit status=" << XrStatusName(status) << "(" << status << ")";
+        } else {
+            out << "xr.submit result=0" << NoValue(args);
+        }
     } else if (verb == "view.observe") {
-        out << "view.observe result=" << SetViewHookObserving(arg(1, 1));
+        out << "view.observe result=" << (Valued(args) ? SetViewHookObserving(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "view.calibrate") {
         out << "view.calibrate result=" << RecenterHeadTracking(true) << ' ' << HeadHeightReport();
     } else if (verb == "view.height") {
@@ -709,14 +746,14 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
     } else if (verb == "view.recenter") {
         out << "view.recenter result=" << RecenterHeadTracking();
     } else if (verb == "view.apply") {
-        out << "view.apply result=" << SetViewHookApplying(arg(1, 1));
+        out << "view.apply result=" << (Valued(args) ? SetViewHookApplying(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "view.position") {
-        out << "view.position result=" << SetViewPositionApplying(arg(1, 1));
+        out << "view.position result=" << (Valued(args) ? SetViewPositionApplying(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "near.fov") {
         // Bare command reports without changing/rearming a faulted override.
         // Decidegrees: `near.fov 1234` is 123.4 degrees, explicit 0 disables.
         DWORD result = 0;
-        if (args.size() > 1) {
+        if (Valued(args)) {
             int value = 0;
             // An explicit value is a choice: stop following the world FOV.
             SetNearFovFollow(0);
@@ -732,49 +769,52 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
             << " faulted=" << NearFovFaulted()
             << " thread=" << NearFovThreadId();
     } else if (verb == "near.enable") {
-        out << "near.enable result=" << SetNearViewStereo(arg(1, 1));
+        out << "near.enable result=" << (Valued(args) ? SetNearViewStereo(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "near.halfipd") {
-        out << "near.halfipd result=" << SetNearViewHalfIpdMillimetres(arg(1, 32));
+        out << "near.halfipd result=" << (Valued(args) ? SetNearViewHalfIpdMillimetres(arg(1, 32)) : 0)
+            << NoValue(args);
     } else if (verb == "near.lineage") {
-        out << "near.lineage result=" << ArmNearViewLineage(arg(1, 1));
+        out << "near.lineage result=" << (Valued(args) ? ArmNearViewLineage(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "near.dump") {
         out << "near.dump result=" << DumpNearViewLineage();
     } else if (verb == "near.zero") {
-        out << "near.zero result=" << SetNearViewZeroDeltaControl(arg(1, 1));
+        out << "near.zero result=" << (Valued(args) ? SetNearViewZeroDeltaControl(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "ik.mode") {
         // 0 off, 1 observe (identify the rig, read its ADIK table, write
         // nothing), 2 apply. Mutually exclusive with hand.mode 2.
-        const int requested = arg(1, 0);
-        out << "ik.mode result=" << SetAnimIkMode(requested) << " mode=" << requested
-            << (requested == 0 ? "(off)" : requested == 1 ? "(observe)" : requested == 2 ? "(apply)" : "(unknown)");
+        out << "ik.mode result=" << (Valued(args) ? SetAnimIkMode(arg(1, 0)) : 0);
+        const unsigned int mode = AnimIkMode();
+        out << " mode=" << mode
+            << (mode == 0 ? "(off)" : mode == 1 ? "(observe)" : mode == 2 ? "(apply)" : "(unknown)");
     } else if (verb == "ik.test") {
-        out << "ik.test result=" << SetAnimIkTestOffsetMillimetres(arg(1, 0), arg(2, 0), arg(3, 0));
+        out << "ik.test result=" << (Valued(args) ? SetAnimIkTestOffsetMillimetres(arg(1, 0), arg(2, 0), arg(3, 0)) : 0)
+            << NoValue(args);
     } else if (verb == "ik.drive") {
-        out << "ik.drive result=" << SetAnimIkControllerDrive(arg(1, 1));
+        out << "ik.drive result=" << (Valued(args) ? SetAnimIkControllerDrive(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "ik.calibrate") {
         out << "ik.calibrate result=" << CalibrateAnimIk();
     } else if (verb == "ik.align") {
         DWORD result = 0;
-        if (args.size() > 1) {
+        if (Valued(args)) {
             int value = 0;
             result = args.size() == 2 && ParseInt(args[1], value) && value >= 0
                 ? SetAnimIkWeaponAlignment(static_cast<unsigned int>(value)) : 1u;
         }
         out << "ik.align result=" << result << AnimIkWeaponAlignmentReport();
     } else if (verb == "ik.joints") {
-        out << "ik.joints result=" << SetAnimIkJointSignature(arg(1, 101));
+        out << "ik.joints result=" << (Valued(args) ? SetAnimIkJointSignature(arg(1, 101)) : 0) << NoValue(args);
     } else if (verb == "ik.reach") {
-        out << "ik.reach result=" << SetAnimIkReachPercent(arg(1, 100))
+        out << "ik.reach result=" << (Valued(args) ? SetAnimIkReachPercent(arg(1, 100)) : 0)
             << " percent=" << AnimIkReachPercent();
     } else if (verb == "ik.hands") {
-        out << "ik.hands result=" << SetAnimIkHands(arg(1, 1));
+        out << "ik.hands result=" << (Valued(args) ? SetAnimIkHands(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "ik.anchor") {
-        out << "ik.anchor result=" << SetAnimIkCameraAnchor(arg(1, 1))
+        out << "ik.anchor result=" << (Valued(args) ? SetAnimIkCameraAnchor(arg(1, 1)) : 0) << NoValue(args)
             << " camera=" << AnimIkAnchorCameraCount()
             << " reticle=" << AnimIkAnchorReticleCount()
             << " missing=" << AnimIkAnchorMissingCount();
     } else if (verb == "ik.trace") {
-        if (args.size() >= 2) { out << "ik.trace result=" << SetAnimIkTrace(arg(1, 1)); }
+        if (Valued(args)) { out << "ik.trace result=" << SetAnimIkTrace(arg(1, 1)); }
         else { out << "ik.trace result=0"; }
         const std::string trace = AnimIkTraceReport();
         // Persisted: results.txt is overwritten by the next command, and a
@@ -785,37 +825,37 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
     } else if (verb == "ik.dump") {
         out << "ik.dump result=" << DumpAnimIk();
     } else if (verb == "hand.mode") {
-        const int requested = arg(1, 0);
-        const DWORD result = SetHandRigTakeoverMode(requested);
+        out << "hand.mode result=" << (Valued(args) ? SetHandRigTakeoverMode(arg(1, 0)) : 0);
         // Named, because "1" reads like "on" and is actually the control that
         // deliberately changes nothing.
-        const char* name = requested == 0 ? "off"
-                         : requested == 1 ? "passthrough_changes_nothing"
-                         : requested == 2 ? "apply"
-                                          : "unknown";
-        out << "hand.mode result=" << result << " mode=" << requested << "(" << name << ")";
+        const unsigned int mode = HandRigMode();
+        const char* name = mode == 0 ? "off"
+                         : mode == 1 ? "passthrough_changes_nothing"
+                         : mode == 2 ? "apply"
+                                     : "unknown";
+        out << " mode=" << mode << "(" << name << ")";
     } else if (verb == "hand.joint") {
-        out << "hand.joint result=" << SetHandRigJoint(arg(1, 0));
+        out << "hand.joint result=" << (Valued(args) ? SetHandRigJoint(arg(1, 0)) : 0) << NoValue(args);
     } else if (verb == "hand.offset") {
         out << "hand.offset result="
-            << SetHandRigOffsetMillimetres(arg(1, 0), arg(2, 0), arg(3, 0));
+            << (Valued(args) ? SetHandRigOffsetMillimetres(arg(1, 0), arg(2, 0), arg(3, 0)) : 0) << NoValue(args);
     } else if (verb == "hand.right") {
-        out << "hand.right result=" << SetHandRigRightJoint(arg(1, 0));
+        out << "hand.right result=" << (Valued(args) ? SetHandRigRightJoint(arg(1, 0)) : 0) << NoValue(args);
     } else if (verb == "hand.left") {
-        out << "hand.left result=" << SetHandRigLeftJoint(arg(1, 0));
+        out << "hand.left result=" << (Valued(args) ? SetHandRigLeftJoint(arg(1, 0)) : 0) << NoValue(args);
     } else if (verb == "hand.drive") {
-        out << "hand.drive result=" << SetHandRigControllerDrive(arg(1, 1));
+        out << "hand.drive result=" << (Valued(args) ? SetHandRigControllerDrive(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "hand.wrist") {
-        out << "hand.wrist result=" << SetHandRigWristDrive(arg(1, 1));
+        out << "hand.wrist result=" << (Valued(args) ? SetHandRigWristDrive(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "hand.turnyaw") {
         // Tenths of a degree, so 1800 is a half turn. Reported back so a wearer
         // reading the channel can see what is actually set.
-        out << "hand.turnyaw result=" << SetHandRigTurnYaw(arg(1, 0))
+        out << "hand.turnyaw result=" << (Valued(args) ? SetHandRigTurnYaw(arg(1, 0)) : 0)
             << " deciDegrees=" << HandRigTurnYawDeciDegrees();
     } else if (verb == "hand.calibrate") {
         out << "hand.calibrate result=" << CalibrateHandRig();
     } else if (verb == "hand.scale") {
-        out << "hand.scale result=" << SetHandRigScalePercent(arg(1, 100));
+        out << "hand.scale result=" << (Valued(args) ? SetHandRigScalePercent(arg(1, 100)) : 0) << NoValue(args);
     } else if (verb == "hand.character" && args.size() >= 2) {
         unsigned long long pointer = 0;
         if (!ParseU64(args[1], pointer)) {
@@ -848,18 +888,18 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         out << "console result=" << result
             << " command=\"" << command << "\"";
     } else if (verb == "psi.target") {
-        const auto result=args.size()>1?SetPsiTargetMode(arg(1,0)):0;
+        const auto result=Valued(args)?SetPsiTargetMode(arg(1,0)):0;
         out<<"psi.target result="<<result<<PsiMedkitReport();
     } else if (verb == "medkit.slot") {
-        const auto result=args.size()>1?SetMedkitSlot(arg(1,0)):0;
+        const auto result=Valued(args)?SetMedkitSlot(arg(1,0)):0;
         out<<"medkit.slot result="<<result<<PsiMedkitReport();
     } else if (verb == "physical") {
         out<<"physical"<<PhysicalInteractionsReport();
     } else if (verb == "aim.scene") {
-        if(args.size()>1)SetSceneReticle(arg(1,0));
+        if(Valued(args))SetSceneReticle(arg(1,0));
         out<<"aim.scene"<<SceneQueryReport();
     } else if (verb == "haptics") {
-        if(args.size()>1)SetHapticsEnabled(arg(1,1));
+        if(Valued(args))SetHapticsEnabled(arg(1,1));
         if(args.size()>2)SetHapticStrength(arg(2,70));
         out<<"haptics"<<HapticsReport();
     } else if (verb == "aim.reticle") {
@@ -868,41 +908,41 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         // screen position exists, not two, so it is projected through the
         // current view rather than per eye; that is a real limitation, not an
         // oversight, and a genuinely stereo reticle needs a mod-drawn one.
-        out << "aim.reticle result=" << SetReticleFollowEnabled(arg(1, 1));
+        out << "aim.reticle result=" << (Valued(args) ? SetReticleFollowEnabled(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "aim.reticleconverge") {
         // The distance the crosshair marks along the firing ray, in mm. Only
         // matters once a barrel calibration puts the origin off the eye: until
         // then reticleOriginMm reads 0 and the setting changes nothing, which is
         // the honest reading rather than a knob that appears to do something.
         out << "aim.reticleconverge result="
-            << SetReticleConvergenceMillimetres(arg(1, 10000))
+            << (Valued(args) ? SetReticleConvergenceMillimetres(arg(1, 10000)) : 0)
             << " mm=" << ReticleConvergenceMillimetres();
     } else if (verb == "aim.reticledispatch") {
         // Separates the two halves of the reticle write. Off writes only the
         // cached field; on also dispatches the movie call the engine's own reset
         // makes. If the crosshair does not move, this says which half to blame.
-        out << "aim.reticledispatch result=" << SetReticleDispatchEnabled(arg(1, 1))
-            << " value=" << arg(1, 1);
+        out << "aim.reticledispatch result=" << (Valued(args) ? SetReticleDispatchEnabled(arg(1, 1)) : 0);
+        if (Valued(args)) { out << " value=" << arg(1, 1); } else { out << NoValue(args); }
     } else if (verb == "aim.reticlecanvas") {
         // aim.reticlecanvas 0|1|2 -- raw viewport / R-118 model / native
-        out << "aim.reticlecanvas result=" << SetReticleCanvasMode(arg(1, 1))
+        out << "aim.reticlecanvas result=" << (Valued(args) ? SetReticleCanvasMode(arg(1, 1)) : 0)
             << " mode=" << ReticleCanvasMode()
             << " native=" << ReticleNativeCanvasCount()
             << " nativeFailed=" << ReticleNativeCanvasFailedCount();
     } else if (verb == "aim.reticlestage") {
-        out << "aim.reticlestage result=" << SetReticleStageScaleMode(arg(1, 0));
+        out << "aim.reticlestage result=" << (Valued(args) ? SetReticleStageScaleMode(arg(1, 0)) : 0) << NoValue(args);
     } else if (verb == "aim.twohand") {
-        out << "aim.twohand result=" << (args.size()>1?SetTwoHandedAim(arg(1,1)):0)
+        out << "aim.twohand result=" << (Valued(args)?SetTwoHandedAim(arg(1,1)):0)
             << TwoHandedAimStatus();
     } else if (verb == "aim.bodyyaw") {
         // 1 rotates head-relative offsets by the BODY yaw (camera - head), 0 by
         // the camera yaw. 0 makes the hand and weapon swing with the headset.
-        out << "aim.bodyyaw result=" << SetAimBodyYaw(arg(1, 1))
+        out << "aim.bodyyaw result=" << (Valued(args) ? SetAimBodyYaw(arg(1, 1)) : 0)
             << " value=" << AimBodyYawEnabled();
     } else if (verb == "aim.origin") {
         // Diagnostic controller-aim origin; this does not establish a muzzle
         // transform or remove projectile convergence from the authored helper.
-        out << "aim.origin result=" << SetAimOriginFromHand(arg(1, 1))
+        out << "aim.origin result=" << (Valued(args) ? SetAimOriginFromHand(arg(1, 1)) : 0)
             << " mode=" << AimOriginMode()
             << (AimOriginMode() == 2 ? "(muzzle)" : AimOriginMode() == 1 ? "(hand)" : "(native)");
     } else if (verb == "aim.calibratebarrel") {
@@ -915,18 +955,19 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         // 0.127165 units and the interaction selector committed a different
         // entity -- but both used synthetic angle offsets driven from a
         // debugger. This is what lets a *controller* drive it.
-        out << "aim.enable result=" << SetAimTakeoverEnabled(arg(1, 1))
+        out << "aim.enable result=" << (Valued(args) ? SetAimTakeoverEnabled(arg(1, 1)) : 0) << NoValue(args)
             << " applied=" << AimTakeoverAppliedCount()
             << " nativeMagMilli=" << AimTakeoverNativeDirectionMagnitude();
     } else if (verb == "weapon.observe") {
-        out << "weapon.observe result=" << SetWeaponAttachmentObserving(arg(1, 1));
+        out << "weapon.observe result=" << (Valued(args) ? SetWeaponAttachmentObserving(arg(1, 1)) : 0)
+            << NoValue(args);
     } else if (verb == "weapon.offset") {
         out << "weapon.offset result="
-            << SetWeaponOffsetMillimetres(arg(1, 0), arg(2, 0), arg(3, 0));
+            << (Valued(args) ? SetWeaponOffsetMillimetres(arg(1, 0), arg(2, 0), arg(3, 0)) : 0) << NoValue(args);
     } else if (verb == "weapon.apply") {
-        out << "weapon.apply result=" << SetWeaponOffsetEnabled(arg(1, 1));
+        out << "weapon.apply result=" << (Valued(args) ? SetWeaponOffsetEnabled(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "weapon.rotate") {
-        out << "weapon.rotate result=" << SetWeaponRotationDrive(arg(1, 1));
+        out << "weapon.rotate result=" << (Valued(args) ? SetWeaponRotationDrive(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "weapon.calibrate") {
         out << "weapon.calibrate result=" << CalibrateWeaponRotation();
     } else if (verb == "capture.hud") {
@@ -957,14 +998,14 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         out << "hud.fit result=" << QueueHudFit(!fitInside) << " queued=1"
             << " fitInside=" << (fitInside ? 1 : 0);
     } else if (verb == "xr.frustum") {
-        out << "xr.frustum result=" << SetRuntimeFrustum(arg(1, 1))
+        out << "xr.frustum result=" << (Valued(args) ? SetRuntimeFrustum(arg(1, 1)) : 0) << NoValue(args)
             << " used=" << RuntimeFrustumUsedCount()
             << " missing=" << RuntimeFrustumMissingCount()
             << XrCoverageReport();
     } else if (verb == "xr.timing") {
         // xr.timing            -- report
         // xr.timing 1 [hz]     -- arm and reset, default 90 Hz deadline
-        if (args.size() >= 2) {
+        if (Valued(args)) {
             out << "xr.timing result="
                 << SetXrTimingEnabled(arg(1, 1), static_cast<unsigned int>(arg(2, 90)));
         } else {
@@ -979,7 +1020,7 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
     } else if (verb == "xr.coverage") {
         out << "xr.coverage result=0" << XrCoverageReport();
     } else if (verb == "move.act") {
-        out << "move.act result=" << SetInteractionEnabled(arg(1, 1))
+        out << "move.act result=" << (Valued(args) ? SetInteractionEnabled(arg(1, 1)) : 0)
             << InteractionReport();
     } else if (verb == "move.bind" && args.size() >= 3) {
         // move.bind <slot 0-3> <keyId>  -- 0 interact, 1 inventory, 2 jump, 3 crouch
@@ -988,9 +1029,13 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         out << "move.bind result=" << SetInteractionBinding(slot, keyId)
             << InteractionReport();
     } else if (verb == "menu.gate") {
-        SetMenuNavigationGate(arg(1, 1));
-        out << "menu.gate result=0 value=" << arg(1, 1)
-            << " menuOpen=" << (HudMenuIsOpen() ? 1 : 0)
+        if (Valued(args)) {
+            SetMenuNavigationGate(arg(1, 1));
+            out << "menu.gate result=0 value=" << arg(1, 1);
+        } else {
+            out << "menu.gate result=0" << NoValue(args);
+        }
+        out << " menuOpen=" << (HudMenuIsOpen() ? 1 : 0)
             << " samples=" << HudMenuStateSampleCount()
             << " suppressed=" << MenuNavigationSuppressedCount();
     } else if (verb == "hud.probe") {
@@ -1004,7 +1049,7 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
             out << "hud.probe result=0 " << HudLastProbe();
         }
     } else if (verb == "frame.capture") {
-        out << "frame.capture result=" << SetRenderFrameCapture(arg(1, 1));
+        out << "frame.capture result=" << (Valued(args) ? SetRenderFrameCapture(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "frame.character" && args.size() >= 2) {
         unsigned long long pointer = 0;
         if (!ParseU64(args[1], pointer)) {
@@ -1014,14 +1059,14 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         }
     } else if (verb == "frame.offset") {
         out << "frame.offset result="
-            << SetRenderFrameOffsetMillimetres(arg(1, 0), arg(2, 0), arg(3, 0));
+            << (Valued(args) ? SetRenderFrameOffsetMillimetres(arg(1, 0), arg(2, 0), arg(3, 0)) : 0) << NoValue(args);
     } else if (verb == "frame.apply") {
-        out << "frame.apply result=" << SetRenderFrameOverrideEnabled(arg(1, 1))
+        out << "frame.apply result=" << (Valued(args) ? SetRenderFrameOverrideEnabled(arg(1, 1)) : 0) << NoValue(args)
             << " applied=" << RenderFrameOverrideAppliedCount()
             << " refused=" << RenderFrameOverrideRefusedCount();
     } else if (verb == "frame.propagate") {
         out << "frame.propagate result="
-            << SetRenderFrameOverridePropagates(arg(1, 1));
+            << (Valued(args) ? SetRenderFrameOverridePropagates(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "frame.near") {
         // Dumps the capture table with RenderCHR's own near verdict per slot
         // (R-089), so identifying the near character no longer needs an injector
@@ -1070,43 +1115,52 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         // 0 off, 1 observe (hook the analog handlers, attribute every call,
         // post nothing), 2 apply. Observe first: it proves the handlers fire
         // and measures the player's own hardware before we add to it.
-        const int requested = arg(1, 0);
-        out << "move.mode result=" << SetMoveLaneMode(requested) << " mode=" << requested
-            << (requested == 0 ? "(off)" : requested == 1 ? "(observe)" : requested == 2 ? "(apply)" : "(unknown)");
+        out << "move.mode result=" << (Valued(args) ? SetMoveLaneMode(arg(1, 0)) : 0);
+        const unsigned int mode = MoveLaneMode();
+        out << " mode=" << mode
+            << (mode == 0 ? "(off)" : mode == 1 ? "(observe)" : mode == 2 ? "(apply)" : "(unknown)");
     } else if (verb == "move.snap") {
-        out << "move.snap result=" << (args.size()>1?SetSnapTurnDegrees(arg(1,SnapTurnDegrees())):0) << " degrees=" << SnapTurnDegrees();
+        out << "move.snap result=" << (Valued(args)?SetSnapTurnDegrees(arg(1,SnapTurnDegrees())):0) << " degrees=" << SnapTurnDegrees();
     } else if (verb == "move.headrelative") {
-        out << "move.headrelative result=" << (args.size()>1?SetHeadRelativeMovement(arg(1,2)):0)
+        out << "move.headrelative result=" << (Valued(args)?SetHeadRelativeMovement(arg(1,2)):0)
             << " enabled=" << HeadRelativeMovementEnabled();
     } else if (verb == "move.scales") {
-        out << "move.scales result=" << SetMovementAxisScales(arg(1,100),arg(2,100));
+        out << "move.scales result=" << (Valued(args) ? SetMovementAxisScales(arg(1,100),arg(2,100)) : 0)
+            << " strafe=" << MovementStrafePercent() << " backward=" << MovementBackwardPercent();
     } else if (verb == "move.turn") {
-        out << "move.turn result=" << SetTurnLaneEnabled(arg(1, 1))
+        out << "move.turn result=" << (Valued(args) ? SetTurnLaneEnabled(arg(1, 1)) : 0)
             << " enabled=" << TurnLaneEnabled();
     } else if (verb == "move.turndeadzone") {
-        out << "move.turndeadzone result=" << SetTurnLaneDeadzone(arg(1, 15));
+        out << "move.turndeadzone result=" << (Valued(args) ? SetTurnLaneDeadzone(arg(1, 15)) : 0)
+            << " hundredths=" << TurnLaneDeadzone();
     } else if (verb == "move.turnscale") {
-        out << "move.turnscale result=" << SetTurnLaneScale(arg(1, 100));
+        out << "move.turnscale result=" << (Valued(args) ? SetTurnLaneScale(arg(1, 100)) : 0) << NoValue(args);
     } else if (verb == "move.fire") {
-        out << "move.fire result=" << SetFireLaneEnabled(arg(1, 1))
+        out << "move.fire result=" << (Valued(args) ? SetFireLaneEnabled(arg(1, 1)) : 0)
             << " enabled=" << FireLaneEnabled();
     } else if (verb == "move.all") {
         // The whole control scheme in one command: left stick moves, right stick
         // turns, right trigger fires, grip and face buttons interact.
-        const unsigned int on = static_cast<unsigned int>(arg(1, 1)) != 0u ? 1u : 0u;
-        const DWORD m = SetMoveLaneMode(on ? 2u : 0u);
-        const DWORD t = SetTurnLaneEnabled(on);
-        const DWORD f = SetFireLaneEnabled(on);
-        const DWORD a = SetInteractionEnabled(on);
-        out << "move.all result=" << (m | t | f | a)
-            << " move=" << m << " turn=" << t << " fire=" << f << " act=" << a
-            << InteractionReport();
+        if (Valued(args)) {
+            const unsigned int on = static_cast<unsigned int>(arg(1, 1)) != 0u ? 1u : 0u;
+            const DWORD m = SetMoveLaneMode(on ? 2u : 0u);
+            const DWORD t = SetTurnLaneEnabled(on);
+            const DWORD f = SetFireLaneEnabled(on);
+            const DWORD a = SetInteractionEnabled(on);
+            out << "move.all result=" << (m | t | f | a)
+                << " move=" << m << " turn=" << t << " fire=" << f << " act=" << a;
+        } else {
+            out << "move.all result=0" << NoValue(args);
+        }
+        out << InteractionReport();
     } else if (verb == "move.deadzone") {
-        out << "move.deadzone result=" << SetMoveLaneDeadzone(arg(1, 15));
+        out << "move.deadzone result=" << (Valued(args) ? SetMoveLaneDeadzone(arg(1, 15)) : 0)
+            << " hundredths=" << MoveLaneDeadzone();
     } else if (verb == "input.post") {
-        out << "input.post result=" << SetInputPostEnabled(arg(1, 1));
+        out << "input.post result=" << (Valued(args) ? SetInputPostEnabled(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "input.force") {
-        out << "input.force result=" << SetInputPostForce(static_cast<unsigned int>(arg(1, 1)));
+        out << "input.force result=" << (Valued(args) ? SetInputPostForce(static_cast<unsigned int>(arg(1, 1))) : 0)
+            << NoValue(args);
     } else if (verb == "menu") {
         // Menu navigation through the engine's own input layer. `arg(1)` is the
         // MenuAction index; 0=up 1=down 2=left 3=right 4=accept 5=cancel 6=start.
@@ -1136,9 +1190,13 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         // Arms the controller -> menu binding. Separate from `input.post` on
         // purpose: one authorises posting at all, the other decides whether a
         // controller may produce it.
-        SetMenuNavigation(static_cast<unsigned int>(arg(1, 1)));
-        out << "menu.nav result=0 value=" << arg(1, 1)
-            << " actions=" << MenuNavigationActionCount();
+        if (Valued(args)) {
+            SetMenuNavigation(static_cast<unsigned int>(arg(1, 1)));
+            out << "menu.nav result=0 value=" << arg(1, 1);
+        } else {
+            out << "menu.nav result=0" << NoValue(args);
+        }
+        out << " actions=" << MenuNavigationActionCount();
     } else if (verb == "report") {
         WriteReport(out);
         // results.txt is replaced by the next command. Preserve each requested

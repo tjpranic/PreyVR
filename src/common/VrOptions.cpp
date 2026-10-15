@@ -2,50 +2,163 @@
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include <cstdlib>
+#include <iterator>
 #include <sstream>
 namespace preyvr::options {
 namespace {
+constexpr int turnChoices[]={0,15,30,45,60,90};
+constexpr const wchar_t* headRelativeNames[]={L"BODY RELATIVE",L"HEAD RELATIVE"};
+constexpr const wchar_t* gripToggleNames[]={L"HOLD",L"TOGGLE"};
+constexpr const wchar_t* supportSnapNames[]={L"FREE",L"SNAPPED"};
+constexpr const wchar_t* psiNames[]={L"ORIGINAL",L"HEAD",L"LEFT CONTROLLER"};
+constexpr const wchar_t* bodyFollowNames[]={L"OFF",L"TURN ONLY",L"TURN AND MOVE"};
+constexpr const wchar_t* pointerNames[]={L"LEFT",L"RIGHT",L"BUTTONS ONLY"};
+constexpr const wchar_t* hudNames[]={L"IN THE WORLD",L"FLOATING PANEL"};
+constexpr const wchar_t* carryHoldNames[]={L"PRESS TO TOGGLE",L"HOLD THE GRIP"};
+constexpr const wchar_t* grenadeNames[]={L"GAME THROW",L"HAND THROW"};
+using U=Unit;
 constexpr Spec specs[]={
- {"turn",L"TURNING",L"Smooth turning or fixed angular steps.",45,0,90,15},
- {"head_relative",L"MOVEMENT DIRECTION",L"Follow your view, or the character's forward direction.",1,0,1,1},
- {"turn_speed",L"SMOOTH TURN SPEED",L"Scales the game's turn rate. Applies in Smooth mode.",100,10,200,25},
+ {"turn",L"TURNING",L"Smooth turning or fixed angular steps.",45,0,90,15,U::degrees,{},turnChoices,L"SMOOTH"},
+ {"head_relative",L"MOVEMENT DIRECTION",L"Follow your view, or the character's forward direction.",1,0,1,1,U::none,headRelativeNames},
+ {"turn_speed",L"SMOOTH TURN SPEED",L"Scales the game's turn rate. Applies in Smooth mode.",100,10,200,25,U::percent},
  {"two_hand",L"TWO-HAND AIM",L"Grip near a long weapon's foregrip to steady and aim it.",1,0,1,1},
- {"grip_toggle",L"FOREGRIP INPUT",L"Hold the grip, or squeeze once to attach and again to release.",0,0,1,1},
- {"support_snap",L"SUPPORT HAND",L"Snap the displayed hand to the weapon, or follow your controller.",1,0,1,1},
+ {"grip_toggle",L"FOREGRIP INPUT",L"Hold the grip, or squeeze once to attach and again to release.",0,0,1,1,U::none,gripToggleNames},
+ {"support_snap",L"SUPPORT HAND",L"Snap the displayed hand to the weapon, or follow your controller.",1,0,1,1,U::none,supportSnapNames},
  {"psychoscope",L"PSYCHOSCOPE GESTURE",L"Left grip at forehead: pull down or lift up. Native unlock rules apply.",0,0,1,1},
- {"ui_scale",L"INTERFACE SIZE",L"Scales game panels and HUD within the visible-area limit.",100,20,200,10},
- {"ui_margin",L"VISIBLE-AREA LIMIT",L"Larger values approach the lens edges. Tune while wearing the headset.",72,30,100,5},
- {"ui_curve",L"PANEL CURVATURE",L"Curves supported mono menus. Experimental stereo PDA stays planar.",35,0,60,5},
+ {"ui_scale",L"INTERFACE SIZE",L"Scales game panels and HUD within the visible-area limit.",100,20,200,10,U::percent},
+ {"ui_margin",L"VISIBLE-AREA LIMIT",L"Larger values approach the lens edges. Tune while wearing the headset.",72,30,100,5,U::percent},
+ {"ui_curve",L"PANEL CURVATURE",L"Curves supported mono menus. Experimental stereo PDA stays planar.",35,0,60,5,U::degrees,{},{},L"FLAT"},
  {"ui_guide",L"CONTROLS GUIDE",L"Shows a help card below native menus; uses some panel space.",0,0,1,1},
- {"holsters",L"BODY HOLSTERS",L"Right grip at right hip or left chest: store current weapon, then draw/stow. Session only.",0,0,1,1},
+ {"holsters",L"BODY HOLSTERS",L"Right grip at right hip or left chest: store current weapon, then draw/stow. Assignments are not saved.",0,0,1,1},
  {"wrist",L"WRIST STATUS",L"Raise your left forearm and look at its back, like a watch: health, suit and psi.",1,0,1,1},
- {"wrist_size",L"WRIST DISPLAY SIZE",L"Adjust the status hologram size. Hidden in menus and during two-hand aiming.",100,80,140,10},
- {"scene_reticle",L"SCENE RETICLE (EXPERIMENTAL)",L"Place the reticle on the first surface along the weapon's aim. Does not steer shots.",0,0,1,1},
- {"reticle_fallback_mm",L"RETICLE FALLBACK DISTANCE",L"Distance used when no scene hit is available, or Scene Reticle is off.",10000,500,200000,500},
+ {"wrist_size",L"WRIST DISPLAY SIZE",L"Adjust the status hologram size. Hidden in menus and during two-hand aiming.",100,80,140,10,U::percent},
+ {"scene_reticle",L"SCENE RETICLE",L"Place the reticle on the first surface along the weapon's aim. Does not steer shots.",0,0,1,1},
+ {"reticle_fallback_mm",L"RETICLE FALLBACK DISTANCE",L"Distance used when no scene hit is available, or Scene Reticle is off.",10000,500,200000,500,U::metresInMm},
  {"haptics",L"CONTROLLER FEEDBACK",L"Short pulses for VR menu changes and attaching the support hand.",1,0,1,1},
- {"haptic_strength",L"FEEDBACK STRENGTH",L"Scale controller feedback intensity. Zero silences all pulses.",70,0,100,10},
- {"physical_melee",L"PHYSICAL WRENCH (EXPERIMENTAL)",L"Swing the wrench to strike. Native stamina and attack recovery still apply.",0,0,1,1},
- {"physical_contacts",L"OBJECT NUDGES (EXPERIMENTAL)",L"Tap movable objects with weapon bounds. Does not stop your weapon at walls.",0,0,1,1},
- {"swing_speed",L"MINIMUM SWING SPEED",L"Higher values require faster swings. Rest briefly between strikes.",120,80,250,10},
- {"contact_strength",L"OBJECT NUDGE STRENGTH",L"Scales gentle object impulses. Wrench damage uses the game's rules.",50,0,100,10},
- {"psi_target",L"PSYCHIC TARGETING",L"Head or left controller: hold left trigger to aim the equipped power; release to cast. Original keeps native controls.",0,0,2,1},
+ {"haptic_strength",L"FEEDBACK STRENGTH",L"Scale controller feedback intensity. Zero silences all pulses.",70,0,100,10,U::percent},
+ {"physical_melee",L"PHYSICAL WRENCH",L"Swing the wrench to strike. Native stamina and attack recovery still apply.",0,0,1,1},
+ {"physical_contacts",L"OBJECT NUDGES",L"Tap movable objects with weapon bounds. Does not stop your weapon at walls.",0,0,1,1},
+ {"swing_speed",L"MINIMUM SWING SPEED",L"Higher values require faster swings. Rest briefly between strikes.",120,80,250,10,U::cmPerSecond},
+ {"contact_strength",L"OBJECT NUDGE STRENGTH",L"Scales gentle object impulses. Wrench damage uses the game's rules.",50,0,100,10,U::percent},
+ {"psi_target",L"PSYCHIC TARGETING",L"Head or left controller: hold left trigger to aim the equipped power; release to cast. Original keeps native controls.",0,0,2,1,U::none,psiNames},
  {"medkit_slot",L"LEFT-HIP MEDKIT SLOT",L"Squeeze left grip at left hip, then press left trigger while holding grip. One medkit per grab; native use rules apply.",0,0,1,1},
  {"belt_hints",L"BODY SLOT FEEDBACK",L"Brief feedback for holster requests and medkit selection/use. Requires the corresponding body slot feature.",1,0,1,1},
  {"debug_overlay",L"DEBUG OVERLAY (TESTING)",L"Draws each hand's ray and target, body slots, the wrist test and the foregrip region in the world.",0,0,1,1},
- {"muzzle_aim",L"SHOTS FROM THE MUZZLE (EXPERIMENTAL)",L"Shots leave the weapon's muzzle along your controller's aim, so they land where the barrel points at any distance.",0,0,1,1},
- {"body_follow",L"BODY FOLLOWS YOU",L"Turn: your body faces you once you look past a short deadzone. Turn and move: it also steps to stay under you as you walk.",2,0,2,1}
+ {"muzzle_aim",L"SHOTS FROM THE MUZZLE",L"Shots leave the weapon's muzzle along your controller's aim, so they land where the barrel points at any distance.",0,0,1,1},
+ {"body_follow",L"BODY FOLLOWS YOU",L"Turn: your body faces you once you look past a short deadzone. Turn and move: it also steps to stay under you as you walk.",2,0,2,1,U::none,bodyFollowNames},
+ {"ui_distance",L"MENU DISTANCE",L"How far away the game's menus float. They keep their apparent size.",200,100,400,5,U::cm},
+ {"ui_offset_right",L"MENU LEFT / RIGHT",L"Turns the game's menus around you, left or right of where you faced when they opened.",0,-90,90,1,U::degreesRightLeft,{},{},L"CENTRE"},
+ {"ui_offset_up",L"MENU UP / DOWN",L"Raises or lowers the game's menus; they stay upright.",0,-45,45,1,U::degreesUpDown,{},{},L"CENTRE"},
+ {"ui_text",L"TEXT PANEL DISTANCE",L"How far notes, books, subtitles and tutorial cards float. Nearer is larger and sharper.",140,100,200,5,U::cm},
+ {"pointer_hand",L"LASER HAND",L"Which hand points at menus. Buttons only turns the laser off.",1,0,2,1,U::none,pointerNames},
+ {"hud_layer",L"HUD STYLE",L"The game's HUD on a panel floating in front of you, or drawn in the world as Prey draws it.",1,0,1,1,U::none,hudNames},
+ {"move_deadzone",L"MOVE STICK DEADZONE",L"How far the left stick moves before you walk.",15,0,60,1,U::percent},
+ {"turn_deadzone",L"TURN STICK DEADZONE",L"How far the right stick moves before you turn.",15,0,60,1,U::percent},
+ {"strafe_speed",L"SIDEWAYS SPEED",L"Walking speed to the side, relative to walking forward.",100,10,200,5,U::percent},
+ {"backward_speed",L"BACKWARD SPEED",L"Walking speed backward, relative to walking forward.",100,10,200,5,U::percent},
+ {"body_turn_deadzone",L"BODY TURN DEADZONE",L"How far you look away before your body turns to follow. Arms and body turn together.",35,0,180,5,U::degrees},
+ {"body_step",L"BODY STEP DISTANCE",L"How far your head moves before your body steps under you. Needs Body Follows You: Turn and Move.",30,10,300,5,U::mm},
+ {"body_glide",L"BODY GLIDE",L"How long your body takes to catch up when it steps under you. Zero is instant.",50,0,1000,10,U::ms},
+ {"arms_free",L"HANDS WITHOUT A WEAPON",L"Keep both hands at the controllers with no weapon drawn: holstered or carrying.",1,0,1,1},
+ {"carry_hold",L"CARRY GRIP",L"Hold the grip to keep holding, or press once to pick up and again to drop.",1,0,1,1,U::none,carryHoldNames},
+ {"grenade_hand",L"GRENADE THROW",L"Throw grenades with your hand's motion, or with the game's charged throw along your view.",1,0,1,1,U::none,grenadeNames},
+ {"carry_throw_strength",L"OBJECT THROW STRENGTH",L"How hard carried objects fly when you throw them.",140,50,300,10,U::percent},
+ {"grenade_throw_strength",L"GRENADE THROW STRENGTH",L"How hard grenades fly when you throw them.",130,50,400,10,U::percent},
+ {"wrist_on_hud",L"STATUS ON HUD TOO",L"Keep health, suit and psi in front of you as well as on the wrist.",0,0,1,1},
+ {"wrist_tick",L"WRIST TICK",L"A faint pulse on the left controller as the wrist display unfolds.",1,0,1,1},
+ {"wrist_along",L"WRIST DISPLAY POSITION",L"Where the display sits along the forearm, from the wrist toward the elbow.",75,-50,200,5,U::mm},
+ {"wrist_hover",L"WRIST DISPLAY HEIGHT",L"How far the display floats above the forearm.",42,0,150,2,U::mm},
+ {"wrist_tilt",L"WRIST DISPLAY TILT",L"How far the display turns toward your eyes.",40,0,90,5,U::degrees},
+ {"carry_hand",L"PHYSICAL CARRYING",L"Carried objects sit in your left hand and are thrown with its motion. Off: the game's own carry in front of you.",1,0,1,1},
+ {"grenade_deploy",L"STICK CHARGES TO SURFACES",L"With hand throwing, keep the game's sticking of charges to the surface you look at.",0,0,1,1},
+ {"long_reach",L"LONG-WEAPON HOLD-BACK",L"Long weapons are held back toward the body, with a wider foregrip region and torso twist.",1,0,1,1},
+ {"inventory_layer",L"INVENTORY LAYER",L"The inventory on a see-through layer of its own instead of the whole flat screen.",0,0,1,1},
+ {"inventory_stereo",L"STEREO INVENTORY",L"Gives the inventory's layers depth. Needs Inventory Layer.",0,0,1,1},
+ {"inventory_depth",L"INVENTORY DEPTH",L"How much depth Stereo Inventory gives.",25,0,100,5,U::percent}
 };
+static_assert(std::size(specs)==Count,"one Spec per Setting, in order");
+// Each default, name and choice belongs to its setting's range, one name per value.
+constexpr bool Consistent(){
+ for(const auto& s:specs){
+  if(s.initial<s.min||s.initial>s.max||s.step<=0)return false;
+  if(!s.names.empty()&&static_cast<int>(s.names.size())!=(s.max-s.min)/s.step+1)return false;
+  for(const int c:s.choices)if(c<s.min||c>s.max)return false;
+ }
+ return true;
 }
+static_assert(Consistent(),"every Spec describes its own range");
+
+// The panel's tabs. Each setting appears once, each button once.
+constexpr int comfort[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,StrafeSpeed,BackwardSpeed,
+    BodyFollow,BodyTurnDeadzone,BodyStep,BodyGlide};
+constexpr int hands[]={TwoHand,GripToggle,SupportSnap,Psychoscope,ArmsFree,CarryHold,GrenadeHand,
+    CarryThrowStrength,GrenadeThrowStrength};
+constexpr int interface_[]={UiScale,UiMargin,UiCurve,UiGuide,UiDistance,UiOffsetRight,UiOffsetUp,UiText,
+    PointerHand,HudLayer};
+constexpr int equipment[]={Holsters,ClearHolsterSlots,Wrist,WristSize,WristOnHud,WristTick,WristAlong,WristHover,
+    WristTilt};
+constexpr int feedback[]={ReticleFallback,Haptics,HapticStrength};
+constexpr int abilities[]={PsiTarget,Medkit,BeltHints};
+constexpr int setup[]={CalibratePosture,RecenterView,DebugOverlay};
+// Features still being proven, together with the settings that tune them.
+constexpr int experimental[]={CarryHand,GrenadeDeploy,LongReach,MuzzleAim,SceneReticle,PhysicalMelee,SwingSpeed,
+    PhysicalContacts,ContactStrength,InventoryLayer,InventoryStereo,InventoryDepth};
+constexpr std::span<const int> menuPages[]={comfort,hands,interface_,equipment,feedback,abilities,setup,experimental};
+constexpr const wchar_t* menuNames[]={L"COMFORT",L"HANDS",L"INTERFACE",L"EQUIPMENT",L"FEEDBACK",L"ABILITIES",
+    L"SETUP",L"EXPERIMENTAL"};
+static_assert(std::size(menuPages)==std::size(menuNames));
+}
+unsigned MenuPages(){return static_cast<unsigned>(std::size(menuPages));}
+const wchar_t* MenuPageName(unsigned page){return menuNames[page%MenuPages()];}
+std::span<const int> MenuEntries(unsigned page){return page<MenuPages()?menuPages[page]:std::span<const int>{};}
 const Spec& Describe(unsigned id){return specs[id<Count?id:0];}
 bool Valid(unsigned id,int v){
  if(id>=Count||v<specs[id].min||v>specs[id].max)return false;
- return id!=Turn||v==0||v>=15;
+ const auto& c=specs[id].choices;
+ return c.size()<2||v==c[0]||v>=c[1];
+}
+Kind KindOf(unsigned id){
+ const auto& s=Describe(id);
+ if(!s.names.empty()||!s.choices.empty())return Kind::choice;
+ return s.min==0&&s.max==1&&s.unit==Unit::none?Kind::toggle:Kind::range;
+}
+std::vector<int> Choices(unsigned id){
+ const auto& s=Describe(id);
+ if(!s.choices.empty())return {s.choices.begin(),s.choices.end()};
+ std::vector<int> out;
+ if(!s.names.empty())for(int v=s.min;v<=s.max;v+=s.step)out.push_back(v);
+ return out;
+}
+std::wstring Display(unsigned id,int v){
+ const auto& s=Describe(id);
+ if(!s.names.empty()){
+  const int n=(v-s.min)/s.step;
+  return v>=s.min&&n<static_cast<int>(s.names.size())?s.names[static_cast<std::size_t>(n)]:std::to_wstring(v);
+ }
+ if(v==0&&s.zero)return s.zero;
+ const auto number=std::to_wstring(v);
+ switch(s.unit){
+ case U::percent:return number+L"%";
+ case U::cm:return number+L" CM";
+ case U::mm:return number+L" MM";
+ case U::metresInMm:return std::to_wstring(v/1000)+L"."+std::to_wstring((v%1000)/100)+L" M";
+ case U::degrees:return number+L" DEGREES";
+ case U::degreesRightLeft:return std::to_wstring(std::abs(v))+(v>0?L" DEGREES RIGHT":L" DEGREES LEFT");
+ case U::degreesUpDown:return std::to_wstring(std::abs(v))+(v>0?L" DEGREES UP":L" DEGREES DOWN");
+ case U::ms:return number+L" MS";
+ case U::cmPerSecond:return number+L" CM/S";
+ case U::none:break;
+ }
+ return v?L"ON":L"OFF";
 }
 Values Defaults(){Values v{};for(unsigned i=0;i<Count;++i)v[i]=specs[i].initial;return v;}
-std::string Serialize(const Values& v){
- std::string s="version=1\n";for(unsigned i=0;i<Count;++i)s+=std::string(specs[i].key)+"="+std::to_string(v[i])+"\n";return s;
+std::string Serialize(const Values& v,const Present* present){
+ std::string s="version=1\n";
+ for(unsigned i=0;i<Count;++i)if(!present||(*present)[i])s+=std::string(specs[i].key)+"="+std::to_string(v[i])+"\n";
+ return s;
 }
-bool Parse(std::string_view text,Values& result){
+bool Parse(std::string_view text,Values& result,Present* present){
  if(text.size()>8192)return false;
  Values parsed=Defaults();std::array<bool,Count> seen{};bool version=false;
  std::istringstream in{std::string(text)};std::string line;
@@ -64,53 +177,15 @@ bool Parse(std::string_view text,Values& result){
  }
  if(!version)return false;
  // Partial files preserve explicit defaults; future versions must bump version.
- result=parsed;return true;
+ result=parsed;if(present)*present=seen;return true;
 }
-int Item(unsigned page,unsigned row){
- constexpr int items[Pages][Rows]={{Turn,HeadRelative,TurnSpeed,BodyFollow},{TwoHand,GripToggle,SupportSnap,Psychoscope},{UiScale,UiMargin,UiCurve,UiGuide},{Holsters,Wrist,WristSize,-3},{SceneReticle,ReticleFallback,Haptics,HapticStrength},{PhysicalMelee,PhysicalContacts,SwingSpeed,ContactStrength},{PsiTarget,Medkit,BeltHints,-2},{-4,-1,DebugOverlay,MuzzleAim}};
- return page<Pages&&row<Rows?items[page][row]:-2;
-}
-const wchar_t* PageName(unsigned p){constexpr const wchar_t* names[]={L"COMFORT",L"HANDS",L"INTERFACE",L"EQUIPMENT",L"FEEDBACK",L"PHYSICAL",L"ABILITIES",L"SETUP"};return names[p%Pages];}
-std::wstring Display(unsigned id,int v){
- if(id==PsiTarget)return v==1?L"HEAD":v==2?L"LEFT CONTROLLER":L"ORIGINAL";
- if(id==BodyFollow)return v==2?L"TURN AND MOVE":v==1?L"TURN ONLY":L"OFF";
- if(id==SwingSpeed)return std::to_wstring(v)+L" CM/S";
- if(id==ContactStrength)return std::to_wstring(v)+L"%";
- if(id==Turn)return v?std::to_wstring(v)+L" DEGREES":L"SMOOTH";
- if(id==HeadRelative)return v?L"HEAD RELATIVE":L"BODY RELATIVE";
- if(id==GripToggle)return v?L"TOGGLE":L"HOLD";
- if(id==SupportSnap)return v?L"SNAPPED":L"FREE";
- if(id==UiCurve)return v?std::to_wstring(v)+L" DEGREES":L"FLAT";
- if(id==TurnSpeed||id==UiScale||id==UiMargin||id==WristSize||id==HapticStrength)return std::to_wstring(v)+L"%";
- if(id==ReticleFallback)return std::to_wstring(v/1000)+L"."+std::to_wstring((v%1000)/100)+L" M";
- return v?L"ON":L"OFF";
-}
-int Adjust(unsigned id,int v,int direction){
- if(id>=Count||!direction)return v;
- if(id==Turn){
-  constexpr int choices[]={0,15,30,45,60,90};
-  if(direction>0){for(int c:choices)if(c>v)return c;return 0;}
-  for(int n=5;n>=0;--n)if(choices[n]<v)return choices[n];return 90;
- }
- const auto& s=specs[id];if(s.max==1)return v?0:1;
- return std::clamp(v+(direction>0?s.step:-s.step),s.min,s.max);
-}
-int Hit(float u,float v){
- if(!std::isfinite(u)||!std::isfinite(v)||u<.04f||u>.96f||v<0||v>1)return -1;
- const float y=v*Height;
- if(y>=174&&y<246)return Rows+std::min(static_cast<int>(Pages-1),static_cast<int>((u-.04f)/.92f*Pages));
- if(y>=280&&y<744)return std::min(3,static_cast<int>((y-280)/116));
- if(y>=980&&y<1060)return CloseHit;
- return -1;
-}
-void Menu::Close(){open_=false;quarantine_=true;armed_=false;requested_=false;pending_=false;}
-Change Menu::Update(const Input& i){
- Change out;
+void Menu::Close(){open_=false;quarantine_=true;armed_=false;requested_=false;}
+void Menu::Update(const Input& i){
  pauseTap_=false;
  const bool valid=i.valid&&std::isfinite(i.x)&&std::isfinite(i.y)&&std::isfinite(i.dt)&&i.dt>0&&i.dt<=.2f;
  const bool neutral=!i.start&&!i.accept&&!i.cancel&&!i.previous&&!i.next&&!i.trigger&&std::fabs(i.x)<.25f&&std::fabs(i.y)<.25f;
  if(!valid||i.epoch!=epoch_){
-  epoch_=i.epoch;Close();startArmed_=false;startUsed_=false;startWas_=false;hold_=0;return out;
+  epoch_=i.epoch;Close();startArmed_=false;startUsed_=false;startWas_=false;hold_=0;return;
  }
  if(!i.start){
   if(startWas_&&startArmed_&&!startUsed_&&!open_&&!quarantine_)pauseTap_=true;
@@ -118,33 +193,16 @@ Change Menu::Update(const Input& i){
  }
  else if(startArmed_&&!startUsed_)hold_+=i.dt;
  startWas_=i.start;
- if(pending_){pendingTime_+=i.dt;if(pendingTime_>2.f)Close();}
- if(!open_&&!i.modal&&hold_>=.65f&&!startUsed_&&!quarantine_){
-  pauseTap_=true;pending_=true;pendingTime_=0;startUsed_=true;
+ // The same hold in play and in a game menu: open over what is shown, without
+ // pausing the game. Opening uses the hold, so its release is no pause tap.
+ if(!open_&&((hold_>=.65f&&!startUsed_&&!quarantine_)||requested_)){
+  open_=true;quarantine_=true;armed_=false;requested_=false;startUsed_=true;overMenu_=i.modal;
  }
- if(!open_&&i.modal&&((hold_>=.65f&&!startUsed_)||requested_||pending_)){
-  open_=true;quarantine_=true;armed_=false;requested_=false;startUsed_=true;
-  pending_=false;
- }
- if(open_&&!i.modal)Close();
- if(!open_){if(neutral)quarantine_=false;return out;}
- if(!armed_){if(neutral){armed_=true;accept_=cancel_=trigger_=previous_=next_=false;stickX_=stickY_=0;}return out;}
- const bool accept=i.accept&&!accept_,cancel=i.cancel&&!cancel_,click=i.trigger&&!trigger_;
- const bool prev=i.previous&&!previous_,next=i.next&&!next_;
- accept_=i.accept;cancel_=i.cancel;trigger_=i.trigger;previous_=i.previous;next_=i.next;
- if(cancel||(click&&i.hover==CloseHit)){Close();return out;}
- if(prev!=next){page=(page+(next?1:Pages-1))%Pages;row=0;}
- if(click&&i.hover>=static_cast<int>(Rows)&&i.hover<CloseHit){page=static_cast<unsigned>(i.hover-Rows);row=0;return out;}
- const int x=i.x>.65f?1:(i.x<-.65f?-1:0),y=i.y>.65f?1:(i.y<-.65f?-1:0);
- const int moveY=y&&stickY_==0?y:0,moveX=x&&stickX_==0?x:0;
- if(std::fabs(i.x)<.25f)stickX_=0;else if(x)stickX_=x;
- if(std::fabs(i.y)<.25f)stickY_=0;else if(y)stickY_=y;
- if(moveY){do{row=(row+(moveY>0?Rows-1:1))%Rows;}while(Item(page,row)==-2);}
- const bool rowClick=click&&i.hover>=0&&i.hover<static_cast<int>(Rows)&&Item(page,static_cast<unsigned>(i.hover))!=-2;
- if(rowClick)row=static_cast<unsigned>(i.hover);
- if(moveX||accept||rowClick){
-  out.setting=Item(page,row);out.direction=moveX?moveX:((click&&i.decrease)?-1:1);out.recenter=out.setting==-1;out.clearHolsters=out.setting==-3;out.calibrate=out.setting==-4;
- }
- return out;
+ // A game menu opening under it, or the one it was opened over closing.
+ if(open_&&i.modal!=overMenu_)Close();
+ if(!open_){if(neutral)quarantine_=false;return;}
+ // Armed at rest, so B is a fresh press.
+ if(!armed_){if(neutral)armed_=true;return;}
+ if(i.cancel)Close();
 }
 }

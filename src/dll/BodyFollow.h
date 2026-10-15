@@ -54,6 +54,9 @@ unsigned RoomScaleEnabled();
 // Idle until the head is `startMm` from the body, then follow to `stopMm`,
 // closing the gap with time constant `followMs` (negative: unchanged).
 DWORD SetRoomScaleZone(int startMm, int stopMm, int followMs = -1);
+int RoomScaleStartMm();
+int RoomScaleStopMm();
+int RoomScaleFollowMs();
 // The capsule radius the sweep assumes (not read from the engine).
 DWORD SetRoomScaleRadius(int radiusMm);
 // Diagnostic: one swept, compensated move of the capsule relative to the

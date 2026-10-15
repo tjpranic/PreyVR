@@ -2233,6 +2233,17 @@ DWORD SetArmSetting(const std::string& what, const int* v, unsigned n)
     return 0;
 }
 
+DWORD SetTorsoDeadzone(int degrees)
+{
+    const int relax = static_cast<int>(std::lround(ReadPoseSettings().torsoRelax * 1000.0f));
+    const int values[2] = {degrees, relax};
+    return SetArmSetting("torso", values, 2) == 0 ? 0 : ERROR_INVALID_PARAMETER;
+}
+int TorsoDeadzoneDegrees()
+{
+    return static_cast<int>(std::lround(ReadPoseSettings().torsoDeadzone * 180.0f / 3.14159265f));
+}
+
 std::string ArmReport()
 {
     const PoseSettings p = ReadPoseSettings();
@@ -2514,6 +2525,13 @@ DWORD SetAnimIkLongReach(int enabled, int comfortMm, int maxBackMm, int supportB
     gLongSupportBackMm.store(supportBackMm); gLongTwistDeg.store(twistDeg);
     return 0;
 }
+DWORD SetAnimIkLongReachEnabled(unsigned enabled)
+{
+    if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
+    gLongOn.store(enabled != 0);
+    return 0;
+}
+unsigned AnimIkLongReachEnabled() { return gLongOn.load() ? 1u : 0u; }
 std::string AnimIkLongReachReport()
 {
     return " longReach=" + std::to_string(gLongOn.load() ? 1 : 0) + " comfortMm=" + std::to_string(gLongComfortMm.load()) +

@@ -1,6 +1,7 @@
 #include "preyvr/UiPanel.h"
 #include <cstdlib>
 #include <cmath>
+#include <initializer_list>
 #include <iostream>
 using namespace preyvr;
 void Require(bool b,const char* why) { if(!b){std::cerr<<why<<'\n';std::exit(1);} }
@@ -175,5 +176,225 @@ int main() {
         if(m>.3f)Require(ui::CornersVisible(*pm,tight,1.f),"and passes every looser one");
     }
 
-    std::cout<<"UI panel geometry passed\n";
+    // --- menus open upright, at eye level, facing the wearer ----------------
+    //
+    // Fitted from the head itself, a menu opened while looking down came out
+    // low and tilted, and rolled with the head. The upright head keeps only the
+    // way the face is turned; levelling the eyes with it sizes the panel for a
+    // level gaze, as though the wearer had looked straight ahead.
+    const auto about=[](float x,float y,float z,float radians){
+        const float s=std::sin(radians*.5f);return Quaternion{x*s,y*s,z*s,std::cos(radians*.5f)};};
+    const auto eyesOf=[&](const Pose& head,const std::array<ui::Eye,2>& local){
+        auto out=local;for(auto& eye:out)eye.pose=Compose(head,eye.pose);return out;};
+    const float yaw=.52f;
+    const Pose tilted{Normalize(Multiply(Multiply(about(0,1,0,yaw),about(1,0,0,-.7f)),about(0,0,1,.44f))),
+                      {.3f,1.6f,-.2f}};
+    const auto upright=ui::UprightHead(tilted);
+    Require(near(upright.position.x,.3f)&&near(upright.position.y,1.6f)&&near(upright.position.z,-.2f),
+        "the upright head stays where the head is");
+    const auto uprightForward=Rotate(upright.orientation,{0,0,-1});
+    Require(near(uprightForward.y,0)&&near(std::atan2(-uprightForward.x,-uprightForward.z),yaw),
+        "and keeps only the way the face is turned");
+    const auto levelled=ui::LevelledEyes(tilted,upright,eyesOf(tilted,plain));
+    for(float distance:{1.f,1.5f,2.f,4.f}) {
+        const auto menu=ui::FitPanel(upright,levelled,16.f/9,distance);
+        Require(menu.has_value(),"a levelled fit places the menu");
+        Require(near(menu->pose.position.y,1.6f),"at eye level");
+        const float dx=menu->pose.position.x-.3f,dz=menu->pose.position.z+.2f;
+        Require(near(std::sqrt(dx*dx+dz*dz),distance),"at the distance asked for");
+        Require(near(std::atan2(-dx,-dz),yaw),"straight ahead of where the face is turned");
+        const auto normal=Rotate(menu->pose.orientation,{0,0,1});
+        const auto across=Rotate(menu->pose.orientation,{1,0,0});
+        Require(near(normal.y,0)&&near(across.y,0),"upright: neither tilted nor rolled");
+        Require(near(normal.x*dx+normal.z*dz,-distance),"facing the wearer square-on");
+        Require(near(menu->width/distance,base->width/2),
+            "the same apparent size at every distance, and as a level gaze gets");
+    }
+    const Pose lookingDown{Multiply(about(0,1,0,yaw),about(1,0,0,-1.05f)),{0,1.6f,0}};
+    const auto levelHead=ui::UprightHead(lookingDown);
+    Require(!ui::FitPanel(levelHead,eyesOf(lookingDown,plain),16.f/9),
+        "premise: the live eyes, looking well down, refuse a level menu outright");
+    Require(ui::FitPanel(levelHead,ui::LevelledEyes(lookingDown,levelHead,eyesOf(lookingDown,plain)),16.f/9).has_value(),
+        "the levelled eyes place it");
+    const Pose straightDown{Multiply(about(0,1,0,yaw),about(1,0,0,-1.5707963f)),{0,1.6f,0}};
+    const auto downForward=Rotate(ui::UprightHead(straightDown).orientation,{0,0,-1});
+    Require(near(std::atan2(-downForward.x,-downForward.z),yaw),
+        "looking straight down still faces the way the face is turned");
+
+    // --- ui.offset: around a cylinder about the head, never pitched or resized
+    const auto ahead=ui::FitPanel(upright,levelled,16.f/9,2.f);
+    Require(ahead.has_value(),"premise: the straight-ahead menu");
+    const auto unmoved=ui::AroundHead(upright,ahead->pose,0,0);
+    Require(near(unmoved.position.x,ahead->pose.position.x)&&near(unmoved.position.y,ahead->pose.position.y)&&
+        near(unmoved.position.z,ahead->pose.position.z),"no offset, no move");
+    for(float right:{-1.2f,-.35f,0.f,.5f,1.5f})for(float up:{-.9f,-.2f,0.f,.3f,1.f}) {
+        const auto aside=ui::AroundHead(upright,ahead->pose,right,up);
+        const float dx=aside.position.x-.3f,dy=aside.position.y-1.6f,dz=aside.position.z+.2f;
+        const float across=std::sqrt(dx*dx+dz*dz);
+        Require(near(across,2.f),"kept at the horizontal distance asked for");
+        Require(near(dy,2.f*std::tan(up)),"slid straight up to the height of that angle");
+        Require(near(std::atan2(dy,across),up),"so its centre is seen that far above eye level");
+        // Turned right of where the face points: yaw decreases to the right.
+        Require(near(std::atan2(-dx,-dz),yaw-right),"turned by the angle asked for");
+        const auto normal=Rotate(aside.orientation,{0,0,1});
+        Require(near(normal.y,0),"upright: never pitched to face the eyes");
+        Require(near(Rotate(aside.orientation,{1,0,0}).y,0),"its edges stay level");
+        Require(near(normal.x*dx+normal.z*dz,-across),"facing the head's vertical line square-on");
+    }
+    const auto vertical=ui::AroundHead(upright,ahead->pose,0,1.5707963f);
+    Require(near(vertical.position.y,ahead->pose.position.y),"straight up has no height, so it is refused");
+
+    // --- the shared menu anchor -------------------------------------------
+    // Taken once from the tilted head; every menu placed from it, before or
+    // after the wearer turns, lands where the anchor says.
+    const auto anchor=ui::AnchorMenu(tilted,eyesOf(tilted,plain));
+    const auto placed=ui::PlaceMenu(anchor,16.f/9,2.f,1.f,ui::kDefaultFitMargin,.5f,-.2f);
+    Require(placed.has_value(),"a menu is placed from the anchor");
+    const auto expected=ui::AroundHead(upright,ahead->pose,.5f,-.2f);
+    Require(near(placed->pose.position.x,expected.position.x)&&near(placed->pose.position.y,expected.position.y)&&
+        near(placed->pose.position.z,expected.position.z)&&near(placed->width,ahead->width),
+        "placing is fitting straight ahead of the upright head, then carrying it around the cylinder");
+    // The wearer has turned to look at that menu, 0.5 rad right. Re-placing it
+    // from the anchor leaves it where it is; anchoring afresh where they now
+    // look would add the offset a second time.
+    const Pose lookingAtIt{Multiply(about(0,1,0,yaw-.5f),about(1,0,0,-.2f)),tilted.position};
+    const auto again=ui::PlaceMenu(anchor,16.f/9,2.f,1.f,ui::kDefaultFitMargin,.5f,-.2f);
+    Require(again&&near(again->pose.position.x,placed->pose.position.x)&&near(again->pose.position.z,placed->pose.position.z),
+        "re-placed from its anchor, a menu stays put");
+    const auto compounded=ui::PlaceMenu(ui::AnchorMenu(lookingAtIt,eyesOf(lookingAtIt,plain)),16.f/9,2.f,1.f,
+        ui::kDefaultFitMargin,.5f,-.2f);
+    Require(compounded&&!near(compounded->pose.position.x,placed->pose.position.x),
+        "premise: anchored afresh where the wearer now looks, it would move by the offset again");
+    // Only the distance changes: the same direction from the anchor, further away.
+    const auto further=ui::PlaceMenu(anchor,16.f/9,3.f,1.f,ui::kDefaultFitMargin,.5f,-.2f);
+    Require(further.has_value(),"a further menu is placed");
+    const float px=placed->pose.position.x-.3f,pz=placed->pose.position.z+.2f;
+    const float fx=further->pose.position.x-.3f,fz=further->pose.position.z+.2f;
+    Require(near(std::atan2(-fx,-fz),std::atan2(-px,-pz))&&near(std::sqrt(fx*fx+fz*fz),3.f),
+        "a new distance keeps its direction from the anchor");
+    Require(!ui::PlaceMenu(anchor,0,2.f,1.f,ui::kDefaultFitMargin,0,0),"a refused fit places nothing");
+    const auto toRight=ui::AroundHead(upright,ahead->pose,.4f,0);
+    const auto rightOfFace=Rotate(upright.orientation,{1,0,0});
+    Require((toRight.position.x-ahead->pose.position.x)*rightOfFace.x+
+            (toRight.position.z-ahead->pose.position.z)*rightOfFace.z>0,"positive x is the wearer's right");
+    Require(ui::AroundHead(upright,ahead->pose,.2f,-.3f).position.y<1.6f,"negative y is below eye level");
+    // The guide card rides with the menu: both offsets keep their spacing.
+    const Pose above=Compose(ahead->pose,Pose{{},{0,.3f,0}});
+    const auto a=ui::AroundHead(upright,ahead->pose,.6f,.4f),b=ui::AroundHead(upright,above,.6f,.4f);
+    const float gx=b.position.x-a.position.x,gy=b.position.y-a.position.y,gz=b.position.z-a.position.z;
+    Require(near(std::sqrt(gx*gx+gy*gy+gz*gz),.3f),"a stacked card keeps its place beside the menu");
+    const auto kept=ui::AroundHead(upright,ahead->pose,std::nanf(""),0);
+    Require(near(kept.position.z,ahead->pose.position.z),"a non-finite offset leaves the menu where it was");
+    const Pose lost{{std::nanf(""),0,0,1},{}};
+    Require(!ui::FitPanel(ui::UprightHead(lost),ui::LevelledEyes(lost,ui::UprightHead(lost),plain),16.f/9),
+        "a non-finite head is refused, not levelled into a plausible pose");
+
+    // What a frame submits, bottom to top.
+    using L=ui::FrameLayer;
+    const auto is=[](const ui::FrameLayers& got,std::initializer_list<L> want){
+        if(got.count!=want.size())return false;
+        unsigned n=0;for(const L l:want)if(got.layers[n++]!=l)return false;
+        return true;
+    };
+    ui::FrameShown play;play.hud=play.text=play.beam=play.cursor=play.wrist=play.slot=play.fade=true;
+    Require(is(ui::ComposeFrame(play),{L::world,L::hud,L::text,L::beam,L::cursor,L::wrist,L::slot,L::fade}),
+        "gameplay: the world, then the HUD and text, the laser, wrist, slot and fade");
+    auto over=play;over.options=true;over.wrist=over.slot=over.fade=false; // paused by their callers meanwhile
+    Require(is(ui::ComposeFrame(over),{L::world,L::options,L::beam,L::cursor}),
+        "VR Options over the running game: the world under it, the laser over it, the HUD and text out");
+    over.wrist=over.slot=over.fade=true;
+    Require(is(ui::ComposeFrame(over),{L::world,L::options,L::beam,L::cursor,L::wrist,L::slot,L::fade}),
+        "the wrist, slot and fade are their callers' to gate: what is shown is drawn");
+    ui::FrameShown menu;menu.menu=menu.menuCylinder=menu.menuRightEye=menu.guide=menu.beam=menu.cursor=true;
+    Require(is(ui::ComposeFrame(menu),{L::menuCylinder,L::menuRightEye,L::guide,L::beam,L::cursor}),
+        "a curved game menu with its right eye and guide card, under the laser");
+    auto options=menu;options.options=true;
+    Require(is(ui::ComposeFrame(options),{L::menuCylinder,L::menuRightEye,L::guide,L::options,L::beam,L::cursor}),
+        "VR Options over a game menu: the whole menu stays under it");
+    ui::FrameShown flatMenu;flatMenu.menu=flatMenu.options=flatMenu.hud=flatMenu.text=true;
+    Require(is(ui::ComposeFrame(flatMenu),{L::menu,L::options}),"a flat game menu is the quad, VR Options over it, no HUD or text");
+    ui::FrameShown everything;
+    everything.menuRightEye=everything.guide=everything.hud=everything.text=true;
+    everything.beam=everything.cursor=everything.wrist=everything.slot=everything.fade=true;
+    Require(is(ui::ComposeFrame(everything),{L::world,L::hud,L::text,L::beam,L::cursor,L::wrist,L::slot,L::fade}),
+        "the menu's right eye and guide card never show over the world");
+
+    // **VR Options dragged by the laser**, round the inside of a cylinder about the head.
+    {
+        const auto close=[](float a,float b){return std::abs(a-b)<.002f;};
+        // OpenXR looks down -Z: a positive yaw turns left, a positive pitch up.
+        const auto aim=[](Vec3 from,float turnBy,float tiltBy){
+            const Quaternion turn{0,std::sin(turnBy*.5f),0,std::cos(turnBy*.5f)},tilt{std::sin(tiltBy*.5f),0,0,std::cos(tiltBy*.5f)};
+            return Pose{Normalize(Multiply(turn,tilt)),from};
+        };
+        const auto across=[](Vec3 a,Vec3 b){return std::hypot(a.x-b.x,a.z-b.z);};
+        const auto isUpright=[&](const Quaternion& q){return close(q.x,0)&&close(q.z,0);};
+        const auto facing=[&](const ui::Panel& panel,Vec3 head){
+            const auto n=Rotate(panel.pose.orientation,Vec3{0,0,1});
+            const float x=head.x-panel.pose.position.x,z=head.z-panel.pose.position.z,length=std::hypot(x,z);
+            return close(n.y,0)&&close(n.x,x/length)&&close(n.z,z/length);
+        };
+        const Vec3 head{0,1.6f,0},hand{.2f,1.3f,-.3f},spot{.3f,1.8f,-2};
+        const ui::Panel start{Pose{{},{0,1.6f,-2}},1.2f,.9f};
+        const float dx=spot.x-hand.x,dy=spot.y-hand.y,dz=spot.z-hand.z;
+        const float laserYaw=std::atan2(-dx,-dz),laserPitch=std::asin(dy/std::sqrt(dx*dx+dy*dy+dz*dz));
+        const auto laser=aim(hand,laserYaw,laserPitch);
+        const auto panelHit=ui::Intersect(ui::Surface{start,0},laser);
+        Require(panelHit&&panelHit->inside,"premise: the laser is on the panel, right of and above its centre");
+        const auto grab=ui::GrabPanel(start,*panelHit,head);
+        Require(grab&&close(grab->x,.3f)&&close(grab->y,.2f)&&close(grab->radius,across(spot,head)),
+            "a grab keeps the spot it took and its distance across the floor");
+        Require(!ui::GrabPanel(start,ui::RayHit{},head),"a laser off the panel grabs nothing");
+        const auto spotOf=[&](const ui::Panel& panel){
+            const auto o=Rotate(panel.pose.orientation,Vec3{grab->x,grab->y,0});
+            return Vec3{panel.pose.position.x+o.x,panel.pose.position.y+o.y,panel.pose.position.z+o.z};
+        };
+        const auto onLaser=[&](Vec3 point,const Pose& ray){
+            const auto d=Rotate(ray.orientation,Vec3{0,0,-1});
+            const Vec3 v{point.x-ray.position.x,point.y-ray.position.y,point.z-ray.position.z};
+            const float along=v.x*d.x+v.y*d.y+v.z*d.z;
+            return along>0&&std::hypot(std::hypot(v.x-d.x*along,v.y-d.y*along),v.z-d.z*along)<.002f;
+        };
+        const auto still=ui::DragPanel(*grab,laser,head);
+        Require(still&&close(still->pose.position.x,0)&&close(still->pose.position.y,1.6f)&&close(still->pose.position.z,-2),
+            "held without moving, it stays put");
+        const auto swungLaser=aim(hand,laserYaw-.5f,laserPitch);
+        const auto swung=ui::DragPanel(*grab,swungLaser,head);
+        Require(swung&&swung->pose.position.x>.5f&&onLaser(spotOf(*swung),swungLaser)&&close(across(spotOf(*swung),head),grab->radius)&&
+            isUpright(swung->pose.orientation)&&facing(*swung,head),
+            "swung right: round the cylinder, the grabbed spot under the laser, upright and facing the head");
+        const auto raisedLaser=aim(hand,laserYaw,laserPitch+.4f);
+        const auto raised=ui::DragPanel(*grab,raisedLaser,head);
+        Require(raised&&spotOf(*raised).y>spot.y+.5f&&onLaser(spotOf(*raised),raisedLaser)&&
+            close(across(spotOf(*raised),head),grab->radius)&&isUpright(raised->pose.orientation)&&facing(*raised,head),
+            "raised: it slides up the cylinder at the same distance across the floor, never tilting toward the eyes");
+        auto pushed=*grab;pushed.radius+=1;
+        const auto pushedPanel=ui::DragPanel(pushed,laser,head);
+        Require(pushedPanel&&close(across(spotOf(*pushedPanel),head),grab->radius+1)&&onLaser(spotOf(*pushedPanel),laser)&&
+            pushedPanel->width==start.width&&pushedPanel->height==start.height,
+            "pushed: a metre further along the laser, the same physical size, so it reads smaller");
+        Require(!ui::DragPanel(*grab,aim(hand,0,1.5707963f),head),"a laser straight up meets no wall of the cylinder");
+        const auto steep=ui::DragPanel(*grab,aim(hand,laserYaw,1.45f),head);
+        Require(steep&&spotOf(*steep).y-head.y<=grab->radius*std::tan(1.05f)+.002f,"no higher than 60 degrees from the head");
+        const ui::PanelGrab small{start,0,0,.6f};
+        const auto beyond=ui::DragPanel(small,aim(Vec3{0,1.3f,-1.2f},0,0),head);
+        Require(beyond&&close(across(beyond->pose.position,head),1.3f),"a hand held out past the cylinder widens it, rather than losing the panel");
+        // Placement relative to an anchor: kept across anchors.
+        const ui::MenuAnchor anchorAhead{Pose{{},{0,1.6f,0}},{}};
+        const auto leftAt=ui::PlacementOf(anchorAhead,*swung);
+        const auto back=ui::PlacedPose(anchorAhead,leftAt);
+        Require(close(back.position.x,swung->pose.position.x)&&close(back.position.y,swung->pose.position.y)&&
+            close(back.position.z,swung->pose.position.z)&&close(back.orientation.y,swung->pose.orientation.y)&&
+            close(back.orientation.w,swung->pose.orientation.w),"a placement puts a panel back where it was");
+        const ui::MenuAnchor turned{Pose{{0,std::sin(.7853982f),0,std::cos(.7853982f)},{1,1.5f,1}},{}};
+        const auto aside=ui::PlacedPose(turned,ui::PanelPlacement{});
+        const ui::Panel asidePanel{aside,1,1};
+        Require(close(aside.position.x,-1)&&close(aside.position.y,1.5f)&&close(aside.position.z,1)&&isUpright(aside.orientation)&&
+            facing(asidePanel,turned.upright.position),"the default placement is 2 m ahead of an anchor turned left, facing it");
+        const auto reopened=ui::PlacementOf(turned,ui::Panel{ui::PlacedPose(turned,leftAt),1,1});
+        Require(close(reopened.right,leftAt.right)&&close(reopened.height,leftAt.height)&&close(reopened.radius,leftAt.radius),
+            "and from a new anchor it is the same place relative to the wearer");
+    }
+
+    std::cout<<"UI panel geometry, frame layers and panel dragging passed\n";
 }

@@ -15,8 +15,8 @@
 #include "UiPointer.h"
 #include "HudLayer.h"
 #include "InventorySwapchain.h"
+#include "VrOptionsLayer.h"
 #include "VrOptionsRuntime.h"
-#include "VrOptionsPanel.h"
 #include "BodyEquipment.h"
 #include "BodyFollow.h"
 #include "SlotFeedback.h"
@@ -117,19 +117,17 @@ struct Host {
     std::uintptr_t heldBackBuffer=0;
     std::unique_ptr<InventorySwapchain> inventorySwapchain;
     std::unique_ptr<InventorySwapchain> inventoryRightSwapchain;
-    std::unique_ptr<InventorySwapchain> optionsSwapchain;
-    ID3D11Texture2D* optionsTexture=nullptr;
+    VrOptionsLayer optionsLayer; // the VR Options panel: placed, dragged and drawn (XR frame thread)
     std::unique_ptr<InventorySwapchain> wristSwapchain;
     std::unique_ptr<NativeWristTexture> wristFitter;
     bool wristVisible=false;
     std::uint64_t wristCapturedNs=0;
-    DXGI_FORMAT optionsFormat=DXGI_FORMAT_UNKNOWN;
-    std::optional<ui::Panel> optionsPanel;
-    std::uint64_t optionsReference=0;
-    options::Values optionsPainted{};
-    unsigned optionsPage=~0u,optionsRow=~0u;
-    bool optionsReady=false,optionsSaveFailed=false;
-    std::wstring optionsSetupPainted;
+    // **The menu anchor (ui::MenuAnchor)**, shared by the game's menu panel and
+    // VR Options, so both are placed from where the wearer faced. Taken when a
+    // game menu opens (or VR Options opens without one), after a recenter, or
+    // after the tracking space changes; kept through setting changes.
+    std::optional<ui::MenuAnchor> menuAnchor;
+    std::uint64_t menuAnchorReference=0;
     std::unique_ptr<InventorySwapchain> slotSwapchain;
     ID3D11Texture2D* slotTexture=nullptr;
     DXGI_FORMAT slotFormat=DXGI_FORMAT_UNKNOWN;
@@ -422,6 +420,9 @@ void EnsurePointerTexture()
 bool CreateInstanceAndSystem()
 {
     std::vector<const char*> enabled{XR_KHR_D3D11_ENABLE_EXTENSION_NAME};
+    // Extensions a controller profile needs (ControllerProfiles.h), where offered.
+    const auto controllerExtensions=XrInputExtensions();
+    std::vector<std::string> inputExtensions;
     std::uint32_t extensionCount=0;
     if(XR_SUCCEEDED(xrEnumerateInstanceExtensionProperties(nullptr,0,&extensionCount,nullptr))) {
         std::vector<XrExtensionProperties> extensions(extensionCount,{XR_TYPE_EXTENSION_PROPERTIES});
@@ -438,7 +439,17 @@ bool CreateInstanceAndSystem()
                 if(std::strcmp(extension.extensionName,XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME)==0) {
                     enabled.push_back(XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME);gHost.cylinderSupported=true;
                 }
+                for(const char* wanted:controllerExtensions) {
+                    if(std::strcmp(extension.extensionName,wanted)==0) {
+                        enabled.push_back(wanted);inputExtensions.emplace_back(wanted);
+                    }
+                }
             }
+    }
+    SetXrInputEnabledExtensions(inputExtensions);
+    for(const char* wanted:controllerExtensions) {
+        const bool on=std::find(inputExtensions.begin(),inputExtensions.end(),wanted)!=inputExtensions.end();
+        Log(std::string("xr_input_extension name=")+wanted+" enabled="+(on?"1":"0"));
     }
     Log(std::string("xr_depth extension_supported=")+(gHost.depthSupported?"1":"0"));
     Log(std::string("ui_cylinder supported=")+(gHost.cylinderSupported?"1":"0 flat_fallback=1"));
@@ -705,8 +716,7 @@ void Teardown()
     gHost.inventoryRightSwapchain.reset();
     gHost.hudSwapchain.reset();
     gHost.textSwapchain.reset();
-    gHost.optionsSwapchain.reset();
-    if(gHost.optionsTexture)gHost.optionsTexture->Release();
+    gHost.optionsLayer.Reset();
     gHost.slotSwapchain.reset();
     if(gHost.slotTexture)gHost.slotTexture->Release();
     gHost.fadeSwapchain.reset();
@@ -749,6 +759,32 @@ void LogOnce(const std::string& line)
     if (!logged.exchange(true, std::memory_order_acq_rel)) {
         Log(line);
     }
+}
+
+// The located eyes as UiPanel describes them: pose and frustum angles.
+std::array<ui::Eye,2> OpticalEyes(const XrView (&views)[2])
+{
+    std::array<ui::Eye,2> eyes{};
+    for (int eye = 0; eye < 2; ++eye) {
+        const auto& p = views[eye].pose;
+        const auto& f = views[eye].fov;
+        eyes[eye] = {Pose{{p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w},
+                          {p.position.x, p.position.y, p.position.z}},
+                     f.angleLeft, f.angleRight, f.angleUp, f.angleDown};
+    }
+    return eyes;
+}
+
+// The shared menu anchor (Host::menuAnchor), taken afresh when there is none
+// or a recenter has completed since it was taken (an odd generation is one in
+// progress). XR frame thread, under gMutex.
+const ui::MenuAnchor& MenuAnchorFor(const Pose& head, const XrView (&views)[2], std::uint64_t reference)
+{
+    if (!gHost.menuAnchor || (reference % 2 == 0 && reference != gHost.menuAnchorReference)) {
+        gHost.menuAnchor = ui::AnchorMenu(head, OpticalEyes(views));
+        gHost.menuAnchorReference = reference;
+    }
+    return *gHost.menuAnchor;
 }
 
 // Reads Prey's live view camera and returns the frustum to declare.
@@ -801,6 +837,19 @@ std::atomic<unsigned int> gUiScalePercent{100};
 // "out of focus". Nearer at the same size is larger in angle, so less minified.
 // Centimetres, 100..200; 200 is the HUD panel's own fit.
 std::atomic<unsigned int> gTextPanelCm{140};
+// **The menu panel's distance, centimetres, 100..400.** It was a fixed 2 m. The
+// fit's caps are angles, so the panel keeps its apparent size at any distance:
+// this is where it sits, and ui.scale is how big it looks. 100..400 is the
+// range FitPanel accepts. Saved by the VR Options menu (ui_distance).
+std::atomic<unsigned int> gUiDistanceCm{200};
+// **Where the menu sits around the wearer**, whole degrees from straight ahead:
+// right -90..90, up -45..45, around a cylinder about the head (ui::AroundHead),
+// so it slides up upright rather than tipping back. Up stops at 45: an upright
+// panel 60 degrees up is seen nearly edge-on (half its height) and, at 2 m,
+// 3.5 m overhead. Applied after the fit, so it moves the panel without resizing
+// it. Two scalars, like every other setting; a pair is stored before the one
+// generation bump, so a refit reads both. Saved by the VR Options menu.
+std::atomic<int> gUiOffsetRight{0},gUiOffsetUp{0};
 // Command threads only publish settings. Cached panels belong to the XR frame
 // thread under gMutex; touching their optionals from a setter is a data race.
 std::atomic<unsigned long long> gPanelSettingsGeneration{0};
@@ -1189,6 +1238,10 @@ void PumpEvents()
             }
         } else if(event.type==XR_TYPE_EVENT_DATA_INSTANCE_LOSS_PENDING) {
             gStopRequested.store(true);
+        } else if(event.type==XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED) {
+            // The profile the runtime picked for each hand: a controller's own,
+            // or one it emulates.
+            LogXrInputProfiles(gHost.instance,gHost.session);
         }
         event = XrEventDataBuffer{XR_TYPE_EVENT_DATA_BUFFER};
     }
@@ -1448,6 +1501,9 @@ void ServiceXrFrame(void* renderer)
         }
         gHost.eyeImageValid[0]=gHost.eyeImageValid[1]=false;
         gHost.menuPanel.reset();gHost.guidePanel.reset();ClearUiPointer();
+        // Poses in the old space mean nothing in the new one; a placement kept
+        // relative to the anchor still does, and is put back from the new one.
+        gHost.optionsLayer.Close(nullptr);gHost.menuAnchor.reset();
         gHost.recalibrateSpace=HeadTrackingHasReference()==0;
         gHost.spaceChanges.erase(gHost.spaceChanges.begin());
         Log("tracking_space changed images_invalidated=1");
@@ -1553,6 +1609,7 @@ void ServiceXrFrame(void* renderer)
     if (wantPanel != gHost.panelWasActive) {
         gHost.menuPanel.reset();
         gHost.guidePanel.reset();
+        gHost.menuAnchor.reset(); // a game menu opening is placed afresh, in front of the wearer
         gHost.eyeImageValid[0]=gHost.eyeImageValid[1]=false;
         gHost.panelWasActive=wantPanel;
         Log(std::string("result=0 detail=ui_panel active=")+(wantPanel?"1":"0"));
@@ -1564,14 +1621,9 @@ void ServiceXrFrame(void* renderer)
     const float curve=gHost.cylinderSupported && !planarInventory?
         static_cast<float>(gUiCurveDegrees.load())*.01745329252f:0;
     if (wantPanel && (!gHost.menuPanel || curve!=gHost.panelAngle || (reference%2==0 && reference!=gHost.panelReference))) {
-        std::array<ui::Eye,2> optical{};
-        for(int eye=0;eye<2;++eye) {
-            const auto& p=views[eye].pose;
-            optical[eye]={Pose{{p.orientation.x,p.orientation.y,p.orientation.z,p.orientation.w},
-                                   {p.position.x,p.position.y,p.position.z}},
-                          views[eye].fov.angleLeft,views[eye].fov.angleRight,
-                          views[eye].fov.angleUp,views[eye].fov.angleDown};
-        }
+        const auto& anchor=MenuAnchorFor(inputHead,views,reference);
+        const auto& upright=anchor.upright;
+        const auto& optical=anchor.eyes;
         const float aspect=static_cast<float>(gHost.width)/static_cast<float>(gHost.height);
         constexpr float guideRatio=static_cast<float>(kGuideHeight)/kGuideWidth;
         constexpr float gapRatio=.015f;
@@ -1581,7 +1633,17 @@ void ServiceXrFrame(void* renderer)
         // the card and its gap used to reserve goes back to the menu instead of
         // being left empty -- which is the whole point of switching it off.
         const float stackAspect=wantGuide?1/(1/aspect+guideRatio+gapRatio):aspect;
-        auto layout=ui::FitPanel(inputHead,optical,stackAspect,2.0f,
+        // **Upright, at eye level, facing the wearer square-on**, ui.distance
+        // ahead of the way the face was turned when the anchor was taken (on
+        // opening, not now: a setting change re-places the menu from the same
+        // anchor). Fitted from the head itself the menu followed its pitch and
+        // roll: opened while looking down, it came out low, tilted and rolled.
+        // The anchor's eyes are levelled so the fit sizes it for a level gaze,
+        // which also keeps a menu opened while looking down from failing the
+        // corner test (UiPanel.h). The stack's centre is what sits at eye
+        // level: with the guide card on, the menu rides half the card above it.
+        const float distance=static_cast<float>(gUiDistanceCm.load(std::memory_order_relaxed))*.01f;
+        auto layout=ui::FitPanel(upright,optical,stackAspect,distance,
             static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f,margin);
         if(layout) {
             gHost.menuPanel.reset();gHost.guidePanel.reset();
@@ -1605,10 +1667,22 @@ void ServiceXrFrame(void* renderer)
                 layout->width*=.95f;layout->height*=.95f;
             }
         }
+        // ui.offset carries the fitted stack around the head as one piece. After
+        // the fit, not before: the fit sizes for straight ahead, and an offset
+        // view would shrink or refuse a panel the wearer chose to put aside.
+        const int offsetRight=gUiOffsetRight.load(std::memory_order_relaxed);
+        const int offsetUp=gUiOffsetUp.load(std::memory_order_relaxed);
+        if(gHost.menuPanel && (offsetRight || offsetUp)) {
+            const float right=static_cast<float>(offsetRight)*.01745329252f,up=static_cast<float>(offsetUp)*.01745329252f;
+            gHost.menuPanel->pose=ui::AroundHead(upright,gHost.menuPanel->pose,right,up);
+            if(gHost.guidePanel)gHost.guidePanel->pose=ui::AroundHead(upright,gHost.guidePanel->pose,right,up);
+        }
         gHost.panelReference=reference;
         gHost.panelAngle=curve;
         ++gHost.surfaceSerial;
-        Log("ui_surface angle_degrees="+std::to_string(curve*57.2957795f));
+        Log("ui_surface angle_degrees="+std::to_string(curve*57.2957795f)+" distance_m="+std::to_string(distance)+
+            " offset_degrees="+std::to_string(offsetRight)+","+std::to_string(offsetUp)+
+            " placed="+(gHost.menuPanel?"1":"0"));
     }
     const bool panelActive=wantPanel && gHost.menuPanel.has_value();
     if(panelActive && !gHost.guideAttempted) {
@@ -1883,76 +1957,28 @@ void ServiceXrFrame(void* renderer)
         }
         if(rendered)EnsurePointerTexture();
     }
-    XrCompositionLayerQuad optionsLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
-    bool optionsActive=false;
-    if(VrOptionsOpen()&&haveViews&&rendered) {
-        if(!gHost.optionsPanel||gHost.optionsReference!=reference) {
-            std::array<ui::Eye,2> optical{};
-            for(unsigned eye=0;eye<2;++eye) {
-                const auto& p=views[eye].pose;const auto& f=views[eye].fov;
-                optical[eye]={Pose{{p.orientation.x,p.orientation.y,p.orientation.z,p.orientation.w},
-                    {p.position.x,p.position.y,p.position.z}},f.angleLeft,f.angleRight,f.angleUp,f.angleDown};
-            }
-            // Independent fit keeps the settings escape hatch readable even if
-            // the wearer makes the game's UI very large or small.
-            gHost.optionsPanel=ui::FitPanel(inputHead,optical,static_cast<float>(options::Width)/options::Height,1.5f,1.f,.68f);
-            gHost.optionsReference=reference;
-        }
-        if(!gHost.optionsTexture) {
-            uint32_t count=0;
-            if(xrEnumerateSwapchainFormats(gHost.session,0,&count,nullptr)==XR_SUCCESS&&count&&count<256) {
-                std::vector<int64_t> formats(count);
-                if(xrEnumerateSwapchainFormats(gHost.session,count,&count,formats.data())==XR_SUCCESS) {
-                    for(auto format:{DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB}) {
-                        if(std::find(formats.begin(),formats.end(),format)!=formats.end()){gHost.optionsFormat=format;break;}
-                    }
-                }
-            }
-            if(gHost.optionsFormat!=DXGI_FORMAT_UNKNOWN) {
-                D3D11_TEXTURE2D_DESC d{};d.Width=options::Width;d.Height=options::Height;
-                d.Format=gHost.optionsFormat;d.SampleDesc.Count=1;d.ArraySize=d.MipLevels=1;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
-                if(SUCCEEDED(gHost.device->CreateTexture2D(&d,nullptr,&gHost.optionsTexture))) {
-                    gHost.optionsSwapchain=std::make_unique<InventorySwapchain>(InventorySwapchainApi{
-                        xrEnumerateSwapchainFormats,xrCreateSwapchain,xrEnumerateSwapchainImages,
-                        xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,xrDestroySwapchain});
-                    if(!gHost.optionsSwapchain->Prepare(gHost.session,d,gHost.optionsFormat))RequestVrOptions(false);
-                }
-            }
-        }
-        const auto values=VrOptionsValues();const auto optionPage=VrOptionsPage(),optionRow=VrOptionsRow();const bool failed=VrOptionsSaveFailed();
-        const auto setupMessage=VrSetupMessage();
-        if(gHost.optionsTexture&&gHost.optionsSwapchain&&
-           (!gHost.optionsReady||values!=gHost.optionsPainted||optionPage!=gHost.optionsPage||optionRow!=gHost.optionsRow||failed!=gHost.optionsSaveFailed||setupMessage!=gHost.optionsSetupPainted)) {
-            auto pixels=DrawVrOptions(values,optionPage,optionRow,failed,setupMessage);
-            if(gHost.optionsFormat==DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)
-                for(size_t n=0;n+3<pixels.size();n+=4)std::swap(pixels[n],pixels[n+2]);
-            ID3D11DeviceContext* context=nullptr;gHost.device->GetImmediateContext(&context);
-            if(context&&!pixels.empty()) {
-                context->UpdateSubresource(gHost.optionsTexture,0,nullptr,pixels.data(),options::Width*4,0);
-                const auto upload=gHost.optionsSwapchain->Copy(context,gHost.optionsTexture);
-                gHost.optionsReady=upload==InventorySwapchain::Upload::ready;
-                if(upload==InventorySwapchain::Upload::sessionFault)gStopRequested.store(true);
-                if(gHost.optionsReady){gHost.optionsPainted=values;gHost.optionsPage=optionPage;gHost.optionsRow=optionRow;gHost.optionsSaveFailed=failed;gHost.optionsSetupPainted=setupMessage;}
-            }
-            if(context)context->Release();
-        }
-        optionsActive=gHost.optionsReady&&gHost.optionsPanel.has_value();
-        if(optionsActive) {
-            const auto& p=*gHost.optionsPanel;
-            optionsLayer.space=gHost.space;optionsLayer.eyeVisibility=XR_EYE_VISIBILITY_BOTH;
-            optionsLayer.pose={{p.pose.orientation.x,p.pose.orientation.y,p.pose.orientation.z,p.pose.orientation.w},
-                {p.pose.position.x,p.pose.position.y,p.pose.position.z}};
-            optionsLayer.size={p.width,p.height};optionsLayer.subImage.swapchain=gHost.optionsSwapchain->Handle();
-            optionsLayer.subImage.imageRect={{0,0},{options::Width,options::Height}};
-            surface={p,0};SetVrOptionsSurface(&surface,reference);EnsurePointerTexture();
-        } else {
-            RequestVrOptions(false);Log("result=refused detail=vr_options_layer native_menu_retained=1");
-        }
-    } else {gHost.optionsPanel.reset();SetVrOptionsSurface(nullptr,reference);}
+    // **VR Options** (VrOptionsLayer). Not gated on this frame having an image:
+    // over the running game a frame can miss its eye pair, and dropping the
+    // placement then would re-anchor the panel wherever the wearer looks next.
+    // Such a frame submits nothing. Over a game menu it takes that menu's
+    // anchor; over the running game, an anchor afresh.
+    VrOptionsLayer::Frame options;
+    if(VrOptionsOpen()&&haveViews) {
+        if(!gHost.optionsLayer.Placed()&&!wantPanel)gHost.menuAnchor.reset();
+        options=gHost.optionsLayer.Update(gHost.session,gHost.space,gHost.device,MenuAnchorFor(inputHead,views,reference),
+            reference,inputHead,frameState.predictedDisplayTime);
+        if(options.sessionFault)gStopRequested.store(true);
+        if(options.active) {SetVrOptionsSurface(&options.surface,reference);EnsurePointerTexture();}
+        else {RequestVrOptions(false);Log("result=refused detail=vr_options_layer native_menu_retained=1");}
+    } else {
+        gHost.optionsLayer.Close(gHost.menuAnchor?&*gHost.menuAnchor:nullptr);
+        SetVrOptionsSurface(nullptr,reference);
+    }
+    const bool optionsActive=options.active;
     UiPointerVisual pointer;
     if(optionsActive) {
         PublishUiPointer(nullptr,0,0,0);
-        if(gHost.pointerReady)pointer=OptionsPointer(surface);
+        if(gHost.pointerReady)pointer=OptionsPointer(options.surface);
     } else pointer=PublishUiPointer(panelActive&&rendered&&gHost.pointerReady&&!VrOptionsInputOwned()?&surface:nullptr,
         gHost.width,gHost.height,gHost.surfaceSerial);
     XrCompositionLayerQuad cursorLayer{XR_TYPE_COMPOSITION_LAYER_QUAD},beamLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
@@ -2327,20 +2353,33 @@ void ServiceXrFrame(void* renderer)
             }
         }
     }
+    // **VR Options is drawn over what is shown**: the game's menu while one is
+    // up, else the world -- the running game (ui::ComposeFrame has the order).
+    ui::FrameShown shown;
+    shown.menu=panelActive;shown.menuCylinder=panelActive&&surface.angle>0;shown.menuRightEye=inventoryStereoSubmitted;
+    shown.guide=guideActive;shown.hud=hudActive;shown.text=textActive;shown.options=optionsActive;
+    shown.beam=beamActive;shown.cursor=cursorActive;shown.wrist=wristActive;shown.slot=slotActive;shown.fade=fadeActive;
+    const auto header=[&](ui::FrameLayer which)->const XrCompositionLayerBaseHeader* {
+        switch(which) {
+        case ui::FrameLayer::world:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&layer);
+        case ui::FrameLayer::menu:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&panelLayer);
+        case ui::FrameLayer::menuCylinder:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&cylinderLayer);
+        case ui::FrameLayer::menuRightEye:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&rightPanelLayer);
+        case ui::FrameLayer::guide:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&guideLayer);
+        case ui::FrameLayer::hud:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&hudLayer);
+        case ui::FrameLayer::text:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&textLayer);
+        case ui::FrameLayer::options:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&options.layer);
+        case ui::FrameLayer::beam:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&beamLayer);
+        case ui::FrameLayer::cursor:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&cursorLayer);
+        case ui::FrameLayer::wrist:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&wristLayer);
+        case ui::FrameLayer::slot:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&slotLayer);
+        case ui::FrameLayer::fade:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&fadeLayer);
+        }
+        return nullptr;
+    };
+    const auto order=ui::ComposeFrame(shown);
     std::vector<const XrCompositionLayerBaseHeader*> layers;
-    if(optionsActive)layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&optionsLayer));
-    else if(panelActive)layers.push_back(surface.angle>0?reinterpret_cast<const XrCompositionLayerBaseHeader*>(&cylinderLayer):
-        reinterpret_cast<const XrCompositionLayerBaseHeader*>(&panelLayer));
-    else layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&layer));
-    if(!optionsActive&&inventoryStereoSubmitted)layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&rightPanelLayer));
-    if(!optionsActive&&guideActive)layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&guideLayer));
-    else if(!optionsActive&&hudActive)layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&hudLayer));
-    if(!optionsActive&&!guideActive&&textActive)layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&textLayer));
-    if(beamActive)layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&beamLayer));
-    if(cursorActive)layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&cursorLayer));
-    if(wristActive)layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&wristLayer));
-    if(slotActive)layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&slotLayer));
-    if(fadeActive)layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&fadeLayer));
+    for(unsigned n=0;n<order.count;++n)layers.push_back(header(order.layers[n]));
 
     XrFrameEndInfo endInfo{XR_TYPE_FRAME_END_INFO};
     endInfo.displayTime = frameState.predictedDisplayTime;
@@ -2499,6 +2538,37 @@ DWORD SetTextPanelDistanceCm(unsigned int centimetres)
 }
 
 DWORD TextPanelDistanceCm() { return gTextPanelCm.load(std::memory_order_acquire); }
+
+DWORD SetUiDistanceCm(unsigned int centimetres)
+{
+    if (centimetres < 100 || centimetres > 400) {
+        Log("result=refused detail=ui_distance_out_of_range");
+        return 1;
+    }
+    gUiDistanceCm.store(centimetres, std::memory_order_release);
+    // As ui.scale: the frame thread refits an open menu at the new distance.
+    gPanelSettingsGeneration.fetch_add(1, std::memory_order_release);
+    Log("result=0 detail=ui_distance cm=" + std::to_string(centimetres));
+    return 0;
+}
+
+DWORD UiDistanceCm() { return gUiDistanceCm.load(std::memory_order_acquire); }
+
+DWORD SetUiOffsetDegrees(int right, int up)
+{
+    if (right < -90 || right > 90 || up < -45 || up > 45) {
+        Log("result=refused detail=ui_offset_out_of_range");
+        return 1;
+    }
+    gUiOffsetRight.store(right, std::memory_order_release);
+    gUiOffsetUp.store(up, std::memory_order_release);
+    gPanelSettingsGeneration.fetch_add(1, std::memory_order_release);
+    Log("result=0 detail=ui_offset right_degrees=" + std::to_string(right) + " up_degrees=" + std::to_string(up));
+    return 0;
+}
+
+int UiOffsetRightDegrees() { return gUiOffsetRight.load(std::memory_order_acquire); }
+int UiOffsetUpDegrees() { return gUiOffsetUp.load(std::memory_order_acquire); }
 
 // **Why this exists.** `ui.scale` stopped having any effect above about 130 at
 // 2688x2880, which reads as a hard maximum but is not one: the fit loops were

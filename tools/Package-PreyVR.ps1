@@ -51,10 +51,13 @@ foreach($script in @('Start-PreyVR.ps1','Start Prey VR.cmd','Send-PreyVR.ps1','T
 }
 Copy-Item -LiteralPath $GuidePath -Destination (Join-Path $destination 'README.md')
 Copy-Item -LiteralPath $ValidationPath -Destination (Join-Path $destination 'VALIDATION.md')
+# Every tuner command, beside the tuner that sends them.
+Copy-Item -LiteralPath (Join-Path $here '../docs/TUNING-COMMANDS.md') -Destination $destination
 $licenses=Join-Path $destination 'licenses'
 [void](New-Item -ItemType Directory -Path $licenses)
 Copy-Item -LiteralPath (Join-Path $root 'build/headless/_deps/minhook-src/LICENSE.txt') -Destination (Join-Path $licenses 'MinHook.txt')
 Copy-Item -LiteralPath (Join-Path $root 'build/headless/_deps/openxr-src/LICENSE') -Destination (Join-Path $licenses 'OpenXR.txt')
+Copy-Item -LiteralPath (Join-Path $root 'build/headless/_deps/imgui-src/LICENSE.txt') -Destination (Join-Path $licenses 'DearImGui.txt')
 $files=@(Get-ChildItem -LiteralPath $destination -Recurse -File | ForEach-Object {
     @{path=$_.FullName.Substring($destination.Length+1).Replace('\','/');bytes=$_.Length;sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
 })

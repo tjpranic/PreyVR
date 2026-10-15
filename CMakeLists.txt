@@ -11,6 +11,7 @@ set(PREYVR_BUILD_VERSION "0.3.1-static-ik-integration")
 set(PREYVR_SUPPORTED_PREYDLL_SHA256 "7D6E322F61B28331095A400F0BA5F09BD9A39C57BF993602285DD6ACB05311A7")
 set(PREYVR_MINHOOK_GIT_COMMIT "c3fcafdc10146beb5919319d0683e44e3c30d537" CACHE STRING "Pinned MinHook commit (v1.3.4)")
 set(PREYVR_OPENXR_GIT_COMMIT "64f2b37c8c6da3d83c9b4d11865ba1fb752cb8ec" CACHE STRING "Pinned OpenXR-SDK commit (release-1.1.60)")
+set(PREYVR_IMGUI_GIT_COMMIT "f1cc2ae15e53a861a874c3034aae6798fde194ab" CACHE STRING "Pinned Dear ImGui commit (v1.92.9b)")
 set(
     PREYVR_GAME_RELEASE_DIR
     "D:/SteamLibrary/steamapps/common/Prey/Binaries/Danielle/x64/Release"
@@ -57,6 +58,29 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
     else()
         FetchContent_MakeAvailable(minhook)
     endif()
+    # Dear ImGui draws the VR Options panel. It has no
+    # CMake project of its own, so MakeAvailable only fetches it; the library is
+    # declared below. No demo, no Win32 clipboard/IME or shell calls: it is fed
+    # input by the mod and never touches the game's window.
+    FetchContent_Declare(
+        imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui.git
+        GIT_TAG ${PREYVR_IMGUI_GIT_COMMIT}
+        GIT_SHALLOW FALSE
+    )
+    FetchContent_MakeAvailable(imgui)
+    add_library(preyvr_imgui STATIC
+        "${imgui_SOURCE_DIR}/imgui.cpp"
+        "${imgui_SOURCE_DIR}/imgui_draw.cpp"
+        "${imgui_SOURCE_DIR}/imgui_tables.cpp"
+        "${imgui_SOURCE_DIR}/imgui_widgets.cpp"
+        "${imgui_SOURCE_DIR}/backends/imgui_impl_dx11.cpp"
+    )
+    target_include_directories(preyvr_imgui PUBLIC "${imgui_SOURCE_DIR}" "${imgui_SOURCE_DIR}/backends")
+    target_compile_definitions(preyvr_imgui PUBLIC
+        IMGUI_DISABLE_OBSOLETE_FUNCTIONS IMGUI_DISABLE_DEMO_WINDOWS IMGUI_DISABLE_DEBUG_TOOLS
+        IMGUI_DISABLE_WIN32_FUNCTIONS IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS)
+    target_link_libraries(preyvr_imgui PUBLIC d3d11 d3dcompiler)
 endif()
 
 configure_file(
@@ -85,6 +109,7 @@ add_library(preyvr_core STATIC
     src/common/CameraEdit.cpp
     src/common/ConsolePolicy.cpp
     src/common/DebugRegisters.cpp
+    src/common/ControllerProfiles.cpp
     src/common/EngineMap.cpp
     src/common/FrameDump.cpp
     src/common/FrameObserver.cpp
@@ -156,7 +181,8 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/Bootstrap.cpp
         src/dll/VrMode.cpp
         src/dll/UiGuide.cpp
-        src/dll/VrOptionsPanel.cpp
+        src/dll/VrOptionsLayer.cpp
+        src/dll/VrOptionsUi.cpp
         src/dll/VrOptionsRuntime.cpp
         src/dll/Psychoscope.cpp
         src/dll/BodyEquipment.cpp
@@ -212,7 +238,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         "${CMAKE_CURRENT_BINARY_DIR}/generated"
     )
     target_compile_definitions(preyvr PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-    target_link_libraries(preyvr PRIVATE preyvr_core preyvr_win32_bootstrap minhook bcrypt psapi shell32 d3d11 dxgi d3dcompiler gdi32)
+    target_link_libraries(preyvr PRIVATE preyvr_core preyvr_win32_bootstrap preyvr_imgui minhook bcrypt psapi shell32 d3d11 dxgi d3dcompiler gdi32)
     if(PREYVR_BUILD_OPENXR_LOADER AND TARGET openxr_loader)
         # The in-process session host needs the loader. The DLL already ships
         # openxr_loader.dll beside itself for the preflight, so this adds a link
@@ -252,6 +278,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
                 -DPREYVR_ENGINE_MAP_PROBE=$<TARGET_FILE:preyvr_engine_map_probe>
                 -DPREYVR_MINHOOK_COMMIT=${PREYVR_MINHOOK_GIT_COMMIT}
                 -DPREYVR_OPENXR_COMMIT=${PREYVR_OPENXR_GIT_COMMIT}
+                -DPREYVR_IMGUI_COMMIT=${PREYVR_IMGUI_GIT_COMMIT}
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/WriteBuildManifest.cmake"
             VERBATIM
         )
@@ -269,6 +296,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
                 -DPREYVR_ENGINE_MAP_PROBE=$<TARGET_FILE:preyvr_engine_map_probe>
                 -DPREYVR_MINHOOK_COMMIT=${PREYVR_MINHOOK_GIT_COMMIT}
                 -DPREYVR_OPENXR_COMMIT=${PREYVR_OPENXR_GIT_COMMIT}
+                -DPREYVR_IMGUI_COMMIT=${PREYVR_IMGUI_GIT_COMMIT}
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/WriteBuildManifest.cmake"
             VERBATIM
         )
@@ -389,6 +417,10 @@ if(PREYVR_BUILD_TESTS)
     target_link_libraries(preyvr_vr_options_tests PRIVATE preyvr_core)
     preyvr_enable_warnings(preyvr_vr_options_tests)
     add_test(NAME vr_options_contracts COMMAND preyvr_vr_options_tests)
+    add_executable(preyvr_controller_profiles_tests tests/ControllerProfilesTests.cpp)
+    target_link_libraries(preyvr_controller_profiles_tests PRIVATE preyvr_core)
+    preyvr_enable_warnings(preyvr_controller_profiles_tests)
+    add_test(NAME controller_profiles COMMAND preyvr_controller_profiles_tests)
     add_executable(preyvr_body_equipment_tests tests/BodyEquipmentTests.cpp)
     target_link_libraries(preyvr_body_equipment_tests PRIVATE preyvr_core)
     preyvr_enable_warnings(preyvr_body_equipment_tests)
@@ -588,11 +620,13 @@ if(PREYVR_BUILD_TESTS)
         target_link_libraries(preyvr_ui_pointer_tests PRIVATE preyvr_core)
         preyvr_enable_warnings(preyvr_ui_pointer_tests)
         add_test(NAME ui_pointer_dispatch COMMAND preyvr_ui_pointer_tests)
-        add_executable(preyvr_vr_options_panel_tests tests/VrOptionsPanelTests.cpp src/dll/VrOptionsPanel.cpp)
-        target_compile_definitions(preyvr_vr_options_panel_tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-        target_link_libraries(preyvr_vr_options_panel_tests PRIVATE preyvr_core gdi32 user32)
-        preyvr_enable_warnings(preyvr_vr_options_panel_tests)
-        add_test(NAME vr_options_panel COMMAND preyvr_vr_options_panel_tests)
+        # The VR Options panel, drawn by the real ImGui backend on WARP.
+        add_executable(preyvr_vr_options_ui_tests tests/VrOptionsUiTests.cpp src/dll/VrOptionsUi.cpp)
+        target_include_directories(preyvr_vr_options_ui_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/dll")
+        target_compile_definitions(preyvr_vr_options_ui_tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+        target_link_libraries(preyvr_vr_options_ui_tests PRIVATE preyvr_core preyvr_imgui d3d11)
+        preyvr_enable_warnings(preyvr_vr_options_ui_tests)
+        add_test(NAME vr_options_ui COMMAND preyvr_vr_options_ui_tests)
         add_executable(preyvr_wrist_panel_tests tests/WristPanelTests.cpp src/dll/WristPanel.cpp)
         target_compile_definitions(preyvr_wrist_panel_tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
         target_link_libraries(preyvr_wrist_panel_tests PRIVATE preyvr_core gdi32 user32)
@@ -671,8 +705,8 @@ if(PREYVR_BUILD_TESTS)
     if(PREYVR_POWERSHELL_EXECUTABLE)
         add_test(NAME launcher_resolution COMMAND "${PREYVR_POWERSHELL_EXECUTABLE}"
             -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/LauncherResolution.Tests.ps1")
-        add_test(NAME launcher_comfort COMMAND "${PREYVR_POWERSHELL_EXECUTABLE}"
-            -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/LauncherComfort.Tests.ps1")
+        add_test(NAME launcher_settings COMMAND "${PREYVR_POWERSHELL_EXECUTABLE}"
+            -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/LauncherSettings.Tests.ps1")
         add_test(NAME launcher_stereo COMMAND "${PREYVR_POWERSHELL_EXECUTABLE}"
             -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/LauncherStereo.Tests.ps1")
     endif()

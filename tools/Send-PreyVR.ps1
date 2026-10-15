@@ -69,11 +69,16 @@ try {
     # accepts many more; the full set is in docs/, and an unknown verb answers
     # with an error rather than doing something surprising.
     $help=@(
+        'A command with no value reports and changes nothing. Commands last this'
+        'session; VR Options saves. Every command: TUNING-COMMANDS.md beside this.'
+        ''
         'ui.scale 130          HUD/menu panel size, 20..200 percent (100 = default)'
         'ui.margin 85          the REAL size ceiling, 30..100 (default 72). Past'
         '                      the point this binds, ui.scale does nothing.'
         'ui.guide 1            show the control card under the menu (off by default)'
         'ui.curve 35           panel curvature in degrees, 0 = flat'
+        'ui.distance 150       menu panel distance, 100..400 cm (200 = default), same apparent size'
+        'ui.offset 15 -20      menu panel around you, degrees: right -90..90, up -45..45 (0 0 = ahead)'
         'ui.pointer 1          laser hand: 0 left, 1 right, 2 buttons only'
         'hud.layer 1           draw the HUD as its own layer (0 = in-world)'
         'vr.status             where VR setup got to'

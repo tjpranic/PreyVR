@@ -37,6 +37,7 @@ bool PeekInventoryPair(ID3D11Texture2D** left,ID3D11Texture2D** right);
 DWORD SetInventoryStereoEnabled(unsigned enabled);
 bool InventoryStereoEnabled();
 DWORD SetInventoryDepthPercent(unsigned percent);
+unsigned InventoryDepthPercent();
 std::string InventoryStereoReport();
 // Render-thread consumer lease. Null revokes; format/dimensions must match the
 // native destination before capture can redirect it. Expires during XR stalls.

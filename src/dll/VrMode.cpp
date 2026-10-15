@@ -83,10 +83,8 @@ void EnableVrMode() {
     wchar_t value[24]{};
     desiredWidth=GetEnvironmentVariableW(L"PREYVR_RENDER_WIDTH",value,24)?static_cast<unsigned>(_wtoi(value)):0;
     desiredHeight=GetEnvironmentVariableW(L"PREYVR_RENDER_HEIGHT",value,24)?static_cast<unsigned>(_wtoi(value)):0;
-    const auto curveLength=GetEnvironmentVariableW(L"PREYVR_UI_CURVE_DEGREES",value,24);
-    if(curveLength>0 && curveLength<24)SetUiCurveDegrees(static_cast<unsigned>(_wtoi(value)));
-    const auto pointerLength=GetEnvironmentVariableW(L"PREYVR_POINTER_HAND",value,24);
-    if(pointerLength>0 && pointerLength<24)SetUiPointerHand(static_cast<unsigned>(_wtoi(value)));
+    // Panel curvature and the laser hand are VR Options settings: vr-options.ini
+    // holds them (ApplySavedVrOptions), not the launcher's environment.
     LoadVrOptions();
     phase=Phase::preparing;deadline=GetTickCount64()+120000;nextInputProbe=0;
     Log("state=waiting_for_renderer controls=F11_enable,F12_recenter");
@@ -217,12 +215,14 @@ void TickVrMode() {
         // right grip held) or carrying (AnimIkTakeover arms.free; arms.free 0 =
         // the game lowers them out of view, as before).
         SetAnimIkFreeArms(1);
-        // Both hands' rays drawn in gameplay while interaction is being tested
-        // (user, 2026-10-06). The VR options' Debug overlay switch turns them off.
-        if(DebugOverlayMask()==0) SetDebugOverlay(debugdraw::kRays|debugdraw::kHits);
-        wchar_t hudSetting[8]{};
-        GetEnvironmentVariableW(L"PREYVR_HUD_LAYER",hudSetting,8);
-        if(hudSetting[0]!=L'0' && SetHudLayerEnabled(1)!=0)Log("hud_layer=unavailable native_hud=retained");
+        // The debug overlay is no longer switched on here: it forced the rays
+        // back every start, so the VR Options' "off" never survived a restart.
+        // It follows the menu, or dbg.draw for the session.
+        // The floating HUD by default; VR Options' HUD style can turn it off.
+        if(SetHudLayerEnabled(1)!=0)Log("hud_layer=unavailable native_hud=retained");
+        // Saved VR Options choices last, so they win over the defaults above
+        // (an F11 restart included).
+        ApplySavedVrOptions();
         phase=Phase::rendering;deadline=GetTickCount64()+15000;
     }
     if(phase==Phase::rendering) {

@@ -38,4 +38,5 @@ file(WRITE "${PREYVR_MANIFEST}"
     "lifecycle=supported_host_pinned_until_process_exit\n"
     "minhook_commit=${PREYVR_MINHOOK_COMMIT}\n"
     "openxr_commit=${PREYVR_OPENXR_COMMIT}\n"
+    "imgui_commit=${PREYVR_IMGUI_COMMIT}\n"
 )

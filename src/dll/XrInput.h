@@ -2,6 +2,8 @@
 
 #include "preyvr/VrMath.h"
 #include <array>
+#include <string>
+#include <vector>
 
 #include <windows.h>
 
@@ -44,12 +46,18 @@ struct ControllerState {
     bool menuStart = false;
 };
 
+// **Navigation for the mod's own panels**, -1..1 each way: the right stick,
+// plus whatever a controller binds to navigation (input::Role::navigate*: the
+// Steam Frame's left D-pad). The game's menus keep the stick alone.
+struct Navigation { float x = 0, y = 0; };
+
 // Head and BOTH hands located at one predicted display time. This is the
 // publication unit for gameplay; independently reading latest poses mixes times.
 struct TrackingFrame {
     Pose head{};
     PoseValidity headValidity{};
     std::array<ControllerState, 2> hands{}; // indexed by Hand (left, right)
+    Navigation navigate{};
     long long displayTime = 0;
     std::uint64_t sequence = 0;
     std::uint64_t epoch = 0;
@@ -64,6 +72,14 @@ bool TryGetTrackingFrame(TrackingFrame& out);
 // Returns false and logs rather than throwing; the session then runs without
 // input, which is a mod with no hands rather than a mod that fails to start.
 bool CreateXrInput(void* instanceHandle, void* sessionHandle);
+// The instance extensions the controller profiles need (ControllerProfiles.h),
+// for the instance to enable where the runtime offers them; then which ones
+// it did, before CreateXrInput, which suggests a profile only when its own is.
+std::vector<const char*> XrInputExtensions();
+void SetXrInputEnabledExtensions(const std::vector<std::string>& enabled);
+// Logs the profile the runtime picked for each hand. Call on an interaction
+// profile changed event; before it, the runtime may report none.
+void LogXrInputProfiles(void* instanceHandle, void* sessionHandle);
 
 // Syncs actions and locates both controllers. Called once per frame from the
 // session's own frame service, after xrWaitFrame so the predicted display time is

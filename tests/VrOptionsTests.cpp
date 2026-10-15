@@ -1,5 +1,6 @@
 #include "preyvr/VrOptions.h"
 #include "preyvr/PsychoscopeGesture.h"
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <limits>
@@ -8,46 +9,50 @@ using namespace preyvr::options;
 void Check(bool ok,const char* why){if(!ok){std::cerr<<why<<'\n';std::exit(1);}}
 Input Base(){Input i;i.valid=i.modal=true;i.dt=.01f;i.epoch=1;return i;}
 void Ready(Menu& m,Input& i){m.Update(i);m.Update(i);}
-void Open(Menu& m,Input& i){Ready(m,i);m.RequestOpen();m.Update(i);m.Update(i);Check(m.Open(),"open on modal");}
+void Open(Menu& m,Input& i){Ready(m,i);m.RequestOpen();m.Update(i);m.Update(i);Check(m.Open()&&m.Armed(),"open on modal");}
+bool Has(std::span<const int> entries,int e){return std::find(entries.begin(),entries.end(),e)!=entries.end();}
 void MenuChecks(){
  Input i=Base();Menu m;Ready(m,i);
  i.start=true;m.Update(i);Check(!m.PauseTap(),"pause deferred until tap or hold");
  i.start=false;m.Update(i);Check(m.PauseTap()&&!m.Open(),"short tap goes to native pause once");
  m.Update(i);Check(!m.PauseTap(),"no repeated pause");
  i.start=true;for(int n=0;n<70;++n)m.Update(i);
- Check(m.Open()&&m.OwnsInput()&&!m.PauseTap(),"long hold on existing menu opens options without closing native menu");
- i.accept=true;Check(m.Update(i).setting==-1,"opening held accept cannot edit");
- i.start=i.accept=false;m.Update(i);
- i.accept=true;Check(m.Update(i).setting==Turn,"fresh accept edits selected");
- Check(m.Update(i).setting==-1,"held accept does not repeat");
- i.accept=false;i.next=true;m.Update(i);Check(m.page==1,"next tab");
- m.Update(i);Check(m.page==1,"held tab no repeat");
- i.next=false;i.y=-1;m.Update(i);Check(m.row==1,"down selects next");
- m.Update(i);Check(m.row==1,"held stick no repeat");
- i.y=0;m.Update(i);i.y=-1;m.Update(i);Check(m.row==2,"neutral rearm stick");
- i.y=0;i.x=1;auto change=m.Update(i);Check(change.setting==SupportSnap&&change.direction==1,"selected grip preference");
- i.x=0;i.trigger=true;i.hover=4;m.Update(i);Check(m.page==0,"ray tab click");
- i.trigger=false;m.Update(i);i.trigger=true;i.hover=3;
-{const auto row3=m.Update(i);Check(row3.setting==BodyFollow&&!row3.recenter,"ray edits body following on the comfort page");}
-i.trigger=false;m.Update(i);i.trigger=true;i.hover=static_cast<int>(Rows)+7;m.Update(i);Check(m.page==7,"ray setup tab");
-i.trigger=false;m.Update(i);i.trigger=true;i.hover=1;Check(m.Update(i).recenter,"ray recenter action");
- i.trigger=false;i.cancel=true;m.Update(i);Check(!m.Open()&&m.OwnsInput(),"closing press remains quarantined");
+ Check(m.Open()&&m.OwnsInput()&&!m.PauseTap()&&!m.Armed(),"long hold on a game menu opens options over it, unarmed while held");
+ i.start=false;i.accept=true;m.Update(i);Check(!m.Armed(),"a press carried from the hold does not arm it");
+ i.accept=false;m.Update(i);Check(m.Armed()&&m.OwnsInput(),"at rest it arms, keeping the controls");
+ // Only B acts on the state machine; the panel (VrOptionsUi) takes the rest.
+ i.accept=i.next=i.previous=i.trigger=true;i.x=1;i.y=-1;m.Update(i);
+ Check(m.Open()&&m.Armed(),"accept, grips, stick and trigger leave it open");
+ i.accept=i.next=i.previous=i.trigger=false;i.x=i.y=0;
+ i.cancel=true;m.Update(i);Check(!m.Open()&&m.OwnsInput(),"closing press remains quarantined");
  m.Update(i);Check(m.OwnsInput(),"held close never leaks");
  i.cancel=false;m.Update(i);Check(!m.OwnsInput(),"neutral gives input back");
+ // In play the same long hold opens it over the running game: no pause.
  m={};i=Base();i.modal=false;Ready(m,i);i.start=true;
  int pauses=0;for(int n=0;n<70;++n){m.Update(i);pauses+=m.PauseTap();}
- Check(pauses==1&&!m.Open()&&m.OwnsInput(),"long hold from play requests one native pause");
- i.modal=true;m.Update(i);Check(m.Open(),"wait for observed native menu before showing options");
- m={};i=Base();i.modal=false;Ready(m,i);i.start=true;
- for(int n=0;n<300;++n)m.Update(i);i.start=false;m.Update(i);i.modal=true;m.Update(i);
- Check(!m.Open(),"failed pause request expires instead of surprising later");
+ Check(pauses==0&&m.Open()&&!m.OverMenu()&&m.OwnsInput(),"long hold from play opens over the game, posting no pause");
+ i.start=false;m.Update(i);Check(!m.PauseTap()&&m.Open(),"letting the hold go posts no pause either");
+ i.modal=true;m.Update(i);Check(!m.Open(),"a game menu opening under it closes it");
+ m={};i=Base();i.modal=false;Ready(m,i);m.RequestOpen();m.Update(i);
+ Check(m.Open()&&!m.OverMenu(),"a request (F10, vr.options 1) opens it over the game too");
+ m={};i=Base();i.modal=false;Ready(m,i);i.start=true;m.Update(i);i.start=false;m.Update(i);
+ Check(m.PauseTap()&&!m.Open(),"a short tap in play is still the game's pause");
+ m={};i=Base();Open(m,i);Check(m.OverMenu(),"opened in a game menu, it is over that menu");
  m={};i=Base();Open(m,i);i.modal=false;m.Update(i);Check(!m.Open(),"native modal ends closes overlay");
  m={};i=Base();Open(m,i);i.valid=false;m.Update(i);Check(!m.Open(),"tracking loss closes");
  i.valid=true;i.accept=true;m.Update(i);Check(!m.Open(),"regained held input cannot open");
  m={};i=Base();Open(m,i);i.epoch++;m.Update(i);Check(!m.Open(),"session transition closes");
- Check(Hit(.5f,310.f/Height)==0&&Hit(.5f,1010.f/Height)==CloseHit,"shared row and close hit layout");
- for(unsigned p=0;p<Pages;++p)Check(Hit(.04f+.92f*(p+.5f)/Pages,200.f/Height)==static_cast<int>(Rows+p),"each visible tab selects itself");
- Check(Hit(-.1f,.4f)==-1&&Hit(.5f,.82f)==-1&&Hit(NAN,.4f)==-1,"outside and help text not actionable");
+ m={};i=Base();Open(m,i);i.dt=NAN;m.Update(i);Check(!m.Open(),"a nonfinite frame closes");
+ // A trigger held while it opens (the laser already on the panel) must not click.
+ m={};i=Base();Ready(m,i);
+ i.trigger=true;m.RequestOpen();m.Update(i);
+ Check(m.Open()&&!m.Armed(),"a press held while opening does not arm it");
+ m.Update(i);Check(!m.Armed(),"nor while it stays held");
+ i.trigger=false;i.x=.5f;m.Update(i);Check(!m.Armed(),"a deflected stick is not at rest");
+ i.x=.1f;m.Update(i);Check(m.Armed()&&m.OwnsInput(),"inside the deadzone is: it arms and keeps input");
+ i.x=0;i.cancel=true;m.Update(i);Check(!m.Open()&&m.OwnsInput(),"B closes it, quarantined");
+ i.cancel=false;i.trigger=true;m.Update(i);Check(m.OwnsInput(),"a trigger pressed before rest after closing never leaks");
+ i.trigger=false;m.Update(i);Check(!m.OwnsInput(),"neutral gives input back");
 }
 void SettingsChecks(){
  auto v=Defaults(),parsed=v;
@@ -57,41 +62,103 @@ void SettingsChecks(){
  for(auto s:{"version=2\n","version=1\nturn=10\n","version=1\npsychoscope=2\n","version=1\nui_scale=500\n","version=1\nx=3\n","version=1\nturn=45oops\n","version=1\nturn=45\nturn=30\n"}){
   Check(!Parse(s,parsed)&&parsed==original,"invalid file has no partial effects");
  }
- Check(Adjust(Turn,60,1)==90&&Adjust(Turn,90,1)==0,"turn choices skip unsupported 75");
- Check(Valid(Turn,75)&&Adjust(Turn,75,1)==90&&Adjust(Turn,75,-1)==60,"custom command angle displays and adjusts correctly");
- Check(Adjust(UiScale,200,1)==200&&Adjust(UiScale,20,-1)==20,"scale limits");
+ // Turning: smooth, or any step from 15 to 90 -- a command can set 75, which no
+ // menu choice is -- while 1..14 is no angle at all.
+ Check(Valid(Turn,0)&&!Valid(Turn,1)&&!Valid(Turn,14)&&Valid(Turn,15)&&Valid(Turn,75)&&Valid(Turn,90)&&!Valid(Turn,91),
+       "turning takes smooth or a step of 15..90");
+ Check(KindOf(Turn)==Kind::choice&&Choices(Turn)==std::vector<int>{0,15,30,45,60,90},"the menu offers the six turn choices");
+ Check(Display(Turn,0)==L"SMOOTH"&&Display(Turn,75)==L"75 DEGREES","a command's angle reads as itself");
  Check(Defaults()[Psychoscope]==0,"gesture opt in");
  Check(Defaults()[Holsters]==0&&Defaults()[Wrist]==1,"holsters opt in; the wrist hologram is on (2026-10-07)");
  Check(Parse("version=1\nturn=45\n",parsed)&&parsed[Holsters]==0&&parsed[WristSize]==100,"old settings upgrade safely");
- Check(Item(3,0)==Holsters&&Item(3,1)==Wrist&&Item(3,3)==-3,"equipment page layout");
  Check(Defaults()[PsiTarget]==0&&Defaults()[Medkit]==0,"abilities preserve original behavior by default");
  Check(Valid(PsiTarget,2)&&!Valid(PsiTarget,3)&&!Valid(Medkit,2),"ability ranges");
- Menu abilities;Input ai=Base();Open(abilities,ai);abilities.page=6;abilities.row=1;
- ai.y=-1;abilities.Update(ai);Check(abilities.row==2,"body slot feedback is an ability setting");
- ai.y=0;abilities.Update(ai);ai.y=-1;abilities.Update(ai);Check(abilities.row==0,"navigation skips empty ability rows");
- ai.y=0;abilities.Update(ai);ai.y=1;abilities.Update(ai);Check(abilities.row==2,"reverse navigation skips empty rows");
- ai.y=0;ai.trigger=true;ai.hover=3;Check(abilities.Update(ai).setting==-1&&abilities.row==2,"empty row is not interactive");
- Menu menu;Input input=Base();Open(menu,input);input.trigger=true;input.hover=7;menu.Update(input);
- Check(menu.Open()&&menu.page==3,"fourth tab is not mistaken for close");
- input.trigger=false;menu.Update(input);input.trigger=true;input.hover=3;
- Check(menu.Update(input).clearHolsters,"clear assignments distinct from recenter");
- Menu setup;Input si=Base();Open(setup,si);setup.page=7;
- si.accept=true;const auto calibration=setup.Update(si);
- Check(calibration.calibrate&&!calibration.recenter&&!calibration.clearHolsters,"posture calibration is a distinct one-shot action");
- Check(!setup.Update(si).calibrate,"held calibration button never repeats");
- si.accept=false;setup.Update(si);si.y=-1;setup.Update(si);si.y=0;setup.Update(si);si.accept=true;
- Check(setup.Update(si).recenter,"setup retains reset without height calibration");
- Check(Item(7,2)==DebugOverlay&&Defaults()[DebugOverlay]==0,"debug overlay is an opt-in setup row");
- Check(Item(7,3)==MuzzleAim&&Defaults()[MuzzleAim]==0,"shots from the muzzle are an opt-in setup row");
+ Check(Defaults()[DebugOverlay]==0&&Defaults()[MuzzleAim]==0,"the debug overlay and shots from the muzzle are opt in");
  Check(Parse("version=1\nmuzzle_aim=1\n",parsed)&&parsed[MuzzleAim]==1&&!Valid(MuzzleAim,2),"muzzle aim persists as on/off");
- Check(Item(0,3)==BodyFollow&&Defaults()[BodyFollow]==2,"body following is a comfort row, turn and move by default");
+ Check(Defaults()[BodyFollow]==2,"body following turns and moves by default");
  Check(Parse("version=1\nbody_follow=1\n",parsed)&&parsed[BodyFollow]==1&&Valid(BodyFollow,0)&&!Valid(BodyFollow,3),
        "body following persists as off, turn only, turn and move");
  Check(Display(BodyFollow,0)==L"OFF"&&Display(BodyFollow,1)==L"TURN ONLY"&&Display(BodyFollow,2)==L"TURN AND MOVE",
        "body following reads as what it does");
- Check(Adjust(BodyFollow,2,1)==2&&Adjust(BodyFollow,2,-1)==1,"body following steps between its three settings");
+ Check(Choices(BodyFollow)==std::vector<int>{0,1,2},"body following offers its three settings");
  Check(Parse("version=1\nturn=45\n",parsed)&&parsed[BodyFollow]==2,"settings saved before body following default it on");
  Check(Parse("version=1\ndebug_overlay=1\n",parsed)&&parsed[DebugOverlay]==1&&!Valid(DebugOverlay,2),"debug overlay persists as on/off");
+}
+void KindChecks(){
+ // Each setting is edited as what its Spec says it is.
+ Check(KindOf(TwoHand)==Kind::toggle&&KindOf(DebugOverlay)==Kind::toggle&&KindOf(Holsters)==Kind::toggle,
+       "a bare 0..1 is on/off");
+ Check(KindOf(HeadRelative)==Kind::choice&&KindOf(PointerHand)==Kind::choice&&KindOf(HudLayer)==Kind::choice,
+       "named values are a choice, two of them included");
+ Check(KindOf(UiScale)==Kind::range&&KindOf(UiCurve)==Kind::range&&KindOf(UiOffsetRight)==Kind::range&&
+       KindOf(HapticStrength)==Kind::range,"the rest are ranges, those with a named zero included");
+ Check(Choices(PointerHand)==std::vector<int>{0,1,2}&&Choices(UiScale).empty()&&Choices(TwoHand).empty(),
+       "only a choice offers a list");
+ for(unsigned id=0;id<Count;++id){
+  const auto values=Choices(id);
+  for(const int value:values)Check(Valid(id,value),"every choice is valid");
+  Check((KindOf(id)==Kind::choice)==(values.size()>=2),"a choice, and only a choice, offers two or more values");
+  if(!Describe(id).names.empty())for(const int value:values)Check(Display(id,value)!=std::to_wstring(value),"every named value reads as its name");
+ }
+ Check(Display(TwoHand,1)==L"ON"&&Display(TwoHand,0)==L"OFF","on/off");
+ Check(Display(UiCurve,0)==L"FLAT"&&Display(UiCurve,35)==L"35 DEGREES","a named zero, otherwise the unit");
+ Check(Display(ReticleFallback,10000)==L"10.0 M"&&Display(ReticleFallback,12500)==L"12.5 M","millimetres read as metres");
+ Check(Display(UiScale,130)==L"130%"&&Display(SwingSpeed,120)==L"120 CM/S","percent and speed");
+ Check(Display(UiOffsetUp,-10)==L"10 DEGREES DOWN"&&Display(UiOffsetRight,25)==L"25 DEGREES RIGHT","directions name the side");
+ Check(Display(PointerHand,7)==L"7","a value without a name reads as its number");
+}
+void LayoutChecks(){
+ // The panel's tabs (MenuEntries): any number of rows, every setting on
+ // exactly one tab, each button once, the last tab EXPERIMENTAL.
+ Check(MenuPages()==8&&std::wstring(MenuPageName(7))==L"EXPERIMENTAL","eight tabs, the last experimental");
+ std::array<int,Count> seen{};int recenter=0,clear=0,calibrate=0;
+ for(unsigned p=0;p<MenuPages();++p)for(const int e:MenuEntries(p)){
+  if(e==RecenterView)++recenter;else if(e==ClearHolsterSlots)++clear;else if(e==CalibratePosture)++calibrate;
+  else{Check(e>=0&&e<static_cast<int>(Count),"entries are settings or buttons");++seen[e];}
+ }
+ for(unsigned i=0;i<Count;++i)Check(seen[i]==1,"every setting appears on exactly one tab");
+ Check(recenter==1&&clear==1&&calibrate==1,"each button appears once");
+ Check(MenuEntries(MenuPages()).empty(),"past the last tab there is nothing");
+ for(const int e:{CarryHand,GrenadeDeploy,LongReach,MuzzleAim,SceneReticle,PhysicalMelee,SwingSpeed,PhysicalContacts,
+                  ContactStrength,InventoryLayer,InventoryStereo,InventoryDepth})
+  Check(Has(MenuEntries(7),e),"features still being proven, and their tuning, on the experimental tab");
+ Check(MenuEntries(0)[0]==Turn&&Has(MenuEntries(0),BodyFollow)&&Has(MenuEntries(0),BodyGlide),"comfort: turning first, body following");
+ for(const int e:{UiDistance,UiOffsetRight,UiOffsetUp,UiText,PointerHand,HudLayer})
+  Check(Has(MenuEntries(2),e),"menu placement and HUD on the interface tab");
+ Check(MenuEntries(3)[0]==Holsters&&MenuEntries(3)[1]==ClearHolsterSlots&&MenuEntries(3)[2]==Wrist,
+       "equipment: holsters, clearing them, then the wrist");
+ Check(MenuEntries(6).size()==3&&MenuEntries(6)[0]==CalibratePosture&&MenuEntries(6)[1]==RecenterView&&
+       MenuEntries(6)[2]==DebugOverlay,"setup: its two buttons and the debug overlay");
+ for(unsigned i=0;i<Count;++i){
+  const Spec& s=Describe(i);
+  Check(Valid(i,s.initial)&&s.min<s.max&&s.step>0,"each spec's default is valid and it can step");
+  Check(std::wstring_view(s.label).find(L"EXPERIMENTAL")==std::wstring_view::npos,"the tab says experimental, not the label");
+  for(unsigned j=0;j<i;++j)Check(std::string_view(Describe(j).key)!=s.key,"keys are unique");
+ }
+}
+void PresenceChecks(){
+ // Only settings chosen in the menu, or read from the file, are written back:
+ // a tuner command's session value never reaches the file by riding along.
+ Present present{};present[DebugOverlay]=present[UiDistance]=true;
+ auto v=Defaults();v[UiDistance]=250;v[UiScale]=150;
+ const auto text=Serialize(v,&present);
+ Check(text=="version=1\ndebug_overlay=0\nui_distance=250\n","only present settings are written, explicit defaults included");
+ Present back{};Values parsed{};
+ Check(Parse(text,parsed,&back)&&back==present&&parsed[UiDistance]==250&&parsed[UiScale]==Defaults()[UiScale],
+       "presence roundtrips; the rest read as defaults");
+ Check(Parse("version=1\n",parsed,&back)&&back==Present{},"a file of no settings holds none");
+ back[Turn]=true;
+ Check(!Parse("version=1\nturn=7\n",parsed,&back)&&back[Turn],"a refused file leaves presence as it was");
+ Check(Serialize(Defaults()).find("inventory_depth=25\n")!=std::string::npos,"without presence, every setting is written");
+ Check(Parse("version=1\nui_offset_right=-90\nui_offset_up=45\nui_distance=400\nbody_glide=0\n",parsed)&&
+       parsed[UiOffsetRight]==-90&&parsed[UiOffsetUp]==45&&parsed[UiDistance]==400&&parsed[BodyGlide]==0,
+       "new settings persist at their limits");
+ for(auto s:{"version=1\nui_offset_up=46\n","version=1\nui_distance=99\n","version=1\npointer_hand=3\n",
+             "version=1\nwrist_along=-51\n","version=1\ninventory_depth=101\n"})
+  Check(!Parse(s,parsed),"out-of-range new settings are refused");
+ Check(Display(UiOffsetRight,-10)==L"10 DEGREES LEFT"&&Display(UiOffsetUp,0)==L"CENTRE"&&
+       Display(PointerHand,2)==L"BUTTONS ONLY"&&Display(HudLayer,0)==L"IN THE WORLD"&&Display(BodyGlide,0)==L"0 MS"&&
+       Display(WristHover,42)==L"42 MM"&&Display(UiText,140)==L"140 CM","new settings read as what they do");
 }
 void GestureChecks(){
  PsychoscopeGesture g;const Vec3 high{-.12f,.18f,-.12f},low{-.12f,-.02f,-.12f};
@@ -112,4 +179,4 @@ void GestureChecks(){
  g={};tick(high,false);tick(high,false);tick(high,true);
  Check(!tick({NAN,0,0},true),"nonfinite pose refuses");
 }
-int main(){MenuChecks();SettingsChecks();GestureChecks();std::cout<<"VR options ownership, persistence and gesture contracts passed\n";}
+int main(){MenuChecks();SettingsChecks();KindChecks();LayoutChecks();PresenceChecks();GestureChecks();std::cout<<"VR options ownership, settings, layout, persistence and gesture contracts passed\n";}

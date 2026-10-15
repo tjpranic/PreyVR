@@ -25,6 +25,11 @@ The notebook separates evidence from plans so implementation follows demonstrate
 > without moving the view: [`BODY-YAW-2026-10-11.md`](BODY-YAW-2026-10-11.md). It also
 > walks with them across the room, swept for walls, and the view goes black when the head
 > goes through one: [`ROOMSCALE-2026-10-11.md`](ROOMSCALE-2026-10-11.md).
+> The VR Options panel, drawn with Dear ImGui over the game or a game menu and moved with
+> the laser; it replaced the classic card, and each controller's bindings have their own
+> module: [`VR-OPTIONS-IMGUI-2026-10-13.md`](VR-OPTIONS-IMGUI-2026-10-13.md).
+> Every **Tune Prey VR.cmd** command, what the VR Options menu saves, and what wins over
+> what: [`TUNING-COMMANDS.md`](TUNING-COMMANDS.md).
 >
 > [`HANDOVER-2026-08-07-HARDENING.md`](HANDOVER-2026-08-07-HARDENING.md) remains
 > the record of binary identity and lifecycle decisions.

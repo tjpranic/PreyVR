@@ -45,6 +45,7 @@ void UpdateTurnAndFireLanes();
 // cardinals are dead, and a per-axis clamp makes diagonal movement sqrt(2)
 // times faster, which reads as sprinting only when moving cornerwise.
 DWORD SetMoveLaneDeadzone(unsigned int hundredths);
+unsigned MoveLaneDeadzone();
 
 // --- turn -------------------------------------------------------------------
 //
@@ -60,6 +61,7 @@ DWORD SetMoveLaneDeadzone(unsigned int hundredths);
 // consumer of the same axis.
 DWORD SetTurnLaneEnabled(unsigned int enabled);
 DWORD SetTurnLaneDeadzone(unsigned int hundredths);
+unsigned TurnLaneDeadzone();
 // Scales the stick before posting, in percent. The engine applies its own turn
 // speed on top, so this trims rather than defines the rate.
 DWORD SetTurnLaneScale(unsigned int percent);
@@ -144,4 +146,6 @@ unsigned SnapTurnDegrees();
 DWORD SetHeadRelativeMovement(unsigned enabled);
 bool HeadRelativeMovementEnabled();
 DWORD SetMovementAxisScales(unsigned strafePercent,unsigned backwardPercent);
+unsigned MovementStrafePercent();
+unsigned MovementBackwardPercent();
 }

@@ -136,4 +136,159 @@ std::optional<Panel> FitPanel(const Pose& head, const std::array<Eye,2>& eyes,
     }
     return {};
 }
+Pose UprightHead(const Pose& head) {
+    if (!Valid(head)) return head;
+    // The forward axis projected flat is immune to roll (it turns about that
+    // axis) and to pitch. armpose::HeadYaw is not used: it mixes in the up
+    // vector at every pitch, which roll tips sideways -- 13 degrees off at 40
+    // down and 25 rolled. Only near straight down or up, where the projection
+    // vanishes, does the up vector stand in (it points the way the face is
+    // turned looking down, away from it looking up).
+    const auto forward=Rotate(head.orientation,Vec3{0,0,-1});
+    float x=forward.x,z=forward.z;
+    if (x*x+z*z<.01f) {
+        const auto up=Rotate(head.orientation,Vec3{0,1,0});
+        const float sign=forward.y<0?1.f:-1.f;
+        x=up.x*sign;z=up.z*sign;
+    }
+    if (x*x+z*z<1e-8f) return head;
+    const float yaw=std::atan2(-x,-z);
+    // About +Y: a yaw of t sends -Z to (-sin t, 0, -cos t), as armpose::YawOf reads it.
+    return Pose{{0,std::sin(yaw*.5f),0,std::cos(yaw*.5f)},head.position};
+}
+std::array<Eye,2> LevelledEyes(const Pose& head, const Pose& upright,
+                               const std::array<Eye,2>& eyes) {
+    if (!Valid(head) || !Valid(upright)) return eyes;
+    const auto level=Normalize(Multiply(upright.orientation,stereo::Conjugate(head.orientation)));
+    std::array<Eye,2> result=eyes;
+    for (auto& eye : result) {
+        const Vec3 offset{eye.pose.position.x-head.position.x,eye.pose.position.y-head.position.y,
+                          eye.pose.position.z-head.position.z};
+        const auto turned=Rotate(level,offset);
+        eye.pose.orientation=Normalize(Multiply(level,eye.pose.orientation));
+        eye.pose.position={upright.position.x+turned.x,upright.position.y+turned.y,upright.position.z+turned.z};
+    }
+    return result;
+}
+Pose AroundHead(const Pose& upright, const Pose& pose, float right, float up) {
+    if (!std::isfinite(right) || !std::isfinite(up) || std::fabs(up) >= 1.55f ||
+        !Valid(upright) || !Valid(pose)) return pose;
+    // On the one cylinder every panel is placed on (PanelPlacement): turned
+    // round the upright head's vertical, then slid straight up by its distance
+    // across the floor times tan(up). Raising by rotating about X tipped the
+    // panel back to face the eyes; sliding keeps it upright, facing the line.
+    const MenuAnchor anchor{upright,{}};
+    auto placement=PlacementOf(anchor,Panel{pose,1,1});
+    placement.right+=right;
+    placement.height+=placement.radius*std::tan(up);
+    return PlacedPose(anchor,placement);
+}
+MenuAnchor AnchorMenu(const Pose& head, const std::array<Eye,2>& eyes) {
+    const auto upright=UprightHead(head);
+    return {upright,LevelledEyes(head,upright,eyes)};
+}
+std::optional<Panel> PlaceMenu(const MenuAnchor& anchor, float aspect, float distance, float scale,
+                               float margin, float right, float up) {
+    auto panel=FitPanel(anchor.upright,anchor.eyes,aspect,distance,scale,margin);
+    if(panel)panel->pose=AroundHead(anchor.upright,panel->pose,right,up);
+    return panel;
+}
+namespace {
+// Upright, its face (+Z) turned toward the vertical line through `axis`.
+std::optional<Quaternion> FacingAxis(const Vec3& position,const Vec3& axis)
+{
+    const float x=axis.x-position.x,z=axis.z-position.z;
+    if(!(x*x+z*z>1e-8f))return {};
+    const float yaw=std::atan2(x,z);
+    return Quaternion{0,std::sin(yaw*.5f),0,std::cos(yaw*.5f)};
+}
+bool Finite(const Vec3& v){return std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(v.z);}
+// The anchor's forward and right across the floor.
+bool AnchorAxes(const MenuAnchor& anchor,Vec3& forward,Vec3& right)
+{
+    if(!Valid(anchor.upright))return false;
+    const auto f=Rotate(anchor.upright.orientation,Vec3{0,0,-1});
+    const float n=std::sqrt(f.x*f.x+f.z*f.z);
+    if(!(n>1e-4f))return false;
+    forward={f.x/n,0,f.z/n};right={-forward.z,0,forward.x};
+    return true;
+}
+}
+std::optional<PanelGrab> GrabPanel(const Panel& panel,const RayHit& hit,const Vec3& head)
+{
+    if(!hit.inside||!Valid(panel.pose)||!Finite(hit.point)||!Finite(head))return {};
+    const auto& c=panel.pose.position;
+    const auto local=Rotate(stereo::Conjugate(panel.pose.orientation),
+        Vec3{hit.point.x-c.x,hit.point.y-c.y,hit.point.z-c.z});
+    const float x=hit.point.x-head.x,z=hit.point.z-head.z;
+    return PanelGrab{panel,local.x,local.y,std::clamp(std::sqrt(x*x+z*z),kGrabRadiusMin,kGrabRadiusMax)};
+}
+std::optional<Panel> DragPanel(const PanelGrab& grab,const Pose& aim,const Vec3& head)
+{
+    if(!Valid(aim)||!Finite(head)||!(grab.radius>0)||!std::isfinite(grab.x)||!std::isfinite(grab.y))return {};
+    const auto d=Rotate(aim.orientation,Vec3{0,0,-1});
+    const float ox=aim.position.x-head.x,oz=aim.position.z-head.z;
+    // A hand held out past the cylinder would start outside it: widen it to
+    // just beyond the hand rather than lose the panel.
+    const float r=std::max(grab.radius,std::sqrt(ox*ox+oz*oz)+.1f);
+    const float a=d.x*d.x+d.z*d.z,b=ox*d.x+oz*d.z,c=ox*ox+oz*oz-r*r;
+    if(a<1e-6f)return {};
+    const float t=(-b+std::sqrt(b*b-a*c))/a; // the hand is inside: one root ahead
+    Vec3 point{aim.position.x+d.x*t,aim.position.y+d.y*t,aim.position.z+d.z*t};
+    const float limit=r*std::tan(1.05f);
+    point.y=std::clamp(point.y,head.y-limit,head.y+limit);
+    // Face the line from the centre, which sits off the grabbed spot: settle
+    // the turn twice, so the spot stays exactly where the laser meets it.
+    auto turn=FacingAxis(point,head);
+    if(!turn)return {};
+    Panel out=grab.panel;
+    for(int pass=0;pass<2;++pass) {
+        const auto offset=Rotate(*turn,Vec3{grab.x,grab.y,0});
+        out.pose.position={point.x-offset.x,point.y-offset.y,point.z-offset.z};
+        if(pass==0)if(const auto settled=FacingAxis(out.pose.position,head))turn=settled;
+    }
+    out.pose.orientation=*turn;
+    return out;
+}
+PanelPlacement PlacementOf(const MenuAnchor& anchor,const Panel& panel)
+{
+    Vec3 f{},r{};
+    PanelPlacement out;
+    if(!AnchorAxes(anchor,f,r)||!Valid(panel.pose))return out;
+    const auto& h=anchor.upright.position;const auto& p=panel.pose.position;
+    const float x=p.x-h.x,z=p.z-h.z;
+    out.right=std::atan2(x*r.x+z*r.z,x*f.x+z*f.z);
+    out.height=p.y-h.y;
+    out.radius=std::sqrt(x*x+z*z);
+    return out;
+}
+Pose PlacedPose(const MenuAnchor& anchor,const PanelPlacement& placement)
+{
+    Vec3 f{},r{};
+    if(!AnchorAxes(anchor,f,r))return anchor.upright;
+    const float c=std::cos(placement.right),s=std::sin(placement.right);
+    const auto& h=anchor.upright.position;
+    const Vec3 position{h.x+(f.x*c+r.x*s)*placement.radius,h.y+placement.height,h.z+(f.z*c+r.z*s)*placement.radius};
+    const auto facing=FacingAxis(position,h);
+    return Pose{facing?*facing:anchor.upright.orientation,position};
+}
+FrameLayers ComposeFrame(const FrameShown& s)
+{
+    FrameLayers out;
+    const auto add=[&](FrameLayer layer){out.layers[out.count++]=layer;};
+    const bool guide=s.menu&&s.guide;
+    add(!s.menu?FrameLayer::world:s.menuCylinder?FrameLayer::menuCylinder:FrameLayer::menu);
+    if(s.menu&&s.menuRightEye)add(FrameLayer::menuRightEye);
+    // The guide card belongs to the game menu; the HUD and text to the world.
+    if(guide)add(FrameLayer::guide);
+    else if(!s.options&&!s.menu&&s.hud)add(FrameLayer::hud);
+    if(!s.options&&!s.menu&&s.text)add(FrameLayer::text);
+    if(s.options)add(FrameLayer::options);
+    if(s.beam)add(FrameLayer::beam);
+    if(s.cursor)add(FrameLayer::cursor);
+    if(s.wrist)add(FrameLayer::wrist);
+    if(s.slot)add(FrameLayer::slot);
+    if(s.fade)add(FrameLayer::fade);
+    return out;
+}
 }

@@ -890,6 +890,7 @@ DWORD SetInventoryDepthPercent(unsigned value) {
     if(value>100)return 1;
     inventoryDepthPercent.store(value);return 0;
 }
+unsigned InventoryDepthPercent(){return inventoryDepthPercent.load();}
 std::string InventoryStereoReport() {
     return "enabled="+std::to_string(inventoryStereo.load())+" depthPercent="+std::to_string(inventoryDepthPercent.load())+
         " capturedPairs="+std::to_string(stereoPairs.load())+" matrices="+std::to_string(stereoMatrices.load())+

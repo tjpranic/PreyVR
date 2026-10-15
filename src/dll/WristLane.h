@@ -65,6 +65,21 @@ unsigned WristNativeScalePercent();
 bool WristNativeBackground();
 // The gameplay HUD keeps its status meters (0) or they move to the wrist (1).
 bool WristMovesStatusOffFace();
+// wrist.face inverted, as the menu asks it: 1 keeps the status meters on the
+// face HUD as well as on the wrist.
+DWORD SetWristStatusOnHud(unsigned enabled);
+unsigned WristStatusOnHud();
+// wrist.haptic: the faint tick as the display unfolds.
+DWORD SetWristTick(unsigned enabled);
+unsigned WristTickEnabled();
+// wrist.place, one value each: along the forearm (mm, -50..200), above it
+// (mm, 0..150), and the most it turns toward the eyes (degrees, 0..90).
+DWORD SetWristAlongMm(int mm);
+DWORD SetWristHoverMm(int mm);
+DWORD SetWristTiltDegrees(int degrees);
+int WristAlongMm();
+int WristHoverMm();
+int WristTiltDegrees();
 void ResetWristLane();
 
 std::string WristReport();

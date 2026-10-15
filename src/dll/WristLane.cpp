@@ -280,6 +280,41 @@ void NoteWristGate(unsigned bits) { gGateBits.store(bits, std::memory_order_rela
 unsigned WristNativeScalePercent() { return gNativeScale.load(); }
 bool WristNativeBackground() { return gNativeBackground.load() != 0; }
 bool WristMovesStatusOffFace() { return gFace.load() != 0 && WristDisplayEnabled(); }
+DWORD SetWristStatusOnHud(unsigned enabled)
+{
+    if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
+    gFace.store(enabled ? 0u : 1u);
+    return 0;
+}
+unsigned WristStatusOnHud() { return gFace.load() ? 0u : 1u; }
+DWORD SetWristTick(unsigned enabled)
+{
+    if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
+    gHaptic.store(enabled);
+    return 0;
+}
+unsigned WristTickEnabled() { return gHaptic.load() ? 1u : 0u; }
+DWORD SetWristAlongMm(int mm)
+{
+    if (mm < -50 || mm > 200) { return ERROR_INVALID_PARAMETER; }
+    gAlongMm.store(mm);
+    return 0;
+}
+DWORD SetWristHoverMm(int mm)
+{
+    if (mm < 0 || mm > 150) { return ERROR_INVALID_PARAMETER; }
+    gHoverMm.store(mm);
+    return 0;
+}
+DWORD SetWristTiltDegrees(int degrees)
+{
+    if (degrees < 0 || degrees > 90) { return ERROR_INVALID_PARAMETER; }
+    gTiltDeg.store(degrees);
+    return 0;
+}
+int WristAlongMm() { return gAlongMm.load(); }
+int WristHoverMm() { return gHoverMm.load(); }
+int WristTiltDegrees() { return gTiltDeg.load(); }
 
 void ResetWristLane()
 {
@@ -324,7 +359,8 @@ bool ExecuteWristCommand(const std::vector<std::string>& args, std::ostringstrea
     if (verb == "wrist.report") {
         out << "wrist.report result=0" << WristReport();
     } else if (verb == "wrist.anchor") {
-        gAnchor = num(1, 1) ? 1u : 0u;
+        // These report when bare (docs/TUNING-COMMANDS.md): a value sets.
+        if (args.size() > 1) { gAnchor = num(1, 1) ? 1u : 0u; }
         out << "wrist.anchor result=0 anchor=" << gAnchor.load();
     } else if (verb == "wrist.place") {
         // wrist.place <along mm> <hover mm> <width mm> <max tilt deg>
@@ -342,21 +378,23 @@ bool ExecuteWristCommand(const std::vector<std::string>& args, std::ostringstrea
         gDwellMs = std::clamp(num(5, gDwellMs.load()), 0, 2000);
         out << "wrist.gate result=0" << WristReport();
     } else if (verb == "wrist.force") {
-        gForce = num(1, 1) ? 1u : 0u;
+        if (args.size() > 1) { gForce = num(1, 1) ? 1u : 0u; }
         out << "wrist.force result=0 force=" << gForce.load();
     } else if (verb == "wrist.face") {
-        gFace = num(1, 1) ? 1u : 0u;
+        if (args.size() > 1) { gFace = num(1, 1) ? 1u : 0u; }
         out << "wrist.face result=0 face=" << gFace.load();
     } else if (verb == "wrist.native") {
         // wrist.native <scale % of the movie's own> [background 0/1]
-        gNativeScale = static_cast<unsigned>(std::clamp(num(1, 400), 100, 600));
-        gNativeBackground = num(2, static_cast<int>(gNativeBackground.load())) ? 1u : 0u;
+        if (args.size() > 1) {
+            gNativeScale = static_cast<unsigned>(std::clamp(num(1, 400), 100, 600));
+            gNativeBackground = num(2, static_cast<int>(gNativeBackground.load())) ? 1u : 0u;
+        }
         out << "wrist.native result=0 scale=" << gNativeScale.load() << " background=" << gNativeBackground.load();
     } else if (verb == "wrist.haptic") {
-        gHaptic = num(1, 1) ? 1u : 0u;
+        if (args.size() > 1) { gHaptic = num(1, 1) ? 1u : 0u; }
         out << "wrist.haptic result=0 haptic=" << gHaptic.load();
     } else if (verb == "wrist.occlusion") {
-        gOcclusion = static_cast<unsigned>(std::clamp(num(1, 3), 0, 3));
+        if (args.size() > 1) { gOcclusion = static_cast<unsigned>(std::clamp(num(1, 3), 0, 3)); }
         out << "wrist.occlusion result=0 mask=" << gOcclusion.load();
     } else {
         out << verb << " result=1 detail=unknown_verb";

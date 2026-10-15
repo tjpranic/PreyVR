@@ -1008,6 +1008,15 @@ DWORD SetCarryHoldToHold(unsigned enabled)
     return 0;
 }
 unsigned CarryHoldToHold() { return gHand.load() && gHoldToHold.load() ? 1u : 0u; }
+unsigned CarryHoldPreference() { return gHoldToHold.load() ? 1u : 0u; }
+DWORD SetCarryThrowGainPercent(unsigned percent)
+{
+    if (percent < 50 || percent > 300) { return ERROR_INVALID_PARAMETER; }
+    std::lock_guard lock(gSettingsMutex);
+    gThrow.gain = static_cast<float>(percent) * .01f;
+    return 0;
+}
+unsigned CarryThrowGainPercent() { return static_cast<unsigned>(std::lround(Get(gThrow).gain * 100.0f)); }
 bool CarryHoldingInHand() { return gHolding.load(); }
 
 void RecordCarryMotion(const TrackingFrame& frame)

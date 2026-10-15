@@ -1102,6 +1102,21 @@ DWORD SetGrenadeHand(unsigned enabled)
     return 0;
 }
 unsigned GrenadeHandEnabled() { return gHand.load() ? 1u : 0u; }
+DWORD SetGrenadeDeploy(unsigned enabled)
+{
+    if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
+    gDeploy.store(enabled != 0);
+    return 0;
+}
+unsigned GrenadeDeployEnabled() { return gDeploy.load() ? 1u : 0u; }
+DWORD SetGrenadeThrowStrengthPercent(unsigned percent)
+{
+    if (percent < 50 || percent > 400) { return ERROR_INVALID_PARAMETER; }
+    std::lock_guard lock(gSettingsMutex);
+    gSettings.vrFactor = static_cast<float>(percent) * .01f;
+    return 0;
+}
+unsigned GrenadeThrowStrengthPercent() { return static_cast<unsigned>(std::lround(Settings().vrFactor * 100.0f)); }
 bool GrenadeHeldByHand(std::uintptr_t weapon) { return gHand.load() && gInstalled && IsGrenadeWeapon(weapon); }
 
 void NoteGrenadeTrigger(bool pressed)

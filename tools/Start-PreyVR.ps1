@@ -6,20 +6,11 @@ param(
     [string]$RunRoot="$env:LOCALAPPDATA\PreyVR\runs",
     [int]$Width=2016,
     [int]$Height=2160,
-    [int]$HudLayer=1,
-    [int]$UiCurveDegrees=35,
-    [int]$PointerHand=1,
-    # **The HUD/menu panel size, 20..200 percent.** Runtime-only until now: it
-    # could be sent by hand while playing but was gone the next launch, so a
-    # wearer had to rediscover their number every session. Persisted with the
-    # rest below and sent before VR is enabled.
-    [int]$UiScalePercent=100,
-    # The onboarding card under the menu. Off by default since 2026-09-11: it is
-    # read once and then costs about a sixth of the panel on every menu after.
-    # Set to 1 when handing the package to someone who has not seen the controls.
-    [int]$UiGuide=0,
-    [int]$SnapTurnDegrees=45,
-    [int]$HeadRelativeMovement=1,
+    # **Launch settings only.** Everything the VR Options menu shows -- turning,
+    # movement direction, interface size, curvature, the controls guide, laser
+    # hand, HUD style, the debug overlay, shots from the muzzle -- is the menu's,
+    # saved in %LOCALAPPDATA%\PreyVR\vr-options.ini. PreyVR.json once carried
+    # seven of them; Move-PreyVRMenuSettings moves them there once.
     # auto prefers LOCAL_FLOOR, then STAGE, with LOCAL fallback.
     [string]$ReferenceSpace='auto',
     # **Both eyes from one game frame (1) or alternate eyes (0).** 1 is the
@@ -28,12 +19,6 @@ param(
     # specific to the both-eyes path (STEREO-DUAL-SUBMISSION-2026-10-10.md).
     # Read once when VR starts, as PREYVR_DUAL_STEREO.
     [int]$DualStereo=1,
-    # Testing aid, not persisted: 0 off, 255 every layer of the in-game debug
-    # overlay (rays, body slots, wrist test, foregrip; see dbg.draw).
-    [ValidateRange(0,255)][int]$DebugOverlay=0,
-    # Experimental, not persisted here (the VR Options row persists it): shots
-    # leave the weapon's muzzle along the controller's aim (aim.shot 1).
-    [switch]$MuzzleAim,
     [switch]$DryRun
 )
 Set-StrictMode -Version Latest
@@ -62,17 +47,59 @@ function Resolve-PreyVRRenderSize {
     [pscustomobject]@{Width=$Width;Height=$Height;MigrateLegacy=$migrate}
 }
 
-function Resolve-PreyVRComfortSettings {
-    param($Saved, $Overrides, [int]$SnapTurnDegrees, [int]$HeadRelativeMovement, [string]$ReferenceSpace)
-    if ($Saved) {
-        if (!$Overrides.ContainsKey('SnapTurnDegrees') -and $Saved.PSObject.Properties['SnapTurnDegrees']) {$SnapTurnDegrees=[int]$Saved.SnapTurnDegrees}
-        if (!$Overrides.ContainsKey('HeadRelativeMovement') -and $Saved.PSObject.Properties['HeadRelativeMovement']) {$HeadRelativeMovement=[int]$Saved.HeadRelativeMovement}
-        if (!$Overrides.ContainsKey('ReferenceSpace') -and $Saved.PSObject.Properties['ReferenceSpace']) {$ReferenceSpace=[string]$Saved.ReferenceSpace}
-    }
-    if ($SnapTurnDegrees -ne 0 -and ($SnapTurnDegrees -lt 15 -or $SnapTurnDegrees -gt 90)) {throw 'SnapTurnDegrees must be 0 (smooth) or 15..90.'}
-    if ($HeadRelativeMovement -notin @(0,1)) {throw 'HeadRelativeMovement must be 0 or 1.'}
+function Resolve-PreyVRReferenceSpace {
+    param($Saved, $Overrides, [string]$ReferenceSpace)
+    if ($Saved -and !$Overrides.ContainsKey('ReferenceSpace') -and $Saved.PSObject.Properties['ReferenceSpace']) {$ReferenceSpace=[string]$Saved.ReferenceSpace}
     if ($ReferenceSpace -notin @('auto','local')) {throw 'ReferenceSpace must be auto (prefer floor) or local.'}
-    [pscustomobject]@{SnapTurnDegrees=$SnapTurnDegrees;HeadRelativeMovement=$HeadRelativeMovement;ReferenceSpace=$ReferenceSpace.ToLowerInvariant()}
+    $ReferenceSpace.ToLowerInvariant()
+}
+
+function Move-PreyVRMenuSettings {
+    param($Saved, [string]$OptionsPath, [bool]$DryRun=$false)
+    # **The VR Options settings PreyVR.json used to carry.** vr-options.ini is
+    # their one source now. A value the player chose (not the default) moves
+    # there, unless the file already holds that setting -- the menu's choice
+    # wins, as it already did in game. Every one then leaves PreyVR.json.
+    # Keys, defaults and ranges are the DLL's (src/common/VrOptions.cpp); a
+    # value out of range would make the DLL refuse the whole file, so it is
+    # dropped instead. DryRun reports and changes nothing.
+    $settings=[ordered]@{
+        SnapTurnDegrees=@{Key='turn';Default=45;Valid={param($v) $v -eq 0 -or ($v -ge 15 -and $v -le 90)}}
+        HeadRelativeMovement=@{Key='head_relative';Default=1;Valid={param($v) $v -in @(0,1)}}
+        UiScalePercent=@{Key='ui_scale';Default=100;Valid={param($v) $v -ge 20 -and $v -le 200}}
+        UiCurveDegrees=@{Key='ui_curve';Default=35;Valid={param($v) $v -ge 0 -and $v -le 60}}
+        UiGuide=@{Key='ui_guide';Default=0;Valid={param($v) $v -in @(0,1)}}
+        PointerHand=@{Key='pointer_hand';Default=1;Valid={param($v) $v -in @(0,1,2)}}
+        HudLayer=@{Key='hud_layer';Default=1;Valid={param($v) $v -in @(0,1)}}
+    }
+    $result=[pscustomobject]@{Moved=@();Removed=@()}
+    if (!$Saved) {return $result}
+    $found=@($settings.Keys | Where-Object {$Saved.PSObject.Properties[$_]})
+    if (!$found.Count) {return $result}
+    $lines=@()
+    if (Test-Path -LiteralPath $OptionsPath) {$lines=@(Get-Content -LiteralPath $OptionsPath | Where-Object {$_ -ne ''})}
+    $held=@{}
+    foreach ($line in $lines) {$at=$line.IndexOf('=');if ($at -gt 0) {$held[$line.Substring(0,$at)]=$true}}
+    $added=@()
+    foreach ($name in $found) {
+        $setting=$settings[$name];$value=0
+        if ([int]::TryParse([string]$Saved.$name,[ref]$value) -and (& $setting.Valid $value) -and
+            $value -ne $setting.Default -and !$held[$setting.Key]) {
+            $added+="$($setting.Key)=$value";$result.Moved+="$name=$value"
+        } else {
+            $result.Removed+=$name
+        }
+        if (!$DryRun) {$Saved.PSObject.Properties.Remove($name)}
+    }
+    if ($added.Count -and !$DryRun) {
+        if (!$lines.Count) {$lines=@('version=1')}
+        [void](New-Item -ItemType Directory -Path (Split-Path -Parent $OptionsPath) -Force)
+        # The DLL's own form: ASCII, LF, no BOM, written whole and then renamed.
+        $temp=$OptionsPath+'.tmp'
+        [System.IO.File]::WriteAllText($temp,((@($lines)+$added) -join "`n")+"`n",[System.Text.Encoding]::ASCII)
+        Move-Item -LiteralPath $temp -Destination $OptionsPath -Force
+    }
+    $result
 }
 
 function Resolve-PreyVRStereoSettings {
@@ -80,6 +107,21 @@ function Resolve-PreyVRStereoSettings {
     if ($Saved -and !$Overrides.ContainsKey('DualStereo') -and $Saved.PSObject.Properties['DualStereo']) {$DualStereo=[int]$Saved.DualStereo}
     if ($DualStereo -notin @(0,1)) {throw 'DualStereo must be 1 (both eyes per frame) or 0 (alternate eyes).'}
     $DualStereo
+}
+
+function Remove-PreyVRRetiredSettings {
+    param($Saved, [bool]$DryRun=$false)
+    # **Launch settings that no longer exist.** NewVROptionsUI chose between two
+    # VR Options panels; the one it chose is now the only one. Dropped so a
+    # saved PreyVR.json does not carry it on. DryRun reports and changes nothing.
+    $removed=@()
+    if (!$Saved) {return $removed}
+    foreach ($name in @('NewVROptionsUI')) {
+        if (!$Saved.PSObject.Properties[$name]) {continue}
+        $removed+=$name
+        if (!$DryRun) {$Saved.PSObject.Properties.Remove($name)}
+    }
+    $removed
 }
 
 function Get-PreyVRStereoStatus {
@@ -93,16 +135,10 @@ function Get-PreyVRStereoStatus {
 }
 
 function Get-PreyVRStartupCommands {
-    param($Comfort, [int]$UiScalePercent, [int]$UiGuide, [int]$DebugOverlay=0, [bool]$MuzzleAim=$false)
     # One ordered batch, before enabling VR. Successive writes separated by a
-    # guessed sleep can overwrite commands while the channel is busy.
-    "move.snap $($Comfort.SnapTurnDegrees)"
-    "move.headrelative $($Comfort.HeadRelativeMovement)"
-    "ui.scale $UiScalePercent"
-    "ui.guide $UiGuide"
+    # guessed sleep can overwrite commands while the channel is busy. Nothing
+    # the VR Options menu owns is sent: VR start applies vr-options.ini.
     'input.hotkeys 1'
-    if ($DebugOverlay) {"dbg.draw $DebugOverlay"}
-    if ($MuzzleAim) {'aim.shot 1'}
     'vr.enable'
 }
 
@@ -139,22 +175,13 @@ try {
     if (Test-Path -LiteralPath $config) {
         $saved=Get-Content -LiteralPath $config -Raw | ConvertFrom-Json
         if (!$GameExe -and $saved.PSObject.Properties['GameExe']) {$GameExe=$saved.GameExe}
-        if (!$PSBoundParameters.ContainsKey('HudLayer') -and $saved.PSObject.Properties['HudLayer']) {$HudLayer=[int]$saved.HudLayer}
-        if (!$PSBoundParameters.ContainsKey('UiCurveDegrees') -and $saved.PSObject.Properties['UiCurveDegrees']) {$UiCurveDegrees=[int]$saved.UiCurveDegrees}
-        if (!$PSBoundParameters.ContainsKey('PointerHand') -and $saved.PSObject.Properties['PointerHand']) {$PointerHand=[int]$saved.PointerHand}
-        if (!$PSBoundParameters.ContainsKey('UiScalePercent') -and $saved.PSObject.Properties['UiScalePercent']) {$UiScalePercent=[int]$saved.UiScalePercent}
-        if (!$PSBoundParameters.ContainsKey('UiGuide') -and $saved.PSObject.Properties['UiGuide']) {$UiGuide=[int]$saved.UiGuide}
     }
+    $options=Join-Path $env:LOCALAPPDATA 'PreyVR\vr-options.ini'
     $renderSize=Resolve-PreyVRRenderSize -Saved $saved -Width $Width -Height $Height `
         -WidthExplicit $PSBoundParameters.ContainsKey('Width') -HeightExplicit $PSBoundParameters.ContainsKey('Height')
     $Width=$renderSize.Width;$Height=$renderSize.Height
-    $comfort=Resolve-PreyVRComfortSettings $saved $PSBoundParameters $SnapTurnDegrees $HeadRelativeMovement $ReferenceSpace
+    $ReferenceSpace=Resolve-PreyVRReferenceSpace $saved $PSBoundParameters $ReferenceSpace
     $DualStereo=Resolve-PreyVRStereoSettings $saved $PSBoundParameters $DualStereo
-    if ($HudLayer -notin @(0,1)) {throw 'HudLayer must be 0 or 1.'}
-    if ($UiCurveDegrees -lt 0 -or $UiCurveDegrees -gt 60) {throw 'UiCurveDegrees must be 0..60 (0 is flat).'}
-    if ($PointerHand -notin @(0,1,2)) {throw 'PointerHand must be 0 (left), 1 (right), or 2 (buttons only).'}
-    if ($UiScalePercent -lt 20 -or $UiScalePercent -gt 200) {throw 'UiScalePercent must be 20..200.'}
-    if ($UiGuide -notin @(0,1)) {throw 'UiGuide must be 0 (hidden) or 1 (shown).'}
     if (!$GameExe) {
         $candidates=@()
         foreach ($key in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 480490',
@@ -207,17 +234,24 @@ try {
         'SystemShock2','SystemShock2Remastered','Swat4','Swat4X','SoF','TS4_x64','moh','moh_s','Il-2','Launcher64','carrier_command_2')
     $running=@(Get-Process -Name $fleetNames -ErrorAction SilentlyContinue)
     if ($running.Count) {throw ('Close the running game first: '+(($running | Select-Object -ExpandProperty ProcessName) -join ', '))}
-    Write-Host "Prey VR: $Width x $Height per eye; UI scale $UiScalePercent%; guide $(if($UiGuide){'on'}else{'off'}); stereo $(if($DualStereo){'both eyes per frame'}else{'alternate eyes'}); runtime: $(if($Runtime){$Runtime}else{'system OpenXR runtime'})"
+    Write-Host "Prey VR: $Width x $Height per eye; reference $ReferenceSpace; stereo $(if($DualStereo){'both eyes per frame'}else{'alternate eyes'}); runtime: $(if($Runtime){$Runtime}else{'system OpenXR runtime'})"
     if ($renderSize.MigrateLegacy) {Write-Host 'Replacing the v0.5.0 widescreen default with 2016 x 2160 for greater vertical view coverage.'}
     Write-Host "Mod binaries: $BinDir"
-    Write-Host "Comfort: snap $($comfort.SnapTurnDegrees) degrees (0 = smooth); head-relative $($comfort.HeadRelativeMovement); reference $($comfort.ReferenceSpace)"
+    # The in-game settings are the VR Options menu's: say so once, and move any
+    # left in PreyVR.json (DryRun only reports).
+    $menuSettings=Move-PreyVRMenuSettings $saved $options $DryRun.IsPresent
+    if ($menuSettings.Moved.Count) {Write-Host "Moved to VR Options ($options): $($menuSettings.Moved -join ', ')"}
+    if ($menuSettings.Removed.Count) {Write-Host "Left out of PreyVR.json, now set in VR Options: $($menuSettings.Removed -join ', ')"}
+    $retired=@(Remove-PreyVRRetiredSettings $saved $DryRun.IsPresent)
+    if ($retired.Count) {Write-Host "Left out of PreyVR.json, no longer a setting: $($retired -join ', ')"}
+    Write-Host "In-game settings: VR Options (hold the left menu button), saved in $options"
     Write-Host 'Controls: menu button = pause; right stick = navigate; A = select; B = back.'
     Write-Host 'Point + beam-hand trigger = click/drag; grips = tabs; X/Y = actions.'
     Write-Host 'F12 or both grips + left Y = reset view. Press A at the title/loading prompt.'
     Write-Host 'Tilde (the key below Esc) opens Prey''s own console, when focused.'
     if ($DryRun) {Write-Host 'Preflight passed. Nothing launched.';exit 0}
     Save-PreyVRConfiguration -Path $config -Saved $saved -MigrateLegacy $renderSize.MigrateLegacy -Settings `
-        @{GameExe=$GameExe;Width=$Width;Height=$Height;HudLayer=$HudLayer;UiCurveDegrees=$UiCurveDegrees;PointerHand=$PointerHand;UiScalePercent=$UiScalePercent;UiGuide=$UiGuide;SnapTurnDegrees=$comfort.SnapTurnDegrees;HeadRelativeMovement=$comfort.HeadRelativeMovement;ReferenceSpace=$comfort.ReferenceSpace;DualStereo=$DualStereo}
+        @{GameExe=$GameExe;Width=$Width;Height=$Height;ReferenceSpace=$ReferenceSpace;DualStereo=$DualStereo}
     $run=Join-Path $RunRoot ('player-{0:yyyyMMdd-HHmmss}' -f (Get-Date))
     [void](New-Item -ItemType Directory -Path $run -Force)
     $info=New-Object System.Diagnostics.ProcessStartInfo
@@ -229,10 +263,7 @@ try {
     $info.EnvironmentVariables['PREYVR_LOG_PATH']=Join-Path $run 'PreyVR.log'
     $info.EnvironmentVariables['PREYVR_RENDER_WIDTH']="$Width"
     $info.EnvironmentVariables['PREYVR_RENDER_HEIGHT']="$Height"
-    $info.EnvironmentVariables['PREYVR_HUD_LAYER']="$HudLayer"
-    $info.EnvironmentVariables['PREYVR_UI_CURVE_DEGREES']="$UiCurveDegrees"
-    $info.EnvironmentVariables['PREYVR_POINTER_HAND']="$PointerHand"
-    $info.EnvironmentVariables['PREYVR_REFERENCE_SPACE']=$comfort.ReferenceSpace
+    $info.EnvironmentVariables['PREYVR_REFERENCE_SPACE']=$ReferenceSpace
     $info.EnvironmentVariables['PREYVR_DUAL_STEREO']="$DualStereo"
     # Runtime overrides and simulator state remain process-scoped. The normal
     # double-click path uses the player's selected runtime (VDXR/SteamVR/etc.).
@@ -264,7 +295,7 @@ try {
         if ((Get-Date) -gt $deadline) {throw "Mod startup did not finish. See $log"}
         Start-Sleep -Milliseconds 200
     } while ($true)
-    Get-PreyVRStartupCommands $comfort $UiScalePercent $UiGuide $DebugOverlay $MuzzleAim.IsPresent |
+    Get-PreyVRStartupCommands |
         Set-Content -LiteralPath (Join-Path $run 'commands.txt') -Encoding ASCII
     $deadline=(Get-Date).AddSeconds(150)
     Write-Host 'Put on the headset. Enabling VR...'
@@ -286,7 +317,7 @@ try {
     Write-Host ''
     Write-Host 'To adjust while playing, run "Tune Prey VR.cmd" beside this launcher'
     Write-Host 'and type e.g.  ui.scale 130   (20..200, current session only).'
-    Write-Host 'For future launches, edit the saved settings in PreyVR.json.'
+    Write-Host 'VR Options saves the in-game settings; PreyVR.json keeps the launch settings.'
 } catch {
     Write-Host $_.Exception.Message -ForegroundColor Red
     if (!$DryRun) {Read-Host 'Press Enter to close' | Out-Null}
