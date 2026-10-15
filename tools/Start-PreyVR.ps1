@@ -9,8 +9,7 @@ param(
     # **Launch settings only.** Everything the VR Options menu shows -- turning,
     # movement direction, interface size, curvature, the controls guide, laser
     # hand, HUD style, the debug overlay, shots from the muzzle -- is the menu's,
-    # saved in %LOCALAPPDATA%\PreyVR\vr-options.ini. PreyVR.json once carried
-    # seven of them; Move-PreyVRMenuSettings moves them there once.
+    # saved in %LOCALAPPDATA%\PreyVR\vr-options.ini.
     # auto prefers LOCAL_FLOOR, then STAGE, with LOCAL fallback.
     [string]$ReferenceSpace='auto',
     # **Both eyes from one game frame (1) or alternate eyes (0).** 1 is the
@@ -54,74 +53,11 @@ function Resolve-PreyVRReferenceSpace {
     $ReferenceSpace.ToLowerInvariant()
 }
 
-function Move-PreyVRMenuSettings {
-    param($Saved, [string]$OptionsPath, [bool]$DryRun=$false)
-    # **The VR Options settings PreyVR.json used to carry.** vr-options.ini is
-    # their one source now. A value the player chose (not the default) moves
-    # there, unless the file already holds that setting -- the menu's choice
-    # wins, as it already did in game. Every one then leaves PreyVR.json.
-    # Keys, defaults and ranges are the DLL's (src/common/VrOptions.cpp); a
-    # value out of range would make the DLL refuse the whole file, so it is
-    # dropped instead. DryRun reports and changes nothing.
-    $settings=[ordered]@{
-        SnapTurnDegrees=@{Key='turn';Default=45;Valid={param($v) $v -eq 0 -or ($v -ge 15 -and $v -le 90)}}
-        HeadRelativeMovement=@{Key='head_relative';Default=1;Valid={param($v) $v -in @(0,1)}}
-        UiScalePercent=@{Key='ui_scale';Default=100;Valid={param($v) $v -ge 20 -and $v -le 200}}
-        UiCurveDegrees=@{Key='ui_curve';Default=35;Valid={param($v) $v -ge 0 -and $v -le 60}}
-        UiGuide=@{Key='ui_guide';Default=0;Valid={param($v) $v -in @(0,1)}}
-        PointerHand=@{Key='pointer_hand';Default=1;Valid={param($v) $v -in @(0,1,2)}}
-        HudLayer=@{Key='hud_layer';Default=1;Valid={param($v) $v -in @(0,1)}}
-    }
-    $result=[pscustomobject]@{Moved=@();Removed=@()}
-    if (!$Saved) {return $result}
-    $found=@($settings.Keys | Where-Object {$Saved.PSObject.Properties[$_]})
-    if (!$found.Count) {return $result}
-    $lines=@()
-    if (Test-Path -LiteralPath $OptionsPath) {$lines=@(Get-Content -LiteralPath $OptionsPath | Where-Object {$_ -ne ''})}
-    $held=@{}
-    foreach ($line in $lines) {$at=$line.IndexOf('=');if ($at -gt 0) {$held[$line.Substring(0,$at)]=$true}}
-    $added=@()
-    foreach ($name in $found) {
-        $setting=$settings[$name];$value=0
-        if ([int]::TryParse([string]$Saved.$name,[ref]$value) -and (& $setting.Valid $value) -and
-            $value -ne $setting.Default -and !$held[$setting.Key]) {
-            $added+="$($setting.Key)=$value";$result.Moved+="$name=$value"
-        } else {
-            $result.Removed+=$name
-        }
-        if (!$DryRun) {$Saved.PSObject.Properties.Remove($name)}
-    }
-    if ($added.Count -and !$DryRun) {
-        if (!$lines.Count) {$lines=@('version=1')}
-        [void](New-Item -ItemType Directory -Path (Split-Path -Parent $OptionsPath) -Force)
-        # The DLL's own form: ASCII, LF, no BOM, written whole and then renamed.
-        $temp=$OptionsPath+'.tmp'
-        [System.IO.File]::WriteAllText($temp,((@($lines)+$added) -join "`n")+"`n",[System.Text.Encoding]::ASCII)
-        Move-Item -LiteralPath $temp -Destination $OptionsPath -Force
-    }
-    $result
-}
-
 function Resolve-PreyVRStereoSettings {
     param($Saved, $Overrides, [int]$DualStereo)
     if ($Saved -and !$Overrides.ContainsKey('DualStereo') -and $Saved.PSObject.Properties['DualStereo']) {$DualStereo=[int]$Saved.DualStereo}
     if ($DualStereo -notin @(0,1)) {throw 'DualStereo must be 1 (both eyes per frame) or 0 (alternate eyes).'}
     $DualStereo
-}
-
-function Remove-PreyVRRetiredSettings {
-    param($Saved, [bool]$DryRun=$false)
-    # **Launch settings that no longer exist.** NewVROptionsUI chose between two
-    # VR Options panels; the one it chose is now the only one. Dropped so a
-    # saved PreyVR.json does not carry it on. DryRun reports and changes nothing.
-    $removed=@()
-    if (!$Saved) {return $removed}
-    foreach ($name in @('NewVROptionsUI')) {
-        if (!$Saved.PSObject.Properties[$name]) {continue}
-        $removed+=$name
-        if (!$DryRun) {$Saved.PSObject.Properties.Remove($name)}
-    }
-    $removed
 }
 
 function Get-PreyVRStereoStatus {
@@ -155,6 +91,85 @@ function Save-PreyVRConfiguration {
         $Saved | Add-Member -NotePropertyName 'ResolutionDefaultsVersion' -NotePropertyValue 1
     }
     $Saved | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $Path -Encoding UTF8
+}
+
+function Get-PreyVRWindowFit {
+    param([int]$AreaLeft, [int]$AreaTop, [int]$AreaWidth, [int]$AreaHeight,
+        [int]$FrameWidth, [int]$FrameHeight, [int]$RenderWidth, [int]$RenderHeight)
+    # **The desktop window is the eye size, which no desktop is.** Windowed,
+    # Prey sizes its window from r_Width x r_Height and centres it on the
+    # screen. At 2688 x 2880 on a 1440-high desktop that centre is -739, and
+    # Windows then clamps the height to the screen: the window ended halfway
+    # down with its title bar and top half above the screen.
+    #
+    # The backbuffer -- what the headset gets -- does not follow the window.
+    # Measured 2026-10-15: after resizing the window to 1263 x 1353 the frame
+    # capture still read 2688 x 2880, and DXGI scales into the smaller client.
+    # So this fits the window inside the work area at the eye's aspect ratio,
+    # never larger than the render size, and centres it.
+    # Integer arithmetic, so the limiting side fills the area exactly rather
+    # than a pixel short of it.
+    $roomWidth=[long]($AreaWidth-$FrameWidth);$roomHeight=[long]($AreaHeight-$FrameHeight)
+    if ($RenderWidth -le $roomWidth -and $RenderHeight -le $roomHeight) {
+        $clientWidth=$RenderWidth;$clientHeight=$RenderHeight
+    } elseif ($RenderWidth*$roomHeight -le $RenderHeight*$roomWidth) {
+        $clientHeight=$roomHeight;$clientWidth=[math]::Floor($RenderWidth*$roomHeight/$RenderHeight)
+    } else {
+        $clientWidth=$roomWidth;$clientHeight=[math]::Floor($RenderHeight*$roomWidth/$RenderWidth)
+    }
+    $clientWidth=[int][math]::Max(1,$clientWidth);$clientHeight=[int][math]::Max(1,$clientHeight)
+    $width=$clientWidth+$FrameWidth;$height=$clientHeight+$FrameHeight
+    [pscustomobject]@{
+        X=$AreaLeft+[int][math]::Floor(($AreaWidth-$width)/2)
+        Y=$AreaTop+[int][math]::Floor(($AreaHeight-$height)/2)
+        Width=$width;Height=$height;ClientWidth=$clientWidth;ClientHeight=$clientHeight
+    }
+}
+
+function Set-PreyVRWindowFit {
+    param([IntPtr]$Window, [int]$RenderWidth, [int]$RenderHeight)
+    if (!('PreyVRWindow' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class PreyVRWindow {
+    [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)] public struct MonitorInfo { public int Size; public Rect Monitor, Work; public uint Flags; }
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out Rect rect);
+    [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr window, out Rect rect);
+    [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr window, uint flags);
+    [DllImport("user32.dll")] public static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
+    [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+}
+'@
+    }
+    # Physical pixels on both sides: a DPI-unaware launcher at 125% would read
+    # a scaled work area and place the window by it. Per-monitor v2 is -4.
+    $previous=[IntPtr]::Zero
+    try {$previous=[PreyVRWindow]::SetThreadDpiAwarenessContext([IntPtr](-4))} catch {}
+    try {
+        $outer=New-Object PreyVRWindow+Rect;$client=New-Object PreyVRWindow+Rect
+        if (![PreyVRWindow]::GetWindowRect($Window,[ref]$outer) -or ![PreyVRWindow]::GetClientRect($Window,[ref]$client)) {
+            return 'Desktop window: not found, left where Prey put it.'
+        }
+        $info=New-Object PreyVRWindow+MonitorInfo;$info.Size=[Runtime.InteropServices.Marshal]::SizeOf($info)
+        if (![PreyVRWindow]::GetMonitorInfo([PreyVRWindow]::MonitorFromWindow($Window,2),[ref]$info)) {
+            return 'Desktop window: no monitor information, left where Prey put it.'
+        }
+        # The frame is measured, not computed from the style: whatever borders
+        # this window has now are the ones it keeps.
+        $fit=Get-PreyVRWindowFit $info.Work.Left $info.Work.Top ($info.Work.Right-$info.Work.Left) ($info.Work.Bottom-$info.Work.Top) `
+            (($outer.Right-$outer.Left)-$client.Right) (($outer.Bottom-$outer.Top)-$client.Bottom) $RenderWidth $RenderHeight
+        # SWP_NOZORDER | SWP_NOACTIVATE: move and size only.
+        if (![PreyVRWindow]::SetWindowPos($Window,[IntPtr]::Zero,$fit.X,$fit.Y,$fit.Width,$fit.Height,0x14)) {
+            return "Desktop window: could not be moved (error $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
+        }
+        "Desktop window: $($fit.ClientWidth) x $($fit.ClientHeight), fitted to the screen. The headset still gets $RenderWidth x $RenderHeight."
+    } finally {
+        if ($previous -ne [IntPtr]::Zero) {[void][PreyVRWindow]::SetThreadDpiAwarenessContext($previous)}
+    }
 }
 
 # **`$PSScriptRoot` must not be a param default here.** Under Windows PowerShell
@@ -237,13 +252,7 @@ try {
     Write-Host "Prey VR: $Width x $Height per eye; reference $ReferenceSpace; stereo $(if($DualStereo){'both eyes per frame'}else{'alternate eyes'}); runtime: $(if($Runtime){$Runtime}else{'system OpenXR runtime'})"
     if ($renderSize.MigrateLegacy) {Write-Host 'Replacing the v0.5.0 widescreen default with 2016 x 2160 for greater vertical view coverage.'}
     Write-Host "Mod binaries: $BinDir"
-    # The in-game settings are the VR Options menu's: say so once, and move any
-    # left in PreyVR.json (DryRun only reports).
-    $menuSettings=Move-PreyVRMenuSettings $saved $options $DryRun.IsPresent
-    if ($menuSettings.Moved.Count) {Write-Host "Moved to VR Options ($options): $($menuSettings.Moved -join ', ')"}
-    if ($menuSettings.Removed.Count) {Write-Host "Left out of PreyVR.json, now set in VR Options: $($menuSettings.Removed -join ', ')"}
-    $retired=@(Remove-PreyVRRetiredSettings $saved $DryRun.IsPresent)
-    if ($retired.Count) {Write-Host "Left out of PreyVR.json, no longer a setting: $($retired -join ', ')"}
+    # The in-game settings are the VR Options menu's: say so once.
     Write-Host "In-game settings: VR Options (hold the left menu button), saved in $options"
     Write-Host 'Controls: menu button = pause; right stick = navigate; A = select; B = back.'
     Write-Host 'Point + beam-hand trigger = click/drag; grips = tabs; X/Y = actions.'
@@ -295,6 +304,10 @@ try {
         if ((Get-Date) -gt $deadline) {throw "Mod startup did not finish. See $log"}
         Start-Sleep -Milliseconds 200
     } while ($true)
+    # The renderer has settled by now, so Prey will not place the window again.
+    # A failure here costs the desktop view only, never the launch.
+    try {Write-Host (Set-PreyVRWindowFit $process.MainWindowHandle $Width $Height)}
+    catch {Write-Host "Desktop window: left where Prey put it ($($_.Exception.Message))." -ForegroundColor Yellow}
     Get-PreyVRStartupCommands |
         Set-Content -LiteralPath (Join-Path $run 'commands.txt') -Encoding ASCII
     $deadline=(Get-Date).AddSeconds(150)

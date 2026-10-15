@@ -147,7 +147,9 @@ offline-tested only.
   `PREYVR_HUD_LAYER`, which VR start no longer reads. An older `PreyVR.json`'s
   values move into `vr-options.ini` once (`Move-PreyVRMenuSettings`): only a
   changed value, only if the file lacks that setting, only if in the DLL's range;
-  then they leave `PreyVR.json`. With no launcher switch left, a saved debug
+  then they leave `PreyVR.json`. *Removed 2026-10-15*, with the `NewVROptionsUI`
+  cleanup, once no saved `PreyVR.json` still carried them: an older file's
+  values are now ignored. With no launcher switch left, a saved debug
   overlay or muzzle-aim "off" applies like any other choice.
 - **Fixes found while cataloguing the commands:**
   - *Debug overlay "off" did not survive a restart*: VR start switched the rays

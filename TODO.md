@@ -2,10 +2,10 @@
 
 VR Options Menu:
 - Reorganize the options on the menu under each tab into sections
-- Remove the PreyVR.json/vr-options.ini migration
 
 Rendering:
 - Foveated rendering. Is this possible?
+- Make it run minimized on the desktop?
 
 UI:
 - Fix reticle depth
