@@ -394,6 +394,7 @@ value report, as described above.
 |---|---|
 | `dbg.draw [on\|all\|off\|mask]` | In-world debug drawing. Mask bits: 1 rays, 2 raw, 4 body, 8 wrist, 16 foregrip, 32 labels, 64 status, 128 hits. **Menu** (on = every layer). |
 | `dbg.report`, `dbg.marks` | Overlay counters and primitive positions. |
+| `cull.report`, `cull.watch [0\|1]` | Read-only watch on the engine's pass-camera reset, for the job-worker crash at `PreyDll+0x27EC40`. On from startup, VR or not; `PREYVR_CULL_WATCH=0` before launch leaves it out. Its `preyvr_cull_watch` lines in PreyVR.log are what to send with a crash. |
 | `capture [tag]`, `capture.hud [tag]`, `capture.inventory [tag]` | One frame of what the headset receives, to a file. Stalls the GPU once. |
 | `console <command ...>`, or an allowlisted name alone | An engine console command through the fail-closed allowlist. |
 | `mem.peek`, `mem.scan`, `mem.deep`, `mem.watch`, `mem.hits`, `mem.stack`, `mem.str` | Memory inspection and hardware breakpoints. Research only. |

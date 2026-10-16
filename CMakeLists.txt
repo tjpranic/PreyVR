@@ -202,6 +202,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/InventoryPointerCapture.cpp
         src/dll/CameraEditHook.cpp
         src/dll/ConsoleBridgeWin32.cpp
+        src/dll/CullCameraWatch.cpp
         src/dll/DebugWatch.cpp
         src/dll/DllMain.cpp
         src/dll/FrameCaptureWin32.cpp
@@ -660,6 +661,12 @@ if(PREYVR_BUILD_TESTS)
         target_link_libraries(preyvr_near_fov_tests PRIVATE minhook)
         preyvr_enable_warnings(preyvr_near_fov_tests)
         add_test(NAME near_fov_override COMMAND preyvr_near_fov_tests)
+
+        add_executable(preyvr_cull_camera_watch_tests tests/CullCameraWatchTests.cpp)
+        target_include_directories(preyvr_cull_camera_watch_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle")
+        target_link_libraries(preyvr_cull_camera_watch_tests PRIVATE minhook)
+        preyvr_enable_warnings(preyvr_cull_camera_watch_tests)
+        add_test(NAME cull_camera_watch COMMAND preyvr_cull_camera_watch_tests)
 
         add_executable(preyvr_dll_smoke_host tests/DllSmokeHost.cpp)
         preyvr_enable_warnings(preyvr_dll_smoke_host)

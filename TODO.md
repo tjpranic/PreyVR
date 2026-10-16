@@ -6,10 +6,6 @@ VR Options Menu:
 
 Rendering:
 - Foveated rendering. Is this possible?
-- Make it run minimized on the desktop?
-
-UI:
-- Make the inventory screen a in-game 3D popup?
 
 Controls:
 - Redo controls to be nicer
@@ -23,4 +19,8 @@ Interactibility:
 UX:
 - Game freezes a bit when first loading before showing the main menu in VR
 - Desktop game window spawns halfway off-desktop
-- Laser freezes on load
+- Lasers freezes on load
+- Make it run minimized on the desktop
+
+Bugs:
+- Snap turn causes a rendering artifact for a split second (looks kinds like being able to see through the world geometry)

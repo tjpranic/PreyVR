@@ -11,6 +11,7 @@
 #include "NearFovOverride.h"
 #include "CameraEditHook.h"
 #include "ConsoleBridgeWin32.h"
+#include "CullCameraWatch.h"
 #include "HotkeyBridge.h"
 #include "preyvr/ConsolePolicy.h"
 #include "FrameObserverHook.h"
@@ -608,6 +609,12 @@ bool ExecuteDualCommand(const std::vector<std::string>& args, std::ostringstream
             << DualOverlayReport();
     } else if (verb == "dual.report") {
         out << "dual.report result=0" << DualSceneReport() << DualOverlayReport();
+    } else if (verb == "cull.report") {
+        // docs/CULL-CAMERA-CRASH-2026-10-17.md: the read-only pass-camera reset watch.
+        out << "cull.report result=0" << CullCameraWatchReport();
+    } else if (verb == "cull.watch") {
+        out << "cull.watch result=" << (Valued(args) ? SetCullCameraWatch(arg(1, 1)) : 0)
+            << CullCameraWatchReport();
     } else {
         return false;
     }
@@ -1268,6 +1275,8 @@ DWORD WINAPI PollThread(LPVOID)
     Log("result=0 detail=started commands=\"" + commands.string() +
         "\" results=\"" + results.string() + "\"");
     while (gRunning.load(std::memory_order_acquire)) {
+        // Once, as soon as the module is pinned: VR or not (CullCameraWatch.h).
+        ServiceCullCameraWatch();
         TickVrMode();
         ServiceVrOptions();
         // Keys and startup progress are serviced at 50 Hz; disk polling stays 5 Hz.

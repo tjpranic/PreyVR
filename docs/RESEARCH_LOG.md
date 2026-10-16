@@ -3731,3 +3731,22 @@ player's stance change moves the player with this same pair after a ceiling rayc
 - no faults.
 
 See [room-scale](ROOMSCALE-2026-10-11.md).
+
+## 2026-10-17 — The 0x27EC40 job-worker crash: a freed pass camera in the cull queue
+
+The third occurrence (world-reticle-19-wip, apartment) has the same stack as both
+2026-09-10 crashes. Its dump shows what was read. The occlusion item's camera,
+copied into the render-content job's `SRenderingPassInfo+0x18`, points into freed
+memory. Pass cameras live in a `C3DEngine` pool, and the per-frame reset
+(vtable `+0x90`, `0x2105A0`) frees the pool's storage whenever it overflowed. An
+item therefore outlived its camera. What keeps the item alive is not established.
+
+A read-only hook on that reset now records, at every reset:
+- the cull queue's backlog;
+- where each queued item's camera points: `stale`, `doomed`, `previous`, `outside`.
+
+It runs VR or not, so a flat run can be compared with a VR one. Offline only:
+- its CTest passes, and the full suite passes (73 tests);
+- the gate verifier passes against the supported image.
+
+Not yet run in the game. See [the crash notes](CULL-CAMERA-CRASH-2026-10-17.md).

@@ -1,0 +1,126 @@
+# Job-worker crash at PreyDll+0x27EC40: a freed pass camera in the cull queue
+
+Status, 2026-10-17: mechanism established from the crash dump and static code.
+The trigger is **not** established. A read-only instrument (`CullCameraWatch`)
+is in the DLL to catch it on the next occurrence. Steam PreyDll SHA-256
+`7d6e322f…05311a7`.
+
+## Symptom
+
+`EXCEPTION_ACCESS_VIOLATION` on a `JobSystem_Worker`, PreyVR.dll not on the
+stack: `0x27EC40` (or `0x27EC2A`) ← `0x27F820` ← `0x27CD4F` ← `0xDD6B72` ←
+`0xDD7565` ← `0x4D7E8C`.
+
+| When | Build | Read address | Context |
+|---|---|---|---|
+| 2026-09-10 01:51 | candidate 04 | `0xFFFFFFFFFFFFFFFF` at `0x27EC2A` | forced XR session-loss test ([RE-VR-INTERFACE](RE-VR-INTERFACE-2026-09-10.md)) |
+| 2026-09-10 | candidate 09 | `0x23C` at `0x27EC40` | normal play, Lobby ([RE-WEAPON-WHEEL](RE-WEAPON-WHEEL-2026-09-10.md)) |
+| 2026-10-17 08:15 | world-reticle-19-wip (DLL identical to 18) | `0x23C` at `0x27EC40` | normal play, apartment, about 20 ms after a snap turn |
+
+The September crashes predate dual stereo, so the crash is not specific to dual
+stereo or the reticle work.
+
+## Mechanism (dump of 2026-10-17)
+
+1. `0x27EA80` tests an object box against the job's camera. It walks the camera's
+   `m_pMultiCamera` (`CCamera+0x228`, [CCAMERA_LAYOUT](CCAMERA_LAYOUT.md)), reading
+   `+0x23C` (`m_sceneMaskFilter`) of each entry.
+2. The camera pointer (`SRenderingPassInfo+0x18` in the job's parameters,
+   `0x261DDB14270`) points at freed, reused memory. Its 0x240 bytes are an array of
+   `{heap pointer, 0x0000026100000000}`, so `+0x228` yields `0x26100000000`, which
+   reads as `{data = NULL, count = 963}`. In the 2026-09-10 candidate-04 dump the same
+   field held two floats (`0x3F80000000000000`).
+3. Pass cameras are engine-owned copies. `CreateGeneralPassRenderingInfo` (`0x1E5B30`)
+   stores `p3DEngine->vtable[0x608](camera)`, which is `0x20B2D0`. That function pushes
+   the camera into the pool at `C3DEngine + (fillThreadId + 0xA) * 0x80`:
+   `{data, capacity, overflow pages, count}`, plus 0x1000-byte overflow pages of 7
+   cameras each.
+4. The pool reset is `C3DEngine` vtable `+0x90` (`0x2105A0`), called from `CSystem`
+   (`0xDF66BC`, per frame). It reaches `0x212680`. When the pool overflowed, that
+   function **allocates a new array, frees the old one and every page**, then sets the
+   count to 0. After such a reset, every pointer the pool handed out dangles.
+5. The render-content job's camera does **not** come from the current pass. The cull
+   consumer (`0x23EBD0`) pops an occlusion item (`CObjManager+0x400`, 0x40 bytes) and
+   copies the item's `+0x38` into the job's pass info `+0x18` (`0x23ED73`), just
+   before enqueuing it (`0x27F450` → job `0x27CCE0`).
+6. All 8 workers ran that job with the same dead camera and frame IDs 14747/14746.
+   The main thread's own pass for that frame used a different, live camera
+   (`0x262C5CCFBA0`), and sat inside `CSystem::Render` → `RenderWorld`.
+
+So an occlusion item, or the camera it names, survived a pool reset.
+
+At the crash, the main thread was in PreyVR's `CSystem::Render` detour and the render
+thread was in PreyVR's dual `RT_RenderScene` hook. That is circumstance, not
+attribution.
+
+**Not found:** what lets an item outlive its camera. Candidates include:
+- an item carried across frames;
+- a reset with the wrong fill-thread ID;
+- an off-thread registration, such as `PrecacheRenderNode` (`0x20D960` also
+  registers cameras) racing the coalesce.
+
+No public report of this crash in unmodded Prey turned up.
+
+## The instrument
+
+`src/dll/CullCameraWatch.cpp` hooks `0x2105A0` and calls the original exactly once,
+unchanged. Before and after the original, it reads:
+
+- both camera pools, with their overflow page ranges;
+- the occlusion queue's write/read indices (`+0x410`/`+0x440`), and the camera of
+  every item still queued;
+- the second queue's two raw indices (`+0x4A4`/`+0x4A8`).
+
+It writes nothing to the engine. It is installed by the command worker once the
+module is pinned, VR or not. `PREYVR_CULL_WATCH=0` leaves it out; `cull.watch 0`
+makes it pass straight through.
+
+An exact-bytes gate (8 spans plus the vtable slot) guards every offset it reads.
+`tools/re/verify_cull_camera_watch.py <PreyDll.dll>` checks that gate against the
+binary.
+
+Each queued item's camera is classified against the pools as they were just before
+the reset:
+
+| Field | Meaning |
+|---|---|
+| `stale` | Camera in the pool this reset reclaims. |
+| `doomed` | Stale, and the reset freed that storage (`freed=1`). This is the crash condition. |
+| `previous` | Camera in the other pool (last frame's). Probably normal pipelining. |
+| `outside` | Non-null and in neither pool, so already dangling. |
+| `null` | No camera. |
+
+### Log lines (`preyvr_cull_watch` in PreyVR.log)
+
+- `detail=hook_installed … mutation=none`: the watch is live.
+- `detail=event`: `stale`, `outside` or an unreadable queue. The first 64 are
+  logged, then one in 512. The line carries both pools before→after, the queue
+  indices and the oldest stale/outside item (`node`, `camera`, `age` = position
+  from the read index).
+- `detail=pending_at_reset`: the first 8 resets that had items queued but no
+  event, as a baseline.
+- `detail=first_freeing_reset`: the first reset that freed pool storage.
+- `summary` every 60 s, the same text as `cull.report`.
+
+### Reading the next crash
+
+| Before the crash | Reading |
+|---|---|
+| `doomed>0` in the last event before the crash, with `camera` equal to the dump's pass camera | Mechanism confirmed live. Next, find what kept that item queued: the `age`, the queue indices and `previous` say whether it is a lagging consumer or an item from two frames back. |
+| `outside>0` | An item was pushed with a camera that was already dead. The producer, not the reset, is the bug. |
+| `stale>0` but `doomed=0` | Same ordering fault without a free. It culls with a recycled camera and does not crash. |
+| No events, crash anyway | The item was pushed after the last reset. The instrument cannot see that window; instrument the producer next. |
+| `offThread>0` in a summary | A reset ran on an unexpected thread. |
+
+Compare a VR run against a flat run, with the mod injected and VR off. The watch
+runs in both.
+
+## Verification
+
+- Offline: `cull_camera_watch` CTest builds fake engine, pool, page and queue memory.
+  It covers stale/doomed/previous/outside/null, ring and counter wrap, refusals,
+  bounded logging, the gate and the command boundaries.
+- `tools/re/verify_cull_camera_watch.py` passes against the supported image and
+  refuses another.
+- **Not yet run in the game.** The cost per reset is a few hundred bytes of reads,
+  plus a scan only when items are queued, but it is unmeasured.
