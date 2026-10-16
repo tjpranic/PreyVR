@@ -197,6 +197,7 @@ value report, as described above.
 | `view.observe` / `view.apply` / `view.position` | 0/1 | 0 → VR 1 | The view hook: install, write head rotation, write head position (6DoF). |
 | `observer` | 0/1 | VR 1 | The render frame observer. 0 stops the mod drawing. |
 | `input.hotkeys` | 0/1 | launcher 1 | Keyboard thread: ~ console, eye-offset keys, swap eyes, panic. |
+| `window.hold` | 0/1 | launcher 1 | Prey runs as though its window had focus: no 25 ms-a-frame slowdown, no pause and no muted sound when minimised or unfocused. `answered=` counts the slowdowns it prevented, `audioSwallowed=` the mutes. 0 restores the game's behaviour. Not kept. |
 | `report` | report | | Large counter snapshot, also written to the log. |
 
 ### Menus and panels

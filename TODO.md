@@ -5,7 +5,7 @@ VR Options Menu:
 - Audit every option and rework and/or remove and/or consolidate as many as needed
 
 Rendering:
-- Foveated rendering. Is this possible?
+- Foveated rendering. Figure out if this is possible?
 
 Controls:
 - Redo controls to be nicer
@@ -23,4 +23,6 @@ UX:
 - Make it run minimized on the desktop
 
 Bugs:
-- Snap turn causes a rendering artifact for a split second (looks kinds like being able to see through the world geometry)
+- Snap turn causes a rendering artifact for a split second. It looks like the view is lagging by a frame.
+- Access violation that causes a crash. Seems to be due to a use-after-free camera related bug. Have got instrumentation in place to catch it.
+- Hands don't move with the controller when no weapon is out.

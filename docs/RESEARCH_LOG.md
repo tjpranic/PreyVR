@@ -3750,3 +3750,59 @@ It runs VR or not, so a flat run can be compared with a VR one. Offline only:
 - the gate verifier passes against the supported image.
 
 Not yet run in the game. See [the crash notes](CULL-CAMERA-CRASH-2026-10-17.md).
+
+## 2026-10-17 — The desktop window: minimised, sized, and Prey's focus handling
+
+Asked for: the desktop window starts minimised, and PreyVR.json sizes it apart
+from the render size. The size is a launcher-only change, because the backbuffer
+does not follow the window. Minimising is not, because Prey reacts to losing
+activation. Read from the supported image:
+- **A throttle.** `CSystem::Update` sleeps 5 ms up to five times a frame while
+  `GetActiveWindow()` is not the render window (`0xDF58E0`). No cvar controls it.
+- **A pause.** `g_pauseOnLoseFocus` exists: default 1, flags 0. An earlier note said
+  no such cvar existed.
+- **Input.** The input devices are told the foreground state (`0xDF5D5A`).
+- **Not a problem.** `Present` returning OCCLUDED is treated as success, so a
+  minimised window keeps rendering.
+
+`window.hold` answers PreyDll's only `GetActiveWindow` import slot with the render
+window, gated on the loop's bytes. It also sets `g_pauseOnLoseFocus 0` through the
+verified console path. The launcher sends it at startup and minimises the window
+once `state=held` is logged; `WindowWidth`/`WindowHeight` box the picture.
+
+Offline only:
+- its CTest passes, and the full suite passes (74 tests);
+- the verifier passes against the supported image.
+
+Input focus and audio are left native until a headset run shows whether they
+matter. See [the desktop window notes](DESKTOP-WINDOW-2026-10-17.md).
+
+**First headset run, same day (`player-20261017-095157`).** What happened:
+- The window minimised just after startup.
+- `g_pauseOnLoseFocus 0` read back verified.
+- The game loaded and played without pausing, but **made no sound**.
+
+The audio translation layer turns a focus loss into a manager request (type `0x10`).
+That request runs the `lose_focus` trigger and the middleware's `OnLoseFocus`
+(`0xD5A6EA`), and Prey has no cvar to ignore it.
+
+The hold now detours the request dispatcher (`0xD5B950`, audio thread):
+- While held, a lose-focus request is marked done and not run.
+- The audio is kept focused while held. Released, it follows what the engine last asked
+  for. The missing request is issued through the game's own handler: this undoes a
+  loss from before the hold, and mutes again on a release while unfocused.
+
+Offline only:
+- its CTest covers the rule, and the full suite passes (74 tests);
+- the verifier ties cases `0x10` and `0x20` to the IDs hashed from `lose_focus` and
+  `get_focus`.
+
+Not yet heard in the headset.
+
+**Accepted with sound (`player-20261017-101027`).** The window minimised, and the game
+played with its sound. A minute after VR started, the status line read `calls=7331
+answered=7331 audioSwallowed=2 audioIssued=0`. Every throttle call was answered, and
+the minimise sent two lose-focus requests, both held off.
+
+The user then asked for `StartMinimized` to default to 0. The window stays open unless
+PreyVR.json asks for it, and the hold applies either way.

@@ -43,8 +43,12 @@ After the first launch, edit `PreyVR.json` beside the launcher:
 | Setting | Default | Choices |
 | --- | --- | --- |
 | `Width`, `Height` | `2016`, `2160` | Per-eye render size, independent of desktop DPI. `2688`, `2880` gives more detail at the same aspect. |
+| `StartMinimized` | `0` | `1` minimises the desktop window once VR holds focus; `0` leaves it open. |
+| `WindowWidth`, `WindowHeight` | `0`, `0` | Desktop window size in pixels; `0`, `0` fits the screen. Only the desktop window: the headset still gets `Width` x `Height`. |
 
-Restart Prey after changing these settings.
+Restart Prey after changing these settings. Minimised, the game keeps running, does
+not pause and keeps its sound; restore the window from the taskbar to watch on the monitor. The
+F10-F12 keys only work while the window has focus.
 
 Interface size, panel curvature, the controls guide, the laser hand and the HUD
 style are **VR Options** settings: hold the left menu button, then the

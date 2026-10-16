@@ -51,6 +51,9 @@ D:\Dev` Debug\PreyVR\tools\Invoke-PreyVRStartup.ps1
 so the console queue never drains (`console result=4` is *busy*) and no head pose
 is published (`view.recenter result=1` is *no pose*). Three confusing failures,
 one cause. This has now happened in three separate sessions.
+(2026-10-17: `window.hold 1` removes CryEngine's unfocused-frame sleep and the pause
+on focus loss. That sleep costs at most 25 ms a frame, so whether the hold also
+cures this is untested. See [the desktop window notes](DESKTOP-WINDOW-2026-10-17.md).)
 
 ```powershell
 # 3. Load a save and equip a weapon. Then:

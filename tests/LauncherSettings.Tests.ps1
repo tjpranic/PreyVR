@@ -36,7 +36,7 @@ foreach ($name in $menuSettings+@('DebugOverlay','MuzzleAim')) {
     if ($params -contains $name) {throw "The launcher still takes -$name, a VR Options setting"}
 }
 $commands=@(Get-PreyVRStartupCommands)
-if (($commands -join "`n") -cne "input.hotkeys 1`nvr.enable") {throw "Startup must send only the hotkeys and vr.enable: $($commands -join ' | ')"}
+if (($commands -join "`n") -cne "input.hotkeys 1`nwindow.hold 1`nvr.enable") {throw "Startup must send only the hotkeys, the focus hold and vr.enable: $($commands -join ' | ')"}
 $launcher=Get-Content -LiteralPath $scriptPath -Raw
 $vrMode=Get-Content -LiteralPath (Join-Path $PSScriptRoot '../src/dll/VrMode.cpp') -Raw
 foreach ($variable in @('PREYVR_HUD_LAYER','PREYVR_UI_CURVE_DEGREES','PREYVR_POINTER_HAND','PREYVR_NEW_VR_OPTIONS_UI')) {

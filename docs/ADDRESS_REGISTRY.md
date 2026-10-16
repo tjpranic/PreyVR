@@ -2,6 +2,29 @@
 
 Only confirmed or explicitly provisional build-specific locations belong here. Prefer a signature plus validation recipe over an RVA alone.
 
+### Window-focus static additions — 2026-10-17
+
+No R-number. All of it ran in the accepted headset run (`player-20261017-101027`):
+every throttle call answered, the cvar verified, two lose-focus requests held off and
+sound kept. Supported Steam hash;
+`tools/re/verify_focus_hold.py` checks every row. Purpose and design in
+[the desktop window notes](DESKTOP-WINDOW-2026-10-17.md); `src/dll/FocusHold.cpp`
+compares the same bytes in memory before it touches the slot.
+
+| RVA / field | Purpose and constraint |
+| --- | --- |
+| `0xDF58E0`-`0xDF59B1` | `CSystem::Update`'s unfocused-window loop: `GetActiveWindow()` vs `renderer->GetHWND()`, else pump messages and `Sleep(5)`, up to 5 times. Gate spans `0xDF58E0` (31 bytes) and `0xDF599B` (22 bytes). |
+| `0x1C73A10` (`.rdata`) | PreyDll's `USER32!GetActiveWindow` import slot. Its only reader in `.text` is the call at `0xDF58F0`, so answering it changes only the throttle. |
+| `0xDF5D5A` | `pInput->Update(GetForegroundWindow() == CSystem+0xF80 \|\| CSystem+0x9D1)`: the input devices' focus flag. Not touched. |
+| `0xF77F00` (`GetForegroundWindow` at `0xF77F43`) | Renderer: on a foreground change, set (`0xF539E0`) or restore (`0xF53760`) the gamma ramp; flag bit `0x40` of `+0x8088`. Not touched. |
+| `0xF541D9` / `0xF541DF` | `CreateWindowExA("CryENGINE", …)`; the window stored at `CD3D9Renderer+0xAC18`. Then `ShowWindow(1)`, `SetFocus`, `SetForegroundWindow` (`0xF5425E`-`0xF54278`). |
+| renderer vtable `0x1DD2E08` + `0x6C0` -> `0xF50A50` | `GetHWND`: `mov rax,[rcx+0xAC18]; ret`. The value the throttle compares with. |
+| `0x18281D4`-`0x1828203`, variable `0x22906F0` | `IConsole` `+0x38` registration of `g_pauseOnLoseFocus`: default 1 (`r9d = rdi+1`, `rdi` zeroed at `0x182810D`), flags 0, help "Pause the game whenever the window loses focus". Unregistered at `0x18289E9`. |
+| `0xF7E4B1` | `RT_EndFrame` acts only on a failed `Present`; `DXGI_STATUS_OCCLUDED` (a minimised window) is success. |
+| `0xD5B950` | `CAudioTranslationLayer::ProcessRequest(atl, request)`, audio thread, every request; status at request `+0x20`, data at `+0x28`, class at data `+0x10`. Called from `0xD72B9B` (`atl` = `CAudioSystem+0x2E8`), which sets status 4 first. FocusHold detours it (MinHook; entry `48 89 5C 24 10`). |
+| `0xD5BBBD` -> `0xD5A630` | Class 1: the manager handler; type at data `+0x18`, `0x20` compared, up to `0x10` through the table at `0xD5AE68`. |
+| `0xD5A6EA` (type `0x10`) / `0xD5A79F` (type `0x20`) | Lose focus: the `lose_focus` trigger (ID `0x2983664`), then middleware vtable `+0x30`. Get focus: middleware `+0x38`, then `get_focus` (ID `0x2983668`). Both skip when ATL `+0x238` bit 0 is set. IDs hashed by the initialiser at `0xD6AEB0`. |
+
 ### View-rotation static additions — 2026-10-11
 
 No R-number: static only, nothing called live yet. Supported Steam hash;

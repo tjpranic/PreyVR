@@ -53,6 +53,10 @@ no cvar for this -- a string search finds `sys_no_crash_dialog` and a family of
 `Dof_Focus*` and audio-focus entries, but nothing that disables pause-on-focus-loss.
 So it has to be worked with rather than turned off:
 
+> **Corrected 2026-10-17:** there is one. `g_pauseOnLoseFocus` (default 1, flags 0)
+> is registered at `0x18281F5`, and `window.hold 1` sets it to 0 along with removing
+> CryEngine's unfocused-frame sleep. See [the desktop window notes](DESKTOP-WINDOW-2026-10-17.md).
+
 - Arm everything first (observer, scene freeze, the edit), *then* click into the
   game. The camera edit applies every frame and the capture is serviced from the
   render thread, so both act on whatever frames follow.

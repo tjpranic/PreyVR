@@ -203,6 +203,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/CameraEditHook.cpp
         src/dll/ConsoleBridgeWin32.cpp
         src/dll/CullCameraWatch.cpp
+        src/dll/FocusHold.cpp
         src/dll/DebugWatch.cpp
         src/dll/DllMain.cpp
         src/dll/FrameCaptureWin32.cpp
@@ -667,6 +668,12 @@ if(PREYVR_BUILD_TESTS)
         target_link_libraries(preyvr_cull_camera_watch_tests PRIVATE minhook)
         preyvr_enable_warnings(preyvr_cull_camera_watch_tests)
         add_test(NAME cull_camera_watch COMMAND preyvr_cull_camera_watch_tests)
+
+        add_executable(preyvr_focus_hold_tests tests/FocusHoldTests.cpp)
+        target_include_directories(preyvr_focus_hold_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle")
+        target_link_libraries(preyvr_focus_hold_tests PRIVATE preyvr_headers minhook user32)
+        preyvr_enable_warnings(preyvr_focus_hold_tests)
+        add_test(NAME focus_hold COMMAND preyvr_focus_hold_tests)
 
         add_executable(preyvr_dll_smoke_host tests/DllSmokeHost.cpp)
         preyvr_enable_warnings(preyvr_dll_smoke_host)

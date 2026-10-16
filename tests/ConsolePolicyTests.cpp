@@ -115,6 +115,10 @@ void TestAllowlistContents()
     Require(IsAllowlistedCvar("r_NoDrawNear"), "the viewmodel pass toggle is allowlisted");
     Require(IsAllowlistedCvar("e_CameraFreeze"), "the engine camera override is allowlisted");
     Require(IsAllowlistedCvar("g_detachCamera"), "the detached camera cvar is allowlisted");
+    // 2026-10-17: the focus hold keeps a minimised window from pausing the game.
+    Require(Classify("g_pauseOnLoseFocus 0") == Classification::sceneControl,
+        "pause on focus loss can be switched off");
+    Require(Classify("g_pauseOnLoseFocus 1") == Classification::sceneControl, "and back on");
     // **Contract changed 2026-09-08, deliberately.** Resolution was excluded
     // because changing it mid-session invalidates the XR swapchain and held eye
     // textures, which are sized once at session start: D3D11 CopyResource needs

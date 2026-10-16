@@ -26,6 +26,7 @@
 #include "CarryLane.h"
 #include "GrenadeLane.h"
 #include "DebugOverlay.h"
+#include "FocusHold.h"
 #include "preyvr/DebugOverlayScene.h"
 #include "preyvr/LatestSnapshot.h"
 #include <algorithm>
@@ -239,7 +240,8 @@ void TickVrMode() {
             nextStatusReport=GetTickCount64()+kStatusReportMs;
             // The same text dual.report and hud.layer answer with.
             Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
-                " } body={"+BodyFollowReport()+" } reticle={"+ReticleWorldReport()+SceneQueryReport()+" }");
+                " } body={"+BodyFollowReport()+" } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } focus={"+
+                FocusHoldReport()+" }");
         }
         const auto owner=AnimIkOwnerGeneration();
         const auto reference=HeadTrackingReferenceGeneration();

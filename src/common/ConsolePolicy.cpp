@@ -62,7 +62,15 @@ namespace {
 // None reaches outside the game, all are reversible by setting them back, and
 // unlike the resolution entries none of them touches the swapchain, so there is
 // no latched-size hazard to guard.
-constexpr std::array<std::string_view, 42> kAllowlist{
+constexpr std::array<std::string_view, 43> kAllowlist{
+    // **Added 2026-10-17 for the minimised desktop window**
+    // (docs/DESKTOP-WINDOW-2026-10-17.md). Registered at 0x18281F5 with default 1,
+    // no flags, and the help text "Pause the game whenever the window loses
+    // focus". A wearer has no use for the desktop window, and with it minimised
+    // it never has focus, so the focus hold sets this to 0 and back to 1 on
+    // release. It changes only whether the game pauses on focus loss, and it is
+    // not saved (no VF_DUMPTODISK).
+    "g_pauseOnLoseFocus",
     "g_reticleYPercentage",
     "hud_bobHud",
     "hud_canvas_width_adjustment",

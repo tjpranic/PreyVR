@@ -12,6 +12,7 @@
 #include "CameraEditHook.h"
 #include "ConsoleBridgeWin32.h"
 #include "CullCameraWatch.h"
+#include "FocusHold.h"
 #include "HotkeyBridge.h"
 #include "preyvr/ConsolePolicy.h"
 #include "FrameObserverHook.h"
@@ -162,6 +163,7 @@ std::string ControllerStickReport()
 void WriteReport(std::ostringstream& out)
 {
     out << "smoke=" << "n/a"
+        << " focus={" << FocusHoldReport() << " }"
         << " observerFrames=" << ObservedFrameCount()
         << " xrSession=" << XrSessionStatusValue()
         << " xrFrames=" << XrSubmittedFrameCount()
@@ -615,6 +617,11 @@ bool ExecuteDualCommand(const std::vector<std::string>& args, std::ostringstream
     } else if (verb == "cull.watch") {
         out << "cull.watch result=" << (Valued(args) ? SetCullCameraWatch(arg(1, 1)) : 0)
             << CullCameraWatchReport();
+    } else if (verb == "window.hold") {
+        // docs/DESKTOP-WINDOW-2026-10-17.md: Prey runs as though focused. The
+        // launcher sends 1 and minimises the window once state=held is logged.
+        out << "window.hold result=" << (Valued(args) ? SetFocusHold(arg(1, 1)) : 0) << NoValue(args)
+            << FocusHoldReport();
     } else {
         return false;
     }
@@ -1279,6 +1286,7 @@ DWORD WINAPI PollThread(LPVOID)
         ServiceCullCameraWatch();
         TickVrMode();
         ServiceVrOptions();
+        ServiceFocusHold();
         // Keys and startup progress are serviced at 50 Hz; disk polling stays 5 Hz.
         static unsigned poll=0;
         if (++poll%10!=0) { Sleep(20); continue; }
