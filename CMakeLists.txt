@@ -557,6 +557,11 @@ if(PREYVR_BUILD_TESTS)
     preyvr_enable_warnings(preyvr_ui_panel_tests)
     add_test(NAME ui_panel COMMAND preyvr_ui_panel_tests)
 
+    add_executable(preyvr_hud_parts_tests tests/HudPartsTests.cpp)
+    target_link_libraries(preyvr_hud_parts_tests PRIVATE preyvr_core)
+    preyvr_enable_warnings(preyvr_hud_parts_tests)
+    add_test(NAME hud_parts COMMAND preyvr_hud_parts_tests)
+
     add_executable(preyvr_locomotion_tests tests/LocomotionTests.cpp)
     target_link_libraries(preyvr_locomotion_tests PRIVATE preyvr_core)
     preyvr_enable_warnings(preyvr_locomotion_tests)

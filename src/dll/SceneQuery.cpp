@@ -3,6 +3,7 @@
 #include "HeadTrackingHook.h"
 #include "HudBridge.h"
 #include "InputPost.h"
+#include "ReticleFollow.h"
 #include "preyvr/SceneQuery.h"
 #include "preyvr/SceneQueryNative.h"
 #include "preyvr/LatestSnapshot.h"
@@ -57,7 +58,8 @@ DWORD Query(const GameplayPoseFrame& frame,Vec3 origin,Vec3 direction,float rang
 }
 void QueryAimScene(const GameplayPoseFrame& frame,aim::Sample& sample){
     sample.sceneDistance=-1;
-    if(!enabled.load()||fault.load())return;
+    // aim.scene, or the world reticle, whose depth is this hit.
+    if(!(enabled.load()||ReticleInWorld())||fault.load())return;
     if(!HudGameplayInputAllowed()||!FreshSample(MonotonicNanoseconds(),frame.tracking.publishedNs)||
        frame.referenceGeneration!=HeadTrackingReferenceGeneration()){++refused;return;}
     thread_local bool busy=false;

@@ -484,23 +484,22 @@ int main()
         tall.Grip(true);
         frame = tall.Idle();
         Check(frame.page == 2 && frame.scrollMaxY > 0, "with larger text the interface page outgrows the panel");
-        const auto last = Find(frame, Kind::choice, options::HudLayer);
+        // The interface page ends with the reticle: its fallback distance is the last row.
+        const auto last = Find(frame, Kind::range, options::ReticleFallback);
         const auto back = Find(frame, Kind::close);
         Check(last && back && last->y1 > back->y0, "its last row starts out of sight, under the footer");
         const float top = last->y0;
         VrOptionsUiInput scroll;
         scroll.dt = 1.0f / 90.0f;
         scroll.scroll = -1.0f;
-        for (int n = 0; n < 120; ++n) { frame = tall.Frame(scroll); }
+        for (int n = 0; n < 300; ++n) { frame = tall.Frame(scroll); }
         Check(frame.scrollY > 0 && frame.scrollY == frame.scrollMaxY, "the left stick scrolls to the end, and stops there");
-        const auto lowered = Find(frame, Kind::choice, options::HudLayer);
+        const auto lowered = Find(frame, Kind::range, options::ReticleFallback);
         Check(lowered && lowered->y0 < top && lowered->y1 < Find(frame, Kind::close)->y0, "the last row comes into view");
-        const auto text = Find(frame, Kind::range, options::UiText);
-        Check(text.has_value(), "premise: the text panel distance is drawn");
-        frame = tall.Click(*text, 0.98f);
-        Check(tall.Took(frame, options::UiText) >= 195, "a row reached by scrolling works: about 200 cm");
+        frame = tall.Click(*lowered, 0.98f);
+        Check(tall.Took(frame, options::ReticleFallback) >= 190000, "a row reached by scrolling works: about 196 m");
         scroll.scroll = 1.0f;
-        for (int n = 0; n < 120; ++n) { frame = tall.Frame(scroll); }
+        for (int n = 0; n < 300; ++n) { frame = tall.Frame(scroll); }
         Check(frame.scrollY == 0, "and back up to the top");
     }
 

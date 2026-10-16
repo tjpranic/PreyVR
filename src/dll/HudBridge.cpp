@@ -649,7 +649,8 @@ bool HudMenuIsOpen() { return gMenuOpen.load(std::memory_order_acquire); }
 unsigned long long HudMenuEpoch() { return gMenuEpoch.load(std::memory_order_acquire); }
 bool HudMenuStateKnown() { return FreshSample(MonotonicNanoseconds(), gMenuStamp.load()); }
 bool HudInventoryIsOpen() { return HudMenuStateKnown() && gInventoryOpen.load(std::memory_order_acquire); }
-bool HudGameplayInputAllowed() { return !VrOptionsInputOwned() && HudMenuStateKnown() && !HudMenuIsOpen(); }
+bool HudGameplayShown() { return HudMenuStateKnown() && !HudMenuIsOpen(); }
+bool HudGameplayInputAllowed() { return !VrOptionsInputOwned() && HudGameplayShown(); }
 unsigned long long HudMenuStateSampleCount()
 {
     return gMenuStateSamples.load(std::memory_order_relaxed);

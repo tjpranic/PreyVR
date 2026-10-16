@@ -83,6 +83,15 @@ void SettingsChecks(){
  Check(Choices(BodyFollow)==std::vector<int>{0,1,2},"body following offers its three settings");
  Check(Parse("version=1\nturn=45\n",parsed)&&parsed[BodyFollow]==2,"settings saved before body following default it on");
  Check(Parse("version=1\ndebug_overlay=1\n",parsed)&&parsed[DebugOverlay]==1&&!Valid(DebugOverlay,2),"debug overlay persists as on/off");
+ // The scene reticle toggle is retired: a file saved with it still loads, its
+ // other settings intact, and the world reticle takes its default.
+ Present seen{};
+ Check(Parse("version=1\nscene_reticle=0\nui_scale=150\n",parsed,&seen)&&parsed[UiScale]==150&&
+       parsed[ReticleWorld]==1&&!seen[ReticleWorld],"a retired key is skipped, not a reason to lose the file");
+ Check(Serialize(parsed).find("scene_reticle")==std::string::npos,"and the next save leaves it out");
+ Check(!Parse("version=1\nscene_reticle=x\n",parsed),"a retired key still needs a number");
+ Check(Defaults()[ReticleSize]==100&&Valid(ReticleSize,50)&&Valid(ReticleSize,200)&&!Valid(ReticleSize,40),
+       "the reticle's size, 50..200 percent");
 }
 void KindChecks(){
  // Each setting is edited as what its Spec says it is.
@@ -119,12 +128,14 @@ void LayoutChecks(){
  for(unsigned i=0;i<Count;++i)Check(seen[i]==1,"every setting appears on exactly one tab");
  Check(recenter==1&&clear==1&&calibrate==1,"each button appears once");
  Check(MenuEntries(MenuPages()).empty(),"past the last tab there is nothing");
- for(const int e:{CarryHand,GrenadeDeploy,LongReach,MuzzleAim,SceneReticle,PhysicalMelee,SwingSpeed,PhysicalContacts,
+ for(const int e:{CarryHand,GrenadeDeploy,LongReach,MuzzleAim,PhysicalMelee,SwingSpeed,PhysicalContacts,
                   ContactStrength,InventoryLayer,InventoryStereo,InventoryDepth})
   Check(Has(MenuEntries(7),e),"features still being proven, and their tuning, on the experimental tab");
  Check(MenuEntries(0)[0]==Turn&&Has(MenuEntries(0),BodyFollow)&&Has(MenuEntries(0),BodyGlide),"comfort: turning first, body following");
- for(const int e:{UiDistance,UiOffsetRight,UiOffsetUp,UiText,PointerHand,HudLayer})
-  Check(Has(MenuEntries(2),e),"menu placement and HUD on the interface tab");
+ for(const int e:{UiDistance,UiOffsetRight,UiOffsetUp,UiText,PointerHand,HudLayer,ReticleWorld,ReticleSize,ReticleFallback})
+  Check(Has(MenuEntries(2),e),"menu placement, the HUD and the reticle on the interface tab");
+ Check(Describe(ReticleWorld).initial==1&&Display(ReticleWorld,1)==L"IN THE WORLD"&&Display(ReticleWorld,0)==L"ON THE HUD",
+       "the reticle sits in the world by default");
  Check(MenuEntries(3)[0]==Holsters&&MenuEntries(3)[1]==ClearHolsterSlots&&MenuEntries(3)[2]==Wrist,
        "equipment: holsters, clearing them, then the wrist");
  Check(MenuEntries(6).size()==3&&MenuEntries(6)[0]==CalibratePosture&&MenuEntries(6)[1]==RecenterView&&

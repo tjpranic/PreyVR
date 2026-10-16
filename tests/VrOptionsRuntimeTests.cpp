@@ -19,8 +19,10 @@ void SetPhysicalContacts(unsigned v){applied[options::PhysicalContacts]=v;}unsig
 void SetSwingSpeed(unsigned v){applied[options::SwingSpeed]=v;}unsigned SwingSpeed(){return applied[options::SwingSpeed];}
 void SetContactStrength(unsigned v){applied[options::ContactStrength]=v;}unsigned ContactStrength(){return applied[options::ContactStrength];}
 void QueueHaptic(Hand,haptics::Event,const TrackingFrame&){}
-void SetSceneReticle(unsigned v){applied[options::SceneReticle]=v;}
-unsigned SceneReticleEnabled(){return applied[options::SceneReticle];}
+DWORD SetReticleInWorld(unsigned v){applied[options::ReticleWorld]=v;return 0;}
+unsigned ReticleInWorld(){return applied[options::ReticleWorld];}
+DWORD SetReticleSizePercent(unsigned v){applied[options::ReticleSize]=v;return 0;}
+unsigned ReticleSizePercent(){return applied[options::ReticleSize];}
 void SetHapticsEnabled(unsigned v){applied[options::Haptics]=v;}
 unsigned HapticsEnabled(){return applied[options::Haptics];}
 void SetHapticStrength(unsigned v){applied[options::HapticStrength]=v;}
@@ -158,7 +160,8 @@ int main(){
  set(options::Wrist,0);Check(!WristDisplayEnabled()&&WristSizePercent()==100,"wrist toggle (on by default) reaches layer consumer");
  const auto clearBefore=holsterClears;press(options::ClearHolsterSlots);
  Check(holsterClears==clearBefore+1,"clear holsters invokes its own action");
- set(options::SceneReticle,1);Check(SceneReticleEnabled()==1,"scene reticle opt-in reaches producer");
+ set(options::ReticleWorld,0);Check(ReticleInWorld()==0,"the reticle on the HUD reaches the reticle lane");
+ set(options::ReticleSize,150);Check(ReticleSizePercent()==150,"the reticle's size reaches the reticle lane");
  set(options::ReticleFallback,10500);Check(ReticleConvergenceMillimetres()==10500,"fallback setting retains sub-metre precision");
  set(options::Haptics,0);Check(!HapticsEnabled(),"haptics disable reaches XR adapter");
  Check(!PhysicalMeleeEnabled()&&!PhysicalContactsEnabled(),"physical features independently off by default");

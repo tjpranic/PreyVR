@@ -18,6 +18,7 @@
 #include "MoveLane.h"
 #include "AimTakeover.h"
 #include "ReticleFollow.h"
+#include "SceneQuery.h"
 #include "HudLayer.h"
 #include "UiPointer.h"
 #include "AnimIkTakeover.h"
@@ -238,7 +239,7 @@ void TickVrMode() {
             nextStatusReport=GetTickCount64()+kStatusReportMs;
             // The same text dual.report and hud.layer answer with.
             Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
-                " } body={"+BodyFollowReport()+" }");
+                " } body={"+BodyFollowReport()+" } reticle={"+ReticleWorldReport()+SceneQueryReport()+" }");
         }
         const auto owner=AnimIkOwnerGeneration();
         const auto reference=HeadTrackingReferenceGeneration();

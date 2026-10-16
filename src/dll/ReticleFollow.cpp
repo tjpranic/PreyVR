@@ -6,6 +6,8 @@
 
 #include "XrSessionHost.h"
 #include "CameraEditHook.h"
+#include "AimTakeover.h"
+#include "HeadTrackingHook.h"
 #include "Logger.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/WeaponAim.h"
@@ -446,4 +448,85 @@ unsigned long long ReticleFollowOffScreenCount() { return gOffScreen.load(std::m
 DWORD ReticleFollowLastX() { return gLastX.load(std::memory_order_relaxed); }
 DWORD ReticleFollowLastY() { return gLastY.load(std::memory_order_relaxed); }
 
+
+namespace {
+std::atomic<bool> gWorld{true};          // options::Defaults(): reticle_world 1
+std::atomic<unsigned> gSizePercent{100}; // options::Defaults(): reticle_size 100
+LatestSnapshot<ReticleTarget> gTarget;
+std::atomic<unsigned long long> gTargets{0}, gTargetHits{0}, gTargetRefused{0}, gShown{0}, gNotShown{0};
+std::atomic<unsigned> gLastTargetMm{0};
+bool FiniteVec(const Vec3& v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
+} // namespace
+
+DWORD SetReticleInWorld(unsigned enabled)
+{
+    if (enabled > 1) { return 1; }
+    gWorld.store(enabled != 0, std::memory_order_release);
+    if (!enabled) { gTarget.Clear(); }
+    lifecycle::Log(std::string("preyvr_reticle result=0 detail=world value=") + (enabled ? "1" : "0"));
+    return 0;
+}
+unsigned ReticleInWorld() { return gWorld.load(std::memory_order_acquire) ? 1u : 0u; }
+
+DWORD SetReticleSizePercent(unsigned percent)
+{
+    if (percent < 50 || percent > 200) { return 1; }
+    gSizePercent.store(percent, std::memory_order_release);
+    return 0;
+}
+unsigned ReticleSizePercent() { return gSizePercent.load(std::memory_order_acquire); }
+
+void PublishReticleTarget(const GameplayPoseFrame& frame, const aim::Sample& sample)
+{
+    if (!gWorld.load(std::memory_order_acquire)) { return; }
+    const auto& right = frame.tracking.hands[static_cast<unsigned>(Hand::right)];
+    if (!IsPoseUsable(right.aimPose, right.aimValidity, 200ull * 1000ull * 1000ull) ||
+        !FiniteVec(sample.origin) || !FiniteVec(sample.direction)) {
+        gTarget.Clear();
+        gTargetRefused.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    // The shot's own surface, else the distance the crosshair has always been
+    // converged at; never inside the weapon.
+    float distance = sample.sceneDistance;
+    const bool hit = std::isfinite(distance) && distance >= 0.0f && distance <= scene::Range;
+    if (!hit) { distance = static_cast<float>(gConvergenceMm.load(std::memory_order_acquire)) * 0.001f; }
+    distance = std::max(distance, kReticleNearestM);
+    // Converted with the anchor the sample was built from, as the debug ray is:
+    // the muzzle with aim.shot, else the native eye the ray starts at.
+    const Vec3 anchor = sample.muzzleOrigin && frame.cameraCentreValid ? frame.cameraCentre : frame.nativeEye;
+    const Vec3 world{sample.origin.x + sample.direction.x * distance, sample.origin.y + sample.direction.y * distance,
+                     sample.origin.z + sample.direction.z * distance};
+    ReticleTarget target{};
+    target.point = stereo::EngineToTracking(world, anchor, frame.yaw, frame.tracking.head);
+    target.distance = distance;
+    target.hit = hit;
+    target.ns = MonotonicNanoseconds();
+    target.reference = frame.referenceGeneration;
+    if (!FiniteVec(target.point)) {
+        gTarget.Clear();
+        gTargetRefused.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    gTarget.Publish(target);
+    gTargets.fetch_add(1, std::memory_order_relaxed);
+    if (hit) { gTargetHits.fetch_add(1, std::memory_order_relaxed); }
+    gLastTargetMm.store(static_cast<unsigned>(distance * 1000.0f + 0.5f), std::memory_order_relaxed);
+}
+
+bool TryGetReticleTarget(ReticleTarget& out)
+{
+    return gWorld.load(std::memory_order_acquire) && gTarget.TryRead(out) &&
+           FreshSample(MonotonicNanoseconds(), out.ns) && out.reference == HeadTrackingReferenceGeneration();
+}
+
+void NoteReticleShown(bool shown) { (shown ? gShown : gNotShown).fetch_add(1, std::memory_order_relaxed); }
+
+std::string ReticleWorldReport()
+{
+    return " world=" + std::to_string(ReticleInWorld()) + " size=" + std::to_string(ReticleSizePercent()) +
+           " targets=" + std::to_string(gTargets.load()) + " hits=" + std::to_string(gTargetHits.load()) +
+           " refused=" + std::to_string(gTargetRefused.load()) + " lastMm=" + std::to_string(gLastTargetMm.load()) +
+           " shown=" + std::to_string(gShown.load()) + " notShown=" + std::to_string(gNotShown.load());
+}
 } // namespace preyvr::dll

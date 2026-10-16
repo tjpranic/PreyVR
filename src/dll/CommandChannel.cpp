@@ -542,6 +542,30 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
     return true;
 }
 
+// The world reticle (ReticleFollow.h). Kept out of Execute's chain for the same
+// C1061 reason as ExecutePose.
+bool ExecuteReticle(const std::vector<std::string>& args, std::ostringstream& out)
+{
+    const std::string& verb = args[0];
+    const auto arg = [&](std::size_t i, int fallback) {
+        int value = fallback;
+        if (i < args.size()) { ParseInt(args[i], value); }
+        return value;
+    };
+    if (verb == "aim.world") {
+        // Prey's crosshair at the depth it marks (1), or on the HUD panel (0).
+        // Saved by VR Options (reticle_world).
+        const auto result = Valued(args) ? SetReticleInWorld(static_cast<unsigned>(arg(1, 1))) : 0;
+        out << "aim.world result=" << result << ReticleWorldReport() << " scene:" << SceneQueryReport();
+    } else if (verb == "aim.reticlesize") {
+        const auto result = Valued(args) ? SetReticleSizePercent(static_cast<unsigned>(arg(1, 100))) : 0;
+        out << "aim.reticlesize result=" << result << ReticleWorldReport();
+    } else {
+        return false;
+    }
+    return true;
+}
+
 // Rung 1b, the RT_RenderScene double submission (DualSceneStereo.h). Kept out
 // of Execute's chain for the same C1061 reason as ExecutePose.
 bool ExecuteDualCommand(const std::vector<std::string>& args, std::ostringstream& out)
@@ -604,7 +628,7 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
     };
 
     if (ExecutePose(args, out) || ExecuteCarryCommand(args, out) || ExecuteGrenadeCommand(args, out) || ExecuteArmsCommand(args, out) ||
-        ExecuteWristCommand(args, out) || ExecuteDualCommand(args, out)) {
+        ExecuteWristCommand(args, out) || ExecuteDualCommand(args, out) || ExecuteReticle(args, out)) {
         return;
     }
     if (verb == "vr.options") {
@@ -898,6 +922,7 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
     } else if (verb == "aim.scene") {
         if(Valued(args))SetSceneReticle(arg(1,0));
         out<<"aim.scene"<<SceneQueryReport();
+
     } else if (verb == "haptics") {
         if(Valued(args))SetHapticsEnabled(arg(1,1));
         if(args.size()>2)SetHapticStrength(arg(2,70));

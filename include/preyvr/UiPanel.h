@@ -1,6 +1,7 @@
 #pragma once
 #include "preyvr/VrMath.h"
 #include <array>
+#include <cstdint>
 #include <optional>
 
 namespace preyvr::ui {
@@ -68,6 +69,45 @@ MenuAnchor AnchorMenu(const Pose& head, const std::array<Eye,2>& eyes);
 // (AroundHead). Nothing when the fit refuses.
 std::optional<Panel> PlaceMenu(const MenuAnchor& anchor, float aspect, float distance, float scale,
                                float margin, float right, float up);
+// The head without roll, its pitch held within +-`maxPitch` radians: where a
+// popup opens, in front of the gaze. Looking down at a note on a desk puts its
+// panel down there, tilted back to face the eyes, where a menu would go to eye
+// level; past the limit it stops, so a note opened looking at the floor is not
+// laid flat on it. The way the face is turned is UprightHead's, so a look
+// straight down or up is handled as it is there. A non-finite head is returned
+// unchanged, for FitPanel to refuse.
+Pose GazeHead(const Pose& head, float maxPitch);
+// **A popup held where it opened** (the note panel: Prey's notes and books).
+// The anchor -- the gaze head and the eyes carried with it -- is taken on the
+// first frame the popup is shown and kept while it stays up, so turning the
+// head looks around the page instead of carrying it along. It is let go once
+// the popup has been gone for longer than kPopupGraceNs, which a frame or two
+// the capture misses never is, so the next opening is placed afresh in front of
+// the wearer. A completed recenter (an even reference generation other than the
+// anchor's; odd is one in progress) places it afresh too, as it does a menu.
+inline constexpr float kPopupMaxPitch=.6108652f; // 35 degrees
+inline constexpr std::uint64_t kPopupGraceNs=300'000'000;
+struct PopupAnchor { Pose gaze{}; std::array<Eye,2> eyes{}; };
+PopupAnchor AnchorPopup(const Pose& head, const std::array<Eye,2>& eyes);
+class PopupHold {
+public:
+    // Once per frame. `shown`: the popup has an image this frame. The anchor to
+    // place it from, or nothing when it is not shown -- or when it has never
+    // been seen with a usable head, which is not taken as an anchor.
+    const PopupAnchor* Update(bool shown, std::uint64_t nowNs, const Pose& head,
+                              const std::array<Eye,2>& eyes, std::uint64_t reference);
+    bool Held() const { return anchor_.has_value(); }
+    void Reset() { anchor_.reset(); }
+private:
+    std::optional<PopupAnchor> anchor_;
+    std::uint64_t lastShownNs_=0, reference_=0;
+};
+// A popup fitted from its anchor: straight ahead of the gaze at `distance`,
+// facing it (FitPanel). The same anchor gives the same panel, so re-placing it
+// every frame keeps it still; a changed size or distance re-places it from where
+// it opened, not from where the wearer now looks.
+std::optional<Panel> PlacePopup(const PopupAnchor& anchor, float aspect, float distance, float scale,
+                                float margin);
 // angle=0 is a plane; otherwise width is arc length. The panel pose always
 // denotes the visible surface centre, while OpenXR's cylinder pose is its axis.
 struct Surface { Panel panel{}; float angle=0; };
@@ -109,19 +149,34 @@ struct PointerButtons {
 };
 // Unclipped canvas position of a head-relative ray on a front-facing HUD plane.
 std::optional<std::array<float,2>> PanelFraction(float tanX,float tanY,float width,float height,float distance);
+// **A quad centred on `center`, facing `eye` square-on and upright**: its face
+// (+Z) toward the eye, its edges level with the floor (no roll), `width` by
+// `height`. The world reticle (XrSessionHost) at the aim's hit point. Nothing
+// for a non-finite input, a non-positive size, or the eye at the centre; seen
+// from straight above or below, its right is +X.
+std::optional<Panel> FacingQuad(const Vec3& center, const Vec3& eye, float width, float height);
+// The width that keeps a texture's angular size when it is moved from the HUD
+// panel (`panelWidth` wide at `panelDistance`) to `distance` away, times
+// `scale`: what the world reticle is drawn at, so it looks the size it did on
+// the HUD. Zero for a non-finite or non-positive input.
+float AngularWidth(float distance, float panelWidth, float panelDistance, float scale);
 
 // **What one XR frame submits, bottom to top** (XrSessionHost). The game's menu
 // panel and the world are exclusive. VR Options goes over either -- the running
 // game or a game menu, its stereo half and guide card -- under the laser. While
-// it is open the HUD and text panel stay out (they are still captured, so they
-// do not fall back into the world), as they would sit in front of it unseen.
+// it is open the HUD, wheel, note and text panels stay out (they are still
+// captured, so they do not fall back into the world), as they would sit in front
+// of it unseen. The reticle is over the HUD it came out of and under the wheel,
+// which hides it anyway; the note panel under the text panel: a subtitle reads
+// over an open book.
 // The wrist, slot and fade layers are their callers' to gate: they pause while
 // VR Options has the controls, which is more than not being drawn.
 enum class FrameLayer : unsigned char {
-    world, menu, menuCylinder, menuRightEye, guide, hud, text, options, beam, cursor, wrist, slot, fade };
+    world, menu, menuCylinder, menuRightEye, guide, hud, reticle, wheel, note, text, options, beam, cursor, wrist,
+    slot, fade };
 struct FrameShown {
-    bool menu=false,menuCylinder=false,menuRightEye=false,guide=false,hud=false,text=false,options=false;
-    bool beam=false,cursor=false,wrist=false,slot=false,fade=false;
+    bool menu=false,menuCylinder=false,menuRightEye=false,guide=false,hud=false,reticle=false,wheel=false,note=false;
+    bool text=false,options=false,beam=false,cursor=false,wrist=false,slot=false,fade=false;
 };
 struct FrameLayers { std::array<FrameLayer,12> layers{}; unsigned count=0; };
 FrameLayers ComposeFrame(const FrameShown& shown);

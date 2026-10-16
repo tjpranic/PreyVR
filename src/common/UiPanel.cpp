@@ -27,6 +27,26 @@ std::optional<std::array<float,2>> PanelFraction(float tanX,float tanY,float wid
     if(!std::isfinite(result[0])||!std::isfinite(result[1]))return {};
     return result;
 }
+std::optional<Panel> FacingQuad(const Vec3& center, const Vec3& eye, float width, float height) {
+    const auto finite=[](const Vec3& v){return std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(v.z);};
+    if(!finite(center)||!finite(eye)||!std::isfinite(width)||!std::isfinite(height)||!(width>0)||!(height>0))return {};
+    Vec3 z{eye.x-center.x,eye.y-center.y,eye.z-center.z};
+    const float length=std::sqrt(z.x*z.x+z.y*z.y+z.z*z.z);
+    if(!(length>1e-4f))return {};
+    z={z.x/length,z.y/length,z.z/length};
+    // Right is level: across the floor, perpendicular to the line of sight.
+    Vec3 x{z.z,0,-z.x}; // up (0,1,0) cross z
+    float n=std::sqrt(x.x*x.x+x.z*x.z);
+    if(!(n>1e-4f)){x={1,0,0};n=1;} // straight above or below: any level right will do
+    x={x.x/n,0,x.z/n};
+    const Vec3 y{z.y*x.z-z.z*x.y,z.z*x.x-z.x*x.z,z.x*x.y-z.y*x.x}; // z cross x
+    return Panel{Pose{Normalize(stereo::QuaternionFromBasis(x,y,z)),center},width,height};
+}
+float AngularWidth(float distance, float panelWidth, float panelDistance, float scale) {
+    if(!std::isfinite(distance)||!std::isfinite(panelWidth)||!std::isfinite(panelDistance)||!std::isfinite(scale)||
+       !(distance>0)||!(panelWidth>0)||!(panelDistance>0)||!(scale>0))return 0;
+    return distance*panelWidth/panelDistance*scale;
+}
 namespace {
 bool Valid(const Pose& p) {
     PoseValidity v{true,true,true,true,0};
@@ -193,6 +213,40 @@ std::optional<Panel> PlaceMenu(const MenuAnchor& anchor, float aspect, float dis
     if(panel)panel->pose=AroundHead(anchor.upright,panel->pose,right,up);
     return panel;
 }
+Pose GazeHead(const Pose& head, float maxPitch) {
+    if (!Valid(head) || !std::isfinite(maxPitch)) return head;
+    // The pitch from the forward axis, which roll turns about and so cannot
+    // change; then tipped about the upright head's own X, so no roll comes back.
+    // About +X, a positive angle tips -Z up: (0, sin t, -cos t).
+    const auto forward=Rotate(head.orientation,Vec3{0,0,-1});
+    const float limit=std::clamp(maxPitch,0.f,1.5f);
+    const float pitch=std::clamp(std::asin(std::clamp(forward.y,-1.f,1.f)),-limit,limit);
+    const auto upright=UprightHead(head);
+    return Pose{Normalize(Multiply(upright.orientation,Quaternion{std::sin(pitch*.5f),0,0,std::cos(pitch*.5f)})),
+                head.position};
+}
+PopupAnchor AnchorPopup(const Pose& head, const std::array<Eye,2>& eyes) {
+    const auto gaze=GazeHead(head,kPopupMaxPitch);
+    return {gaze,LevelledEyes(head,gaze,eyes)};
+}
+const PopupAnchor* PopupHold::Update(bool shown, std::uint64_t now, const Pose& head,
+                                     const std::array<Eye,2>& eyes, std::uint64_t reference) {
+    if (!shown) {
+        if (anchor_ && now>lastShownNs_ && now-lastShownNs_>kPopupGraceNs) anchor_.reset();
+        return nullptr;
+    }
+    lastShownNs_=now;
+    const bool recentred=reference%2==0 && reference!=reference_;
+    if ((!anchor_ || recentred) && Valid(head) && Valid(eyes[0]) && Valid(eyes[1])) {
+        anchor_=AnchorPopup(head,eyes);
+        reference_=reference;
+    }
+    return anchor_ ? &*anchor_ : nullptr;
+}
+std::optional<Panel> PlacePopup(const PopupAnchor& anchor, float aspect, float distance, float scale,
+                                float margin) {
+    return FitPanel(anchor.gaze,anchor.eyes,aspect,distance,scale,margin);
+}
 namespace {
 // Upright, its face (+Z) turned toward the vertical line through `axis`.
 std::optional<Quaternion> FacingAxis(const Vec3& position,const Vec3& axis)
@@ -279,9 +333,12 @@ FrameLayers ComposeFrame(const FrameShown& s)
     const bool guide=s.menu&&s.guide;
     add(!s.menu?FrameLayer::world:s.menuCylinder?FrameLayer::menuCylinder:FrameLayer::menu);
     if(s.menu&&s.menuRightEye)add(FrameLayer::menuRightEye);
-    // The guide card belongs to the game menu; the HUD and text to the world.
+    // The guide card belongs to the game menu; the HUD, reticle, wheel, note and text to the world.
     if(guide)add(FrameLayer::guide);
     else if(!s.options&&!s.menu&&s.hud)add(FrameLayer::hud);
+    if(!s.options&&!s.menu&&s.reticle)add(FrameLayer::reticle);
+    if(!s.options&&!s.menu&&s.wheel)add(FrameLayer::wheel);
+    if(!s.options&&!s.menu&&s.note)add(FrameLayer::note);
     if(!s.options&&!s.menu&&s.text)add(FrameLayer::text);
     if(s.options)add(FrameLayer::options);
     if(s.beam)add(FrameLayer::beam);

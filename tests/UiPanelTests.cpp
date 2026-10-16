@@ -289,6 +289,105 @@ int main() {
     Require(!ui::FitPanel(ui::UprightHead(lost),ui::LevelledEyes(lost,ui::UprightHead(lost),plain),16.f/9),
         "a non-finite head is refused, not levelled into a plausible pose");
 
+    // --- popups: placed in front of the gaze, held where they opened -------
+    {
+        const auto forwardOf=[](const Pose& p){return Rotate(p.orientation,{0,0,-1});};
+        const auto pitchOf=[&](const Pose& p){return std::asin(forwardOf(p).y);};
+        const auto yawOf=[&](const Pose& p){const auto f=forwardOf(p);return std::atan2(-f.x,-f.z);};
+        // Looking a little down, head rolled: the pitch is kept, the roll is not.
+        const Pose reading{Normalize(Multiply(Multiply(about(0,1,0,yaw),about(1,0,0,-.3f)),about(0,0,1,.35f))),
+                           {.3f,1.6f,-.2f}};
+        const auto gaze=ui::GazeHead(reading,ui::kPopupMaxPitch);
+        Require(near(gaze.position.x,.3f)&&near(gaze.position.y,1.6f)&&near(gaze.position.z,-.2f),
+            "the gaze head stays where the head is");
+        Require(near(yawOf(gaze),yaw)&&near(pitchOf(gaze),-.3f),"and looks where the head looks");
+        Require(near(Rotate(gaze.orientation,{1,0,0}).y,0),"without its roll");
+        // Looking further down than the limit (tilted is 0.7 rad down): held at the limit.
+        const auto steepGaze=ui::GazeHead(tilted,ui::kPopupMaxPitch);
+        Require(near(pitchOf(steepGaze),-ui::kPopupMaxPitch)&&near(yawOf(steepGaze),yaw),
+            "a steeper look is held at the pitch limit, still facing the same way");
+        const Pose floorward{Multiply(about(0,1,0,yaw),about(1,0,0,-1.5707963f)),{0,1.6f,0}};
+        Require(near(yawOf(ui::GazeHead(floorward,ui::kPopupMaxPitch)),yaw),
+            "straight down still faces the way the face is turned");
+        const Pose lostHead{{std::nanf(""),0,0,1},{}};
+        Require(!ui::FitPanel(ui::GazeHead(lostHead,ui::kPopupMaxPitch),plain,16.f/9),"a non-finite head is refused");
+
+        // Placed straight ahead of the gaze, tilted back to face the eyes, edges level.
+        const auto opened=ui::AnchorPopup(reading,eyesOf(reading,plain));
+        const auto note=ui::PlacePopup(opened,16.f/9,1.4f,1.f,ui::kDefaultFitMargin);
+        Require(note.has_value(),"a popup is placed from its anchor");
+        const auto f=forwardOf(gaze);
+        Require(near(note->pose.position.x,.3f+f.x*1.4f)&&near(note->pose.position.y,1.6f+f.y*1.4f)&&
+            near(note->pose.position.z,-.2f+f.z*1.4f),"at the distance asked for, along the gaze");
+        const auto normal=Rotate(note->pose.orientation,{0,0,1});
+        Require(near(normal.x,-f.x)&&near(normal.y,-f.y)&&near(normal.z,-f.z),"facing the eyes square-on");
+        Require(near(Rotate(note->pose.orientation,{1,0,0}).y,0),"its edges level");
+        Require(ui::PlacePopup(ui::AnchorPopup(tilted,eyesOf(tilted,plain)),16.f/9,1.4f,1.f,ui::kDefaultFitMargin).has_value(),
+            "opened looking steeply down and rolled, it still fits: the eyes are carried with the gaze");
+
+        // Held where it opened: turning the head does not carry it.
+        const Pose turnedAway{Normalize(Multiply(about(0,1,0,yaw+.8f),about(1,0,0,.2f))),{.5f,1.6f,0}};
+        ui::PopupHold hold;
+        constexpr std::uint64_t ms=1'000'000;
+        Require(!hold.Update(false,0,reading,eyesOf(reading,plain),0)&&!hold.Held(),"nothing shown, nothing held");
+        const auto* first=hold.Update(true,1000*ms,reading,eyesOf(reading,plain),2);
+        Require(first&&near(yawOf(first->gaze),yaw),"the first frame shown anchors it where the wearer looks");
+        const auto* turning=hold.Update(true,1011*ms,turnedAway,eyesOf(turnedAway,plain),2);
+        Require(turning&&near(yawOf(turning->gaze),yaw)&&near(pitchOf(turning->gaze),-.3f),
+            "turning the head while it is up leaves it where it opened");
+        const auto placedAgain=ui::PlacePopup(*turning,16.f/9,1.4f,1.f,ui::kDefaultFitMargin);
+        Require(placedAgain&&near(placedAgain->pose.position.x,note->pose.position.x)&&
+            near(placedAgain->pose.position.z,note->pose.position.z),"re-placed every frame, it stays still");
+        Require(!hold.Update(false,1200*ms,turnedAway,eyesOf(turnedAway,plain),2)&&hold.Held(),
+            "a missed frame shows nothing but keeps the anchor");
+        const auto* back=hold.Update(true,1250*ms,turnedAway,eyesOf(turnedAway,plain),2);
+        Require(back&&near(yawOf(back->gaze),yaw),"shown again within the grace, it is where it was");
+        hold.Update(false,1400*ms,turnedAway,eyesOf(turnedAway,plain),2);
+        Require(hold.Held(),"gone for less than the grace: still held");
+        hold.Update(false,1251*ms+ui::kPopupGraceNs,turnedAway,eyesOf(turnedAway,plain),2);
+        Require(!hold.Held(),"gone for longer: let go");
+        const auto* reopened=hold.Update(true,1700*ms,turnedAway,eyesOf(turnedAway,plain),2);
+        Require(reopened&&near(yawOf(reopened->gaze),yaw+.8f),"the next opening is placed where the wearer now looks");
+        Require(near(yawOf(hold.Update(true,1711*ms,reading,eyesOf(reading,plain),3)->gaze),yaw+.8f),
+            "a recenter in progress (odd generation) leaves it");
+        Require(near(yawOf(hold.Update(true,1722*ms,reading,eyesOf(reading,plain),4)->gaze),yaw),
+            "a completed recenter places it afresh in front of the wearer");
+        Require(near(yawOf(hold.Update(true,1733*ms,turnedAway,eyesOf(turnedAway,plain),4)->gaze),yaw),
+            "once only per recenter");
+        hold.Reset();
+        Require(!hold.Held(),"reset lets go");
+        Require(!hold.Update(true,1744*ms,lostHead,eyesOf(reading,plain),4)&&!hold.Held(),
+            "an unusable head is never taken as an anchor");
+        Require(hold.Update(true,1755*ms,reading,eyesOf(reading,plain),4)&&hold.Held(),"the next usable one is");
+    }
+
+    // --- the world reticle: a quad at the hit point, facing the eyes -----------
+    {
+        const Vec3 eye{.3f,1.6f,-.2f};
+        for(const Vec3 target:{Vec3{.3f,1.6f,-10.2f},Vec3{3.f,.4f,-6.f},Vec3{-2.f,2.5f,1.f},Vec3{.31f,-3.f,-.25f}}) {
+            const auto quad=ui::FacingQuad(target,eye,.4f,.3f);
+            Require(quad.has_value(),"a quad is placed at the target");
+            Require(near(quad->pose.position.x,target.x)&&near(quad->pose.position.y,target.y)&&
+                near(quad->pose.position.z,target.z)&&near(quad->width,.4f)&&near(quad->height,.3f),
+                "centred on the target, at the size asked for");
+            Vec3 toEye{eye.x-target.x,eye.y-target.y,eye.z-target.z};
+            const float d=std::sqrt(toEye.x*toEye.x+toEye.y*toEye.y+toEye.z*toEye.z);
+            toEye={toEye.x/d,toEye.y/d,toEye.z/d};
+            const auto face=Rotate(quad->pose.orientation,{0,0,1});
+            Require(std::abs(face.x-toEye.x)<1e-3f&&std::abs(face.y-toEye.y)<1e-3f&&std::abs(face.z-toEye.z)<1e-3f,
+                "its face toward the eye, square-on");
+            Require(std::abs(Rotate(quad->pose.orientation,{1,0,0}).y)<1e-4f,"its edges level: no roll");
+            Require(Rotate(quad->pose.orientation,{0,1,0}).y>0,"upright, not upside down");
+        }
+        Require(ui::FacingQuad({0,0,0},{0,5,0},1,1).has_value(),"seen from straight above, still placed");
+        Require(!ui::FacingQuad(eye,eye,1,1),"the eye at the centre: nothing");
+        Require(!ui::FacingQuad({0,0,-1},eye,0,1)&&!ui::FacingQuad({std::nanf(""),0,0},eye,1,1),"no size or a lost target: nothing");
+        // Moved from the HUD panel (2 m) to 10 m, it is five times as wide: the same angle.
+        Require(near(ui::AngularWidth(10.f,2.3f,2.f,1.f),11.5f),"five times as far, five times as wide");
+        Require(near(ui::AngularWidth(10.f,2.3f,2.f,1.5f),17.25f),"and the size dial scales it");
+        Require(ui::AngularWidth(-1.f,2.3f,2.f,1.f)==0&&ui::AngularWidth(10.f,2.3f,0,1.f)==0,"nonsense gives nothing");
+    }
+
     // What a frame submits, bottom to top.
     using L=ui::FrameLayer;
     const auto is=[](const ui::FrameLayers& got,std::initializer_list<L> want){
@@ -296,12 +395,15 @@ int main() {
         unsigned n=0;for(const L l:want)if(got.layers[n++]!=l)return false;
         return true;
     };
-    ui::FrameShown play;play.hud=play.text=play.beam=play.cursor=play.wrist=play.slot=play.fade=true;
-    Require(is(ui::ComposeFrame(play),{L::world,L::hud,L::text,L::beam,L::cursor,L::wrist,L::slot,L::fade}),
-        "gameplay: the world, then the HUD and text, the laser, wrist, slot and fade");
+    ui::FrameShown play;
+    play.hud=play.reticle=play.wheel=play.note=play.text=play.beam=play.cursor=play.wrist=play.slot=play.fade=true;
+    Require(is(ui::ComposeFrame(play),{L::world,L::hud,L::reticle,L::wheel,L::note,L::text,L::beam,L::cursor,L::wrist,
+        L::slot,L::fade}),
+        "gameplay: the world, then the HUD, the reticle, the wheel over them, note and text, the laser, wrist, slot and fade");
+    Require(ui::ComposeFrame(play).count<=ui::FrameLayers{}.layers.size(),"every gameplay layer at once fits");
     auto over=play;over.options=true;over.wrist=over.slot=over.fade=false; // paused by their callers meanwhile
     Require(is(ui::ComposeFrame(over),{L::world,L::options,L::beam,L::cursor}),
-        "VR Options over the running game: the world under it, the laser over it, the HUD and text out");
+        "VR Options over the running game: the world under it, the laser over it, the HUD, wheel, note and text out");
     over.wrist=over.slot=over.fade=true;
     Require(is(ui::ComposeFrame(over),{L::world,L::options,L::beam,L::cursor,L::wrist,L::slot,L::fade}),
         "the wrist, slot and fade are their callers' to gate: what is shown is drawn");
@@ -311,8 +413,10 @@ int main() {
     auto options=menu;options.options=true;
     Require(is(ui::ComposeFrame(options),{L::menuCylinder,L::menuRightEye,L::guide,L::options,L::beam,L::cursor}),
         "VR Options over a game menu: the whole menu stays under it");
-    ui::FrameShown flatMenu;flatMenu.menu=flatMenu.options=flatMenu.hud=flatMenu.text=true;
-    Require(is(ui::ComposeFrame(flatMenu),{L::menu,L::options}),"a flat game menu is the quad, VR Options over it, no HUD or text");
+    ui::FrameShown flatMenu;
+    flatMenu.menu=flatMenu.options=flatMenu.hud=flatMenu.reticle=flatMenu.wheel=flatMenu.note=flatMenu.text=true;
+    Require(is(ui::ComposeFrame(flatMenu),{L::menu,L::options}),
+        "a flat game menu is the quad, VR Options over it, no HUD, wheel, note or text");
     ui::FrameShown everything;
     everything.menuRightEye=everything.guide=everything.hud=everything.text=true;
     everything.beam=everything.cursor=everything.wrist=everything.slot=everything.fade=true;

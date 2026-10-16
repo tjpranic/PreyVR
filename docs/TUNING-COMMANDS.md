@@ -116,6 +116,9 @@ this session. "Menu only" means no command reaches it.
 | Interface | Text panel distance (`ui_text`) | 100–200 cm | 140 | `ui.text <100..200>` |
 | Interface | Laser hand (`pointer_hand`) | left (0), right (1), buttons only (2) | right | `ui.pointer <0..2>` |
 | Interface | HUD style (`hud_layer`) | in the world (0), floating panel (1) | panel | `hud.layer <0\|1>` |
+| Interface | Reticle (`reticle_world`) | on the HUD (0), in the world (1) | world | `aim.world <0\|1>` |
+| Interface | Reticle size (`reticle_size`) | 50–200% | 100 | `aim.reticlesize <percent>` |
+| Interface | Reticle fallback distance (`reticle_fallback_mm`) | 500–200000 mm | 10000 | `aim.reticleconverge <mm>` |
 | Equipment | Body holsters (`holsters`) | on/off | off | menu only |
 | Equipment | Wrist status (`wrist`) | on/off | on | menu only |
 | Equipment | Wrist display size (`wrist_size`) | 80–140 % | 100 | menu only |
@@ -124,7 +127,6 @@ this session. "Menu only" means no command reaches it.
 | Equipment | Wrist display position (`wrist_along`) | −50–200 mm | 75 | `wrist.place <along> <hover> <width> <tilt>` |
 | Equipment | Wrist display height (`wrist_hover`) | 0–150 mm | 42 | `wrist.place` (second value) |
 | Equipment | Wrist display tilt (`wrist_tilt`) | 0–90 degrees | 40 | `wrist.place` (fourth value) |
-| Feedback | Reticle fallback distance (`reticle_fallback_mm`) | 500–200000 mm | 10000 | `aim.reticleconverge <mm>` |
 | Feedback | Controller feedback (`haptics`) | on/off | on | `haptics <0\|1> [strength]` |
 | Feedback | Feedback strength (`haptic_strength`) | 0–100 % | 70 | `haptics <0\|1> <strength>` |
 | Abilities | Psychic targeting (`psi_target`) | original (0), head (1), left controller (2) | original | `psi.target <0..2>` |
@@ -135,7 +137,6 @@ this session. "Menu only" means no command reaches it.
 | Experimental | Stick charges to surfaces (`grenade_deploy`) | on/off | off | `grenade.deploy <0\|1>` |
 | Experimental | Long-weapon hold-back (`long_reach`) | on/off | on | `ik.longreach <0\|1> ...` (first value) |
 | Experimental | Shots from the muzzle (`muzzle_aim`) | on/off | off | `aim.shot <0\|1>` |
-| Experimental | Scene reticle (`scene_reticle`) | on/off | off | `aim.scene <0\|1>` |
 | Experimental | Physical wrench (`physical_melee`) | on/off | off | menu only (`physical` reports) |
 | Experimental | Minimum swing speed (`swing_speed`) | 80–250 cm/s | 120 | menu only |
 | Experimental | Object nudges (`physical_contacts`) | on/off | off | menu only |
@@ -208,7 +209,7 @@ value report, as described above.
 | `ui.guide` | 0/1 | 0 | Controls card under game menus. **Menu.** |
 | `ui.distance` | 100–400 cm | 200 | Game menu distance, same apparent size. VR Options is placed apart (dragged by the laser). **Menu.** |
 | `ui.offset <right> <up>` | −90..90, −45..45 degrees | 0 0 | Moves the game menus around you on a cylinder, upright. Both values or neither. **Menu.** |
-| `ui.text` | 100–200 cm | 140 | Distance of notes, books, subtitles and tutorial cards. **Menu.** |
+| `ui.text` | 100–200 cm | 140 | Distance of notes, books, subtitles and tutorial cards. An open book or note moves to the new distance in the direction it opened. **Menu.** |
 | `ui.pointer` | 0 left, 1 right, 2 buttons only | 1 | Which hand's laser points at menus. **Menu.** |
 | `ui.panel` | 0 scene, 1 automatic, 2 force | 0 → VR 1 | Whether modal screens go to the floating panel. 2 is diagnostic. |
 | `ui.inventory` | 0/1 | 0 | Inventory and PDA on a see-through layer of their own. **Menu (Experimental).** |
@@ -343,8 +344,10 @@ value report, as described above.
 | Command | Values | Default | What it does |
 |---|---|---|---|
 | `aim.twohand` | 0/1 | 1 | Two-hand support aim. **Menu.** |
-| `aim.scene` | 0/1 | 0 | Reticle on the first surface along the aim. **Menu.** |
-| `aim.reticleconverge` | 500–200000 mm | 10000 | Reticle distance with no surface hit. **Menu** (Reticle fallback distance). |
+| `aim.world` | 0/1 | 1 | Prey's crosshair in the world at the aim's hit (1), or on the HUD panel (0). Reports its targets and frames shown. **Menu** (Reticle). |
+| `aim.reticlesize` | 50–200 % | 100 | The world crosshair's size against the HUD's. **Menu.** |
+| `aim.scene` | 0/1 | 0 | Runs the aim's scene query on its own (diagnostics); the world reticle runs it whatever this is. The old Scene Reticle setting is retired, and a saved `scene_reticle` is skipped. |
+| `aim.reticleconverge` | 500–200000 mm | 10000 | The world crosshair's distance when the aim hits nothing within 200 m; on the HUD, the point along the ray it marks. **Menu** (Reticle fallback distance). |
 | `aim.shot` | 0/1 | 0 | Shots leave the muzzle along the controller's aim. **Menu.** |
 | `aim.enable` | 0/1 | 0 → VR 1 | Controller aim. 0 aims with the head. |
 | `aim.reticle` / `aim.reticledispatch` | 0/1 | 0 → VR 1 | The crosshair follows the controller; the movie call half of that write. |

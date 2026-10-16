@@ -15,6 +15,7 @@ constexpr const wchar_t* psiNames[]={L"ORIGINAL",L"HEAD",L"LEFT CONTROLLER"};
 constexpr const wchar_t* bodyFollowNames[]={L"OFF",L"TURN ONLY",L"TURN AND MOVE"};
 constexpr const wchar_t* pointerNames[]={L"LEFT",L"RIGHT",L"BUTTONS ONLY"};
 constexpr const wchar_t* hudNames[]={L"IN THE WORLD",L"FLOATING PANEL"};
+constexpr const wchar_t* reticleNames[]={L"ON THE HUD",L"IN THE WORLD"};
 constexpr const wchar_t* carryHoldNames[]={L"PRESS TO TOGGLE",L"HOLD THE GRIP"};
 constexpr const wchar_t* grenadeNames[]={L"GAME THROW",L"HAND THROW"};
 using U=Unit;
@@ -33,8 +34,9 @@ constexpr Spec specs[]={
  {"holsters",L"BODY HOLSTERS",L"Right grip at right hip or left chest: store current weapon, then draw/stow. Assignments are not saved.",0,0,1,1},
  {"wrist",L"WRIST STATUS",L"Raise your left forearm and look at its back, like a watch: health, suit and psi.",1,0,1,1},
  {"wrist_size",L"WRIST DISPLAY SIZE",L"Adjust the status hologram size. Hidden in menus and during two-hand aiming.",100,80,140,10,U::percent},
- {"scene_reticle",L"SCENE RETICLE",L"Place the reticle on the first surface along the weapon's aim. Does not steer shots.",0,0,1,1},
- {"reticle_fallback_mm",L"RETICLE FALLBACK DISTANCE",L"Distance used when no scene hit is available, or Scene Reticle is off.",10000,500,200000,500,U::metresInMm},
+ {"reticle_world",L"RETICLE",L"In the world: the crosshair sits on what you aim at, so it stays sharp when you look there. On the HUD: on the floating HUD panel. Needs the HUD on its floating panel.",1,0,1,1,U::none,reticleNames},
+ {"reticle_size",L"RETICLE SIZE",L"The crosshair in the world, against its size on the HUD.",100,50,200,10,U::percent},
+ {"reticle_fallback_mm",L"RETICLE FALLBACK DISTANCE",L"How far the crosshair sits when your aim hits nothing within 200 m.",10000,500,200000,500,U::metresInMm},
  {"haptics",L"CONTROLLER FEEDBACK",L"Short pulses for VR menu changes and attaching the support hand.",1,0,1,1},
  {"haptic_strength",L"FEEDBACK STRENGTH",L"Scale controller feedback intensity. Zero silences all pulses.",70,0,100,10,U::percent},
  {"physical_melee",L"PHYSICAL WRENCH",L"Swing the wrench to strike. Native stamina and attack recovery still apply.",0,0,1,1},
@@ -95,14 +97,14 @@ constexpr int comfort[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,S
 constexpr int hands[]={TwoHand,GripToggle,SupportSnap,Psychoscope,ArmsFree,CarryHold,GrenadeHand,
     CarryThrowStrength,GrenadeThrowStrength};
 constexpr int interface_[]={UiScale,UiMargin,UiCurve,UiGuide,UiDistance,UiOffsetRight,UiOffsetUp,UiText,
-    PointerHand,HudLayer};
+    PointerHand,HudLayer,ReticleWorld,ReticleSize,ReticleFallback};
 constexpr int equipment[]={Holsters,ClearHolsterSlots,Wrist,WristSize,WristOnHud,WristTick,WristAlong,WristHover,
     WristTilt};
-constexpr int feedback[]={ReticleFallback,Haptics,HapticStrength};
+constexpr int feedback[]={Haptics,HapticStrength};
 constexpr int abilities[]={PsiTarget,Medkit,BeltHints};
 constexpr int setup[]={CalibratePosture,RecenterView,DebugOverlay};
 // Features still being proven, together with the settings that tune them.
-constexpr int experimental[]={CarryHand,GrenadeDeploy,LongReach,MuzzleAim,SceneReticle,PhysicalMelee,SwingSpeed,
+constexpr int experimental[]={CarryHand,GrenadeDeploy,LongReach,MuzzleAim,PhysicalMelee,SwingSpeed,
     PhysicalContacts,ContactStrength,InventoryLayer,InventoryStereo,InventoryDepth};
 constexpr std::span<const int> menuPages[]={comfort,hands,interface_,equipment,feedback,abilities,setup,experimental};
 constexpr const wchar_t* menuNames[]={L"COMFORT",L"HANDS",L"INTERFACE",L"EQUIPMENT",L"FEEDBACK",L"ABILITIES",
@@ -171,6 +173,10 @@ bool Parse(std::string_view text,Values& result,Present* present){
   if(err!=std::errc{}||end!=last)return false;
   const auto key=line.substr(0,sep);
   if(key=="version"){if(version||value!=1)return false;version=true;continue;}
+  // Retired settings: skipped, so a file saved before they went still loads.
+  // The next save leaves them out. scene_reticle: the world reticle runs the
+  // scene query itself (reticle_world).
+  if(key=="scene_reticle")continue;
   unsigned i=0;for(;i<Count&&key!=specs[i].key;++i){}
   if(i==Count||seen[i]||!Valid(i,value))return false;
   parsed[i]=value;seen[i]=true;

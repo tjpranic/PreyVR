@@ -189,6 +189,14 @@ bool HudMenuStateKnown();
 // PDA is visible without another known modal screen/dialog covering it.
 bool HudInventoryIsOpen();
 unsigned long long HudMenuEpoch();
+// The game is showing gameplay: the menu state is known and no native menu is
+// up. What the HUD, text and note captures gate on (HudLayer). Unlike the input
+// gate below it ignores VR Options, which takes the controllers but leaves the
+// game running: the movies must stay captured under it, or they fall back into
+// the game's own image -- both eyes, fixed to the head, behind the panel.
+bool HudGameplayShown();
+// HudGameplayShown, and VR Options does not own the controllers: what every
+// gameplay input lane waits for.
 bool HudGameplayInputAllowed();
 unsigned long long HudMenuStateSampleCount();
 

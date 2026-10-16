@@ -112,6 +112,13 @@ struct ReferenceFrame {
 
 Quaternion YawQuaternion(float radians);
 
+// **An engine-world point in tracking (OpenXR) space**, by the mapping one
+// gameplay frame defines: the engine point `anchor` is where the tracked `head`
+// sits, and `yawRadians` turns play space into the engine world
+// (ReferenceFrame). The inverse of how the aim lane carries a tracked pose into
+// the world, so a point along the aim ray lands where the controller points.
+Vec3 EngineToTracking(const Vec3& world, const Vec3& anchor, float yawRadians, const Pose& head);
+
 // The yaw a recenter should store, extracted from a live head pose.
 //
 // **This is the FAIL-CAM-019 seam, and the method is chosen to make the bug

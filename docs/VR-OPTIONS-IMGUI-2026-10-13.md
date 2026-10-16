@@ -181,7 +181,7 @@ panel: it floated in black, the game menu it was opened over gone too.
   or the menu it was opened over closes, it closes (`options::Menu::OverMenu`).
 - **Drawn over what is shown.** `ui::ComposeFrame` (`UiPanel.h`) orders a frame's
   layers: the world, or the game menu with its stereo half and guide card; then
-  VR Options; then the laser and cursor. While it is open the HUD, text panel,
+  VR Options; then the laser and cursor. While it is open the HUD, note and text panels,
   wrist, slot and fade layers stay out (the last three paused by their own
   lanes), so nothing nearer than the panel is drawn behind it. Layers do not
   depth-test, so the panel reads as on top of the world even with a wall nearer.

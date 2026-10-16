@@ -504,8 +504,33 @@ void TestRolledRecenterDoesNotTiltTheComposition()
         "a crooked recenter does not tilt the composed camera");
 }
 
+// An engine point back in tracking space: the inverse of carrying a tracked
+// offset into the world (anchor + yaw * OpenXR-to-engine), so a point on the
+// aim ray lands where the controller points.
+void TestEngineToTracking()
+{
+    const Pose head{Normalize(Quaternion{0.1f, 0.3f, -0.05f, 0.95f}), {0.4f, 1.6f, -0.2f}};
+    const Vec3 anchor{120.0f, -45.0f, 7.5f};
+    for (const float yaw : {0.0f, 0.7f, -2.4f, 3.1f}) {
+        for (const Vec3 offset : {Vec3{0, 0, -2}, Vec3{0.3f, -0.2f, -10}, Vec3{-1.5f, 0.8f, 0.4f}}) {
+            const Vec3 engine = Rotate(YawQuaternion(yaw), Rotate(kOpenXrToEngine, offset));
+            const Vec3 world{anchor.x + engine.x, anchor.y + engine.y, anchor.z + engine.z};
+            const Vec3 back = EngineToTracking(world, anchor, yaw, head);
+            Require(NearVec(back, {head.position.x + offset.x, head.position.y + offset.y,
+                                   head.position.z + offset.z}, 1e-4f),
+                    "an engine point maps back to the tracked offset it was carried from");
+        }
+    }
+    // Engine forward (+Y) with no yaw is OpenXR forward (-Z), engine up (+Z) is +Y.
+    Require(NearVec(EngineToTracking({0, 2, 0}, {}, 0.0f, Pose{}), {0, 0, -2}), "engine forward is tracking forward");
+    Require(NearVec(EngineToTracking({0, 0, 1}, {}, 0.0f, Pose{}), {0, 1, 0}), "engine up is tracking up");
+    // The anchor is where the head is: the anchor itself maps to the head's position.
+    Require(NearVec(EngineToTracking(anchor, anchor, 1.2f, head), head.position), "the anchor maps to the head");
+}
+
 int main()
 {
+    TestEngineToTracking();
     TestHeadAtRecenterLeavesGameRotationUntouched();
     TestHeadDeltaAddsToGameRotation();
     TestRolledRecenterDoesNotTiltTheComposition();

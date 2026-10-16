@@ -931,6 +931,31 @@ is the shape to perfect rather than abandon.
 - **Recovery:** `body.nudge` and `body.turn` take `[delayS]` (default 5). The next run logged
   `detail=nudge_done movedMm=200`, with `nudgeDriftMaxMm=0`.
 
+## F-021 - VR Options over the running game dropped the HUD and popups into the world behind it
+
+- **Date:** found 2026-10-15 in the headset, fixed the same day. Present since VR Options could
+  open over the running game (2026-10-14).
+- **Target:** The HUD, text and note captures (`HudLayer`), with VR Options open over gameplay.
+- **Intent:** While VR Options is open, keep capturing the HUD, subtitles and books but leave them
+  off the frame, so nothing is drawn behind the panel (`ui::ComposeFrame`; "they are still
+  captured, so they do not fall back into the world").
+- **Mechanism:**
+  - The captures were gated on `HudGameplayInputAllowed()`, which is "no menu up".
+  - In September the same function also became false while VR Options owns the controllers. Back
+    then VR Options opened only over menus, where the captures stop anyway.
+  - Once it opened over the running game, opening it stopped the captures. Each movie drew into
+    the game's own image instead: both eyes, fixed to the head, behind the panel.
+- **Result:** The wearer opened a book, then VR Options. The page sat behind the panel "as if in
+  the background", following the headset. The HUD and subtitles took the same path, less
+  visibly. The book's anchor was also let go 300 ms in, so after closing VR Options the page would
+  have reopened wherever the wearer looked.
+- **Rule:** Gate what is *displayed* on what the game shows (`HudGameplayShown()`: menu state
+  known, no native menu). Gate what is *done* on who owns the controllers
+  (`HudGameplayInputAllowed()`). A layer can be hidden from the frame without being returned to
+  the scene.
+- **Recovery:** The HUD and text captures (`WantMovie`, `CaptureText`) gate on `HudGameplayShown()`.
+  Built and tested offline (71/71); awaiting the headset recheck.
+
 ---
 
 # F-009 -- the viewmodel character pointer is EPHEMERAL, and pinning it is a trap

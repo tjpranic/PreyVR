@@ -28,6 +28,10 @@ The notebook separates evidence from plans so implementation follows demonstrate
 > The VR Options panel, drawn with Dear ImGui over the game or a game menu and moved with
 > the laser; it replaced the classic card, and each controller's bindings have their own
 > module: [`VR-OPTIONS-IMGUI-2026-10-13.md`](VR-OPTIONS-IMGUI-2026-10-13.md).
+> Books and notes held where they open, in front of the gaze, while subtitles and tutorial
+> cards follow the head: [`POPUP-ANCHOR-2026-10-15.md`](POPUP-ANCHOR-2026-10-15.md).
+> The radial wheel and the reticle as parts lifted out of the HUD movie, with the movie's
+> layout read offline: [`HUD-PARTS-2026-10-15.md`](HUD-PARTS-2026-10-15.md).
 > Every **Tune Prey VR.cmd** command, what the VR Options menu saves, and what wins over
 > what: [`TUNING-COMMANDS.md`](TUNING-COMMANDS.md).
 >

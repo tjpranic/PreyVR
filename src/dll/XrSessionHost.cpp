@@ -23,6 +23,7 @@
 #include "NativeWristTexture.h"
 #include "WristLane.h"
 #include "AimTakeover.h"
+#include "ReticleFollow.h"
 #include "DebugOverlay.h"
 #include "preyvr/UiPanel.h"
 #include "preyvr/LatestSnapshot.h"
@@ -105,10 +106,23 @@ struct Host {
     bool pointerReady=false,pointerAttempted=false,cylinderSupported=false;
     std::unique_ptr<InventorySwapchain> hudSwapchain;
     bool hudSwapchainLogged=false;
-    // The text panel: note, subtitle and tutorial movies, lifted out of the
-    // scene like the HUD and shown on the same panel above it.
+    // The text panel: subtitle and tutorial movies, lifted out of the scene
+    // like the HUD and shown on a panel nearer than it, following the head.
     std::unique_ptr<InventorySwapchain> textSwapchain;
     bool textSwapchainLogged=false;
+    // The note panel: notes and books, captured like the text panel but held
+    // where they opened (ui::PopupHold) rather than following the head.
+    std::unique_ptr<InventorySwapchain> noteSwapchain;
+    bool noteSwapchainLogged=false;
+    ui::PopupHold noteHold;
+    // The radial wheel: lifted out of the HUD (HudLayer RequestHudPart) and held
+    // where it opened, as the note panel is.
+    std::unique_ptr<InventorySwapchain> wheelSwapchain;
+    bool wheelSwapchainLogged=false;
+    ui::PopupHold wheelHold;
+    // The world reticle: the crosshair lifted out of the HUD, at the aim's hit.
+    std::unique_ptr<InventorySwapchain> reticleSwapchain;
+    bool reticleSwapchainLogged=false;
     // A render target view on the held first eye, matching the view format
     // the game draws its overlays with, and the backbuffer it held from.
     ID3D11RenderTargetView* heldTargetView=nullptr;
@@ -716,6 +730,11 @@ void Teardown()
     gHost.inventoryRightSwapchain.reset();
     gHost.hudSwapchain.reset();
     gHost.textSwapchain.reset();
+    gHost.noteSwapchain.reset();
+    gHost.noteHold.Reset();
+    gHost.wheelSwapchain.reset();
+    gHost.wheelHold.Reset();
+    gHost.reticleSwapchain.reset();
     gHost.optionsLayer.Reset();
     gHost.slotSwapchain.reset();
     if(gHost.slotTexture)gHost.slotTexture->Release();
@@ -725,6 +744,7 @@ void Teardown()
     gHost.wristSwapchain.reset();
     gHost.wristFitter.reset();
     ResetNativeWristCapture();
+    ResetHudParts();
     ResetWristLane();
     ClearHolsters();
     ResetVrOptionsSession();
@@ -785,6 +805,55 @@ const ui::MenuAnchor& MenuAnchorFor(const Pose& head, const XrView (&views)[2], 
         gHost.menuAnchorReference = reference;
     }
     return *gHost.menuAnchor;
+}
+
+// One captured movie's texture into its own swapchain (the text and note
+// panels), created on first use. True when this frame's image is ready to
+// submit. A refusal logs which step, the runtime's answer and both formats,
+// drops the swapchain and hands the movies back to the scene through `refuse`,
+// where they are drawn per eye. XR frame thread, under gMutex.
+bool UploadPanelCapture(std::unique_ptr<InventorySwapchain>& swapchain, bool& logged,
+                        ID3D11Texture2D* texture, const char* detail, void (*refuse)(const char*))
+{
+    D3D11_TEXTURE2D_DESC desc{};texture->GetDesc(&desc);
+    if(!swapchain)swapchain=std::make_unique<InventorySwapchain>(InventorySwapchainApi{
+        xrEnumerateSwapchainFormats,xrCreateSwapchain,xrEnumerateSwapchainImages,
+        xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,xrDestroySwapchain});
+    if(!swapchain->Prepare(gHost.session,desc,gHost.colorFormat)) {
+        const auto refusal=swapchain->LastRefusal();
+        std::ostringstream line;
+        line<<"result=refused detail="<<detail<<" reason="<<InventorySwapchain::RefusalName(refusal)
+            <<" xrResult="<<swapchain->LastResult()<<" format="<<gHost.colorFormat
+            <<" captureFormat="<<desc.Format<<" size="<<desc.Width<<"x"<<desc.Height;
+        Log(line.str());
+        swapchain.reset();
+        refuse(InventorySwapchain::RefusalName(refusal));
+        return false;
+    }
+    if(!logged) {
+        logged=true;
+        std::ostringstream line;
+        line<<"result=0 detail="<<detail<<" format="<<gHost.colorFormat<<" captureFormat="<<desc.Format
+            <<" size="<<desc.Width<<"x"<<desc.Height;
+        Log(line.str());
+    }
+    ID3D11DeviceContext* context=nullptr;gHost.device->GetImmediateContext(&context);
+    const auto upload=swapchain->Copy(context,texture);
+    if(context)context->Release();
+    if(upload==InventorySwapchain::Upload::sessionFault){gStopRequested.store(true);refuse("image_wait_or_release");}
+    return upload==InventorySwapchain::Upload::ready;
+}
+
+// A captured movie's panel: alpha-blended over the world, both eyes, the whole capture.
+void FillPanelLayer(XrCompositionLayerQuad& layer, const ui::Panel& p, XrSwapchain swapchain,
+                    const D3D11_TEXTURE2D_DESC& desc)
+{
+    layer.space=gHost.space;layer.eyeVisibility=XR_EYE_VISIBILITY_BOTH;
+    layer.layerFlags=XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+    layer.pose={{p.pose.orientation.x,p.pose.orientation.y,p.pose.orientation.z,p.pose.orientation.w},
+                {p.pose.position.x,p.pose.position.y,p.pose.position.z}};
+    layer.size={p.width,p.height};layer.subImage.swapchain=swapchain;
+    layer.subImage.imageRect={{0,0},{static_cast<int>(desc.Width),static_cast<int>(desc.Height)}};
 }
 
 // Reads Prey's live view camera and returns the frustum to declare.
@@ -1420,6 +1489,9 @@ void ServiceXrFrame(void* renderer)
     ID3D11Texture2D* inventoryTexture = InventoryLayerTexture(&inventoryRightTexture);
     ID3D11Texture2D* hudTexture = HudLayerTexture();
     ID3D11Texture2D* textTexture = TextLayerTexture();
+    ID3D11Texture2D* noteTexture = NoteLayerTexture();
+    const HudPartImage wheelImage = TakeHudPart(HudPart::wheel);
+    const HudPartImage reticleImage = TakeHudPart(HudPart::reticle);
     ID3D11Texture2D* nativeWristTexture = NativeWristLayerTexture();
     RequestNativeWristCapture(false);
     SetInventoryConsumerReady(nullptr);
@@ -1504,6 +1576,8 @@ void ServiceXrFrame(void* renderer)
         // Poses in the old space mean nothing in the new one; a placement kept
         // relative to the anchor still does, and is put back from the new one.
         gHost.optionsLayer.Close(nullptr);gHost.menuAnchor.reset();
+        gHost.noteHold.Reset(); // an open note or wheel is placed afresh in the new space
+        gHost.wheelHold.Reset();
         gHost.recalibrateSpace=HeadTrackingHasReference()==0;
         gHost.spaceChanges.erase(gHost.spaceChanges.begin());
         Log("tracking_space changed images_invalidated=1");
@@ -2026,6 +2100,7 @@ void ServiceXrFrame(void* renderer)
         guideLayer.subImage.imageRect={{0,0},{kGuideWidth,kGuideHeight}};
     }
     XrCompositionLayerQuad hudLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
+    float hudPanelWidth=0; // this frame's HUD panel at 2 m: what the world reticle keeps the size of
     bool hudActive=false;
     // A held eye may still contain the native reticle from before capture was
     // enabled/refused. Never add another HUD over that eye's baked-in copy.
@@ -2083,69 +2158,101 @@ void ServiceXrFrame(void* renderer)
                 hudLayer.size={p.width,p.height};hudLayer.subImage.swapchain=gHost.hudSwapchain->Handle();
                 hudLayer.subImage.imageRect={{0,0},{static_cast<int>(desc.Width),static_cast<int>(desc.Height)}};
                 SetHudLayerPresentation(true,p.width,p.height,2);
+                hudPanelWidth=p.width;
             }
         }
     }
     if(!hudActive)SetHudLayerPresentation(false);
-    // **The text panel.** Notes and books, subtitles and tutorial cards, lifted
-    // out of the scene like the HUD (HudLayer TextLayerTexture) and shown on the
-    // same panel fit, above it, so each keeps the place it has on screen. Not
-    // tied to the HUD layer's own capture: a frame may have text and no HUD.
+    // **The radial wheel.** Prey's Favorites Wheel, lifted out of the HUD while
+    // it is open (HudLayer RequestHudPart) and held where it opened, as a book is
+    // (ui::PopupHold): in front of where the wearer looked, at the HUD panel's
+    // distance and size, so it looks as it did on the HUD but stays put while the
+    // head turns. Asked for only with the HUD on its panel: drawn in the world
+    // instead, the HUD keeps its wheel. Over a game menu nothing is lifted.
+    RequestHudPart(HudPart::wheel,HudLayerEnabled() && haveViews && !panelActive);
+    // **The world reticle.** Prey's crosshair, with the interaction prompt and
+    // quick loot that follow it, lifted out of the HUD (HudPart::reticle) and
+    // redrawn centred, then shown where the aim ray hits (ReticleFollow
+    // PublishReticleTarget): its scene hit, else the fallback distance. The quad
+    // faces the eyes and is as wide, for its distance, as the HUD panel is at 2 m,
+    // times the size setting, so it looks the size it did on the HUD but at the
+    // depth it marks. Asked for only with the HUD on its panel and a fresh target;
+    // otherwise the crosshair stays on the HUD panel. A frame Prey hides it (the
+    // wheel, a menu) draws nothing.
+    ReticleTarget reticleTarget{};
+    const bool reticleTargetFresh=TryGetReticleTarget(reticleTarget);
+    RequestHudPart(HudPart::reticle,ReticleInWorld() && HudLayerEnabled() && haveViews && !panelActive && reticleTargetFresh);
+    XrCompositionLayerQuad reticleLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
+    bool reticleActive=false;
+    if(rendered && haveViews && !panelActive && reticleImage.texture && reticleImage.drawn && reticleTargetFresh &&
+       hudPanelWidth>0 &&
+       UploadPanelCapture(gHost.reticleSwapchain,gHost.reticleSwapchainLogged,reticleImage.texture,"reticle_swapchain",
+                          [](const char* reason){RefuseHudPart(HudPart::reticle,reason);})) {
+        D3D11_TEXTURE2D_DESC desc{};reticleImage.texture->GetDesc(&desc);
+        const Vec3 offset{reticleTarget.point.x-inputHead.position.x,reticleTarget.point.y-inputHead.position.y,
+                          reticleTarget.point.z-inputHead.position.z};
+        const float seen=std::sqrt(offset.x*offset.x+offset.y*offset.y+offset.z*offset.z);
+        const float width=ui::AngularWidth(seen,hudPanelWidth,2.0f,static_cast<float>(ReticleSizePercent())*.01f);
+        if(const auto quad=ui::FacingQuad(reticleTarget.point,inputHead.position,width,
+                                          width*static_cast<float>(desc.Height)/desc.Width)) {
+            FillPanelLayer(reticleLayer,*quad,gHost.reticleSwapchain->Handle(),desc);
+            reticleActive=true;
+        }
+    }
+    if(ReticleInWorld() && HudLayerEnabled() && rendered && haveViews && !panelActive)NoteReticleShown(reticleActive);
+    XrCompositionLayerQuad wheelLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
+    bool wheelActive=false;
+    const bool wheelShown=rendered && haveViews && !panelActive && wheelImage.texture;
+    const auto* wheelAnchor=gHost.wheelHold.Update(wheelShown,MonotonicNanoseconds(),inputHead,
+        wheelShown?OpticalEyes(views):std::array<ui::Eye,2>{},reference);
+    if(wheelAnchor && UploadPanelCapture(gHost.wheelSwapchain,gHost.wheelSwapchainLogged,wheelImage.texture,
+                                         "wheel_swapchain",[](const char* reason){RefuseHudPart(HudPart::wheel,reason);})) {
+        D3D11_TEXTURE2D_DESC desc{};wheelImage.texture->GetDesc(&desc);
+        if(const auto panel=ui::PlacePopup(*wheelAnchor,static_cast<float>(desc.Width)/desc.Height,2.0f,
+                static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f,UiFitMargin())) {
+            FillPanelLayer(wheelLayer,*panel,gHost.wheelSwapchain->Handle(),desc);
+            wheelActive=true;
+        }
+    }
+    // The text and note panels' size and distance. The HUD panel's physical
+    // size, brought nearer: FitPanel's size is an angle, so the scale carries the
+    // 2 m width to the nearer distance. The fit's corner test still shrinks it
+    // back inside the margin if needed.
+    const float textDistance=static_cast<float>(gTextPanelCm.load(std::memory_order_relaxed))*.01f;
+    const float textScale=static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f*(2.0f/textDistance);
+    // **The note panel.** Notes and books, lifted out of the scene like the HUD
+    // (HudLayer NoteLayerTexture) and held where they opened (ui::PopupHold):
+    // placed in front of where the wearer looked on the first frame one is shown
+    // and kept there while it stays up, so the head moves over the page instead
+    // of carrying it along. Re-placed each frame from that one anchor, so a
+    // changed distance or size applies where it opened.
+    XrCompositionLayerQuad noteLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
+    bool noteActive=false;
+    const bool noteShown=rendered && haveViews && !panelActive && noteTexture;
+    const auto* noteAnchor=gHost.noteHold.Update(noteShown,MonotonicNanoseconds(),inputHead,
+        noteShown?OpticalEyes(views):std::array<ui::Eye,2>{},reference);
+    if(noteAnchor && UploadPanelCapture(gHost.noteSwapchain,gHost.noteSwapchainLogged,noteTexture,"note_swapchain",
+                                        RefuseNoteLayer)) {
+        D3D11_TEXTURE2D_DESC desc{};noteTexture->GetDesc(&desc);
+        if(const auto panel=ui::PlacePopup(*noteAnchor,static_cast<float>(desc.Width)/desc.Height,textDistance,
+                                           textScale,UiFitMargin())) {
+            FillPanelLayer(noteLayer,*panel,gHost.noteSwapchain->Handle(),desc);
+            noteActive=true;
+        }
+    }
+    // **The text panel.** Subtitles and tutorial cards, lifted out of the scene
+    // the same way (HudLayer TextLayerTexture) and fitted to the head every
+    // frame, so each keeps the place it has on screen. Neither panel is tied to
+    // the HUD layer's own capture: a frame may have text and no HUD.
     XrCompositionLayerQuad textLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
     bool textActive=false;
-    if(rendered && haveViews && !panelActive && textTexture) {
+    if(rendered && haveViews && !panelActive && textTexture &&
+       UploadPanelCapture(gHost.textSwapchain,gHost.textSwapchainLogged,textTexture,"text_swapchain",RefuseTextLayer)) {
         D3D11_TEXTURE2D_DESC desc{};textTexture->GetDesc(&desc);
-        if(!gHost.textSwapchain)gHost.textSwapchain=std::make_unique<InventorySwapchain>(InventorySwapchainApi{
-            xrEnumerateSwapchainFormats,xrCreateSwapchain,xrEnumerateSwapchainImages,
-            xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,xrDestroySwapchain});
-        if(gHost.textSwapchain->Prepare(gHost.session,desc,gHost.colorFormat)) {
-            if(!gHost.textSwapchainLogged) {
-                gHost.textSwapchainLogged=true;
-                std::ostringstream line;
-                line<<"result=0 detail=text_swapchain format="<<gHost.colorFormat<<" captureFormat="<<desc.Format
-                    <<" size="<<desc.Width<<"x"<<desc.Height;
-                Log(line.str());
-            }
-            ID3D11DeviceContext* context=nullptr;gHost.device->GetImmediateContext(&context);
-            const auto upload=gHost.textSwapchain->Copy(context,textTexture);
-            if(context)context->Release();
-            textActive=upload==InventorySwapchain::Upload::ready;
-            if(upload==InventorySwapchain::Upload::sessionFault){gStopRequested.store(true);RefuseTextLayer("image_wait_or_release");}
-        } else {
-            const auto refusal=gHost.textSwapchain->LastRefusal();
-            std::ostringstream line;
-            line<<"result=refused detail=text_swapchain reason="<<InventorySwapchain::RefusalName(refusal)
-                <<" xrResult="<<gHost.textSwapchain->LastResult()<<" format="<<gHost.colorFormat
-                <<" captureFormat="<<desc.Format<<" size="<<desc.Width<<"x"<<desc.Height;
-            Log(line.str());
-            gHost.textSwapchain.reset();
-            // The movies go back into the scene, where they are drawn per eye.
-            RefuseTextLayer(InventorySwapchain::RefusalName(refusal));
-        }
-        std::array<ui::Eye,2> optical{};
-        for(int eye=0;eye<2;++eye) {
-            const auto& p=views[eye].pose;
-            optical[eye]={Pose{{p.orientation.x,p.orientation.y,p.orientation.z,p.orientation.w},
-                {p.position.x,p.position.y,p.position.z}},views[eye].fov.angleLeft,views[eye].fov.angleRight,
-                views[eye].fov.angleUp,views[eye].fov.angleDown};
-        }
-        // The HUD panel's physical size, brought nearer: FitPanel's size is an
-        // angle, so the scale carries the 2 m width to the nearer distance. The
-        // fit's corner test still shrinks it back inside the margin if needed.
-        const float textDistance=static_cast<float>(gTextPanelCm.load(std::memory_order_relaxed))*.01f;
-        const auto panel=ui::FitPanel(inputHead,optical,
-            static_cast<float>(desc.Width)/desc.Height,textDistance,
-            static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f*(2.0f/textDistance),
-            UiFitMargin());
-        textActive=textActive && panel.has_value();
-        if(textActive) {
-            const auto& p=*panel;
-            textLayer.space=gHost.space;textLayer.eyeVisibility=XR_EYE_VISIBILITY_BOTH;
-            textLayer.layerFlags=XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-            textLayer.pose={{p.pose.orientation.x,p.pose.orientation.y,p.pose.orientation.z,p.pose.orientation.w},
-                            {p.pose.position.x,p.pose.position.y,p.pose.position.z}};
-            textLayer.size={p.width,p.height};textLayer.subImage.swapchain=gHost.textSwapchain->Handle();
-            textLayer.subImage.imageRect={{0,0},{static_cast<int>(desc.Width),static_cast<int>(desc.Height)}};
+        if(const auto panel=ui::FitPanel(inputHead,OpticalEyes(views),static_cast<float>(desc.Width)/desc.Height,
+                                         textDistance,textScale,UiFitMargin())) {
+            FillPanelLayer(textLayer,*panel,gHost.textSwapchain->Handle(),desc);
+            textActive=true;
         }
     }
     XrCompositionLayerQuad wristLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
@@ -2357,7 +2464,8 @@ void ServiceXrFrame(void* renderer)
     // up, else the world -- the running game (ui::ComposeFrame has the order).
     ui::FrameShown shown;
     shown.menu=panelActive;shown.menuCylinder=panelActive&&surface.angle>0;shown.menuRightEye=inventoryStereoSubmitted;
-    shown.guide=guideActive;shown.hud=hudActive;shown.text=textActive;shown.options=optionsActive;
+    shown.guide=guideActive;shown.hud=hudActive;shown.reticle=reticleActive;shown.wheel=wheelActive;shown.note=noteActive;shown.text=textActive;
+    shown.options=optionsActive;
     shown.beam=beamActive;shown.cursor=cursorActive;shown.wrist=wristActive;shown.slot=slotActive;shown.fade=fadeActive;
     const auto header=[&](ui::FrameLayer which)->const XrCompositionLayerBaseHeader* {
         switch(which) {
@@ -2367,6 +2475,9 @@ void ServiceXrFrame(void* renderer)
         case ui::FrameLayer::menuRightEye:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&rightPanelLayer);
         case ui::FrameLayer::guide:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&guideLayer);
         case ui::FrameLayer::hud:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&hudLayer);
+        case ui::FrameLayer::reticle:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&reticleLayer);
+        case ui::FrameLayer::wheel:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&wheelLayer);
+        case ui::FrameLayer::note:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&noteLayer);
         case ui::FrameLayer::text:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&textLayer);
         case ui::FrameLayer::options:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&options.layer);
         case ui::FrameLayer::beam:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&beamLayer);

@@ -134,6 +134,14 @@ Quaternion YawQuaternion(float radians)
     return {0.0f, 0.0f, std::sin(half), std::cos(half)};
 }
 
+Vec3 EngineToTracking(const Vec3& world, const Vec3& anchor, float yawRadians, const Pose& head)
+{
+    const Vec3 offset{world.x - anchor.x, world.y - anchor.y, world.z - anchor.z};
+    const Vec3 play = Rotate(Conjugate(YawQuaternion(yawRadians)), offset);
+    const Vec3 local = Rotate(Conjugate(kOpenXrToEngine), play);
+    return {head.position.x + local.x, head.position.y + local.y, head.position.z + local.z};
+}
+
 namespace {
 
 // Below this horizontal length the forward axis is too close to vertical for its

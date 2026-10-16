@@ -82,8 +82,7 @@ dd::TessellateStats gLastStats;
 
 Vec3 EngineToXr(const GameplayPoseFrame& f, Vec3 anchor, Vec3 world)
 {
-    const Vec3 engine = Rotate(dd::Conjugate(stereo::YawQuaternion(f.yaw)), dd::Sub(world, anchor));
-    return dd::Add(f.tracking.head.position, Rotate(dd::Conjugate(stereo::kOpenXrToEngine), engine));
+    return stereo::EngineToTracking(world, anchor, f.yaw, f.tracking.head);
 }
 Vec3 EngineDirToXr(const GameplayPoseFrame& f, Vec3 direction)
 {

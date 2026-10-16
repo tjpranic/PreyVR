@@ -3,7 +3,10 @@
 #include "preyvr/VrMath.h"
 
 #include <windows.h>
+#include <cstdint>
 #include <string>
+
+namespace preyvr::aim { struct Sample; }
 
 // The indicative overlay: make Prey's own reticle sit where the controller points.
 //
@@ -132,4 +135,39 @@ DWORD ReticleCanvasY();
 DWORD ReticleFollowLastX();
 DWORD ReticleFollowLastY();
 
+
+// **The world reticle** (XrSessionHost): Prey's crosshair lifted out of the HUD
+// (HudPart::reticle) and shown in the world at the point it marks, instead of
+// on the HUD panel 2 m away, where it doubled whenever the eyes were on the
+// target. On by default; off leaves the crosshair on the HUD panel, where this
+// file's projection keeps placing it. Its depth is the aim's scene hit, so
+// while it is on the scene query runs (SceneQuery: aim.scene or this).
+DWORD SetReticleInWorld(unsigned enabled);
+unsigned ReticleInWorld();
+// Its size against the crosshair on the HUD, 50..200 percent.
+DWORD SetReticleSizePercent(unsigned percent);
+unsigned ReticleSizePercent();
+
+struct GameplayPoseFrame;
+// **Where it goes**: the aim ray's scene hit, else the fallback distance
+// (SetReticleConvergenceMillimetres), never nearer than kReticleNearestM, in
+// tracking space by the gameplay frame's own mapping (the anchor the ray was
+// built from, the head the frame was built with). `reference` is the recenter
+// generation it belongs to.
+inline constexpr float kReticleNearestM = 0.25f;
+struct ReticleTarget {
+    Vec3 point{};
+    float distance = 0.0f;
+    bool hit = false;
+    std::uint64_t ns = 0, reference = 0;
+};
+// Game thread, from the aim takeover after its scene query. Clears the target
+// when the aim is not usable, so the crosshair returns to the HUD.
+void PublishReticleTarget(const GameplayPoseFrame& frame, const aim::Sample& sample);
+// XR thread: the latest target while the world reticle is on, if it is fresh
+// and from the current recenter.
+bool TryGetReticleTarget(ReticleTarget& out);
+// XR thread, once per frame the world reticle could be shown: whether it was.
+void NoteReticleShown(bool shown);
+std::string ReticleWorldReport();
 } // namespace preyvr::dll
