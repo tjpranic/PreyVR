@@ -17,6 +17,10 @@ struct InventorySwapchainApi {
     PFN_xrReleaseSwapchainImage release;
     PFN_xrDestroySwapchain destroy;
 };
+// The `destroy` every swapchain of the session host uses (XrSessionHost.cpp):
+// it also drops the frame that hold frames would submit again, so a hold frame
+// never names a destroyed swapchain. XR frame thread, under the session lock.
+XrResult XRAPI_CALL DestroyUnheldSwapchain(XrSwapchain swapchain);
 bool InventoryTextureCompatible(const D3D11_TEXTURE2D_DESC& a,
                                 const D3D11_TEXTURE2D_DESC& b);
 class InventorySwapchain {

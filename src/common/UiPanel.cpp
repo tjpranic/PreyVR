@@ -47,6 +47,27 @@ float AngularWidth(float distance, float panelWidth, float panelDistance, float 
        !(distance>0)||!(panelWidth>0)||!(panelDistance>0)||!(scale>0))return 0;
     return distance*panelWidth/panelDistance*scale;
 }
+PointerQuads PointerQuadsFor(const Pose& aim, const std::optional<RayHit>& hit, bool pressed,
+                             const Surface& surface, const Vec3& head) {
+    PointerQuads quads;
+    const bool onSurface=hit&&hit->inside;
+    if(onSurface) {
+        const float size=pressed?.020f:.013f;
+        quads.cursor=Panel{Compose(SurfacePoint(surface,hit->u,hit->v),Pose{{},{0,0,.002f}}),size,size};
+    }
+    const float length=onSurface?hit->distance:.65f;
+    const auto y=Rotate(aim.orientation,{0,0,-1});
+    const Vec3 centre{aim.position.x+y.x*length*.5f,aim.position.y+y.y*length*.5f,aim.position.z+y.z*length*.5f};
+    const Vec3 toHead{head.x-centre.x,head.y-centre.y,head.z-centre.z};
+    Vec3 x{y.y*toHead.z-y.z*toHead.y,y.z*toHead.x-y.x*toHead.z,y.x*toHead.y-y.y*toHead.x};
+    const float norm=std::sqrt(x.x*x.x+x.y*x.y+x.z*x.z);
+    if(norm>.0001f) {
+        x={x.x/norm,x.y/norm,x.z/norm};
+        const Vec3 z{x.y*y.z-x.z*y.y,x.z*y.x-x.x*y.z,x.x*y.y-x.y*y.x};
+        quads.beam=Panel{Pose{stereo::QuaternionFromBasis(x,y,z),centre},.002f,length};
+    }
+    return quads;
+}
 namespace {
 bool Valid(const Pose& p) {
     PoseValidity v{true,true,true,true,0};

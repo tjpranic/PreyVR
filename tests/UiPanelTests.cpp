@@ -500,5 +500,34 @@ int main() {
             "and from a new anchor it is the same place relative to the wearer");
     }
 
-    std::cout<<"UI panel geometry, frame layers and panel dragging passed\n";
+    // **The laser's quads** (ui::PointerQuadsFor), as both Prey's frames and hold frames draw them.
+    {
+        const Pose aim{{},{.4f,.2f,0}};         // forward is -Z, towards `flat`
+        const Vec3 head{0,.3f,.3f};
+        const auto onPanel=ui::Intersect(flat,aim);
+        auto quads=ui::PointerQuadsFor(aim,onPanel,false,flat,head);
+        Require(quads.cursor&&near(quads.cursor->width,.013f)&&near(quads.cursor->height,.013f),"a hit inside gets the cursor");
+        const auto spot=ui::SurfacePoint(flat,onPanel->u,onPanel->v);
+        Require(near(quads.cursor->pose.position.x,spot.position.x)&&near(quads.cursor->pose.position.y,spot.position.y)&&
+                near(quads.cursor->pose.position.z,spot.position.z+.002f),"2 mm in front of the hit on the surface");
+        Require(quads.beam&&near(quads.beam->width,.002f)&&near(quads.beam->height,2),"the beam reaches the hit");
+        Require(near(quads.beam->pose.position.x,.4f)&&near(quads.beam->pose.position.y,.2f)&&near(quads.beam->pose.position.z,-1),
+                "and is centred halfway along the aim");
+        const auto along=Rotate(quads.beam->pose.orientation,{0,1,0});
+        Require(near(along.x,0)&&near(along.y,0)&&near(along.z,-1),"its length lies along the aim");
+        const auto face=Rotate(quads.beam->pose.orientation,{0,0,1});
+        const Vec3 toHead{head.x-.4f,head.y-.2f,head.z+1};
+        Require(std::abs(face.z)<.0001f&&face.x*toHead.x+face.y*toHead.y>0,"it turns about that axis to face the head");
+        quads=ui::PointerQuadsFor(aim,onPanel,true,flat,head);
+        Require(quads.cursor&&near(quads.cursor->width,.020f),"the cursor grows while pressed");
+        const auto off=ui::Intersect(flat,Pose{{},{1.2f,0,0}});
+        quads=ui::PointerQuadsFor(Pose{{},{1.2f,0,0}},off,false,flat,head);
+        Require(!quads.cursor&&quads.beam&&near(quads.beam->height,.65f),"off the panel: no cursor, the 0.65 m beam");
+        quads=ui::PointerQuadsFor(aim,std::nullopt,false,flat,head);
+        Require(!quads.cursor&&quads.beam&&near(quads.beam->height,.65f),"no surface hit: the same");
+        quads=ui::PointerQuadsFor(aim,std::nullopt,false,flat,Vec3{.4f,.2f,-.325f});
+        Require(!quads.beam,"no beam with the head on its axis");
+    }
+
+    std::cout<<"UI panel geometry, frame layers, panel dragging and laser quads passed\n";
 }

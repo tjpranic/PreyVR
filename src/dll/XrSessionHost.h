@@ -235,6 +235,16 @@ DWORD SetUiGuideEnabled(unsigned int enabled);
 DWORD UiGuideEnabled();
 
 DWORD SetXrTimingEnabled(unsigned int enabled, unsigned int displayHz);
+
+// **Hold frames** (docs/LOADING-LASER-2026-10-17.md): while Prey renders no
+// frames -- a load -- a thread of ours submits the last frame's layers again,
+// with the laser following the hand. On by default. Needs D3D11 multithread
+// protection on Prey's device, which this switches with them: 0 turns both
+// off (the protection back to how it was), 1 on. `thresholdMs` (30..2000, 0
+// keeps it; default 100) is how late Prey's frame must be first. Applied by
+// the render thread on its next frame. 87 for a bad value.
+DWORD SetXrHold(unsigned int enabled, unsigned int thresholdMs);
+std::string XrHoldReport();
 std::string XrTimingReport();
 
 // The frustum the RUNTIME asked for, in radians, for one eye. False before

@@ -61,7 +61,7 @@ VrOptionsLayer::Frame VrOptionsLayer::Update(XrSession session, XrSpace space, I
             if (!swapchain_) {
                 swapchain_ = std::make_unique<InventorySwapchain>(InventorySwapchainApi{
                     xrEnumerateSwapchainFormats, xrCreateSwapchain, xrEnumerateSwapchainImages,
-                    xrAcquireSwapchainImage, xrWaitSwapchainImage, xrReleaseSwapchainImage, xrDestroySwapchain});
+                    xrAcquireSwapchainImage, xrWaitSwapchainImage, xrReleaseSwapchainImage, DestroyUnheldSwapchain});
             }
             if (swapchain_->Prepare(session, description, format_)) {
                 const auto upload = swapchain_->Copy(context, frame.texture);

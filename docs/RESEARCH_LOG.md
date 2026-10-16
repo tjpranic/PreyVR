@@ -3806,3 +3806,43 @@ the minimise sent two lose-focus requests, both held off.
 
 The user then asked for `StartMinimized` to default to 0. The window stays open unless
 PreyVR.json asks for it, and the hold applies either way.
+
+## 2026-10-17 — The laser during loads: hold frames
+
+The laser froze during loads because every XR frame comes from Prey's
+`RT_EndFrame`, and a loading Prey renders none. A thread of ours now submits frames
+whenever Prey's are more than 100 ms late. Each one repeats the last frame's
+layers, with the laser drawn from a fresh aim pose by the same code as Prey's
+frames.
+
+That thread calls `xrEndFrame`, and SteamVR's flushes Prey's immediate context.
+So Prey's device runs with D3D11 multithread protection while hold frames are on.
+
+Prey's render thread waits only for a hold frame already in flight. Its frame
+stamp stops new ones from starting. Without the wait, the first frame after a
+hitch would lose its held first eye and show black.
+
+`xr.hold 0|1` switches both, for an A/B with `xr.timing`.
+
+Offline only:
+- the stall rule and the laser quads have CTests, and the full suite passes
+  (75 tests);
+- the hold path itself waits for the headset.
+
+See [the design](LOADING-LASER-2026-10-17.md).
+
+**Headset run, same day (`player-20261017-104010`).** The laser followed the hand
+through a 10.5 s load (933 hold frames) and two short stalls.
+
+Each protection run's whole-run mean frame interval was 14.41 ms: 37.04 s / 2570
+frames with it on, 41.31 s / 2867 off. The 0.7 ms gap between the 6-second
+`frameP50` windows is within their spread: a window across the switch was slower
+than both. So the protection stays on by default.
+
+One render-thread wait timed out (`renderWaitMisses=1`). When and why is not
+established.
+
+**The laser's cursor on VR Options, fixed.** A hit on VR Options drew its cursor on
+the game menu's surface, at the Options panel's (u, v). That is the menu plane over
+a menu, and near the tracking origin over the running game. It now goes on the
+surface that was hit, in Prey's frames and hold frames. Offline only.

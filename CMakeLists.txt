@@ -140,6 +140,7 @@ add_library(preyvr_core STATIC
     src/common/WeaponAim.cpp
     src/common/WrenchQuery.cpp
     src/common/XrFrameContract.cpp
+    src/common/XrHold.cpp
     src/common/XrSwapchainFormat.cpp
 )
 target_link_libraries(preyvr_core PUBLIC preyvr_headers)
@@ -558,6 +559,11 @@ if(PREYVR_BUILD_TESTS)
     target_link_libraries(preyvr_ui_panel_tests PRIVATE preyvr_core)
     preyvr_enable_warnings(preyvr_ui_panel_tests)
     add_test(NAME ui_panel COMMAND preyvr_ui_panel_tests)
+
+    add_executable(preyvr_xr_hold_tests tests/XrHoldTests.cpp)
+    target_link_libraries(preyvr_xr_hold_tests PRIVATE preyvr_core)
+    preyvr_enable_warnings(preyvr_xr_hold_tests)
+    add_test(NAME xr_hold COMMAND preyvr_xr_hold_tests)
 
     add_executable(preyvr_hud_parts_tests tests/HudPartsTests.cpp)
     target_link_libraries(preyvr_hud_parts_tests PRIVATE preyvr_core)

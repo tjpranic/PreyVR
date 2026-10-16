@@ -241,7 +241,7 @@ void TickVrMode() {
             // The same text dual.report and hud.layer answer with.
             Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
                 " } body={"+BodyFollowReport()+" } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } focus={"+
-                FocusHoldReport()+" }");
+                FocusHoldReport()+" } hold={"+XrHoldReport()+" }");
         }
         const auto owner=AnimIkOwnerGeneration();
         const auto reference=HeadTrackingReferenceGeneration();

@@ -87,6 +87,14 @@ void LogXrInputProfiles(void* instanceHandle, void* sessionHandle);
 void UpdateXrInput(void* sessionHandle, void* spaceHandle, long long predictedDisplayTime,
                    const Pose& head, const PoseValidity& headValidity);
 
+// **Hold frames only** (XrSessionHost): one hand's aim and whether its trigger
+// is pressed, for the laser while Prey renders no frames. Syncs the actions as
+// UpdateXrInput does, then publishes no tracking frame and runs no menu
+// navigation, haptics or carry record: nothing the stalled game would act on
+// later. False when unfocused or the aim is not located.
+bool LocateHeldPointer(void* sessionHandle, void* spaceHandle, long long displayTime, Hand hand,
+                       Pose& aim, bool& pressed);
+
 // Arms controller-driven menu navigation. Off by default: it posts synthesised
 // input into the engine, so it is enabled deliberately like every other write
 // this mod performs.

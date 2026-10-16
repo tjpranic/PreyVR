@@ -388,6 +388,7 @@ value report, as described above.
 | `xr.frustum` | 0/1 | 0 | Renders the runtime's frustum. Prototype; leave off. |
 | `xr.runtime <manifest>` / `xr.start` | | | Runtime choice before start; start the session. |
 | `xr.timing [0\|1] [hz]` / `xr.resolution` / `xr.coverage` | | | Frame timing, resolution chain, frustum coverage. |
+| `xr.hold [0\|1] [ms]` | 0/1, 30..2000 | 1, 100 | Frames from the mod while Prey renders none (a load), so the laser follows the hand. 0 turns them off along with the D3D11 multithread protection they need, for a performance comparison with `xr.timing`. `ms` is how late Prey's frame must be first. Not kept. |
 
 ### Diagnostics and legacy lanes
 

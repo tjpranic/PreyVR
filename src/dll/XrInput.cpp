@@ -496,6 +496,35 @@ void UpdateXrInput(void* sessionHandle, void* spaceHandle, long long predictedDi
     }
 }
 
+bool LocateHeldPointer(void* sessionHandle, void* spaceHandle, long long displayTime, Hand hand,
+                       Pose& aim, bool& pressed)
+{
+    const auto index = static_cast<std::size_t>(hand);
+    if (!gCreated.load(std::memory_order_acquire) || index >= gHands.size()) { return false; }
+    const auto session = static_cast<XrSession>(sessionHandle);
+    XrActiveActionSet active{gActionSet, XR_NULL_PATH};
+    XrActionsSyncInfo sync{XR_TYPE_ACTIONS_SYNC_INFO};
+    sync.countActiveActionSets = 1;
+    sync.activeActionSets = &active;
+    // XR_SESSION_NOT_FOCUSED is a success code with every action inactive.
+    if (xrSyncActions(session, &sync) != XR_SUCCESS) { return false; }
+    XrSpaceLocation location{XR_TYPE_SPACE_LOCATION};
+    if (XR_FAILED(xrLocateSpace(gHands[index].aimSpace, static_cast<XrSpace>(spaceHandle),
+                                static_cast<XrTime>(displayTime), &location))) {
+        return false;
+    }
+    const auto validity = ValidityFrom(location.locationFlags);
+    if (!validity.orientationValid || !validity.positionValid) { return false; }
+    aim = FromXrPose(location.pose);
+    XrActionStateGetInfo get{XR_TYPE_ACTION_STATE_GET_INFO};
+    get.subactionPath = gHands[index].subactionPath;
+    get.action = Action(Role::trigger);
+    XrActionStateFloat trigger{XR_TYPE_ACTION_STATE_FLOAT};
+    pressed = XR_SUCCEEDED(xrGetActionStateFloat(session, &get, &trigger)) && trigger.isActive &&
+              trigger.currentState >= 0.5f;
+    return true;
+}
+
 std::vector<const char*> XrInputExtensions()
 {
     std::vector<const char*> wanted;

@@ -622,6 +622,11 @@ bool ExecuteDualCommand(const std::vector<std::string>& args, std::ostringstream
         // launcher sends 1 and minimises the window once state=held is logged.
         out << "window.hold result=" << (Valued(args) ? SetFocusHold(arg(1, 1)) : 0) << NoValue(args)
             << FocusHoldReport();
+    } else if (verb == "xr.hold") {
+        // docs/LOADING-LASER-2026-10-17.md: the mod's own frames while Prey's are
+        // late, and D3D11 multithread protection with them. xr.hold <0|1> [ms].
+        out << "xr.hold result=" << (Valued(args) ? SetXrHold(arg(1, 1), arg(2, 0)) : 0) << NoValue(args)
+            << XrHoldReport();
     } else {
         return false;
     }

@@ -161,6 +161,17 @@ std::optional<Panel> FacingQuad(const Vec3& center, const Vec3& eye, float width
 // the HUD. Zero for a non-finite or non-positive input.
 float AngularWidth(float distance, float panelWidth, float panelDistance, float scale);
 
+// **The laser's two quads**, from the controller's aim and what it hit. The beam
+// is 2 mm wide, from the aim along its forward (-Z) to the hit -- or 0.65 m --
+// turned about its own axis to face `head`. The cursor is 13 mm square (20 mm
+// while `pressed`), 2 mm in front of `surface` -- the one `hit` lies on -- at
+// the hit's (u, v), only when it is inside. Drawn the same in Prey's frames and in hold frames
+// (XrSessionHost), so a laser during a load looks like the live one. No beam
+// when the head is on its axis.
+struct PointerQuads { std::optional<Panel> beam, cursor; };
+PointerQuads PointerQuadsFor(const Pose& aim, const std::optional<RayHit>& hit, bool pressed,
+                             const Surface& surface, const Vec3& head);
+
 // **What one XR frame submits, bottom to top** (XrSessionHost). The game's menu
 // panel and the world are exclusive. VR Options goes over either -- the running
 // game or a game menu, its stereo half and guide card -- under the laser. While

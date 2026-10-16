@@ -7,6 +7,7 @@
 #include "Logger.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/XrFrameContract.h"
+#include "preyvr/XrHold.h"
 #include "CameraEditHook.h"
 #include "HeadTrackingHook.h"
 #include "XrInput.h"
@@ -33,6 +34,7 @@
 #include "preyvr/XrSwapchainFormat.h"
 
 #include <d3d11.h>
+#include <d3d11_4.h>
 #include <dxgi1_2.h>
 
 #ifndef XR_USE_PLATFORM_WIN32
@@ -87,6 +89,101 @@ std::atomic<float> gRuntimeIpd{0};
 std::atomic<XrReferenceSpaceType> gTrackingSpaceType{XR_REFERENCE_SPACE_TYPE_MAX_ENUM};
 struct BackbufferSample { unsigned width=0,height=0; std::uint64_t changed=0,stamp=0; unsigned frames=0; };
 LatestSnapshot<BackbufferSample> gBackbufferSample;
+
+// **Hold frames** (docs/LOADING-LASER-2026-10-17.md). Every XR frame, the laser
+// included, comes from ServiceXrFrame, so while Prey loads -- rendering no
+// frames -- the compositor reshows the last one and the laser stays where it
+// was. A thread of ours submits frames while Prey's are late: the last frame's
+// layers again, with the laser where the hand is now. That means calling
+// xrEndFrame off Prey's render thread, and SteamVR's xrEndFrame flushes Prey's
+// D3D11 immediate context, which Prey's render thread may be using: so the
+// device runs with D3D11's multithread protection while hold frames are on.
+// xr.hold switches both; the render thread applies the change.
+std::atomic<bool> gHoldWanted{true};
+std::atomic<bool> gHoldActive{false};      // protection applied: hold frames allowed
+std::atomic<unsigned> gHoldThresholdMs{100};
+std::atomic<std::uint64_t> gLastServiceNs{0};
+std::atomic<bool> gHoldInFrame{false};     // the hold thread holds gMutex for a frame
+std::atomic<unsigned long long> gHoldFrames{0}, gHoldStalls{0}, gHoldRenderWaits{0}, gHoldRenderWaitMisses{0};
+std::atomic<std::uint64_t> gHoldLongestStallNs{0}, gHoldLastStallNs{0};
+std::atomic<const char*> gHoldRefusal{"none"};
+// Outside Host, which a session's teardown resets: the protection outlives it.
+std::atomic<int> gProtectionBefore{-1};    // -1 not read yet
+bool gProtectionApplied=false;             // render thread, under gMutex
+std::once_flag gHoldThreadStarted;
+// The one wait the render thread makes: for a hold frame in flight, which ends
+// within a display period.
+constexpr auto kHoldYieldTimeout=std::chrono::milliseconds(40);
+constexpr DWORD kHoldPollMs=5;
+constexpr std::uint64_t kHoldLogStallNs=250000000ull;
+
+// **Prey's render thread takes gMutex here, and waits only for a hold frame in
+// flight.** That frame ends within a display period, and none starts after it,
+// because the caller stamped this frame first. Waiting matters: a both-eyes
+// frame whose first eye is refused submits nothing, so a skip at the end of a
+// hitch would show a black frame. A control call holding the lock still costs
+// the frame, as before.
+bool LockForRenderThread(std::unique_lock<std::timed_mutex>& lock)
+{
+    gLastServiceNs.store(MonotonicNanoseconds(),std::memory_order_release);
+    if(lock.try_lock())return true;
+    if(!gHoldInFrame.load(std::memory_order_acquire))return false;
+    gHoldRenderWaits.fetch_add(1,std::memory_order_relaxed);
+    if(lock.try_lock_for(kHoldYieldTimeout))return true;
+    gHoldRenderWaitMisses.fetch_add(1,std::memory_order_relaxed);
+    return false;
+}
+
+// **One frame's layers by value**, so a hold frame can submit them again.
+// Ordered() points the projection at this set's own views, so always take the
+// list from the copy being submitted.
+struct FrameLayerSet {
+    ui::FrameShown shown{};
+    XrCompositionLayerProjectionView views[2]{};
+    XrCompositionLayerProjection world{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
+    XrCompositionLayerCylinderKHR menuCylinder{XR_TYPE_COMPOSITION_LAYER_CYLINDER_KHR};
+    XrCompositionLayerQuad menu{XR_TYPE_COMPOSITION_LAYER_QUAD}, menuRightEye{XR_TYPE_COMPOSITION_LAYER_QUAD},
+        guide{XR_TYPE_COMPOSITION_LAYER_QUAD}, hud{XR_TYPE_COMPOSITION_LAYER_QUAD}, reticle{XR_TYPE_COMPOSITION_LAYER_QUAD},
+        wheel{XR_TYPE_COMPOSITION_LAYER_QUAD}, note{XR_TYPE_COMPOSITION_LAYER_QUAD}, text{XR_TYPE_COMPOSITION_LAYER_QUAD},
+        options{XR_TYPE_COMPOSITION_LAYER_QUAD}, beam{XR_TYPE_COMPOSITION_LAYER_QUAD}, cursor{XR_TYPE_COMPOSITION_LAYER_QUAD},
+        wrist{XR_TYPE_COMPOSITION_LAYER_QUAD}, slot{XR_TYPE_COMPOSITION_LAYER_QUAD}, fade{XR_TYPE_COMPOSITION_LAYER_QUAD};
+
+    std::vector<const XrCompositionLayerBaseHeader*> Ordered() {
+        world.views=views;
+        const auto order=ui::ComposeFrame(shown);
+        std::vector<const XrCompositionLayerBaseHeader*> layers;
+        for(unsigned n=0;n<order.count;++n)layers.push_back(Header(order.layers[n]));
+        return layers;
+    }
+
+private:
+    const XrCompositionLayerBaseHeader* Header(ui::FrameLayer which) const {
+        const auto as=[](const auto& layer){return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&layer);};
+        switch(which) {
+        case ui::FrameLayer::world:return as(world);
+        case ui::FrameLayer::menu:return as(menu);
+        case ui::FrameLayer::menuCylinder:return as(menuCylinder);
+        case ui::FrameLayer::menuRightEye:return as(menuRightEye);
+        case ui::FrameLayer::guide:return as(guide);
+        case ui::FrameLayer::hud:return as(hud);
+        case ui::FrameLayer::reticle:return as(reticle);
+        case ui::FrameLayer::wheel:return as(wheel);
+        case ui::FrameLayer::note:return as(note);
+        case ui::FrameLayer::text:return as(text);
+        case ui::FrameLayer::options:return as(options);
+        case ui::FrameLayer::beam:return as(beam);
+        case ui::FrameLayer::cursor:return as(cursor);
+        case ui::FrameLayer::wrist:return as(wrist);
+        case ui::FrameLayer::slot:return as(slot);
+        case ui::FrameLayer::fade:return as(fade);
+        }
+        return nullptr;
+    }
+};
+// Where the laser points: the surface it is tested against and its cursor drawn
+// on. VR Options' while it is up, else the game menu's. Kept with the held frame
+// so a hold frame points where Prey's frame did.
+struct HeldPointer { bool active=false; ui::Surface surface{}; };
 
 struct Host {
     XrInstance instance = XR_NULL_HANDLE;
@@ -231,9 +328,26 @@ struct Host {
     bool requestedFovValid[2]{};
     XrTime eyeDisplayTime[2]{};
     xrframe::FrameContract contract;
+    // The last frame submitted with layers, for hold frames to submit again.
+    // Cleared with the session and when the tracking space changes.
+    FrameLayerSet heldLayers;
+    HeldPointer heldPointer;
+    bool heldValid=false;
 };
 
 Host gHost;
+} // namespace
+
+// Every mid-session destruction -- a refused HUD, a capture resized, inventory
+// stereo switched off -- comes through here, and is followed by a frame of
+// Prey's that may not be submitted. Until one is, nothing is held.
+XrResult XRAPI_CALL DestroyUnheldSwapchain(XrSwapchain swapchain)
+{
+    gHost.heldValid = false;
+    return xrDestroySwapchain(swapchain);
+}
+
+namespace {
 LatestSnapshot<std::array<DWORD,15>> gResolution;
 LatestSnapshot<std::array<XrFovf,2>> gOptics;
 void PublishResolution() {
@@ -818,7 +932,7 @@ bool UploadPanelCapture(std::unique_ptr<InventorySwapchain>& swapchain, bool& lo
     D3D11_TEXTURE2D_DESC desc{};texture->GetDesc(&desc);
     if(!swapchain)swapchain=std::make_unique<InventorySwapchain>(InventorySwapchainApi{
         xrEnumerateSwapchainFormats,xrCreateSwapchain,xrEnumerateSwapchainImages,
-        xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,xrDestroySwapchain});
+        xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,DestroyUnheldSwapchain});
     if(!swapchain->Prepare(gHost.session,desc,gHost.colorFormat)) {
         const auto refusal=swapchain->LastRefusal();
         std::ostringstream line;
@@ -854,6 +968,37 @@ void FillPanelLayer(XrCompositionLayerQuad& layer, const ui::Panel& p, XrSwapcha
                 {p.pose.position.x,p.pose.position.y,p.pose.position.z}};
     layer.size={p.width,p.height};layer.subImage.swapchain=swapchain;
     layer.subImage.imageRect={{0,0},{static_cast<int>(desc.Width),static_cast<int>(desc.Height)}};
+}
+
+// The laser (ui::PointerQuadsFor) as two layers on the pointer texture: all of
+// it for the cursor, its centre texel for the beam. Prey's frames and hold
+// frames both draw it here.
+void FillPointerLayers(const UiPointerVisual& pointer, const ui::Surface& surface, const Vec3& head,
+                       XrCompositionLayerQuad& cursor, XrCompositionLayerQuad& beam, bool& cursorActive, bool& beamActive)
+{
+    cursorActive=beamActive=false;
+    if(!pointer.active)return;
+    const auto fill=[](XrCompositionLayerQuad& target,const ui::Panel& p) {
+        target.space=gHost.space;target.eyeVisibility=XR_EYE_VISIBILITY_BOTH;
+        target.layerFlags=XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT|XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
+        target.pose={{p.pose.orientation.x,p.pose.orientation.y,p.pose.orientation.z,p.pose.orientation.w},
+            {p.pose.position.x,p.pose.position.y,p.pose.position.z}};
+        target.size={p.width,p.height};target.subImage.swapchain=gHost.pointerSwapchain;
+        target.subImage.imageRect={{0,0},{32,32}};
+    };
+    const auto quads=ui::PointerQuadsFor(pointer.aim,pointer.hit,pointer.pressed,surface,head);
+    if(quads.cursor){fill(cursor,*quads.cursor);cursorActive=true;}
+    if(quads.beam) {
+        fill(beam,*quads.beam);
+        beam.subImage.imageRect={{15,15},{1,1}};
+        beamActive=true;
+    }
+}
+
+Pose PoseOf(const XrPosef& p)
+{
+    return Pose{Quaternion{p.orientation.x,p.orientation.y,p.orientation.z,p.orientation.w},
+                Vec3{p.position.x,p.position.y,p.position.z}};
 }
 
 // Reads Prey's live view camera and returns the frustum to declare.
@@ -1316,6 +1461,150 @@ void PumpEvents()
     }
 }
 
+// **The only place the protection changes**: Prey's render thread, under
+// gMutex, so no hold frame (which needs gMutex) is in flight. Hold frames are
+// allowed only after the protection is on, and stopped before it comes off.
+void ApplyHoldProtection()
+{
+    const bool wanted=gHoldWanted.load(std::memory_order_acquire);
+    if(wanted==gProtectionApplied || gHost.device==nullptr)return;
+    if(!wanted)gHoldActive.store(false,std::memory_order_release);
+    ID3D11DeviceContext* context=nullptr;
+    gHost.device->GetImmediateContext(&context);
+    ID3D11Multithread* protection=nullptr;
+    const bool interfaced=context!=nullptr &&
+        SUCCEEDED(context->QueryInterface(__uuidof(ID3D11Multithread),reinterpret_cast<void**>(&protection))) &&
+        protection!=nullptr;
+    if(context)context->Release();
+    if(wanted) {
+        // A single-threaded device has no locks to turn on.
+        const char* refusal=!interfaced?"no_multithread_interface":
+            (gHost.device->GetCreationFlags()&D3D11_CREATE_DEVICE_SINGLETHREADED)?"single_threaded_device":nullptr;
+        if(refusal) {
+            gHoldWanted.store(false,std::memory_order_release);
+            gHoldRefusal.store(refusal,std::memory_order_release);
+            Log(std::string("hold result=refused detail=")+refusal+" laser_during_loads=frozen");
+        } else {
+            const BOOL before=protection->SetMultithreadProtected(TRUE);
+            gProtectionBefore.store(before?1:0,std::memory_order_release);
+            gProtectionApplied=true;
+            gHoldActive.store(true,std::memory_order_release);
+            Log(std::string("hold result=0 detail=on multithread_protection=on was=")+(before?"on":"off")+
+                " threshold_ms="+std::to_string(gHoldThresholdMs.load()));
+        }
+    } else {
+        // Put back only what we changed.
+        if(interfaced && gProtectionBefore.load(std::memory_order_acquire)==0)protection->SetMultithreadProtected(FALSE);
+        gProtectionApplied=false;
+        Log(std::string("hold result=0 detail=off multithread_protection=")+
+            (gProtectionBefore.load()==1?"on_as_before":"off"));
+    }
+    if(protection)protection->Release();
+}
+
+void RecordStall(const xrhold::StallEnd& stall)
+{
+    gHoldStalls.fetch_add(1,std::memory_order_relaxed);
+    gHoldLastStallNs.store(stall.durationNs,std::memory_order_relaxed);
+    if(stall.durationNs>gHoldLongestStallNs.load(std::memory_order_relaxed))
+        gHoldLongestStallNs.store(stall.durationNs,std::memory_order_relaxed);
+    if(stall.durationNs>=kHoldLogStallNs || stall.heldFrames)
+        Log("hold stall_ms="+std::to_string(stall.durationNs/1000000)+" frames="+std::to_string(stall.heldFrames));
+}
+
+// **One hold frame**, on the hold thread with gMutex held: the last frame's
+// layers again, with the laser where the hand is now. No D3D11 call is made
+// here; the runtime's own use of Prey's context is what the protection covers.
+// A begun frame always ends, and the contract is left idle either way, so a
+// failure here can never wedge Prey's next frame.
+bool ServiceHoldFrame()
+{
+    PumpEvents();
+    if(gStopRequested.load(std::memory_order_acquire) || !gHost.sessionBegun)return false;
+    const std::uint32_t thread=GetCurrentThreadId();
+    XrFrameWaitInfo waitInfo{XR_TYPE_FRAME_WAIT_INFO};
+    XrFrameState frameState{XR_TYPE_FRAME_STATE};
+    if(XR_FAILED(xrWaitFrame(gHost.session,&waitInfo,&frameState)))return false;
+    const bool contracted=gHost.contract.OnWaited(frameState.predictedDisplayTime,
+        frameState.shouldRender!=XR_FALSE,thread)==xrframe::Result::ok;
+    // A tracking-space change is the render thread's to apply; until then the
+    // held poses mean nothing.
+    const bool spaceChanging=!gHost.spaceChanges.empty() &&
+        gHost.spaceChanges.front().changeTime<=frameState.predictedDisplayTime;
+    XrViewLocateInfo locate{XR_TYPE_VIEW_LOCATE_INFO};
+    locate.viewConfigurationType=XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+    locate.displayTime=frameState.predictedDisplayTime;
+    locate.space=gHost.space;
+    XrViewState viewState{XR_TYPE_VIEW_STATE};
+    std::uint32_t located=0;
+    XrView views[2]={{XR_TYPE_VIEW},{XR_TYPE_VIEW}};
+    const bool haveViews=!spaceChanging &&
+        XR_SUCCEEDED(xrLocateViews(gHost.session,&locate,&viewState,2,&located,views)) && located==2 &&
+        (viewState.viewStateFlags&XR_VIEW_STATE_POSITION_VALID_BIT)!=0 &&
+        (viewState.viewStateFlags&XR_VIEW_STATE_ORIENTATION_VALID_BIT)!=0;
+    if(contracted)gHost.contract.OnViewsLocated(frameState.predictedDisplayTime,haveViews,haveViews);
+
+    FrameLayerSet set=gHost.heldLayers;
+    set.shown.beam=set.shown.cursor=false;
+    const auto hand=UiPointerHand();
+    if(haveViews && gHost.heldPointer.active && gHost.pointerReady && hand<2) {
+        UiPointerVisual pointer;
+        if(LocateHeldPointer(gHost.session,gHost.space,frameState.predictedDisplayTime,static_cast<Hand>(hand),
+                             pointer.aim,pointer.pressed)) {
+            pointer.active=true;
+            pointer.hit=ui::Intersect(gHost.heldPointer.surface,pointer.aim);
+            const auto head=stereo::CyclopsPose(PoseOf(views[0].pose),PoseOf(views[1].pose));
+            FillPointerLayers(pointer,gHost.heldPointer.surface,head.position,set.cursor,set.beam,
+                              set.shown.cursor,set.shown.beam);
+        }
+    }
+    XrFrameBeginInfo beginInfo{XR_TYPE_FRAME_BEGIN_INFO};
+    if(XR_FAILED(xrBeginFrame(gHost.session,&beginInfo))) {
+        gHost.contract.Reset();
+        return false;
+    }
+    const bool begun=contracted && gHost.contract.OnBegun()==xrframe::Result::ok;
+    const bool show=!spaceChanging && frameState.shouldRender!=XR_FALSE;
+    const auto layers=set.Ordered();
+    XrFrameEndInfo endInfo{XR_TYPE_FRAME_END_INFO};
+    endInfo.displayTime=frameState.predictedDisplayTime;
+    endInfo.environmentBlendMode=XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+    endInfo.layerCount=show?static_cast<std::uint32_t>(layers.size()):0;
+    endInfo.layers=show?layers.data():nullptr;
+    const auto endResult=xrEndFrame(gHost.session,&endInfo);
+    if(!begun || gHost.contract.OnSubmitted(thread)!=xrframe::Result::ok)gHost.contract.Reset();
+    return XR_SUCCEEDED(endResult) && show;
+}
+
+// The hold thread, started with the first session and idle without one.
+DWORD WINAPI HoldThread(LPVOID)
+{
+    xrhold::StallTracker stalls;
+    for(;;) {
+        Sleep(kHoldPollMs);
+        const bool running=gStatus.load(std::memory_order_acquire)==static_cast<DWORD>(XrSessionStatus::running);
+        const std::uint64_t threshold=static_cast<std::uint64_t>(gHoldThresholdMs.load(std::memory_order_relaxed))*1000000ull;
+        std::optional<xrhold::StallEnd> ended;
+        const bool stalled=stalls.Observe(MonotonicNanoseconds(),running?gLastServiceNs.load(std::memory_order_acquire):0,
+                                          threshold,ended);
+        if(ended)RecordStall(*ended);
+        if(!stalled || !gHoldActive.load(std::memory_order_acquire))continue;
+        std::unique_lock lock(gMutex,std::try_to_lock);
+        if(!lock.owns_lock())continue;
+        // Again under the lock: Prey's frame may have been stamped meanwhile.
+        if(MonotonicNanoseconds()-gLastServiceNs.load(std::memory_order_acquire)<threshold ||
+           !gHoldActive.load(std::memory_order_acquire) || !gHost.started || !gHost.sessionBegun ||
+           gStopRequested.load(std::memory_order_acquire) || !gHost.heldValid)continue;
+        gHoldInFrame.store(true,std::memory_order_release);
+        const bool submitted=ServiceHoldFrame();
+        gHoldInFrame.store(false,std::memory_order_release);
+        if(submitted) {
+            stalls.CountHeldFrame();
+            gHoldFrames.fetch_add(1,std::memory_order_relaxed);
+        }
+    }
+}
+
 } // namespace
 
 const char* XrTrackingSpaceName() {
@@ -1439,6 +1728,11 @@ DWORD StartXrSession()
 
     // Bring-up is single-threaded on the render thread; see the header.
     gHost.contract.AllowSingleThreaded(true);
+    gLastServiceNs.store(0, std::memory_order_release); // no stall before this session's first frame
+    std::call_once(gHoldThreadStarted, [] {
+        if (const HANDLE thread = CreateThread(nullptr, 0, &HoldThread, nullptr, 0, nullptr)) CloseHandle(thread);
+        else Log("hold result=failed detail=create_thread laser_during_loads=frozen");
+    });
     gHost.started = true;
     gStopAcknowledged.store(false,std::memory_order_release);
     gStopRequested.store(false, std::memory_order_release);
@@ -1498,12 +1792,14 @@ void ServiceXrFrame(void* renderer)
     if (gStatus.load(std::memory_order_acquire) != static_cast<DWORD>(XrSessionStatus::running)) {
         return; // the hot path
     }
-    // The render thread never waits. Skipping a frame is free; blocking Prey's
-    // renderer on a control call is not.
-    std::unique_lock lock(gMutex, std::try_to_lock);
-    if (!lock.owns_lock() || !gHost.started) {
+    // The render thread does not wait on control calls. Skipping a frame is
+    // free; blocking Prey's renderer on a control call is not. It waits only for
+    // a hold frame in flight (LockForRenderThread).
+    std::unique_lock lock(gMutex, std::defer_lock);
+    if (!LockForRenderThread(lock) || !gHost.started) {
         return;
     }
+    ApplyHoldProtection();
 
     if (gStopRequested.load(std::memory_order_acquire)) {
         if(!gStopAcknowledged.load(std::memory_order_acquire))return;
@@ -1572,6 +1868,7 @@ void ServiceXrFrame(void* renderer)
             spaceReady=false;break;
         }
         gHost.eyeImageValid[0]=gHost.eyeImageValid[1]=false;
+        gHost.heldValid=false; // its poses are in the old space
         gHost.menuPanel.reset();gHost.guidePanel.reset();ClearUiPointer();
         // Poses in the old space mean nothing in the new one; a placement kept
         // relative to the anchor still does, and is put back from the new one.
@@ -1854,13 +2151,13 @@ void ServiceXrFrame(void* renderer)
                 if (!gHost.inventorySwapchain) {
                     gHost.inventorySwapchain = std::make_unique<InventorySwapchain>(InventorySwapchainApi{
                         xrEnumerateSwapchainFormats, xrCreateSwapchain, xrEnumerateSwapchainImages,
-                        xrAcquireSwapchainImage, xrWaitSwapchainImage, xrReleaseSwapchainImage, xrDestroySwapchain});
+                        xrAcquireSwapchainImage, xrWaitSwapchainImage, xrReleaseSwapchainImage, DestroyUnheldSwapchain});
                 }
                 inventoryPrepared = gHost.inventorySwapchain->Prepare(gHost.session, backDesc, gHost.colorFormat);
                 if(inventoryPrepared && (InventoryStereoEnabled() || inventoryRightTexture)) {
                     if(!gHost.inventoryRightSwapchain)gHost.inventoryRightSwapchain=std::make_unique<InventorySwapchain>(InventorySwapchainApi{
                         xrEnumerateSwapchainFormats,xrCreateSwapchain,xrEnumerateSwapchainImages,
-                        xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,xrDestroySwapchain});
+                        xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,DestroyUnheldSwapchain});
                     inventoryStereoPrepared=gHost.inventoryRightSwapchain->Prepare(gHost.session,backDesc,gHost.colorFormat);
                 }
                 inventoryDescription = backDesc;
@@ -2050,44 +2347,22 @@ void ServiceXrFrame(void* renderer)
     }
     const bool optionsActive=options.active;
     UiPointerVisual pointer;
+    // The surface the laser is tested against and its cursor drawn on: VR
+    // Options' while it is up, else the game menu's while the menu takes the
+    // pointer. The cursor used to go on the game menu's even for a hit on VR
+    // Options, at that panel's (u, v). A hold frame points the same way.
+    HeldPointer heldPointer;
     if(optionsActive) {
         PublishUiPointer(nullptr,0,0,0);
-        if(gHost.pointerReady)pointer=OptionsPointer(options.surface);
-    } else pointer=PublishUiPointer(panelActive&&rendered&&gHost.pointerReady&&!VrOptionsInputOwned()?&surface:nullptr,
-        gHost.width,gHost.height,gHost.surfaceSerial);
+        if(gHost.pointerReady){pointer=OptionsPointer(options.surface);heldPointer={true,options.surface};}
+    } else {
+        const bool menuPointer=panelActive&&rendered&&gHost.pointerReady&&!VrOptionsInputOwned();
+        pointer=PublishUiPointer(menuPointer?&surface:nullptr,gHost.width,gHost.height,gHost.surfaceSerial);
+        if(menuPointer)heldPointer={true,surface};
+    }
     XrCompositionLayerQuad cursorLayer{XR_TYPE_COMPOSITION_LAYER_QUAD},beamLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
-    const bool cursorActive=pointer.active&&pointer.hit&&pointer.hit->inside;
-    bool beamActive=false;
-    auto pointerLayer=[&](XrCompositionLayerQuad& target,const Pose& pose,float width,float height) {
-        target.space=gHost.space;target.eyeVisibility=XR_EYE_VISIBILITY_BOTH;
-        target.layerFlags=XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT|XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
-        target.pose={{pose.orientation.x,pose.orientation.y,pose.orientation.z,pose.orientation.w},
-            {pose.position.x,pose.position.y,pose.position.z}};
-        target.size={width,height};target.subImage.swapchain=gHost.pointerSwapchain;
-        target.subImage.imageRect={{0,0},{32,32}};
-    };
-    if(cursorActive) {
-        const auto& hit=*pointer.hit;
-        const auto point=Compose(ui::SurfacePoint(surface,hit.u,hit.v),Pose{{},{0,0,.002f}});
-        const float size=pointer.pressed?.020f:.013f;
-        pointerLayer(cursorLayer,point,size,size);
-    }
-    if(pointer.active) {
-        const float length=cursorActive?pointer.hit->distance:.65f;
-        const auto y=Rotate(pointer.aim.orientation,{0,0,-1});
-        const Vec3 centre{pointer.aim.position.x+y.x*length*.5f,pointer.aim.position.y+y.y*length*.5f,
-            pointer.aim.position.z+y.z*length*.5f};
-        const Vec3 toHead{inputHead.position.x-centre.x,inputHead.position.y-centre.y,inputHead.position.z-centre.z};
-        Vec3 x{y.y*toHead.z-y.z*toHead.y,y.z*toHead.x-y.x*toHead.z,y.x*toHead.y-y.y*toHead.x};
-        const float norm=std::sqrt(x.x*x.x+x.y*x.y+x.z*x.z);
-        if(norm>.0001f) {
-            x={x.x/norm,x.y/norm,x.z/norm};
-            const Vec3 z{x.y*y.z-x.z*y.y,x.z*y.x-x.x*y.z,x.x*y.y-x.y*y.x};
-            pointerLayer(beamLayer,Pose{stereo::QuaternionFromBasis(x,y,z),centre},.002f,length);
-            beamLayer.subImage.imageRect={{15,15},{1,1}};
-            beamActive=true;
-        }
-    }
+    bool cursorActive=false,beamActive=false;
+    FillPointerLayers(pointer,heldPointer.surface,inputHead.position,cursorLayer,beamLayer,cursorActive,beamActive);
     const bool guideActive=panelActive && gHost.guideReady && gHost.guidePanel.has_value();
     if(guideActive) {
         const auto& p=*gHost.guidePanel;
@@ -2111,7 +2386,7 @@ void ServiceXrFrame(void* renderer)
             D3D11_TEXTURE2D_DESC desc{};captured->GetDesc(&desc);
             if(!gHost.hudSwapchain)gHost.hudSwapchain=std::make_unique<InventorySwapchain>(InventorySwapchainApi{
                 xrEnumerateSwapchainFormats,xrCreateSwapchain,xrEnumerateSwapchainImages,
-                xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,xrDestroySwapchain});
+                xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,DestroyUnheldSwapchain});
             if(gHost.hudSwapchain->Prepare(gHost.session,desc,gHost.colorFormat)) {
                 if(!gHost.hudSwapchainLogged) {
                     gHost.hudSwapchainLogged=true;
@@ -2295,7 +2570,7 @@ void ServiceXrFrame(void* renderer)
                                               gHost.wristFitter->Refit(context,wristAlpha,hologram)){
                 if(!gHost.wristSwapchain)gHost.wristSwapchain=std::make_unique<InventorySwapchain>(InventorySwapchainApi{
                     xrEnumerateSwapchainFormats,xrCreateSwapchain,xrEnumerateSwapchainImages,
-                    xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,xrDestroySwapchain});
+                    xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,DestroyUnheldSwapchain});
                 D3D11_TEXTURE2D_DESC d{};fitted->GetDesc(&d);
                 // GPU fitting swizzles BGRA to RGBA, but preserves encoded colour
                 // values and premultiplication. Inherit the main XR interpretation.
@@ -2349,7 +2624,7 @@ void ServiceXrFrame(void* renderer)
                 if(SUCCEEDED(gHost.device->CreateTexture2D(&d,nullptr,&gHost.slotTexture))){
                     gHost.slotSwapchain=std::make_unique<InventorySwapchain>(InventorySwapchainApi{
                         xrEnumerateSwapchainFormats,xrCreateSwapchain,xrEnumerateSwapchainImages,
-                        xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,xrDestroySwapchain});
+                        xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,DestroyUnheldSwapchain});
                     if(!gHost.slotSwapchain->Prepare(gHost.session,d,gHost.slotFormat))gHost.slotSwapchain.reset();
                 }
             }
@@ -2413,7 +2688,7 @@ void ServiceXrFrame(void* renderer)
                     if(SUCCEEDED(gHost.device->CreateTexture2D(&d,nullptr,&gHost.fadeTexture))){
                         gHost.fadeSwapchain=std::make_unique<InventorySwapchain>(InventorySwapchainApi{
                             xrEnumerateSwapchainFormats,xrCreateSwapchain,xrEnumerateSwapchainImages,
-                            xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,xrDestroySwapchain});
+                            xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,DestroyUnheldSwapchain});
                         if(!gHost.fadeSwapchain->Prepare(gHost.session,d,gHost.fadeFormat)){
                             std::ostringstream line;
                             line<<"result=refused detail=fade_swapchain reason="
@@ -2467,30 +2742,14 @@ void ServiceXrFrame(void* renderer)
     shown.guide=guideActive;shown.hud=hudActive;shown.reticle=reticleActive;shown.wheel=wheelActive;shown.note=noteActive;shown.text=textActive;
     shown.options=optionsActive;
     shown.beam=beamActive;shown.cursor=cursorActive;shown.wrist=wristActive;shown.slot=slotActive;shown.fade=fadeActive;
-    const auto header=[&](ui::FrameLayer which)->const XrCompositionLayerBaseHeader* {
-        switch(which) {
-        case ui::FrameLayer::world:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&layer);
-        case ui::FrameLayer::menu:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&panelLayer);
-        case ui::FrameLayer::menuCylinder:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&cylinderLayer);
-        case ui::FrameLayer::menuRightEye:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&rightPanelLayer);
-        case ui::FrameLayer::guide:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&guideLayer);
-        case ui::FrameLayer::hud:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&hudLayer);
-        case ui::FrameLayer::reticle:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&reticleLayer);
-        case ui::FrameLayer::wheel:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&wheelLayer);
-        case ui::FrameLayer::note:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&noteLayer);
-        case ui::FrameLayer::text:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&textLayer);
-        case ui::FrameLayer::options:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&options.layer);
-        case ui::FrameLayer::beam:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&beamLayer);
-        case ui::FrameLayer::cursor:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&cursorLayer);
-        case ui::FrameLayer::wrist:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&wristLayer);
-        case ui::FrameLayer::slot:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&slotLayer);
-        case ui::FrameLayer::fade:return reinterpret_cast<const XrCompositionLayerBaseHeader*>(&fadeLayer);
-        }
-        return nullptr;
-    };
-    const auto order=ui::ComposeFrame(shown);
-    std::vector<const XrCompositionLayerBaseHeader*> layers;
-    for(unsigned n=0;n<order.count;++n)layers.push_back(header(order.layers[n]));
+    // By value, so a successful frame can be kept for hold frames.
+    FrameLayerSet built;
+    built.shown=shown;built.views[0]=projViews[0];built.views[1]=projViews[1];built.world=layer;
+    built.menu=panelLayer;built.menuCylinder=cylinderLayer;built.menuRightEye=rightPanelLayer;built.guide=guideLayer;
+    built.hud=hudLayer;built.reticle=reticleLayer;built.wheel=wheelLayer;built.note=noteLayer;built.text=textLayer;
+    built.options=options.layer;built.beam=beamLayer;built.cursor=cursorLayer;built.wrist=wristLayer;
+    built.slot=slotLayer;built.fade=fadeLayer;
+    const auto layers=built.Ordered();
 
     XrFrameEndInfo endInfo{XR_TYPE_FRAME_END_INFO};
     endInfo.displayTime = frameState.predictedDisplayTime;
@@ -2517,6 +2776,7 @@ void ServiceXrFrame(void* renderer)
     PublishResolution();
 
     if (rendered && XR_SUCCEEDED(endResult)) {
+        gHost.heldLayers=built;gHost.heldPointer=heldPointer;gHost.heldValid=true;
         if(wristActive)RecordWristLayerFrame();
         if (inventorySubmitted) {
             if (gInventoryLayerFrames.fetch_add(1)==0)
@@ -2717,6 +2977,32 @@ DWORD SetUiGuideEnabled(unsigned int enabled)
 }
 DWORD UiGuideEnabled() { return gUiGuide.load(std::memory_order_acquire) ? 1u : 0u; }
 
+DWORD SetXrHold(unsigned int enabled, unsigned int thresholdMs)
+{
+    if (enabled > 1 || (thresholdMs != 0 && (thresholdMs < 30 || thresholdMs > 2000))) {
+        return ERROR_INVALID_PARAMETER;
+    }
+    if (thresholdMs != 0) gHoldThresholdMs.store(thresholdMs, std::memory_order_relaxed);
+    gHoldRefusal.store("none", std::memory_order_release);
+    // Applied by the render thread on its next frame (ApplyHoldProtection).
+    gHoldWanted.store(enabled != 0, std::memory_order_release);
+    return 0;
+}
+
+std::string XrHoldReport()
+{
+    const auto ms = [](const std::atomic<std::uint64_t>& ns) { return ns.load(std::memory_order_relaxed) / 1000000; };
+    const int before = gProtectionBefore.load(std::memory_order_acquire);
+    std::ostringstream out;
+    out << " wanted=" << (gHoldWanted.load() ? 1 : 0) << " active=" << (gHoldActive.load() ? 1 : 0)
+        << " protectionWas=" << (before < 0 ? "unread" : before ? "on" : "off")
+        << " thresholdMs=" << gHoldThresholdMs.load() << " frames=" << gHoldFrames.load()
+        << " stalls=" << gHoldStalls.load() << " lastStallMs=" << ms(gHoldLastStallNs)
+        << " longestStallMs=" << ms(gHoldLongestStallNs) << " renderWaits=" << gHoldRenderWaits.load()
+        << " renderWaitMisses=" << gHoldRenderWaitMisses.load() << " refusal=" << gHoldRefusal.load();
+    return out.str();
+}
+
 DWORD SetXrTimingEnabled(unsigned int enabled, unsigned int displayHz)
 {
     if (enabled == 0) {
@@ -2860,9 +3146,11 @@ bool HoldDualFirstEye(void* renderer)
         !gStereoSubmission.load(std::memory_order_acquire)) {
         return refuse();
     }
-    // Never wait: this runs inside the engine's scene submission.
-    std::unique_lock lock(gMutex, std::try_to_lock);
-    if (!lock.owns_lock() || !gHost.started || !gHost.sessionBegun || gHost.device == nullptr) {
+    // This runs inside the engine's scene submission: it never waits, except
+    // for a hold frame in flight. That marks the frame as Prey's, so no new
+    // hold frame starts while it renders (LockForRenderThread).
+    std::unique_lock lock(gMutex, std::defer_lock);
+    if (!LockForRenderThread(lock) || !gHost.started || !gHost.sessionBegun || gHost.device == nullptr) {
         return refuse();
     }
     IDXGISwapChain* swapChain = *reinterpret_cast<IDXGISwapChain**>(
@@ -2926,9 +3214,10 @@ ID3D11RenderTargetView* HeldFirstEyeTarget(ID3D11RenderTargetView* destination, 
         return refuse("window_closed");
     }
     if (destination == nullptr) return refuse("no_destination");
-    // Never wait: this runs inside the engine's overlay draws.
-    std::unique_lock lock(gMutex, std::try_to_lock);
-    if (!lock.owns_lock() || gHost.device == nullptr) return refuse("busy");
+    // This runs inside the engine's overlay draws: it never waits, except for a
+    // hold frame in flight (LockForRenderThread).
+    std::unique_lock lock(gMutex, std::defer_lock);
+    if (!LockForRenderThread(lock) || gHost.device == nullptr) return refuse("busy");
     // Only what is drawn into the frame's own backbuffer belongs to the eye;
     // Flash filters and other offscreen targets stay as they are.
     ID3D11Resource* drawn = nullptr;

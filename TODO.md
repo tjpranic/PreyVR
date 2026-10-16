@@ -1,6 +1,7 @@
 # TODO
 
 VR Options Menu:
+- Menu spawns in the same place the game menus do causing Z-fighting
 - Reorganize the options on the menu under each tab into sections
 - Audit every option and rework and/or remove and/or consolidate as many as needed
 
