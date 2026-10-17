@@ -1,4 +1,5 @@
 #include "CameraEditHook.h"
+#include "EngineAccess.h"
 
 #include "XrSessionHost.h"
 #include "MinHookInit.h"
@@ -46,10 +47,7 @@ constexpr std::array<std::uint8_t, 19> kSystemRenderPrologue{
 // CCamera::UpdateFrustum. Rebuilds the corners, the six planes at +0x10C, the
 // plane sign tables and the cached position at +0x230.
 constexpr std::uintptr_t kUpdateFrustumRva = 0x121D70;
-constexpr std::array<std::uint8_t, 20> kUpdateFrustumPrologue{
-    0x48, 0x8B, 0xC4, 0x55, 0x53, 0x48, 0x8D, 0x68, 0xA1, 0x48,
-    0x81, 0xEC, 0xF8, 0x00, 0x00, 0x00, 0xF3, 0x0F, 0x10, 0x59,
-};
+// Gated on the `camera.update_frustum` landmark.
 
 using SystemRenderFn = void(__fastcall*)(void* system);
 using UpdateFrustumFn = void(__fastcall*)(void* camera);
@@ -456,9 +454,9 @@ bool BuildSyntheticEye(
 // Renderer vtable slots, read straight out of CreateGeneralPassRenderingInfo
 // (R-071). Both are called there in exactly this shape, so this replicates the
 // engine's own usage rather than inventing a call.
-constexpr std::uintptr_t kRendererQuerySlot = 0x888;          // EF_Query
-constexpr std::uintptr_t kRendererGetRenderViewSlot = 0x198;  // GetRenderViewForThread
-constexpr int kRenderThreadListQuery = 6;
+constexpr std::uintptr_t kRendererQuerySlot = engine::RendererLayout::vtableQuery;  // EF_Query
+constexpr std::uintptr_t kRendererGetRenderViewSlot = engine::RendererLayout::vtableGetRenderViewForThread;
+constexpr int kRenderThreadListQuery = engine::RendererLayout::queryRenderThreadList;
 
 using EfQueryFn = void(__fastcall*)(void*, int, void*, int, int, int);
 using GetRenderViewFn = void*(__fastcall*)(void*, int, int);
@@ -1369,11 +1367,10 @@ bool EnsureHook()
         return true;
     }
 
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         return false;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
 
     const auto renderAddress = base + kSystemRenderRva;
     const auto frustumAddress = base + kUpdateFrustumRva;
@@ -1381,8 +1378,9 @@ bool EnsureHook()
         lifecycle::Log("preyvr_camera_edit result=unavailable detail=system_render_prologue");
         return false;
     }
-    if (!PrologueMatches(frustumAddress, kUpdateFrustumPrologue.data(),
-                         kUpdateFrustumPrologue.size())) {
+    const engine::Landmark* frustum = engine::FindLandmark("camera.update_frustum");
+    if (frustum == nullptr || frustum->rva != kUpdateFrustumRva ||
+        !PrologueMatches(frustumAddress, frustum->expected.data(), frustum->expected.size())) {
         lifecycle::Log("preyvr_camera_edit result=unavailable detail=update_frustum_prologue");
         return false;
     }
@@ -1701,31 +1699,28 @@ bool EnsureSecondPassTargets()
     if (gCreatePassInfo.load(std::memory_order_acquire) != nullptr) {
         return true;
     }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         return false;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
 
-    for (const auto& landmark : engine::Landmarks()) {
-        if (landmark.id != "pass.create_general") {
-            continue;
-        }
-        if (landmark.rva != kCreatePassInfoRva) {
-            lifecycle::Log("preyvr_second_pass result=unavailable detail=landmark_rva_disagrees");
-            return false;
-        }
-        const auto address = base + landmark.rva;
-        if (!PrologueMatches(address, landmark.expected.data(), landmark.expected.size())) {
-            lifecycle::Log("preyvr_second_pass result=unavailable detail=create_pass_prologue");
-            return false;
-        }
-        gCreatePassInfo.store(reinterpret_cast<CreatePassInfoFn>(address),
-                              std::memory_order_release);
-        return true;
+    const engine::Landmark* landmark = engine::FindLandmark("pass.create_general");
+    if (landmark == nullptr) {
+        lifecycle::Log("preyvr_second_pass result=unavailable detail=landmark_missing");
+        return false;
     }
-    lifecycle::Log("preyvr_second_pass result=unavailable detail=landmark_missing");
-    return false;
+    if (landmark->rva != kCreatePassInfoRva) {
+        lifecycle::Log("preyvr_second_pass result=unavailable detail=landmark_rva_disagrees");
+        return false;
+    }
+    const auto address = base + landmark->rva;
+    if (!PrologueMatches(address, landmark->expected.data(), landmark->expected.size())) {
+        lifecycle::Log("preyvr_second_pass result=unavailable detail=create_pass_prologue");
+        return false;
+    }
+    gCreatePassInfo.store(reinterpret_cast<CreatePassInfoFn>(address),
+                          std::memory_order_release);
+    return true;
 }
 
 // Installs the RenderWorld hook behind its own byte gate, separately from the
@@ -1735,19 +1730,12 @@ bool EnsureRenderWorldHook()
     if (gRenderWorldHookCreated) {
         return true;
     }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         return false;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
 
-    const engine::Landmark* landmark = nullptr;
-    for (const auto& candidate : engine::Landmarks()) {
-        if (candidate.id == "world.render_world") {
-            landmark = &candidate;
-            break;
-        }
-    }
+    const engine::Landmark* landmark = engine::FindLandmark("world.render_world");
     if (landmark == nullptr || landmark->rva != kRenderWorldRva) {
         lifecycle::Log("preyvr_interpose result=unavailable detail=landmark_missing");
         return false;
@@ -1812,18 +1800,11 @@ DWORD SetFrameShapeStereo(unsigned int frameBudget)
     // RenderBegin behind its own byte gate, taken from the landmark table so
     // there is one definition of what it should look like.
     if (gRenderBegin.load(std::memory_order_acquire) == nullptr) {
-        const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-        if (preyDll == nullptr) {
+        const auto base = PreyBase();
+        if (base == 0) {
             return static_cast<DWORD>(CameraEditStatus::unavailable);
         }
-        const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
-        const engine::Landmark* landmark = nullptr;
-        for (const auto& candidate : engine::Landmarks()) {
-            if (candidate.id == "system.render_begin") {
-                landmark = &candidate;
-                break;
-            }
-        }
+        const engine::Landmark* landmark = engine::FindLandmark("system.render_begin");
         if (landmark == nullptr || landmark->rva != kRenderBeginRva) {
             lifecycle::Log("preyvr_frame_shape result=unavailable detail=landmark_missing");
             return static_cast<DWORD>(CameraEditStatus::unavailable);
@@ -1884,7 +1865,7 @@ DWORD SetInterposeStereo(unsigned int frameBudget, unsigned int mode)
 
     gInterposeBudget.store(frameBudget, std::memory_order_release);
     gInterposeMode.store(mode, std::memory_order_release);
-    gPreyBase.store(reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll")),
+    gPreyBase.store(PreyBase(),
                     std::memory_order_release);
     const unsigned long long allowanceMs =
         2000ull + static_cast<unsigned long long>(frameBudget) * 40ull;

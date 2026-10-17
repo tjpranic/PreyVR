@@ -1,4 +1,5 @@
 #include "ShotRay.h"
+#include "EngineAccess.h"
 
 #include "AimTakeover.h"
 #include "HeadTrackingHook.h"
@@ -613,7 +614,7 @@ bool Install()
     std::lock_guard lock(gInstallMutex);
     if (gInstallTried) { return gQueryHooked && gHelperOk; }
     gInstallTried = true;
-    gBase = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    gBase = PreyBase();
     if (!gBase) { gInstallTried = false; return false; }
     EnsureMinHook();
     gHelperOk = std::memcmp(reinterpret_cast<const void*>(gBase + kHelperWorldRva), kHelperWorldPrologue.data(),

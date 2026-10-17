@@ -1,4 +1,5 @@
 #include "PsiMedkit.h"
+#include "EngineAccess.h"
 #include "AimTakeover.h"
 #include "BodyFollow.h"
 #include "HeadTrackingHook.h"
@@ -12,6 +13,7 @@
 #include "ReticleRayHook.h"
 #include "preyvr/PsiTargeting.h"
 #include "preyvr/MedkitSlot.h"
+#include "preyvr/NativeContract.h"
 #include "preyvr/PsiMedkitNative.h"
 #include "preyvr/PsychoscopeNative.h"
 #include <MinHook.h>
@@ -45,7 +47,7 @@ struct Owner {std::uintptr_t player=0,power=0,focus=0,inventory=0;int selected=-
 DWORD ReadOwner(Owner* out){
  __try {
     if(!InputDrainThreadId()||InputDrainThreadId()!=GetCurrentThreadId())return ERROR_INVALID_THREAD_ID;
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     if(!base)return ERROR_NOT_READY;
     out->player=reinterpret_cast<std::uintptr_t(__fastcall*)()>(base+native::GetPlayer)();
     if(!out->player)return ERROR_NOT_READY;
@@ -142,18 +144,24 @@ bool __fastcall ActivateHook(std::uintptr_t self){
     if(result)++casts;
     return result;
 }
+// Every function called through a named RVA is one the gate hashes.
+template <std::size_t N>
+constexpr bool AllGated(const std::uintptr_t (&rvas)[N]){
+    for(const auto rva:rvas)if(!contract::Gated(native::Contracts,rva))return false;
+    return true;
+}
+constexpr std::uintptr_t kCalled[]={native::Update,native::Activate,native::Select,native::Reticle,native::FocusStart,
+    native::FocusStop,native::Consume,native::MedkitArchetype,native::GetPower,native::GetFocus,native::GetPlayer,native::Candidate};
+static_assert(AllGated(kCalled));
 DWORD Gate(){
  __try {
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     if(!base)return ERROR_NOT_READY;
     for(const auto& c:native::Contracts){
         // The shared hook checked this body against the same bytes before
         // patching it; hashing it now would hash the detour's jump.
         if(c.rva==native::Reticle&&ReticleRayHookInstalled())continue;
-        std::uint64_t h=14695981039346656037ull;
-        const auto* b=reinterpret_cast<const unsigned char*>(base+c.rva);
-        for(std::size_t i=0;i<c.size;++i)h=(h^b[i])*1099511628211ull;
-        if(h!=c.hash)return ERROR_BAD_EXE_FORMAT;
+        if(!contract::BodyMatches(base,c))return ERROR_BAD_EXE_FORMAT;
     }
     return ERROR_SUCCESS;
  }__except(EXCEPTION_EXECUTE_HANDLER){return GetExceptionCode();}
@@ -165,7 +173,7 @@ DWORD Install(){
     if(!EnsureGameplayPoseObservation())return ERROR_NOT_READY;
     EnsureMinHook();
     if(!EnsureReticleRayHook())return ERROR_INVALID_FUNCTION;
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     struct Hook {std::uintptr_t rva;void* detour;void** original;};
     const Hook hooks[]={{native::Update,reinterpret_cast<void*>(&UpdateHook),reinterpret_cast<void**>(&originalUpdate)},
       {native::Activate,reinterpret_cast<void*>(&ActivateHook),reinterpret_cast<void**>(&originalActivate)},
@@ -201,7 +209,7 @@ DWORD StopOwned(bool afterCast=false){
     if(!owned.owner.player)return 0;
     Owner current{};const auto error=ReadOwner(&current);
     if(error)return error;
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     const bool sameFocus=current.player==owned.owner.player&&current.power==owned.owner.power&&current.focus&&
         current.focus==owned.owner.focus;
     // A power may clear its selection inside its own native Start callback.
@@ -217,7 +225,7 @@ DWORD Begin(const GameplayPoseFrame& frame){
     if(owner.player!=frame.player||!owner.focus||*reinterpret_cast<const unsigned char*>(owner.focus+0x390))return ERROR_NOT_READY;
     const int equipped=*reinterpret_cast<const int*>(owner.power+0x234);
     if(equipped<0||equipped>=16)return ERROR_NOT_READY;
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     if(!reinterpret_cast<bool(__fastcall*)(std::uintptr_t,bool)>(base+native::FocusStart)(owner.focus,false))return ERROR_NOT_READY;
     owned={owner,frame.tracking.epoch,frame.referenceGeneration,generation.load(),equipped};
     if(!reinterpret_cast<SelectFn>(base+native::Select)(owner.power,equipped)){
@@ -241,7 +249,7 @@ DWORD Cast(const GameplayPoseFrame& frame){
     if(!NativeFocusOwned(current)||owned.epoch!=frame.tracking.epoch||owned.reference!=frame.referenceGeneration||
        owned.generation!=generation.load()||!*reinterpret_cast<const unsigned char*>(current.focus+0x390)||
        *reinterpret_cast<const unsigned char*>(current.focus+0x88))return ERROR_NOT_READY;
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     const bool accepted=reinterpret_cast<ActivateFn>(base+native::Activate)(current.power);
     const auto stop=StopOwned(true);
     return stop?stop:accepted?ERROR_SUCCESS:ERROR_NOT_READY;
@@ -254,7 +262,7 @@ DWORD ConsumeMedkit(const GameplayPoseFrame& frame,int* result){
        *reinterpret_cast<const unsigned char*>(current.focus+0x390)||
        *reinterpret_cast<const unsigned char*>(current.player+0x7BC))return ERROR_NOT_READY;
     const auto input=current.player+scope::InputOffset;
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     if(*reinterpret_cast<const std::uintptr_t*>(input)!=base+scope::InputVtableRva||
        *reinterpret_cast<const std::uintptr_t*>(input+0x70)!=current.player)return ERROR_INVALID_ADDRESS;
     if(*reinterpret_cast<const int*>(input+0x94))return ERROR_NOT_READY;

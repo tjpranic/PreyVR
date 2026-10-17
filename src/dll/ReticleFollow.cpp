@@ -1,4 +1,5 @@
 #include "ReticleFollow.h"
+#include "EngineAccess.h"
 #include "SceneQuery.h"
 #include "preyvr/SceneQuery.h"
 #include "HudBridge.h"
@@ -117,18 +118,10 @@ bool WriteReticleScreenPosition(void* player, const Vec3& rayOrigin,
     if (!gEnabled.load(std::memory_order_acquire) || player == nullptr) {
         return false;
     }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const std::uint8_t* const camera = LiveViewCamera();
+    if (camera == nullptr) {
         return false;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
-    auto* const systemPtr =
-        *reinterpret_cast<std::uint8_t**>(base + engine::SystemLayout::pointerRva);
-    if (systemPtr == nullptr) {
-        return false;
-    }
-    const auto* const camera = reinterpret_cast<const std::uint8_t*>(
-        reinterpret_cast<std::uintptr_t>(systemPtr) + engine::SystemLayout::viewCamera);
     // One camera copy supplies both projection and diagnostic output.
     std::array<std::uint8_t, engine::CameraLayout::size> cameraCopy{};
     std::memcpy(cameraCopy.data(), camera, cameraCopy.size());

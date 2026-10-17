@@ -12,11 +12,21 @@ inline constexpr std::string_view kSupportedPreyDllSha256 =
     "7D6E322F61B28331095A400F0BA5F09BD9A39C57BF993602285DD6ACB05311A7";
 
 struct ArkPlayerLayout {
+    // GetArkPlayerInstance, the `player.get_instance` landmark: returns the player.
+    static constexpr std::uintptr_t getInstanceRva = 0x157C990;
+    static constexpr std::uintptr_t input = 0x8E0;   // ArkPlayerInput, by value
     static constexpr std::uintptr_t interaction = 0xAC8;
     static constexpr std::uintptr_t camera = 0x12A0;
     static constexpr std::uintptr_t cachedReticleOrigin = 0x17D4;
     static constexpr std::uintptr_t cachedReticleDirection = 0x17E0;
     static constexpr std::uintptr_t reticleScreenPosition = 0x17EC;
+};
+
+// ArkPlayerInput, at ArkPlayer + ArkPlayerLayout::input (R-089).
+struct ArkPlayerInputLayout {
+    static constexpr std::uintptr_t vtableRva = 0x1E580E0;
+    static constexpr std::uintptr_t player = 0x70;      // the owning ArkPlayer
+    static constexpr std::uintptr_t cinematic = 0x94;   // int, nonzero while a cinematic owns input
 };
 
 struct ArkPlayerInteractionLayout {
@@ -236,6 +246,8 @@ struct LandmarkValidation {
 };
 
 std::span<const Landmark> Landmarks();
+// The landmark with this id, or nullptr. Ids are unique.
+const Landmark* FindLandmark(std::string_view id);
 LandmarkValidation ValidateLandmark(
     std::span<const std::uint8_t> mappedImage,
     const Landmark& landmark);

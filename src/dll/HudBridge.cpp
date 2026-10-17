@@ -1,4 +1,5 @@
 #include "HudBridge.h"
+#include "EngineAccess.h"
 #include "VrOptionsRuntime.h"
 #include "CameraEditHook.h"
 #include "XrSessionHost.h"
@@ -572,9 +573,8 @@ void* ResolveNamedElement(std::uintptr_t base, const char* name)
 
 DWORD HudRefreshMenuOpenState()
 {
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) { return 4; }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
+    const auto base = PreyBase();
+    if (base == 0) { return 4; }
 
     bool anyVisible = false;
     bool anyAnswered = false;
@@ -618,7 +618,7 @@ DWORD HudDispatchPointer(int event,int x,int y)
     if(event<0||event>2||x < -24576||x>24576||y < -24576||y>24576)return ERROR_INVALID_PARAMETER;
     const auto captureHook=EnsureInventoryPointerCapture();
     if(captureHook)return captureHook;
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     if(!base)return ERROR_MOD_NOT_FOUND;
     // Constructor 0x2D3240 installs primary 0x1CA6898 and mouse listener
     // 0x1CA6008 at primary+8. Its +8 callee subtracts 8 from this before

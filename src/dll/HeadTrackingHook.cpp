@@ -1,4 +1,5 @@
 #include "preyvr/LatestSnapshot.h"
+#include "EngineAccess.h"
 #include "HeadTrackingHook.h"
 #include "XrInput.h"
 #include "MinHookInit.h"
@@ -71,10 +72,7 @@ using UpdateFrustumFn = void(__fastcall*)(std::uint8_t* camera);
 constexpr std::uintptr_t kSetCameraRva = 0xEE7E80;
 
 constexpr std::uintptr_t kUpdateFrustumRva = 0x121D70;
-constexpr std::array<std::uint8_t, 20> kUpdateFrustumPrologue{
-    0x48, 0x8B, 0xC4, 0x55, 0x53, 0x48, 0x8D, 0x68, 0xA1, 0x48,
-    0x81, 0xEC, 0xF8, 0x00, 0x00, 0x00, 0xF3, 0x0F, 0x10, 0x59,
-};
+// Gated on the `camera.update_frustum` landmark.
 
 
 // The first 16 bytes of R-030's registry signature. Verified immediately before
@@ -184,11 +182,10 @@ bool EnsureHook()
     if (gHookCreated) {
         return true;
     }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         return false;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
     const auto target = base + kSetCameraRva;
     if (!PrologueMatches(target)) {
         Log("result=unavailable detail=set_camera_prologue");
@@ -196,8 +193,10 @@ bool EnsureHook()
     }
 
     const auto frustumAddress = base + kUpdateFrustumRva;
-    if (std::memcmp(reinterpret_cast<const void*>(frustumAddress),
-                    kUpdateFrustumPrologue.data(), kUpdateFrustumPrologue.size()) != 0) {
+    const engine::Landmark* frustum = engine::FindLandmark("camera.update_frustum");
+    if (frustum == nullptr || frustum->rva != kUpdateFrustumRva ||
+        std::memcmp(reinterpret_cast<const void*>(frustumAddress),
+                    frustum->expected.data(), frustum->expected.size()) != 0) {
         Log("result=unavailable detail=update_frustum_prologue");
         return false;
     }

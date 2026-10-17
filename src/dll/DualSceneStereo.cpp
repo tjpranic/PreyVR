@@ -1,4 +1,5 @@
 #include "DualSceneStereo.h"
+#include "EngineAccess.h"
 
 #include "CameraEditHook.h"
 #include "FrameCaptureWin32.h"
@@ -54,15 +55,15 @@ constexpr std::uintptr_t kUpdateFrustumRva = 0x121D70;
 // end of m_rcam (+0x2A8, 0x48 bytes). The view and projection matrices live in
 // matrix stacks the SThreadInfo points at (+0x18, +0x20), so they are shared
 // with any copy of it and are loaded by SetCamera itself.
-constexpr std::size_t kThreadInfoSize = 0x328;
+constexpr std::size_t kThreadInfoSize = engine::RendererLayout::frameBlockStride;
 constexpr std::size_t kThreadInfoBlocks = 0x49A0;
 constexpr std::size_t kCameraBlockBegin = 0x28;
 constexpr std::size_t kCameraBlockEnd = 0x2F0;
-constexpr std::size_t kCameraSize = 0x240;
+constexpr std::size_t kCameraSize = engine::CameraLayout::size;
 // RT_RenderScene indexes the slot by renderer + 0x499C; SetCamera on the render
 // thread by renderThread(+0xD90) + 0x48. Both are logged by observe, and the
 // per-eye path copies from the slot SetCamera actually wrote.
-constexpr std::size_t kSceneSlot = 0x499C;
+constexpr std::size_t kSceneSlot = engine::RendererLayout::frameSlotIndex;
 constexpr std::size_t kRenderThread = 0xD90;
 constexpr std::size_t kRenderThreadProcessSlot = 0x48;
 constexpr std::size_t kRenderThreadFillSlot = 0x4C;
@@ -81,11 +82,15 @@ constexpr int kUsageModeReadingDone = 2;
 // Glass) view, which RT_RenderScene itself tests. +0x11A0 is the view's own
 // CCamera (R-049), whose Matrix34 translation sits at +0x0C/+0x1C/+0x2C.
 constexpr std::size_t kViewType = 0x14;
-constexpr int kViewTypeRecursive = 1;
-constexpr std::size_t kViewCamera = 0x11A0;
+constexpr int kViewTypeRecursive = engine::RendererLayout::viewTypeRecursive;
+constexpr std::size_t kViewCamera = engine::RenderViewLayout::camera;
 // SThreadInfo::m_cam, the CCamera copied in by CD3D9Renderer::SetCamera
 // (0xF7FE70 writes it through CCamera::operator= at slot + 0x68).
 constexpr std::size_t kThreadInfoCamera = 0x68;
+// EngineMap names the same block by its camera: RendererLayout::frameBlock is
+// SThreadInfo slot 0's m_cam, and frameBlockRenderCamera its m_rcam.
+static_assert(kThreadInfoBlocks + kThreadInfoCamera == engine::RendererLayout::frameBlock);
+static_assert(kThreadInfoCamera + engine::RendererLayout::frameBlockRenderCamera + 0x48 == kCameraBlockEnd);  // m_rcam is 0x48
 
 enum class Step : int { idle = 0, single = 1, first = 2, between = 3, second = 4 };
 const char* StepName(int step)
@@ -572,15 +577,7 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
     --tDepth;
 }
 
-const engine::Landmark* FindLandmark(std::string_view id)
-{
-    for (const auto& landmark : engine::Landmarks()) {
-        if (landmark.id == id) {
-            return &landmark;
-        }
-    }
-    return nullptr;
-}
+using engine::FindLandmark;
 
 bool PrologueMatches(std::uintptr_t address, const engine::Landmark& landmark)
 {
@@ -604,12 +601,11 @@ DWORD EnsureHooks()
     if (gInstalled) {
         return 0;
     }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         Log("result=unavailable detail=preydll_not_loaded");
         return 1;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
     struct Target {
         const char* id;
         std::uintptr_t rva;

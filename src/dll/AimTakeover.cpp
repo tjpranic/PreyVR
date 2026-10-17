@@ -1,4 +1,5 @@
 #include "AimTakeover.h"
+#include "EngineAccess.h"
 #include "ArmsLane.h"
 #include "WristLane.h"
 #include "SceneQuery.h"
@@ -96,15 +97,7 @@ std::atomic<bool> gHaveHeadYaw{false};
 std::atomic<unsigned long long> gHeadYawHeld{0}, gHeadYawUnavailable{0};
 std::atomic<unsigned long long> gOriginApplied{0};
 
-const engine::Landmark* FindLandmark(std::string_view id)
-{
-    for (const auto& landmark : engine::Landmarks()) {
-        if (landmark.id == id) {
-            return &landmark;
-        }
-    }
-    return nullptr;
-}
+using engine::FindLandmark;
 
 void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking)
 {
@@ -166,18 +159,10 @@ void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking)
 // because the whole point is to follow the player's facing as it changes.
 float GameCameraYaw()
 {
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const std::uint8_t* const camera = LiveViewCamera();
+    if (camera == nullptr) {
         return 0.0f;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
-    auto* const systemPtr =
-        *reinterpret_cast<std::uint8_t**>(base + engine::SystemLayout::pointerRva);
-    if (systemPtr == nullptr) {
-        return 0.0f;
-    }
-    const auto* const camera = reinterpret_cast<const std::uint8_t*>(
-        reinterpret_cast<std::uintptr_t>(systemPtr) + engine::SystemLayout::viewCamera);
     const stereo::Matrix34 matrix =
         stereo::ReadMatrix(std::span<const std::uint8_t>(camera, engine::CameraLayout::size));
     return stereo::CameraYawOf(matrix);
@@ -215,18 +200,12 @@ void __fastcall UpdateCachedRayWithTakeover(void* player)
     // before the render seam installs a per-eye offset, so it carries no half
     // IPD (the trap H-005C / FAIL-HAND-037 records for the live render camera).
     frame.cameraCentreValid = false;
-    if (const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll")) {
-        const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
-        if (auto* const systemPtr =
-                *reinterpret_cast<std::uint8_t**>(base + engine::SystemLayout::pointerRva)) {
-            const auto* const camera = reinterpret_cast<const float*>(
-                reinterpret_cast<std::uintptr_t>(systemPtr) + engine::SystemLayout::viewCamera +
-                engine::CameraLayout::matrix);
-            const Vec3 centre{camera[3], camera[7], camera[11]};
-            if (std::isfinite(centre.x) && std::isfinite(centre.y) && std::isfinite(centre.z)) {
-                frame.cameraCentre = centre;
-                frame.cameraCentreValid = true;
-            }
+    if (const std::uint8_t* const view = LiveViewCamera()) {
+        const auto* const camera = reinterpret_cast<const float*>(view + engine::CameraLayout::matrix);
+        const Vec3 centre{camera[3], camera[7], camera[11]};
+        if (std::isfinite(centre.x) && std::isfinite(centre.y) && std::isfinite(centre.z)) {
+            frame.cameraCentre = centre;
+            frame.cameraCentreValid = true;
         }
     }
     Vec3 nativeDirection{};

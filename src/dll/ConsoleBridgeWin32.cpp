@@ -1,4 +1,5 @@
 #include "ConsoleBridgeWin32.h"
+#include "EngineAccess.h"
 
 #include "Logger.h"
 #include "preyvr/SettingReadback.h"
@@ -68,11 +69,10 @@ DWORD Finish(ConsoleBridgeResult result, const char* detail, const std::string& 
 // smoke contract. A feature-local precondition belongs with the feature.
 ExecuteStringFn ResolveExecuteString()
 {
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         return nullptr;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
     const auto target = base + kExecuteStringRva;
 
     MEMORY_BASIC_INFORMATION memory{};
@@ -92,11 +92,10 @@ ExecuteStringFn ResolveExecuteString()
 
 void* ResolveConsole()
 {
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         return nullptr;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
     const auto gEnv = base + engine::GlobalEnvironmentLayout::baseRva;
     auto* console = *reinterpret_cast<void**>(gEnv + engine::GlobalEnvironmentLayout::console);
     return console;

@@ -327,7 +327,7 @@ const std::array<Landmark, 40> kLandmarks = {{
     {"camera.update_view", "ArkPlayerCamera::UpdateView", 0x148B820, kCameraUpdateView},
     {"camera.set_custom_view", "ArkPlayerCamera::SetCustomViewFunction", 0x1456460, kCameraSetCustomView},
     {"camera.custom_view", "ArkPlayer custom-view wrapper", 0x15CA580, kCustomViewWrapper},
-    {"player.get_instance", "GetArkPlayerInstance", 0x157C990, kGetArkPlayerInstance},
+    {"player.get_instance", "GetArkPlayerInstance", ArkPlayerLayout::getInstanceRva, kGetArkPlayerInstance},
     {"aim.update_cached_ray", "ArkPlayer::UpdateCachedReticleViewPosAndDir", 0x1585320, kReticleUpdater},
     {"aim.get_cached_ray", "IArkPlayer::GetReticleViewPositionAndDir", 0x157CBB0, kReticleRayGetter},
     {"aim.weapon_firing_query", "CArkWeapon::GetReticleInfoForFiring", 0x1694890, kWeaponFiringReticle},
@@ -366,6 +366,16 @@ const std::array<Landmark, 40> kLandmarks = {{
 std::span<const Landmark> Landmarks()
 {
     return kLandmarks;
+}
+
+const Landmark* FindLandmark(std::string_view id)
+{
+    for (const auto& landmark : kLandmarks) {
+        if (landmark.id == id) {
+            return &landmark;
+        }
+    }
+    return nullptr;
 }
 
 LandmarkValidation ValidateLandmark(

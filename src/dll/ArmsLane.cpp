@@ -1,4 +1,5 @@
 #include "ArmsLane.h"
+#include "EngineAccess.h"
 
 #include "AimTakeover.h"
 #include "AnimIkTakeover.h"
@@ -7,6 +8,7 @@
 #include "InteractionLane.h"
 #include "Logger.h"
 #include "WeaponAttachment.h"
+#include "preyvr/EngineMap.h"
 
 #include <cstdint>
 #include <cstdlib>
@@ -35,8 +37,8 @@ void Log(const std::string& line) { lifecycle::Log("preyvr_arms " + line); }
 //   ArkPlayerInput = player+0x8E0 (vtable 0x1E580E0): +0x94 cinematic input.
 //   player+0x7BC: items restricted.
 constexpr std::uintptr_t kWeaponComponent = 0x14B8;
-constexpr std::uintptr_t kEquipRva = 0x1274820, kCanEquipRva = 0x1273EB0, kGetPlayerRva = 0x157C990;
-constexpr std::uintptr_t kInputOffset = 0x8E0, kInputVtableRva = 0x1E580E0;
+constexpr std::uintptr_t kEquipRva = 0x1274820, kCanEquipRva = 0x1273EB0, kGetPlayerRva = engine::ArkPlayerLayout::getInstanceRva;
+constexpr std::uintptr_t kInputOffset = engine::ArkPlayerLayout::input, kInputVtableRva = engine::ArkPlayerInputLayout::vtableRva;
 constexpr std::array<std::uint8_t, 16> kEquipPrologue{0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                       0x24, 0x10, 0x57, 0x48, 0x83, 0xEC, 0x20, 0x48};
 constexpr std::array<std::uint8_t, 16> kCanEquipPrologue{0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
@@ -172,7 +174,7 @@ bool Resolve(const std::string& text, std::uint64_t& value)
     } else if (base == "arms") {
         value = AnimIkOwnerCharacter();
     } else if (base == "dll") {
-        value = reinterpret_cast<std::uint64_t>(GetModuleHandleW(L"PreyDll.dll"));
+        value = PreyBase();
     } else if (!ParseHex(base, value)) {
         return false;
     }
@@ -190,7 +192,7 @@ void RequestDrawWeapon() { gDrawRequested.store(true, std::memory_order_release)
 void UpdateArmsLane(const GameplayPoseFrame& frame, bool valid)
 {
     if (InputDrainThreadId() != GetCurrentThreadId()) { return; }
-    const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base = PreyBase();
     WeaponState state{};
     const bool read = valid && base && frame.player && ReadWeaponState(base, frame.player, state);
     // Holstered: nothing drawn, a weapon to draw, not mid-unequip, not a carry
@@ -220,7 +222,7 @@ bool ExecuteArmsCommand(const std::vector<std::string>& args, std::ostringstream
 {
     const std::string& verb = args[0];
     if (verb.rfind("mem.", 0) != 0 && verb.rfind("arms.", 0) != 0) { return false; }
-    const auto dll = reinterpret_cast<std::uint64_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const std::uint64_t dll = PreyBase();
     if (verb == "mem.peek") {
         // mem.peek <addr> [bytes 64]: qwords, with the PreyDll RVA of any that point into it.
         std::uint64_t address = 0, size = 64;

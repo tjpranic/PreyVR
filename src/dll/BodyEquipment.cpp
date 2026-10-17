@@ -1,4 +1,5 @@
 #include "BodyEquipment.h"
+#include "EngineAccess.h"
 #include "AimTakeover.h"
 #include "BodyFollow.h"
 #include "DebugOverlay.h"
@@ -8,7 +9,9 @@
 #include "VrOptionsRuntime.h"
 #include "SlotFeedback.h"
 #include "WeaponAttachment.h"
+#include "preyvr/EngineMap.h"
 #include "preyvr/EquipmentNative.h"
+#include "preyvr/NativeContract.h"
 #include "preyvr/PsychoscopeNative.h"
 #include "preyvr/LatestSnapshot.h"
 #include <atomic>
@@ -29,25 +32,18 @@ std::array<std::uintptr_t,2> slotWeapons{};
 std::uintptr_t owner=0,inventory=0;
 std::uint64_t ownerEpoch=0;
 
-bool Gate(std::uintptr_t base){
- for(const auto& c:equipment::native::Contracts){
-  auto bytes=reinterpret_cast<const unsigned char*>(base+c.rva);
-  std::uint64_t hash=14695981039346656037ull;
-  for(std::size_t n=0;n<c.size;++n)hash=(hash^bytes[n])*1099511628211ull;
-  if(hash!=c.hash)return false;
- }
- return true;
-}
+static_assert(contract::Gated(equipment::native::Contracts,engine::ArkPlayerLayout::getInstanceRva));
+bool Gate(std::uintptr_t base){return contract::BodiesMatch(base,equipment::native::Contracts);}
 // These are direct Steam native functions, never inferred vtable indices.
 // Entry/consumer bytes and complete ABIs are recorded in EquipmentNative.h.
 DWORD Native(const GameplayPoseFrame& frame,int slot,bool readStats,Status* out,bool* didStow){
  __try {
   if(InputDrainThreadId()==0||InputDrainThreadId()!=GetCurrentThreadId())return ERROR_INVALID_THREAD_ID;
-  const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+  const auto base=PreyBase();
   if(!base||!frame.player)return ERROR_NOT_READY;
   static bool gated=false;
   if(!gated){if(!Gate(base))return ERROR_BAD_EXE_FORMAT;gated=true;}
-  const auto player=reinterpret_cast<std::uintptr_t(__fastcall*)()>(base+0x157C990)();
+  const auto player=reinterpret_cast<std::uintptr_t(__fastcall*)()>(base+engine::ArkPlayerLayout::getInstanceRva)();
   if(player!=frame.player)return ERROR_NOT_READY;
   const auto input=player+scope::InputOffset;
   if(*reinterpret_cast<const std::uintptr_t*>(input)!=base+scope::InputVtableRva||

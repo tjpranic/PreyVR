@@ -1,4 +1,5 @@
 #include "AimRayProbe.h"
+#include "EngineAccess.h"
 
 #include "Logger.h"
 #include "preyvr/AimState.h"
@@ -25,12 +26,8 @@ using GetArkPlayerInstanceFn = void*(__fastcall*)();
 // with a plausible-looking address.
 std::uintptr_t GetArkPlayerInstanceRva()
 {
-    for (const auto& landmark : engine::Landmarks()) {
-        if (landmark.id == "player.get_instance") {
-            return landmark.rva;
-        }
-    }
-    return 0;
+    const auto* landmark = engine::FindLandmark("player.get_instance");
+    return landmark != nullptr ? landmark->rva : 0;
 }
 
 // Full angular separation, not yaw. AimState offers DirectionYawDeltaDegrees,
@@ -86,11 +83,10 @@ void SampleAimRay()
     if (!gEnabled.load(std::memory_order_acquire)) {
         return;
     }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         return;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
 
     // The landmark is gated exactly like every other engine address here, so a
     // wrong build cannot silently produce plausible numbers.

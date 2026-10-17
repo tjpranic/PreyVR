@@ -1,4 +1,5 @@
 #include "ReticleRayHook.h"
+#include "EngineAccess.h"
 
 #include "Logger.h"
 #include "MinHookInit.h"
@@ -26,14 +27,6 @@ std::atomic<bool> gInstalled{false};
 std::atomic<GetterFn> gOriginal{nullptr};
 std::array<std::atomic<ReticleRayFilter>, 2> gFilters{};
 
-const engine::Landmark* FindGetterLandmark()
-{
-    for (const auto& landmark : engine::Landmarks()) {
-        if (landmark.id == "aim.get_cached_ray") { return &landmark; }
-    }
-    return nullptr;
-}
-
 bool BodyMatches(std::uintptr_t address, const engine::Landmark& landmark)
 {
     __try {
@@ -60,9 +53,9 @@ bool EnsureReticleRayHook()
 {
     std::lock_guard lock(gInstallMutex);
     if (gInstalled.load(std::memory_order_acquire)) { return true; }
-    const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base = PreyBase();
     if (!base) { return false; }
-    const auto* landmark = FindGetterLandmark();
+    const auto* landmark = engine::FindLandmark("aim.get_cached_ray");
     if (!landmark) {
         Log("result=unavailable detail=landmark_missing");
         return false;

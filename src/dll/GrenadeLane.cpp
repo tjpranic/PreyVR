@@ -1,4 +1,5 @@
 #include "GrenadeLane.h"
+#include "EngineAccess.h"
 
 #include "AimTakeover.h"
 #include "CarryLane.h"
@@ -9,6 +10,7 @@
 #include "WeaponAttachment.h"
 #include "XrInput.h"
 #include "preyvr/AnimIk.h"
+#include "preyvr/EngineMap.h"
 #include "preyvr/GrenadeThrow.h"
 #include "preyvr/HandCarry.h"
 #include "preyvr/LatestSnapshot.h"
@@ -99,7 +101,7 @@ constexpr std::uintptr_t kEntitySystemRva = 0x224DA38;
 constexpr std::size_t kArchetypeSlot = 0x1A0, kGetEntitySlot = 0x70;
 // Equip (ArmsLane.cpp): ArkPlayerWeaponComponent = player+0x14B8.
 constexpr std::uintptr_t kEquipRva = 0x1274820, kCanEquipRva = 0x1273EB0, kWeaponComponent = 0x14B8;
-constexpr std::uintptr_t kGetPlayerRva = 0x157C990;
+constexpr std::uintptr_t kGetPlayerRva = engine::ArkPlayerLayout::getInstanceRva;
 
 constexpr std::size_t kWorldTmSlot = 0xE8, kPhysicsSlot = 0x228, kGetIdSlot = 0x08, kGetNameSlot = 0x78;
 constexpr std::size_t kGetArchetypeSlot = 0x20, kNameSlot = 0x10;
@@ -1078,7 +1080,7 @@ bool EnsureGrenadeLane()
     std::lock_guard lock(gInstallMutex);
     if (gInstallTried) { return gInstalled; }
     gInstallTried = true;
-    gBase = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    gBase = PreyBase();
     if (!gBase) {
         gInstallTried = false;
         return false;

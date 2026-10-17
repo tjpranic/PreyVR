@@ -1,4 +1,5 @@
 #include "XrSessionHost.h"
+#include "EngineAccess.h"
 
 #include "preyvr/DepthSubmission.h"
 #include "preyvr/FrameTiming.h"
@@ -1110,9 +1111,8 @@ std::atomic<bool> gDepthReversed{false};
 ID3D11Texture2D* GameDepthTexture(D3D11_TEXTURE2D_DESC& desc)
 {
     constexpr std::uintptr_t kNativeZSurface = 0x9970;
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) { return nullptr; }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
+    const auto base = PreyBase();
+    if (base == 0) { return nullptr; }
     auto* const renderer =
         *reinterpret_cast<std::uint8_t**>(base + engine::RendererLayout::singletonPointerRva);
     if (renderer == nullptr) { return nullptr; }
@@ -1136,9 +1136,8 @@ ID3D11Texture2D* GameDepthTexture(D3D11_TEXTURE2D_DESC& desc)
 // rather than two reads that could straddle a frame.
 bool GameDepthPlanes(float& nearPlane, float& farPlane)
 {
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) { return false; }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
+    const auto base = PreyBase();
+    if (base == 0) { return false; }
     auto* const systemPtr =
         *reinterpret_cast<std::uint8_t**>(base + engine::SystemLayout::pointerRva);
     if (systemPtr == nullptr) { return false; }
@@ -1214,17 +1213,10 @@ XrFovf ScaleDeclaredFov(const XrFovf& fov)
 
 std::optional<XrFovf> DeclaredFovFromLiveCamera()
 {
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const std::uint8_t* const camera = LiveViewCamera();
+    if (camera == nullptr) {
         return std::nullopt;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
-    auto* const systemPtr = *reinterpret_cast<std::uint8_t**>(base + engine::SystemLayout::pointerRva);
-    if (systemPtr == nullptr) {
-        return std::nullopt;
-    }
-    const auto* const camera = reinterpret_cast<const std::uint8_t*>(
-        reinterpret_cast<std::uintptr_t>(systemPtr) + engine::SystemLayout::viewCamera);
     const auto view = stereoframe::TangentsFromCamera(
         std::span<const std::uint8_t>(camera, engine::CameraLayout::size));
     if (!view) {
@@ -1683,13 +1675,12 @@ DWORD StartXrSession()
     }
 
     // Prey's renderer and device, not ours.
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         Log("result=unavailable detail=preydll_absent");
         gStatus.store(static_cast<DWORD>(XrSessionStatus::unavailable), std::memory_order_release);
         return gStatus.load(std::memory_order_acquire);
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
     void* renderer = *reinterpret_cast<void**>(
         base + engine::GlobalEnvironmentLayout::baseRva + engine::GlobalEnvironmentLayout::renderer);
     gHost.device = PreyDevice(renderer);

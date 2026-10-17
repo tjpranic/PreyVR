@@ -1,9 +1,11 @@
 #include "Psychoscope.h"
+#include "EngineAccess.h"
 #include "AimTakeover.h"
 #include "HudBridge.h"
 #include "VrOptionsRuntime.h"
 #include "InputPost.h"
 #include "preyvr/PsychoscopeGesture.h"
+#include "preyvr/EngineMap.h"
 #include "preyvr/PsychoscopeNative.h"
 #include "preyvr/LatestSnapshot.h"
 #include "Logger.h"
@@ -16,10 +18,11 @@ std::atomic<bool> fault{false},zone{false};
 DWORD Toggle(std::uintptr_t player){
  __try {
   if(InputDrainThreadId()==0||InputDrainThreadId()!=GetCurrentThreadId())return ERROR_INVALID_THREAD_ID;
-  const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+  const auto base=PreyBase();
   if(!base||!player)return ERROR_NOT_READY;
   if(std::memcmp(reinterpret_cast<const void*>(base+scope::HandlerRva),scope::HandlerBytes.data(),scope::HandlerBytes.size()))
       return ERROR_BAD_EXE_FORMAT;
+  static_assert(scope::InputOffset==engine::ArkPlayerLayout::input&&scope::InputVtableRva==engine::ArkPlayerInputLayout::vtableRva);
   const auto input=player+scope::InputOffset;
   if(*reinterpret_cast<const std::uintptr_t*>(input)!=base+scope::InputVtableRva||
      *reinterpret_cast<const std::uintptr_t*>(input+0x70)!=player)return ERROR_INVALID_ADDRESS;

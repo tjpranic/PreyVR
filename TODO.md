@@ -16,5 +16,9 @@ Interactibility:
 UI:
 - Wrist stats bar shows Psi energy before you install a neuromod
 
+Controls:
+- Get bumpers bounds
+
 Bugs:
 - Access violation that causes a crash. Seems to be due to a use-after-free camera related bug. Have got instrumentation in place to catch it.
+- The movement stop on turn issue still exists, not as bad as it did before, but it still needs to be addressed

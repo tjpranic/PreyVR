@@ -1,4 +1,5 @@
 #include "AnimIkTakeover.h"
+#include "EngineAccess.h"
 
 #include "preyvr/FrameTiming.h"
 
@@ -43,12 +44,7 @@ void Log(const std::string& line) { lifecycle::Log("preyvr_anim_ik " + line); }
 // R-102. CSkeletonAnim::ProcessAnimationDrivenIK(CCharInstance*, SAnimationPoseModifierParams*).
 using ProcessAdikFn = void(__fastcall*)(void*, void*);
 constexpr std::uintptr_t kProcessAdikRva = 0x877B50;
-// Read from the static image; the gate is exact bytes, fail closed.
-constexpr std::array<std::uint8_t, 32> kProcessAdikPrologue{
-    0x48, 0x89, 0x54, 0x24, 0x10, 0x55, 0x53, 0x41,
-    0x55, 0x48, 0x8D, 0xAC, 0x24, 0xE0, 0xFE, 0xFF,
-    0xFF, 0x48, 0x81, 0xEC, 0x20, 0x02, 0x00, 0x00,
-    0x48, 0x8B, 0x5A, 0x08, 0x4C, 0x8B, 0xE9, 0x48};
+// The gate is the `anim.process_adik` landmark's exact bytes, fail closed.
 
 // Layout, all from decompiled reads (H-021 report sections 1, 2 and 7).
 constexpr std::size_t kCharSkeleton = 0x10;     // CCharInstance -> CDefaultSkeleton*
@@ -123,8 +119,8 @@ constexpr std::size_t kAnimatedCharacterInstance = 0x710;
 constexpr std::uintptr_t kArmsCharacterVtableRva = 0x1D22200;
 // Not during a cinematic: ArkPlayerInput (player+0x8E0, vtable 0x1E580E0) +0x94,
 // the gate Funk's body holsters use (BodyEquipment.cpp).
-constexpr std::size_t kPlayerInput = 0x8E0, kInputCinematic = 0x94;
-constexpr std::uintptr_t kPlayerInputVtableRva = 0x1E580E0;
+constexpr std::size_t kPlayerInput = engine::ArkPlayerLayout::input, kInputCinematic = engine::ArkPlayerInputLayout::cinematic;
+constexpr std::uintptr_t kPlayerInputVtableRva = engine::ArkPlayerInputLayout::vtableRva;
 std::atomic<int> gReachPercent{100};
 
 std::atomic<unsigned long long> gCalls{0};
@@ -296,7 +292,7 @@ int JointIndexByName(const std::uint8_t* skeleton, unsigned int count, const cha
 
 bool TryGetFreeArms(std::uintptr_t player, EquippedRig& out)
 {
-    const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base = PreyBase();
     if (!base || !player) { return false; }
     __try {
         if (*reinterpret_cast<std::uintptr_t*>(player + kPlayerInput) != base + kPlayerInputVtableRva ||
@@ -819,7 +815,7 @@ std::uint64_t gHoldBackOwner = 0, gHoldBackNs = 0;
 std::atomic<std::uint32_t> gWeaponVtableRva{0};
 std::uint32_t ReadVtableRva(std::uintptr_t object)
 {
-    const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base = PreyBase();
     __try {
         const std::uintptr_t vtable = object ? *reinterpret_cast<const std::uintptr_t*>(object) : 0;
         return base && vtable > base && vtable - base < 0x10000000ull ? static_cast<std::uint32_t>(vtable - base) : 0;
@@ -855,7 +851,7 @@ void DumpWeaponFrames(const RigIdentity& owner)
     unsigned count = 0;
     Vec3 lo{}, hi{};
     if (!weaponrig::ListWeaponFrames({nullptr, ReadAlignmentMemory},
-            reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll")), owner, frames, 400, count, lo, hi)) {
+            PreyBase(), owner, frames, 400, count, lo, hi)) {
         lifecycle::Log("preyvr_anim_ik helpers result=refused");
         return;
     }
@@ -1035,7 +1031,7 @@ void DriveHand(unsigned int hand, std::uint8_t* relative, std::uint8_t* absolute
                 return;
             }
             gAlignStatus = weaponrig::ReadBasis({nullptr, ReadAlignmentMemory},
-                reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll")), owner,
+                PreyBase(), owner,
                 reinterpret_cast<std::uintptr_t>(absolute), poseCount, handJoint, gAlignBasis);
             if (gAlignStatus != weaponrig::Status::ready) { ++gAlignRefused; return; }
             if (gHelperDump.exchange(false)) { DumpWeaponFrames(owner); }
@@ -1299,7 +1295,7 @@ void DriveHand(unsigned int hand, std::uint8_t* relative, std::uint8_t* absolute
     weaponrig::ContactGeometry contactGeometry{};
     const bool contactReady=hand==0&&aligned&&PhysicalInteractionsEnabled()&&
         weaponrig::ReadContactGeometry({nullptr,ReadAlignmentMemory},
-            reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll")),owner,
+            PreyBase(),owner,
             reinterpret_cast<std::uintptr_t>(absolute),poseCount,handJoint,contactGeometry);
     auto* const targetAt = absolute + static_cast<std::size_t>(target) * kQuatTStride;
     auto* const weightAt = reinterpret_cast<float*>(relative + static_cast<std::size_t>(weight) * kQuatTStride + 0x10);
@@ -1918,8 +1914,9 @@ bool Install()
         return false;
     }
     const auto target = reinterpret_cast<std::uintptr_t>(preyDll) + kProcessAdikRva;
-    if (std::memcmp(reinterpret_cast<const void*>(target),
-                    kProcessAdikPrologue.data(), kProcessAdikPrologue.size()) != 0) {
+    const engine::Landmark* adik = engine::FindLandmark("anim.process_adik");
+    if (adik == nullptr || adik->rva != kProcessAdikRva ||
+        std::memcmp(reinterpret_cast<const void*>(target), adik->expected.data(), adik->expected.size()) != 0) {
         Log("result=unavailable detail=adik_prologue_mismatch");
         return false;
     }

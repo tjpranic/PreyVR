@@ -92,3 +92,8 @@ docs/evidence/**/*.zip
 # Raw texture/buffer dumps.
 *.bgra
 *.rgba
+
+# Python bytecode. Several tools/re scripts are run from the repo and would
+# otherwise leave compiled caches beside them.
+__pycache__/
+*.pyc

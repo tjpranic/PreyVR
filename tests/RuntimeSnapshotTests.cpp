@@ -121,6 +121,13 @@ FakeMemory BuildSupportedEngine(const CameraView& camera)
 
 int main()
 {
+    // --- the RVAs this header keeps are the ones EngineMap gates -----------
+    {
+        const auto* renderWorld = preyvr::engine::FindLandmark("world.render_world");
+        Require(renderWorld != nullptr && renderWorld->rva == kRenderWorldRva,
+            "kRenderWorldRva is the world.render_world landmark");
+    }
+
     // --- decode round-trip -------------------------------------------------
     {
         const CameraView source = SampleCamera();

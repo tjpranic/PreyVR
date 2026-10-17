@@ -1,4 +1,5 @@
 #include "CarryLane.h"
+#include "EngineAccess.h"
 
 #include "AimTakeover.h"
 #include "Haptics.h"
@@ -69,7 +70,7 @@ constexpr std::array<std::uint8_t, 13> kDropPrologue{
 constexpr std::uintptr_t kPhysicalWorldRva = 0x224D9C8;
 constexpr std::size_t kGetPhysVarsSlot = 0x78;
 constexpr std::uintptr_t kMinMass = 0x1C8, kMaxMass = 0x1CC, kArticulatedScale = 0x1D8;
-constexpr std::uintptr_t kGetPlayerRva = 0x157C990;
+constexpr std::uintptr_t kGetPlayerRva = engine::ArkPlayerLayout::getInstanceRva;
 constexpr std::uintptr_t kEntitySystemRva = 0x224DA38;   // gEnv->pEntitySystem
 // The physics queue's per-type struct sizes and payload descriptors (written at
 // start-up by 0xD0D1D0): type 2 (impulse) is 0x38 at +2*4, which is what
@@ -965,7 +966,7 @@ bool EnsureCarryLane()
     std::lock_guard lock(gInstallMutex);
     if (gInstallTried) { return gInstalled; }
     gInstallTried = true;
-    gBase = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    gBase = PreyBase();
     if (!gBase) {
         gInstallTried = false;
         return false;

@@ -14,13 +14,7 @@ std::optional<FrameObserverPlan> PlanFrameObserver(
         return std::nullopt;
     }
 
-    const engine::Landmark* target = nullptr;
-    for (const auto& landmark : engine::Landmarks()) {
-        if (landmark.id == "renderer.end") {
-            target = &landmark;
-            break;
-        }
-    }
+    const engine::Landmark* target = engine::FindLandmark("renderer.end");
     if (target == nullptr ||
         engine::ValidateLandmark(mappedImage, *target).status != engine::LandmarkStatus::match ||
         target->rva > std::numeric_limits<std::uintptr_t>::max() - moduleBase) {

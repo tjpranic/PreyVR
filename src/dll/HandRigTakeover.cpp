@@ -1,4 +1,5 @@
 #include "AnimIkTakeover.h"
+#include "EngineAccess.h"
 #include "HandRigTakeover.h"
 #include "MinHookInit.h"
 
@@ -93,18 +94,10 @@ Vec3 gZeroRight{}, gZeroLeft{};
 // character's frame.
 bool CameraBasis(Vec3& right, Vec3& forward, Vec3& up, Vec3& position)
 {
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const std::uint8_t* const camera = LiveViewCamera();
+    if (camera == nullptr) {
         return false;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
-    auto* const systemPtr =
-        *reinterpret_cast<std::uint8_t**>(base + engine::SystemLayout::pointerRva);
-    if (systemPtr == nullptr) {
-        return false;
-    }
-    const auto* const camera = reinterpret_cast<const std::uint8_t*>(
-        reinterpret_cast<std::uintptr_t>(systemPtr) + engine::SystemLayout::viewCamera);
     const stereo::Matrix34 m =
         stereo::ReadMatrix(std::span<const std::uint8_t>(camera, engine::CameraLayout::size));
     right   = Vec3{m[0], m[4], m[8]};

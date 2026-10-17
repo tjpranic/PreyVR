@@ -1,4 +1,5 @@
 #include "preyvr/FiringPosition.h"
+#include "EngineAccess.h"
 #include "AimTakeover.h"
 #include "ShotRay.h"
 #include "preyvr/AnimIk.h"
@@ -144,7 +145,7 @@ void* __fastcall FiringPositionObserved(void* weapon, void* output, std::uint32_
 bool InstallMuzzleObserver()
 {
     if (gMuzzleInstalled.load()) { return true; }
-    const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base = PreyBase();
     if (!base) { return false; }
     auto* target = reinterpret_cast<void*>(base + 0x1694BC0);
     if (std::memcmp(target, kFiringPositionPrologue.data(), kFiringPositionPrologue.size()) != 0) { return false; }
@@ -170,18 +171,10 @@ bool ControllerAimRotation(Quaternion& out, float& bodyYaw)
     if (!state.aimValidity.orientationTracked) {
         return false;
     }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const std::uint8_t* const camera = LiveViewCamera();
+    if (camera == nullptr) {
         return false;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
-    auto* const systemPtr =
-        *reinterpret_cast<std::uint8_t**>(base + engine::SystemLayout::pointerRva);
-    if (systemPtr == nullptr) {
-        return false;
-    }
-    const auto* const camera = reinterpret_cast<const std::uint8_t*>(
-        reinterpret_cast<std::uintptr_t>(systemPtr) + engine::SystemLayout::viewCamera);
     const stereo::Matrix34 m =
         stereo::ReadMatrix(std::span<const std::uint8_t>(camera, engine::CameraLayout::size));
     bodyYaw = stereo::CameraYawOf(m) - HeadTrackingReferenceYaw();
@@ -234,7 +227,7 @@ bool WriteMount(void* attachment, const QuatT& value)
 // owner chain; item ID is whole-weapon +0x38 (not secondary interface +0x38).
 bool ReadRig(void* weapon, EquippedRig& out)
 {
-    const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base = PreyBase();
     if (!base || !weapon) { return false; }
     __try {
         out.weapon = reinterpret_cast<std::uintptr_t>(weapon);

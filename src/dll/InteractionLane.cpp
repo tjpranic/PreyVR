@@ -1,4 +1,5 @@
 #include "InteractionLane.h"
+#include "EngineAccess.h"
 
 #include "AimTakeover.h"
 #include "CarryLane.h"
@@ -46,7 +47,7 @@ constexpr std::array<std::uint8_t, 16> kInteractPrologue{
 constexpr std::uintptr_t kPerformRva = 0x1593980;
 constexpr std::array<std::uint8_t, 18> kPerformPrologue{
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x89, 0x54, 0x24, 0x10, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56};
-constexpr std::uintptr_t kGetPlayerRva = 0x157C990;
+constexpr std::uintptr_t kGetPlayerRva = engine::ArkPlayerLayout::getInstanceRva;
 // gEnv (SSystemGlobalEnvironment, static at 0x224D980) + 0xB8 = IEntitySystem*.
 constexpr std::uintptr_t kEntitySystemRva = 0x224DA38;
 // Virtual slots. IEntitySystem::GetEntity: +0x70 is by far the most common
@@ -572,7 +573,7 @@ bool EnsureInteractionLane()
     std::lock_guard lock(gInstallMutex);
     if (gInstallTried) { return gInstalled; }
     gInstallTried = true;
-    gBase = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    gBase = PreyBase();
     if (!gBase) { gInstallTried = false; return false; }
     EnsureMinHook();
     gInstalled = HookAt(kUpdateCandidatesRva, kUpdateCandidatesPrologue, reinterpret_cast<void*>(&UpdateCandidatesHook),

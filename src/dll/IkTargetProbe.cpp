@@ -1,4 +1,5 @@
 #include "IkTargetProbe.h"
+#include "EngineAccess.h"
 
 #include "DebugWatch.h"
 #include "Logger.h"
@@ -61,7 +62,7 @@ std::atomic<unsigned long long> gProducerAddress{0};
 
 std::uint8_t* PreyDllBase()
 {
-    return reinterpret_cast<std::uint8_t*>(GetModuleHandleW(L"PreyDll.dll"));
+    return reinterpret_cast<std::uint8_t*>(PreyBase());
 }
 
 bool ReadableFloats(const void* address, float* out, std::size_t count)

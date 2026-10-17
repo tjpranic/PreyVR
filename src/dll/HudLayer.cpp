@@ -1,4 +1,5 @@
 #include "HudLayer.h"
+#include "EngineAccess.h"
 #include "DualOverlay.h"
 #include "Bootstrap.h"
 #include "MinHookInit.h"
@@ -347,7 +348,7 @@ bool DrawExcluding(NativeHudApi& api,void* root,bool status,std::array<bool,kPar
 void RunVarOps(void* root){
     std::vector<VarOp> ops;
     {std::lock_guard lock(varMutex);ops.swap(varPending);varWanted=false;}
-    NativeHudApi api{root,reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"))};
+    NativeHudApi api{root,PreyBase()};
     std::string out;
     if(!api.Valid())out="root_invalid";
     else for(const auto& op:ops){
@@ -365,7 +366,7 @@ bool DrawStatusGuarded(void* root){
     __except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 void CaptureNativeStatus(void* root){
-    NativeHudApi api{root,reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"))};
+    NativeHudApi api{root,PreyBase()};
     if(!api.Valid()){++wristRefused;return;}
     hud::Isolation isolation(api);
     bool produced=false,coverage=false;
@@ -505,7 +506,7 @@ void ReplayPart(NativeHudApi& api,void* root,PartState& part){
 // meters off the face, and each part its consumer asked for whose gate is open.
 // Then the wrist's replay and each lifted part's, all inside this one callback.
 void DrawHudCapture(void* root,bool face){
-    NativeHudApi api{root,reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"))};
+    NativeHudApi api{root,PreyBase()};
     const bool valid=api.Valid();
     const auto now=MonotonicNanoseconds();
     std::array<bool,kParts> lift{};
@@ -656,7 +657,7 @@ int Inspect(void* element,std::uintptr_t base,std::uintptr_t* proxy,char (&name)
 }
 void __fastcall ObserveElement(void* element) {
     std::uintptr_t proxy=0;char name[40]{};
-    const int found=Inspect(element,reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll")),&proxy,name);
+    const int found=Inspect(element,PreyBase(),&proxy,name);
     if(found!=0) {
         const auto now=MonotonicNanoseconds();
         for(unsigned i=0;i<kMovies;++i) {
@@ -764,7 +765,7 @@ struct NativeTargets {
     std::array<ID3D11RenderTargetView*,8> saved{};ID3D11DepthStencilView* ds=nullptr;
     bool single=false;
     NativeTargets() {
-        const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+        const auto base=PreyBase();
         auto renderer=*reinterpret_cast<std::uintptr_t*>(base+engine::RendererLayout::singletonPointerRva);
         device=*reinterpret_cast<ID3D11Device**>(renderer+engine::RendererLayout::device);
         device->GetImmediateContext(&context);
@@ -833,7 +834,7 @@ bool RedrawIntoHeldEye(void* proxy,bool release,std::uintptr_t address) {
     const char* refusal=nullptr;
     ID3D11RenderTargetView* held=native.single?HeldFirstEyeTarget(native.saved[0],&refusal):nullptr;
     if(!native.single)refusal="multiple_targets";
-    void* root=held?InventoryRoot(proxy,reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"))):nullptr;
+    void* root=held?InventoryRoot(proxy,PreyBase()):nullptr;
     if(held && !root)refusal="movie_root";
     if(root && native.ds && !EnsureDepthCopy(native.device,native.ds,redrawDepth)){root=nullptr;refusal="depth_copy";}
     if(!root) {NoteFlashOverlay(NameOf(address).c_str(),false,refusal);return false;}
@@ -876,7 +877,7 @@ void __fastcall CaptureFlash(void* proxy,bool release) {
     }
     Capture& capture=captures[which];
     const bool captureNormal=which!=0||enabled.load();
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     auto renderer=*reinterpret_cast<std::uintptr_t*>(base+engine::RendererLayout::singletonPointerRva);
     auto device=*reinterpret_cast<ID3D11Device**>(renderer+engine::RendererLayout::device);
     ComPtr<ID3D11DeviceContext> context;device->GetImmediateContext(&context);
@@ -932,7 +933,7 @@ void __fastcall CaptureFlash(void* proxy,bool release) {
 bool Install() {
     if(installed)return true;
     if(!ModulePinStatus() || !EnsureMinHook())return false;
-    auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    auto base=PreyBase();
     if(!base)return false;
     constexpr std::uint8_t elementBytes[]={0x41,0x56,0x48,0x83,0xEC,0x20,0x48,0x83,0x79,0x58,0,0x4C,0x8B,0xF1,0x74,0x6A};
     constexpr std::uint8_t flashBytes[]={0x48,0x89,0x5C,0x24,8,0x48,0x89,0x6C,0x24,0x18,0x48,0x89,0x74,0x24,0x20,0x57};
@@ -957,7 +958,7 @@ bool InstallDisplay() {
     if(displayInstalled)return true;
     if(SmokeStatus()!=2)return false; // Complete supported-module gate, not only a DLL pin.
     if(!Install())return false;
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     constexpr unsigned char displayBytes[]={0x40,0x55,0x56,0x48,0x81,0xEC,0x68,0x03,0,0};
     const auto display=reinterpret_cast<void*>(base+0x18AB710);
     if(std::memcmp(display,displayBytes,sizeof(displayBytes)))return false;
@@ -968,7 +969,7 @@ bool InstallDisplay() {
 bool InstallStereo() {
     if(stereoInstalled)return true;
     if(!InstallDisplay())return false;
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     constexpr unsigned char calcBytes[]={0x48,0x8B,0xC4,0x55,0x53,0x56,0x57,0x48,0x8D,0xA8,0x48,0xFF,0xFF,0xFF};
     const auto calc=reinterpret_cast<void*>(base+0xDB9620);
     if(std::memcmp(calc,calcBytes,sizeof(calcBytes)))return false;
@@ -979,7 +980,7 @@ bool InstallStereo() {
 bool InstallStatus(){
     if(spriteInstalled)return true;
     if(!InstallDisplay())return false;
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     if(!VerifyNativeWrist(base))return false;
     if(*reinterpret_cast<std::uintptr_t*>(base+0x1EB57E8)!=base+0x18BABA0)return false;
     auto at=reinterpret_cast<void*>(base+0x18BABA0);

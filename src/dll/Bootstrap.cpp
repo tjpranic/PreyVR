@@ -1,4 +1,5 @@
 #include "Bootstrap.h"
+#include "EngineAccess.h"
 
 #include "CameraEditHook.h"
 #include "XrSessionHost.h"
@@ -644,18 +645,10 @@ extern "C" __declspec(dllexport) DWORD PreyVR_ReadDeclaredFovPtr(PreyVRDeclaredF
     }
     *out = PreyVRDeclaredFov{};
 
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const std::uint8_t* const camera = preyvr::dll::LiveViewCamera();
+    if (camera == nullptr) {
         return 0;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
-    auto* const systemPtr = *reinterpret_cast<std::uint8_t**>(
-        base + preyvr::engine::SystemLayout::pointerRva);
-    if (systemPtr == nullptr) {
-        return 0;
-    }
-    const auto* const camera = reinterpret_cast<const std::uint8_t*>(
-        reinterpret_cast<std::uintptr_t>(systemPtr) + preyvr::engine::SystemLayout::viewCamera);
     const auto span = std::span<const std::uint8_t>(camera, preyvr::engine::CameraLayout::size);
 
     const auto readFloat = [camera](std::size_t offset) {

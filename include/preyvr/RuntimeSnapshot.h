@@ -1,5 +1,6 @@
 #pragma once
 
+#include "preyvr/EngineMap.h"
 #include "preyvr/VrMath.h"
 
 #include <array>
@@ -20,21 +21,25 @@
 namespace preyvr::snapshot {
 
 // ---------------------------------------------------------------------------
-// Verified layout constants. These duplicate nothing: EngineMap.h owns the
-// offsets, this header owns the *shape* the bytes decode into.
+// Verified layout constants. EngineMap.h owns the offsets, and the values it
+// already holds are taken from it; this header owns the *shape* the bytes
+// decode into.
 // ---------------------------------------------------------------------------
 
-inline constexpr std::size_t kCameraSize = 0x240;
+inline constexpr std::size_t kCameraSize = engine::CameraLayout::size;
 inline constexpr std::size_t kRenderCameraSize = 0x48;
 
 // CSystem vtable and C3DEngine vtable RVAs. Reading a live object's first qword
 // and comparing against these proves we are pointed at the class we think we
 // are -- the cheapest possible identity check, and the one that catches a wrong
 // gEnv offset immediately rather than three reads later.
-inline constexpr std::uintptr_t kSystemVtableRva = 0x1D9B9C8;
+inline constexpr std::uintptr_t kSystemVtableRva = engine::SystemLayout::vtableRva;
 inline constexpr std::uintptr_t kThreeDEngineVtableRva = 0x1C912A0;
+// The `world.render_world` landmark's RVA (a test holds the two equal).
 inline constexpr std::uintptr_t kRenderWorldRva = 0x21F520;
-inline constexpr std::uintptr_t kThreeDEngineRenderWorldSlot = 0x18;
+// IProcess is C3DEngine's primary base, so its RenderWorld slot is CSystem's
+// process-pointer slot (SystemLayout).
+inline constexpr std::uintptr_t kThreeDEngineRenderWorldSlot = engine::SystemLayout::vtableRenderWorld;
 
 // ---------------------------------------------------------------------------
 // Typed views

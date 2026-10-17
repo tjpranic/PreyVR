@@ -1,4 +1,5 @@
 #include "PhysicalInteractions.h"
+#include "EngineAccess.h"
 #include "AimTakeover.h"
 #include "BodyFollow.h"
 #include "HeadTrackingHook.h"
@@ -10,6 +11,7 @@
 #include "MinHookInit.h"
 #include "preyvr/LatestSnapshot.h"
 #include "preyvr/PhysicalInteractions.h"
+#include "preyvr/NativeContract.h"
 #include "preyvr/PhysicalNative.h"
 #include "preyvr/StereoCamera.h"
 #include <MinHook.h>
@@ -66,15 +68,17 @@ void __fastcall ImpulseHook(void* entity,void* collider,const Vec3* direction,in
     const Vec3 incoming=Scale(request.direction,-1);
     originalImpulse.load()(entity,collider,EngineThread()&&request.weapon==w&&w?&incoming:direction,part,w,force,minMass,maxMass);
 }
+// Every function called through a named RVA is one the gate hashes (the
+// vtables are checked by slot below instead).
+static_assert(contract::Gated(native::Contracts,native::Attack)&&contract::Gated(native::Contracts,native::WeaponHit)&&
+              contract::Gated(native::Contracts,native::GetHits)&&contract::Gated(native::Contracts,native::AppendHit)&&
+              contract::Gated(native::Contracts,native::WeaponImpulse)&&contract::Gated(native::Contracts,native::RigidAction)&&
+              contract::Gated(native::Contracts,native::RigidGetType)&&contract::Gated(native::Contracts,native::CharacterAabb));
 bool Gate(){
     if(module)return true;
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     if(!base)return false;
-    for(const auto& c:native::Contracts){
-        std::uint64_t h=14695981039346656037ull;
-        for(std::size_t i=0;i<c.size;++i)h=(h^reinterpret_cast<const unsigned char*>(base+c.rva)[i])*1099511628211ull;
-        if(h!=c.hash){error=ERROR_BAD_EXE_FORMAT;fault=true;return false;}
-    }
+    if(!contract::BodiesMatch(base,native::Contracts)){error=ERROR_BAD_EXE_FORMAT;fault=true;return false;}
     if(*reinterpret_cast<std::uintptr_t*>(base+native::RigidVtable+0x38)!=base+native::RigidAction||
        *reinterpret_cast<std::uintptr_t*>(base+native::RigidVtable+8)!=base+native::RigidGetType||
        *reinterpret_cast<std::uintptr_t*>(base+0x1d22200+0x98)!=base+native::CharacterAabb){error=ERROR_INVALID_ADDRESS;fault=true;return false;}

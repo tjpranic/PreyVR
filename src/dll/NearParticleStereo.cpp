@@ -1,4 +1,5 @@
 #include "NearParticleStereo.h"
+#include "EngineAccess.h"
 
 #include "AimTakeover.h"
 #include "CameraEditHook.h"
@@ -240,7 +241,7 @@ bool Install()
 {
     std::lock_guard lock(gInstallMutex);
     if (gInstallTried) { return gInitHooked && gMatrixHooked; }
-    gBase = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    gBase = PreyBase();
     if (gBase == 0) { Log("result=unavailable detail=no_preydll"); return false; }
     gInstallTried = true;
     EnsureMinHook();

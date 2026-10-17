@@ -150,10 +150,7 @@ DWORD EnsureImageHook()
         Log("result=unavailable detail=preydll_not_loaded");
         return 3;
     }
-    const engine::Landmark* landmark = nullptr;
-    for (const auto& candidate : engine::Landmarks()) {
-        if (candidate.id == std::string_view("renderer.draw2d_images")) landmark = &candidate;
-    }
+    const engine::Landmark* landmark = engine::FindLandmark("renderer.draw2d_images");
     if (landmark == nullptr || landmark->rva != kDraw2dImagesRva) {
         Log("result=unavailable detail=landmark_missing id=renderer.draw2d_images");
         return 3;

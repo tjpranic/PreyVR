@@ -13,8 +13,20 @@ Line numbers are as of commit 8c07a51, before the section A fixes. Files those f
 
 **Status:**
 - **2026-10-17:** the section A bugs were fixed; see the status table under A.
-- **2026-10-18:** B1, D1 and D2 were done, for about 800 lines net; see their status notes. Build passes, 76/76 ctest pass, no new warnings. Nothing has been committed or run in the headset.
+- **2026-10-18:** B1, D1 and D2 were done, for about 800 lines net; see their status notes.
+  - The user tested PreyVR-13 (the section A fixes) in the headset: everything worked.
+  - Committed as `b5fc093` (fixes) and `8380154` (B1/D1/D2).
+- **2026-10-18, later:** B4, B5 and E6 were done, uncommitted; see their status notes.
+  - Build passes, 76/76 ctest pass, no new warnings.
+  - The engine-map probe and the six native-table verifiers pass against PreyDll.dll.
 - **Not started:** the rest of B–E.
+- **Receipt pins (checked 2026-10-18).** These files have their committed content pinned by a receipt; edit none of them:
+  - `include/preyvr/{Equipment,NativeWrist,PsiMedkit,Psychoscope}Native.h`
+  - `src/dll/NativeHudValue.h`
+  - `tests/test_extract_native_hud.py`
+  - `tools/re/{extract_native_hud,map_native_hud,verify_body_equipment,verify_inventory_stereo,verify_native_wrist,verify_psychoscope}.py`
+
+  Compare against committed blobs, not the working tree: with `core.autocrlf` the checkout is CRLF, while receipts hashed the LF content. No pin was staled by `b5fc093` or `8380154`.
 - **CameraEditHook research experiments (C):** the user decided on 2026-10-18 to keep them for now.
 
 ## Constraints that shape every fix
@@ -162,6 +174,32 @@ The compiler found the copies: with a shared `preyvr::Add` in scope, any leftove
 - **SEH is the right choice on hot render threads.** NearViewStereo runs it about 190 times per frame, and `VirtualQuery` is a syscall.
 
 ### B4. Engine constants, layouts and contracts in one place (high value, none to low risk, about 300 LOC)
+
+**Status 2026-10-18: done where it is identical and the file is not pinned.** It comes out roughly even on lines; the gain is one source per constant, plus new drift checks.
+
+What went in:
+- **`engine::FindLandmark(id)`** replaces 10 hand-written loops in AimRayProbe, PassCameraProbe, DualSceneStereo, AimTakeover, DualOverlay, CameraEditHook ×3, FrameObserver and ReticleRayHook.
+- **Lane prologues identical to a landmark** now use the landmark: CameraEditHook's and HeadTrackingHook's `camera.update_frustum`, and AnimIkTakeover's `anim.process_adik`.
+- **New EngineMap layouts:** `ArkPlayerLayout::getInstanceRva` and `::input`, and `ArkPlayerInputLayout`.
+  - The landmark row and AimTakeover use them.
+  - So do the lane copies: GetPlayer in Arms, Carry, Grenade, Interaction, BodyEquipment and SceneQuery; ArkPlayerInput in AnimIk, Arms and BodyFollow.
+  - Psychoscope static_asserts its pinned `scope::` values against them.
+- **Layout constants:**
+  - `kCameraSize` in CameraEdit.h, RuntimeSnapshot.h, StereoCamera.h, StereoFrame.h and DualSceneStereo is now `engine::CameraLayout::size`.
+  - RuntimeSnapshot.h's system vtable and RenderWorld slot use the `SystemLayout` names. A new RuntimeSnapshotTests check holds `kRenderWorldRva` equal to its landmark.
+  - DualSceneStereo takes stride, slot, view camera and view type from EngineMap, and static_asserts its SThreadInfo base against `RendererLayout::frameBlock`.
+  - CameraEditHook's renderer vtable slots and InputPathProbe's gEnv RVA now use the EngineMap names.
+- **`include/preyvr/NativeContract.h`** (`contract::BodyMatches/BodiesMatch/Gated`) replaces the four FNV loops in BodyEquipment, PhysicalInteractions, SceneQuery and PsiMedkit.
+  - It is generic over each header's own row type, because the pinned headers keep their own `Contract` struct.
+  - New static_asserts check that every function called through a named RVA has a gate row. That covers PsiMedkit's 12 scalars, Physical's 8, SceneQuery's 3 and BodyEquipment's GetPlayer, and closes the scalar/table hazard.
+
+Deliberately left:
+- **The pinned headers** and NativeHudValue.h's FNV loop.
+- **CullCameraWatch's constants and NearFovOverride's prologue:** their tests have no `include/` path.
+- **Prologues that are only a prefix of their landmark** (HeadTrackingHook SetCamera 16/64 and UpdateView 24/27, ArmsLane GetPlayer 7/17): switching would compare more bytes than today.
+- **The `HookAt`-gated prologues** (ShotRay query, InteractionLane ×2): they move with B2.
+- **The skeleton/QuatT layouts, WrenchQuery RayHit and InteractionQuery offsets:** these belong with B11, or with B12-sized follow-ups.
+- **HudLayer's 0x18ABE10/0x18ABCC0:** these belong with B10.
 - **The FindLandmark-by-id loop has 7 copies:** AimRayProbe:26, PassCameraProbe:44, DualSceneStereo:575, CameraEditHook:1706/1741/1815, DualOverlay:154, AimTakeover:99. → `engine::FindLandmark(id)`.
 - **Lane prologue arrays that match EngineMap landmarks byte for byte:**
   - NearFovOverride:18-24 = `renderer.begin`
@@ -191,6 +229,20 @@ The compiler found the copies: with a shared `preyvr::Add` in scope, any leftove
 - → Alias everything to EngineMap with `static_assert`, and add `ThreadInfoLayout`, `SkeletonLayout` and `ArkPlayerLayout`.
 
 ### B5. Engine-access helpers (medium value, no risk, about 110 LOC)
+
+**Status 2026-10-18: done.** `src/dll/EngineAccess.h` is header-only:
+- `PreyBase()` caches the base once it is non-zero.
+- `LiveViewCamera()`.
+
+What changed:
+- **59 of the 89 lookups** go through `PreyBase()`. That covers 42 `reinterpret_cast` forms and 17 `HMODULE` null-check blocks, including the per-frame camera-centre read.
+- **7 copies of the view-camera chain** use `LiveViewCamera()`: AimTakeover ×2, Bootstrap, HandRigTakeover, ReticleFollow, WeaponAttachment and XrSessionHost.
+- **PsiMedkitRuntimeTests' `#define GetModuleHandleW` stub** still applies, because the header is included inside it. That test uses one fake module throughout, so caching is safe.
+
+Left:
+- **25 lookups** in hook installers and Bootstrap paths that pass the `HMODULE` on. B2 rewrites the installers.
+- **The four test-included files without an `include/` path,** and the pinned NativeHudValue.h.
+- **CameraEditHook's own cached base,** and the dead `GameDepthPlanes` / NearViewStereo copies.
 - **[V]** `GetModuleHandleW(L"PreyDll.dll")` is called 88 times across 39 files, some of them on per-frame paths. The module is pinned, so cache it as `PreyBase()`. FocusHold's injectable `gModuleBase` is used by its test, so keep it.
 - **The live view-camera read has about 10 copies:** Bootstrap:647, CameraEditHook:800, NearViewStereo:210 (dead), ReticleFollow:120, HandRigTakeover:96, WeaponAttachment:174, XrSessionHost:1139/1217, AimTakeover:174/223 (read twice in one call).
 - **Other repeated lookups:**
@@ -415,7 +467,7 @@ The compiler found the copies: with a shared `preyvr::Add` in scope, any leftove
   - The LUID→adapter walk appears 3 times.
   - Two different XrResult name tables.
   - → A header-only `XrProbeCommon.h`, for the probes only.
-- **E6. [V] Committed `.pyc` files.**
+- **E6. [V] Committed `.pyc` files.** **Done 2026-10-18:** untracked with `git rm --cached`, and `.gitignore` gained `__pycache__/` and `*.pyc`.
   - The three files under `tools/re/__pycache__/` are tracked in git, and there is no ignore rule.
   - Six scripts set `sys.dont_write_bytecode` as a workaround.
 - **E7. Minor repeats.**
@@ -468,11 +520,12 @@ The compiler found the copies: with a shared `preyvr::Add` in scope, any leftove
 1. ~~Fix A1–A6.~~ Done on 2026-10-17 (A1–A8 and A10); awaiting a headset run. B2 should keep these fixed failure paths.
 2. Header-only, zero-behaviour work:
    - ~~Land these together: B1 (VrMath) + D1 (TestSupport.h).~~ Done on 2026-10-18.
-   - Then B3 SafeMemory.h, B4 NativeContract.h + FindLandmark + layout aliases, and B5 EngineAccess.h.
+   - ~~B4 NativeContract.h + FindLandmark + layout aliases, and B5 EngineAccess.h.~~ Done on 2026-10-18.
+   - B3 SafeMemory.h together with B2 HookInstall.h, now that PreyVR-13 is headset-verified.
 3. ~~Build: D2 `preyvr_add_test`.~~ Done on 2026-10-18.
    - Note: `tools/re/vr_scheme_review` (D5) already fails to link on its own: about 65 unresolved DLL-lane symbols, none of them B1's. It needs folding into the root build, or an updated source list.
 4. Prune dead code (C). Keep the CameraEditHook experiments (user, 2026-10-18); the rest still needs sign-off.
-5. Tools: E6 (`git rm --cached` the .pyc files and add an ignore rule), then E1, E2 (unpinned scripts only) and E3.
+5. Tools: ~~E6~~ (done 2026-10-18), then E1, E2 (unpinned scripts only) and E3.
 6. Larger refactors that need a headset run afterwards: B6, B7, B9, B10, B11.
 
 Rough totals (reviewer estimates):

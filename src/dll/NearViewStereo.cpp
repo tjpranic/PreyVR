@@ -1,4 +1,5 @@
 #include "NearViewStereo.h"
+#include "EngineAccess.h"
 #include "MinHookInit.h"
 
 #include "CameraEditHook.h"
@@ -207,18 +208,10 @@ std::atomic<int> gLastDeltaMicrometres{0};
 // combined with are the world axes' contributions to clip space.
 bool CameraRightAxis(Vec3& out)
 {
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const std::uint8_t* const camera = LiveViewCamera();
+    if (camera == nullptr) {
         return false;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
-    auto* const systemPtr =
-        *reinterpret_cast<std::uint8_t**>(base + engine::SystemLayout::pointerRva);
-    if (systemPtr == nullptr) {
-        return false;
-    }
-    const auto* const camera = reinterpret_cast<const std::uint8_t*>(
-        reinterpret_cast<std::uintptr_t>(systemPtr) + engine::SystemLayout::viewCamera);
     const stereo::Matrix34 m =
         stereo::ReadMatrix(std::span<const std::uint8_t>(camera, engine::CameraLayout::size));
     // Engine basis: column 0 is right.

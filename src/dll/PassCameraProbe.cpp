@@ -41,15 +41,7 @@ std::atomic<unsigned long long> gMaxDifference{0};
 
 // Resolved from the landmark table, so this inherits the fail-closed byte gate
 // rather than trusting a hardcoded address.
-const engine::Landmark* FindLandmark(std::string_view id)
-{
-    for (const auto& landmark : engine::Landmarks()) {
-        if (landmark.id == id) {
-            return &landmark;
-        }
-    }
-    return nullptr;
-}
+using engine::FindLandmark;
 
 Vec3 ForwardOf(const std::uint8_t* camera)
 {

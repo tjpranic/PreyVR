@@ -25,7 +25,7 @@
 // previous camera -- see CameraEditHook for how that is sequenced.
 namespace preyvr::stereoframe {
 
-inline constexpr std::size_t kCameraSize = 0x240;
+inline constexpr std::size_t kCameraSize = engine::CameraLayout::size;
 
 // One eye as OpenXR reports it: a pose in the reference space, and the four
 // signed tangent half-angles of its frustum.

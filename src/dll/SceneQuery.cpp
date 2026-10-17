@@ -1,10 +1,13 @@
 #include "SceneQuery.h"
+#include "EngineAccess.h"
 #include "AimTakeover.h"
 #include "HeadTrackingHook.h"
 #include "HudBridge.h"
 #include "InputPost.h"
 #include "ReticleFollow.h"
 #include "preyvr/SceneQuery.h"
+#include "preyvr/EngineMap.h"
+#include "preyvr/NativeContract.h"
 #include "preyvr/SceneQueryNative.h"
 #include "preyvr/LatestSnapshot.h"
 #include <atomic>
@@ -13,24 +16,20 @@ namespace {
 std::atomic<bool> enabled{false},fault{false};
 std::atomic<unsigned long long> hits{0},misses{0},refused{0};
 std::atomic<DWORD> lastError{0};
-bool Gate(std::uintptr_t base){
-    for(const auto& c:scene::native::Contracts){
-        const auto bytes=reinterpret_cast<const unsigned char*>(base+c.rva);
-        std::uint64_t hash=14695981039346656037ull;
-        for(std::size_t n=0;n<c.size;++n)hash=(hash^bytes[n])*1099511628211ull;
-        if(hash!=c.hash)return false;
-    }
-    return true;
-}
+// Every function called through a named RVA is one the gate hashes.
+static_assert(contract::Gated(scene::native::Contracts,scene::native::Query)&&
+              contract::Gated(scene::native::Contracts,scene::native::EntityPhysics)&&
+              contract::Gated(scene::native::Contracts,engine::ArkPlayerLayout::getInstanceRva));
+bool Gate(std::uintptr_t base){return contract::BodiesMatch(base,scene::native::Contracts);}
 DWORD Query(const GameplayPoseFrame& frame,Vec3 origin,Vec3 direction,float range,scene::Hit& hit){
     hit={};hit.distance=-1;
     __try {
         if(InputDrainThreadId()==0||InputDrainThreadId()!=GetCurrentThreadId())return ERROR_INVALID_THREAD_ID;
-        const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+        const auto base=PreyBase();
         if(!base||!frame.player)return ERROR_NOT_READY;
         static bool gated=false;
         if(!gated){if(!Gate(base))return ERROR_BAD_EXE_FORMAT;gated=true;}
-        const auto player=reinterpret_cast<std::uintptr_t(__fastcall*)()>(base+0x157c990)();
+        const auto player=reinterpret_cast<std::uintptr_t(__fastcall*)()>(base+engine::ArkPlayerLayout::getInstanceRva)();
         if(player!=frame.player)return ERROR_NOT_READY;
         const auto entity=*reinterpret_cast<const std::uintptr_t*>(player+scene::native::PlayerEntityOffset);
         if(!entity)return ERROR_NOT_READY;

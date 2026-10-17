@@ -1,5 +1,7 @@
 #pragma once
 
+#include "preyvr/EngineMap.h"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -25,7 +27,7 @@
 //      style, it changes what the engine renders.
 namespace preyvr::cameraedit {
 
-inline constexpr std::size_t kCameraSize = 0x240;
+inline constexpr std::size_t kCameraSize = engine::CameraLayout::size;
 
 // Matches the 15-degree ceiling the A0b aim protocol already uses. Large enough
 // that the resulting image change is unmistakable, small enough that a mistake

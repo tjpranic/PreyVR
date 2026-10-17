@@ -1,4 +1,5 @@
 #include "BodyFollow.h"
+#include "EngineAccess.h"
 
 #include "AimTakeover.h"
 #include "HeadTrackingHook.h"
@@ -8,6 +9,7 @@
 #include "SceneQuery.h"
 #include "XrSessionHost.h"
 #include "XrInput.h"
+#include "preyvr/EngineMap.h"
 #include "preyvr/ArmPose.h"
 #include "preyvr/BodyFollow.h"
 #include "preyvr/LatestSnapshot.h"
@@ -82,7 +84,7 @@ constexpr std::string_view kGetPosBody = "488d4138c3";
 // (+0x8E0): the cinematic gate (+0x94, R-089).
 constexpr std::size_t kCameraMode = 0x12A0 + 0x1A4;
 constexpr std::size_t kCustomView = 0x12A0 + 0x148;
-constexpr std::size_t kCinematicGate = 0x8E0 + 0x94;
+constexpr std::size_t kCinematicGate = engine::ArkPlayerLayout::input + engine::ArkPlayerInputLayout::cinematic;
 
 // Closer than this the body is where the torso is.
 constexpr float kMinimumStep = 0.01f * kRadians;
@@ -649,9 +651,8 @@ DWORD Install()
 {
     std::lock_guard lock(gInstallMutex);
     if (gInstalled.load(std::memory_order_acquire)) { return 0; }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) { return 1; }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
+    const auto base = PreyBase();
+    if (base == 0) { return 1; }
     const char* mismatch = nullptr;
     if (!BytesMatch(base + kPlayerUpdateRva, kPlayerUpdatePrologue)) { mismatch = "update_prologue"; }
     else if (!BytesMatch(base + kSetViewRotationRva, kSetViewRotationBody)) { mismatch = "set_view_rotation_body"; }

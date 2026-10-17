@@ -1,5 +1,6 @@
 #pragma once
 
+#include "preyvr/EngineMap.h"
 #include "preyvr/VrMath.h"
 
 #include <array>
@@ -235,7 +236,7 @@ Pose CyclopsPose(const Pose& leftEye, const Pose& rightEye);
 // Writing into a live CCamera
 // ---------------------------------------------------------------------------
 
-inline constexpr std::size_t kCameraSize = 0x240;
+inline constexpr std::size_t kCameraSize = engine::CameraLayout::size;
 
 // Writes only the twelve matrix floats. Everything else in the structure --
 // fov, dimensions, near/far, the asymmetry shifts, and all the cached derived

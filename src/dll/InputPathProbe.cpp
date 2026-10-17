@@ -1,6 +1,8 @@
 #include "InputPathProbe.h"
+#include "EngineAccess.h"
 
 #include "Logger.h"
+#include "preyvr/EngineMap.h"
 
 #include <atomic>
 #include <cstdint>
@@ -17,7 +19,7 @@ void Log(const std::string& line)
 
 // R-044: gEnv, the SSystemGlobalEnvironment instance. Verified 24 times over by
 // the gEnv-relaying ISystem accessors, and confirmed live 2026-08-29.
-constexpr std::uintptr_t kGEnvRva = 0x224D980;
+constexpr std::uintptr_t kGEnvRva = engine::GlobalEnvironmentLayout::baseRva;
 
 // SYSTEM_VTABLE.md: slot 84 GetIInput relays gEnv->pInput at gEnv+0x58. This is
 // **our own verified receipt**, not a guess from the CryEngine 5 headers --
@@ -157,12 +159,11 @@ unsigned int FindEventPostingPair(std::uintptr_t vtable)
 
 DWORD ResolveInputPath()
 {
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         Log("result=unavailable detail=no_preydll");
         return 1;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(preyDll);
     const std::uintptr_t gEnv = base + kGEnvRva;
     gGEnv.store(gEnv, std::memory_order_relaxed);
 
