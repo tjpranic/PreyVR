@@ -46,7 +46,6 @@ constexpr std::uintptr_t kPInputOffset = 0x58;
 constexpr unsigned int kPostInputEventSlotGuess = 12;
 constexpr unsigned int kSlotsToDump = 20;
 
-std::atomic<unsigned long long> gGEnv{0};
 std::atomic<unsigned long long> gInput{0};
 std::atomic<unsigned long long> gVtable{0};
 std::atomic<unsigned int> gAlignmentSlot{0};
@@ -141,7 +140,6 @@ DWORD ResolveInputPath()
         return 1;
     }
     const std::uintptr_t gEnv = base + kGEnvRva;
-    gGEnv.store(gEnv, std::memory_order_relaxed);
 
     std::uintptr_t input = 0;
     if (!ReadPointer(gEnv + kPInputOffset, input) || input == 0) {
@@ -193,7 +191,6 @@ DWORD ResolveInputPath()
     return 0;
 }
 
-unsigned long long InputPathGEnv() { return gGEnv.load(std::memory_order_relaxed); }
 unsigned long long InputPathInputPointer() { return gInput.load(std::memory_order_relaxed); }
 unsigned long long InputPathVtable() { return gVtable.load(std::memory_order_relaxed); }
 DWORD InputPathAlignmentSlot() { return gAlignmentSlot.load(std::memory_order_relaxed); }

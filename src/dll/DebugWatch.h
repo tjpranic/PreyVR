@@ -100,9 +100,6 @@ DWORD WatchArmedMask();
 DWORD WatchArmedThreadCount();
 DWORD WatchMissedThreadCount();
 
-// 1 if the vectored handler is installed.
-DWORD WatchHandlerInstalled();
-
 // Traps the handler saw that belonged to no slot of ours -- passed through to
 // whoever else is handling them. Non-zero alongside zero hits usually means
 // something else owns the debug registers.

@@ -28,7 +28,6 @@ std::atomic<DWORD> gObserverStatus{
     static_cast<DWORD>(FrameObserverRuntimeStatus::unavailable)};
 std::atomic<ULONGLONG> gFrameCount{0};
 std::atomic<DWORD> gFirstThreadId{0};
-std::atomic<LONGLONG> gFirstQpc{0};
 std::atomic<void*> gFirstRenderer{nullptr};
 std::atomic<DWORD> gMilestoneThreadId{0};
 std::atomic<void*> gMilestoneRenderer{nullptr};
@@ -44,9 +43,6 @@ void __fastcall ObserveEndRendererScene(void* renderer)
     if (count == 1) {
         gFirstThreadId.store(GetCurrentThreadId(), std::memory_order_relaxed);
         gFirstRenderer.store(renderer, std::memory_order_relaxed);
-        LARGE_INTEGER now{};
-        QueryPerformanceCounter(&now);
-        gFirstQpc.store(now.QuadPart, std::memory_order_relaxed);
     }
     else if (count == 120) {
         gMilestoneThreadId.store(GetCurrentThreadId(), std::memory_order_relaxed);
@@ -194,7 +190,6 @@ DWORD SetFrameObserverEnabled(bool enabled)
     // Once MH_EnableHook returns, ObserveEndRendererScene can run immediately.
     gFrameCount.store(0, std::memory_order_release);
     gFirstThreadId.store(0, std::memory_order_release);
-    gFirstQpc.store(0, std::memory_order_release);
     gFirstRenderer.store(nullptr, std::memory_order_release);
     gMilestoneThreadId.store(0, std::memory_order_release);
     gMilestoneRenderer.store(nullptr, std::memory_order_release);

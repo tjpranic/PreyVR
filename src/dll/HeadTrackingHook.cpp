@@ -65,34 +65,6 @@ void LogRecenterRefusal(const char* detail)
     Log(std::string("result=refused detail=") + detail + HeldRecenterRefusals());
 }
 
-// R-030 CRenderView::SetCamera(const CCamera&). RCX is the render view, RDX the
-// camera. It copies by value into m_camera at +0x11A0, which is exactly why this
-// seam is safe: what we pass cannot alias the global view camera.
-using SetCameraFn = void(__fastcall*)(void* renderView, const std::uint8_t* camera);
-using UpdateFrustumFn = void(__fastcall*)(std::uint8_t* camera);
-
-constexpr std::uintptr_t kSetCameraRva = 0xEE7E80;
-
-constexpr std::uintptr_t kUpdateFrustumRva = 0x121D70;
-// Gated on the `camera.update_frustum` landmark.
-
-
-// The first 16 bytes of R-030's registry signature. Verified immediately before
-// hooking, so a build that does not match cannot be instrumented at a
-// plausible-looking address.
-constexpr std::array<std::uint8_t, 16> kSetCameraPrologue = {
-    0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48,
-    0x89, 0x78, 0x10, 0x55, 0x48, 0x8D, 0x68, 0xD8,
-};
-
-void* gTarget = nullptr;
-std::atomic<SetCameraFn> gOriginal{nullptr};
-std::atomic<UpdateFrustumFn> gUpdateFrustum{nullptr};
-bool gHookCreated = false;
-
-std::atomic<bool> gArmed{false};
-std::atomic<unsigned long long> gApplied{0};
-std::atomic<unsigned long long> gRefused{0};
 std::atomic<unsigned long long> gLastPoseAgeMicroseconds{0};
 std::atomic<unsigned long long> gMaxPoseAgeMicroseconds{0};
 
@@ -140,83 +112,6 @@ bool ReadPose(Pose& out, std::int64_t& publishedQpc, long long& displayTime, uns
     return true;
 }
 
-bool PrologueMatches(std::uintptr_t address)
-{
-    return std::memcmp(reinterpret_cast<const void*>(address),
-                       kSetCameraPrologue.data(), kSetCameraPrologue.size()) == 0;
-}
-
-// Builds the camera the engine should render with: the game's own position, and
-// an orientation of the recentered play space composed with the live head.
-//
-// **Orientation only.** The head pose's translation is dropped rather than
-// applied, which is what keeps M1 free of `unitsPerMetre` -- still unmeasured,
-// and it scales position rather than rotation -- and free of the head-versus-wall
-// collision problem, since a head that cannot translate cannot lean through
-// geometry.
-void __fastcall SetCameraWithHeadTracking(void* renderView, const std::uint8_t* camera)
-{
-    const SetCameraFn original = gOriginal.load(std::memory_order_acquire);
-    if (!gArmed.load(std::memory_order_acquire) || camera == nullptr) {
-        if (original != nullptr) {
-            original(renderView, camera);
-        }
-        return;
-    }
-
-    // **Rotation deliberately does not happen here any more.** Measured
-    // 2026-09-03: this seam is downstream of visibility, so a rotated camera
-    // renders geometry the engine already culled against an unrotated one. That
-    // is what makes it safe from contamination and what makes it wrong for
-    // rotation. Rotation now happens upstream, on the camera culling reads.
-    //
-    // The hook stays installed and inert rather than removed, because the per-eye
-    // offset belongs here -- downstream, where no restore is needed and nothing
-    // can alias the global camera.
-    gRefused.fetch_add(1, std::memory_order_relaxed);
-    if (original != nullptr) {
-        original(renderView, camera);
-    }
-}
-
-bool EnsureHook()
-{
-    if (gHookCreated) {
-        return true;
-    }
-    const auto base = PreyBase();
-    if (base == 0) {
-        return false;
-    }
-    const auto target = base + kSetCameraRva;
-    if (!PrologueMatches(target)) {
-        Log("result=unavailable detail=set_camera_prologue");
-        return false;
-    }
-
-    const auto frustumAddress = base + kUpdateFrustumRva;
-    const engine::Landmark* frustum = engine::FindLandmark("camera.update_frustum");
-    if (frustum == nullptr || frustum->rva != kUpdateFrustumRva ||
-        std::memcmp(reinterpret_cast<const void*>(frustumAddress),
-                    frustum->expected.data(), frustum->expected.size()) != 0) {
-        Log("result=unavailable detail=update_frustum_prologue");
-        return false;
-    }
-    gUpdateFrustum.store(reinterpret_cast<UpdateFrustumFn>(frustumAddress),
-                         std::memory_order_release);
-
-    gTarget = reinterpret_cast<void*>(target);
-    const auto installed = hook::Install(gTarget, reinterpret_cast<void*>(&SetCameraWithHeadTracking), gOriginal);
-    if (!installed) {
-        Log(std::string("result=failed detail=") + hook::StepName(installed.step) + " minhook=" +
-            MH_StatusToString(installed.status));
-        return false;
-    }
-    gHookCreated = true;
-    Log("result=0 detail=hook_installed target=CRenderView::SetCamera");
-    return true;
-}
-
 } // namespace
 
 // A refused read is contention with the publisher (LatestSnapshot's try-lock),
@@ -261,45 +156,6 @@ bool TryReadHeadPose(Pose& out, unsigned long long& ageMicroseconds)
     out = pose;
     ageMicroseconds = age;
     return age <= 200000ull;
-}
-
-bool ApplyHeadRotation(std::uint8_t* camera, std::size_t size)
-{
-    if (camera == nullptr || size < cameraedit::kCameraSize) {
-        return false;
-    }
-    if (!gHaveReference.load(std::memory_order_acquire)) {
-        return false;
-    }
-    Pose headPose{};
-    unsigned long long age = 0;
-    if (!TryReadHeadPose(headPose, age)) {
-        return false;
-    }
-    const auto span = std::span<std::uint8_t>(camera, cameraedit::kCameraSize);
-
-    // **Compose with the engine's camera rather than replacing it.** The engine's
-    // camera already carries where the player is facing, so the play space sits at
-    // that yaw minus the yaw the head held at recenter. A head back at its
-    // recenter orientation then reproduces the engine's own camera exactly.
-    //
-    // The first build set the reference to the recenter yaw and left it, which
-    // discarded mouse-look from the rendered camera entirely -- seen in game as
-    // the player's body rotating in front of the view.
-    const stereo::Matrix34 existing = stereo::ReadMatrix(span);
-    const stereo::ReferenceFrame reference = stereo::ReferenceFrameForHeadTracking(
-        existing, gReferenceYaw.load(std::memory_order_acquire));
-
-    Pose orientationOnly = headPose;
-    orientationOnly.position = Vec3{};
-    const Pose world = stereo::EyePoseInWorld(reference, orientationOnly);
-
-    if (!stereo::WriteMatrix(span, stereo::MatrixFromPose(world))) {
-        return false;
-    }
-    // A non-orthonormal matrix makes the engine negate its own plane normals,
-    // which is a confusing thing to debug from inside a headset.
-    return cameraedit::RotationIsSafeToWrite(span);
 }
 
 struct HeadRenderPose { Pose pose{}, world{}; long long time=0; unsigned long long reference=0, space=0; bool valid=false; };
@@ -775,38 +631,6 @@ std::string HeadHeightReport() {
         out<<" referenceHeight="<<room.origin.y<<" headHeight="<<frame.head.position.y
            <<" relativeHeight="<<(frame.head.position.y-room.origin.y);
     return out.str();
-}
-
-DWORD SetHeadTrackingEnabled(unsigned int enabled)
-{
-    const bool on = enabled != 0u;
-    if (on) {
-        if (!gHaveReference.load(std::memory_order_acquire)) {
-            // Without a reference the composition has no idea which way the play
-            // space faces, and would snap the world to engine north on frame one.
-            Log("result=refused detail=no_reference_recenter_first");
-            return 1;
-        }
-        if (!EnsureHook()) {
-            return 2;
-        }
-        gApplied.store(0, std::memory_order_relaxed);
-        gRefused.store(0, std::memory_order_relaxed);
-        gMaxPoseAgeMicroseconds.store(0, std::memory_order_relaxed);
-    }
-    gArmed.store(on, std::memory_order_release);
-    Log(std::string("result=0 detail=armed value=") + (on ? "1" : "0"));
-    return 0;
-}
-
-unsigned long long HeadTrackingAppliedCount()
-{
-    return gApplied.load(std::memory_order_relaxed);
-}
-
-unsigned long long HeadTrackingRefusedCount()
-{
-    return gRefused.load(std::memory_order_relaxed);
 }
 
 unsigned long long HeadTrackingLastPoseAgeMicroseconds()

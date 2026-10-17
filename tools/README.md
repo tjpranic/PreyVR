@@ -122,21 +122,22 @@ shows up as plausible-looking wrong images.
 ## Automating a protocol run
 
 `live/preyvr-harness.js` is pasted into a Frida session attached to Prey and
-exposes the A1/A2/A3 protocols as functions:
+exposes the stereo protocols as functions:
 
 ```js
 PreyVR.enableObserver();
 PreyVR.freezeScene();          // t_Scale 0, r_AntialiasingMode 0, r_MotionBlur 0
-PreyVR.runNoiseFloor();        // step 0 - must be done before A1 means anything
-PreyVR.runA1(10.0);            // does writing m_ViewCamera change the image?
+PreyVR.runNoiseFloor();        // two unarmed captures: the noise floor
 PreyVR.runA2(0.064, 50.0);     // alternating-eye stereo, no headset
-PreyVR.runA3(1);               // the double render, budget of ONE frame
 ```
 
 Every call returns a plain object, and each protocol evaluates its own acceptance
-criteria rather than leaving them to be remembered -- `restoreFailures` and
-`applied` are checked inside `runA1`, and `runA2` keeps capturing until it has
-actually seen both eyes instead of assuming two captures land on different ones.
+criteria rather than leaving them to be remembered -- `runA2` checks
+`restoreFailures` and keeps capturing until it has actually seen both eyes
+instead of assuming two captures land on different ones. VR itself is started
+by the mod's `vr.enable` (`Send-PreyVR.ps1 vr.enable`, or F11), not the harness.
+The A1 yaw-edit and A3 double-render protocols were removed with their exports
+on 2026-10-18.
 
 Two F-009 behaviours are worked around deliberately. Several exports raise a
 Frida `system error` even though the call takes effect, so everything goes

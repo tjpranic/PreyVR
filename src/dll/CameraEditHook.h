@@ -5,7 +5,16 @@
 
 #include <Windows.h>
 
-// The first write to Prey's render path, as a bounded and reversible experiment.
+// Prey's CSystem::Render, hooked: the one per-frame seam on the engine's main
+// thread, which keeps running while a menu is up. Every frame it drains queued
+// input and HUD calls and runs the move, turn and fire lanes. With stereo armed
+// it also edits the view camera for that render, restores it byte for byte, and
+// publishes the frame's render contract for submission.
+//
+// It began as the first, bounded write to the render path, and held the A1-A7
+// render experiments (double render, second pass, interpose, frame shape)
+// until 2026-10-18; docs/STEREO_ROUTE.md and docs/FAILURE_REGISTRY.md keep what
+// they found.
 //
 // **Why CSystem::Render and not CSystem::SetViewCamera.** The game rewrites
 // m_ViewCamera every frame from ArkPlayerCamera, so a write issued at
@@ -41,15 +50,10 @@ enum class CameraEditStatus : DWORD {
     failed = 3,
 };
 
-// Installs the hook if needed and arms a bounded yaw, in degrees. Passing 0
-// disarms without removing the hook. Rejects anything outside the bound in
-// preyvr::cameraedit.
 // Installs the `CSystem::Render` hook without arming any camera edit. Needed by
 // anything that relies on that per-frame seam -- notably the input drain, which
 // otherwise queues events that are never delivered.
 DWORD EnsureRenderHookInstalled();
-
-DWORD SetCameraYawEdit(float degrees);
 
 // Alternating-eye stereo, without any double-render.
 //
@@ -168,8 +172,8 @@ DWORD SetStereoAsymmetry(float outerScale);
 // 0 locks left, 1 locks right, any other value returns to alternating.
 DWORD SetStereoEyeLock(unsigned int eye);
 
-// Which eye is in the frame the render thread has just finished, or -1 if the
-// game thread has not published one yet.
+// The render contract of the frame the render thread has just finished -- which
+// eye it is, and its pose -- or false if the game thread has not published one.
 //
 // The camera hook publishes the eye it built alongside each frame, and this pops
 // them in order. The engine's MT/RT double buffer delays work without reordering
@@ -179,7 +183,6 @@ DWORD SetStereoEyeLock(unsigned int eye);
 //
 // Call exactly once per finished frame. Consuming twice would advance past a
 // frame and swap the eyes from then on.
-int ConsumeRenderedEye();
 bool ConsumeRenderedContract(RenderContract& out);
 
 // Clears the queue. Call when arming, so a stale backlog from a previous run
@@ -205,53 +208,12 @@ unsigned long long EyeHandoffDroppedCount();
 // SetStereoEyeLock, which also keeps the capture tag correct.
 void SetStereoEyeLockFromRenderThread(int eye);
 
-// Leaves the head rotation on the global camera rather than restoring it, so the
-// next frame's occlusion job sees it.
-//
-// **A diagnostic first and possibly the fix.** The occlusion job is spawned from
-// GetViewCamera() before CSystem::Render runs, so a rotation written during
-// Render and undone before returning is never visible to culling -- which is why
-// the cull frustum followed the mouse while the pass camera agreed with us
-// exactly. Leaving it costs one frame of staleness on the cull frustum, which
-// decides what to submit and tolerates lag far better than the render camera
-// would.
-//
-// It also changes behaviour rather than only timing: every reader of the global
-// camera now sees the rotation, including the cached aim ray, so aim follows the
-// head. Off by default for that reason.
-DWORD SetKeepHeadRotation(unsigned int enabled);
-
 // The forward axis the camera edit last wrote, for the pass-camera probe.
 //
 // Exists so the probe can answer whether the camera the engine culls with is the
 // one we wrote, rather than the two of us reasoning about it from the call graph
 // -- which said it should be, while the cull frustum visibly followed the mouse.
 bool LastWrittenCameraForward(Vec3& out);
-
-// Applies the tracked head rotation to the upstream camera -- the one the engine
-// culls from.
-//
-// **This is where rotation has to happen.** Driving it from
-// CRenderView::SetCamera was measured on 2026-09-03 and broke level culling,
-// because that seam sits downstream of visibility: the engine culled against an
-// unrotated camera and rendered through a rotated one, so anything outside the
-// original frustum was already gone. Being downstream is what makes that seam
-// contamination-safe and what makes it wrong for rotation.
-//
-// The contamination concern does not transfer. It was about a per-eye *offset* --
-// a transient alternating camera no engine expects. A rotated view camera is what
-// every reader of the global camera sees each time the player turns with a mouse.
-//
-// Requires a recenter reference; refuses if the hook cannot be installed.
-DWORD SetUpstreamHeadRotation(unsigned int enabled);
-
-unsigned long long UpstreamHeadRotationApplied();
-
-// Frames where rotation was armed but not applied -- no pose yet, no reference,
-// or a matrix that failed the orthonormality gate. The frame is left as the
-// engine built it, so this counts frames without head tracking rather than
-// broken ones.
-unsigned long long UpstreamHeadRotationRefused();
 
 // Builds the per-eye camera by translation alone, inheriting Prey's own
 // projection rather than overwriting it with a synthetic one.
@@ -279,206 +241,6 @@ unsigned int NativeProjectionEnabled();
 // the two are a frame or so apart. Use SetStereoEyeLock instead; that is the
 // whole reason it exists.
 int LastRenderedEye();
-
-// **The double-render experiment: native stereo, or not.**
-//
-// Calls the original CSystem::Render twice inside one frame, once per eye. This
-// is the one remaining architectural unknown for native stereo, and it is the
-// risky one -- everything else can be validated by the alternating-eye mode
-// above, which is why that exists and why this is separate.
-//
-// What it answers: whether Prey survives rendering the world twice in a frame at
-// all, and what it costs. What it does **not** answer: whether the per-eye
-// cameras are correct. A2 answers that, and it should be run first, because a
-// crash here would otherwise be ambiguous between "cannot render twice" and
-// "the second camera was malformed".
-//
-// `frameBudget` is a hard ceiling: the mode disarms itself after that many
-// frames, so a crash-prone experiment cannot run away while a person reaches for
-// the keyboard. There is no unbounded option on purpose.
-//
-// Note that the second render overwrites the backbuffer, so the presented image
-// is the right eye. A capture taken here is therefore *one* eye, not a pair --
-// use the alternating mode for pairs.
-DWORD SetDoubleRenderStereo(float ipdMetres, float halfFovDegrees, unsigned int frameBudget);
-
-unsigned long long DoubleRenderedFrameCount();
-
-// **Settles R-072, which decides whether native stereo is possible at all.**
-//
-// `SRenderingPassInfo`'s render view comes from `pRenderer->vtable[0x198](slot,
-// type)` (R-071), and every pass Prey builds asks for type 0. CryEngine's
-// `EViewType` puts Recursive at 1. If type 1 hands back a *different* view, a
-// second per-eye pass can own its own view and `RenderWorld` can be called twice
-// without the re-entry that wedged the engine in F-013. If it hands back the same
-// pointer, that whole approach is dead and we need another one.
-//
-// Runs **once, inside the render hook**, because that is the thread the engine
-// itself calls this from; calling a renderer method from an arbitrary thread is
-// how a probe becomes the bug it was looking for. Nothing is written and no pass
-// is built -- it asks for two pointers and compares them.
-DWORD ProbeRenderViews();
-
-enum class RenderViewProbeStatus : DWORD {
-    notRun = 0,
-    viewsDiffer = 1,     // recursive view is distinct -- R-072 holds
-    viewsIdentical = 2,  // one view for both types -- R-072 refuted
-    unresolved = 3,      // renderer or vtable could not be reached; nothing was called
-    recursiveUnavailable = 4, // type 1 returned null; distinct from "same view"
-};
-
-DWORD RenderViewProbeStatusValue();
-
-// The sub-step the stereo path was last in, as a string literal. See F-014.
-const char* StereoStepName();
-
-// **A4 -- the recursive second pass. The successor to A3, at the right layer.**
-//
-// A3 re-entered `CSystem::Render`, which forced both eyes through one
-// `SRenderingPassInfo` and one `CRenderView`. The second pass then culled against
-// state the first had already consumed, the world vanished leaving only skybox,
-// and the engine wedged (F-013).
-//
-// This does not re-enter anything. The original `CSystem::Render` runs untouched
-// with the game's own camera, and *afterwards* one extra `RenderWorld` (R-054) is
-// issued with:
-//
-//   * our own 64-byte `SRenderingPassInfo`, built by the engine's own
-//     `CreateGeneralPassRenderingInfo` (R-071, byte-gated as `pass.create_general`)
-//   * an eye-offset camera in our own memory, never the game's
-//   * **the recursive render view** rather than the default one (R-072), so the
-//     two passes share no per-frame view state
-//
-// That last point is the whole hypothesis. R-072 measured the recursive view as a
-// distinct object on both thread slots, and `CRenderer::GetRenderViewForThread`
-// disassembles to a plain indexed load with no allocation, so obtaining it is
-// free of side effects.
-//
-// **What this answers and what it does not.** It answers whether the engine
-// survives a second world render given its own view -- which is the last
-// architectural unknown. It does *not* yet composite or submit anything: the
-// second pass renders over the first in the same backbuffer, so the presented
-// image is the second eye. Making a submittable pair is the next problem, and
-// bundling it into this one would make a failure uninterpretable.
-//
-// **KNOWN WRONG IN ITS FRAME PLACEMENT -- see docs/STEREO_RENDER_ARCHITECTURE.md.**
-// Prior art from two injected native-stereo mods gives the frame flow as: both
-// eye world-renders, then HUD exactly once, then present exactly once. This runs
-// the original in full -- world, HUD and present -- and appends a second world
-// render afterwards, so the second eye lands after the HUD and after the present,
-// and composites over a finished frame instead of a cleared target.
-//
-// It is still worth running as the architectural probe it was built to be: it
-// answers whether the engine survives a second RenderWorld given its own view,
-// which is the A3 question at the right layer. It is **not** a stereo path, and
-// must not be treated as one or submitted from.
-//
-// Bounded by both a frame budget and the wall-clock watchdog, because F-013's
-// lesson was that a budget in frames cannot bound a failure that stops frames.
-// Pass ipd 0 or budget 0 to disarm.
-// `zeroCameraDelta` runs the control from BN-SFX-001's fast_test: the second
-// pass is built and dispatched identically, but with a zero eye offset, so the
-// second image should equal the first. Anything that changes is a side effect of
-// repeating the pass rather than stereo -- which is the only way to tell those
-// two apart. Run it before the eye-delta test, not after.
-// `markSecondary` sets SRenderingPassInfo+0x01 (R-073), which makes the engine
-// skip its once-per-frame work. **It is a variable rather than a constant because
-// of F-014**: the crash may be caused by that very skipping, if some of the work
-// it skips is what prepares the per-frame colour table the crash walks. Running
-// with it off changes exactly one bit and separates the two hypotheses --
-// "a second RenderWorld is fatal" from "marking it secondary is fatal".
-DWORD SetSecondPassStereo(float ipdMetres, float halfFovDegrees, unsigned int frameBudget,
-                          bool zeroCameraDelta, bool markSecondary);
-
-unsigned long long SecondPassFrameCount();
-
-// How many second passes advanced the renderer's own frame ids. **Non-zero is a
-// positive detection of a per-frame side effect** and fails BN-SFX-001's gate;
-// zero is necessary but not sufficient, since it sees renderer bookkeeping only.
-unsigned long long SecondPassFrameIdMovedCount();
-
-enum class SecondPassStatus : DWORD {
-    idle = 0,
-    armed = 1,
-    ranAtLeastOnce = 2,
-    refusedUnresolved = 3,  // renderer, process or pass creator could not be reached
-};
-
-DWORD SecondPassStatusValue();
-
-// **A6 -- the interpose shape. What A4 should have been.**
-//
-// A4 appended a second `RenderWorld` *after* the original `CSystem::Render` had
-// already drawn the HUD and presented. F-014 showed the cost: the second pass
-// consumes per-frame UI table state that the next frame's HUD draw then reads,
-// so the health bar renders as wireframe and the render thread later walks a
-// chunk chain into -1. Three fatal runs out of three, with the R-073 flag both
-// on and off.
-//
-// Prior art prescribes the other shape (`docs/STEREO_RENDER_ARCHITECTURE.md`,
-// from FEAR VR and FC2VR): repeat **only** the world-render call per eye, so
-// simulation, HUD and present still happen exactly once per frame. This hooks
-// `RenderWorld` (R-054) itself and calls the original twice from inside it, so
-// `CSystem::Render` sees a single world-render call and proceeds to HUD and
-// present having had both eyes drawn already.
-//
-// **The first test is zero-delta on purpose.** Both calls get the game's own,
-// unmodified pass info, so the only variable is "can this call be repeated
-// here". That separates it from every question about our pass construction --
-// which is what F-011 taught and what A4 conflated.
-// `mode` selects how much the second render shares with the first:
-//   0  everything -- the first A6 run: 13 frames, then a deadlock inside the
-//      second call (F-015), which reads as resource exhaustion
-//   1  its own recursive render view, pass info otherwise copied byte for byte
-//   2  as 1, and marked a secondary pass (R-073)
-//   3  **shares the PRIMARY view and marks the pass secondary** -- the
-//      combination none of the earlier runs tried. The dispatch calls the
-//      per-frame prepare FUN_1802114D0 only when +0x01 == 0, so mode 0 ran it
-//      TWICE per frame (allocate twice, free once) which is the 13-19 frame
-//      exhaustion; mode 3 runs it once. Sharing the primary view is deliberate:
-//      it is the view that prepare just prepared, where mode 1's own recursive
-//      view had nothing prepare it and crashed on frame one.
-//   4  as 3, plus a real per-eye camera registered through the same
-//      C3DEngine slot the pass constructor uses. Mode 3 survived 600 frames at
-//      a 7% cost uncapped, which is far too cheap for a real world render, but
-//      both its passes shared one camera so the image could not tell us whether
-//      the second pass drew anything. Mode 4 makes the image the evidence.
-//
-// The ladder exists because F-015's failure is a *sharing* problem, and each rung
-// separates one more thing the two renders currently share.
-DWORD SetInterposeStereo(unsigned int frameBudget, unsigned int mode);
-
-unsigned long long InterposeFrameCount();
-
-// **A7 -- the faithful Crysis VR shape, and the one thing every attempt so far
-// has been missing.**
-//
-// Crysis VR (fholger) renders the world twice per frame on CryEngine 2 -- the
-// same lineage as Prey -- with this loop:
-//
-//     RenderSingleEye(0, renderFunc, pSystem);
-//     pSystem->RenderBegin();          // <-- BETWEEN THE EYES
-//     RenderSingleEye(1, renderFunc, pSystem);
-//
-// The comment on that middle line reads: "need to call RenderBegin to reset
-// state, otherwise we get messed up object culling and other issues."
-//
-// A3 was this shape **minus** that call, and it wedged. A6 mode 0 was the same
-// omission one layer down: two world renders with nothing between them, which ran
-// 13-19 clean frames and then exhausted -- and A4 crashed inside a per-frame
-// *culling* structure, which is the exact symptom that comment names.
-//
-// CSystem::RenderBegin is ISystem vtable slot 10 (+0x050), RVA 0xE0BD80, and had
-// been sitting in docs/SYSTEM_VTABLE.md unused since that table was built. It is
-// now landmark 33, system.render_begin, and shares the cmp byte [rcx+0x9D7] guard
-// with CSystem::Render, which is what confirms it is the sibling frame-bracket
-// function on the same object.
-//
-// The first test is zero-delta: both renders use the game camera unmodified, so
-// the only variable is whether the reset makes repetition survivable.
-DWORD SetFrameShapeStereo(unsigned int frameBudget);
-
-unsigned long long FrameShapeFrameCount();
 
 DWORD CameraEditStatusValue();
 

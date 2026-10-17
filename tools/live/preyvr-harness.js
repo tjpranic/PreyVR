@@ -4,8 +4,8 @@
 // Everything returns a plain object so the result can be read directly rather
 // than scraped out of a log.
 //
-// Why this exists: the A1/A2/A3 protocols are sequences of export calls with
-// waits and checks between them, and doing that by hand is both slow and the
+// Why this exists: the stereo protocols (A2, A2b) are sequences of export calls
+// with waits and checks between them, and doing that by hand is both slow and the
 // kind of thing where a missed check turns a null result into a false positive.
 // The harness makes a protocol run reproducible and its acceptance criteria
 // non-optional.
@@ -115,7 +115,6 @@ var PreyVR = (function () {
             applied: callTolerant('PreyVR_GetCameraEditAppliedCount', 'uint64', []).value,
             restoreFailures: callTolerant('PreyVR_GetCameraEditRestoreFailureCount', 'uint64', []).value,
             lastEye: callTolerant('PreyVR_GetLastRenderedEye', 'int', []).value,
-            doubleRendered: callTolerant('PreyVR_GetDoubleRenderedFrameCount', 'uint64', []).value,
             consoleResult: callTolerant('PreyVR_GetLastConsoleResult', 'uint32', []).value,
             consoleSubmitted: callTolerant('PreyVR_GetSubmittedConsoleCommandCount', 'uint64', []).value
         };
@@ -187,42 +186,17 @@ var PreyVR = (function () {
     function thawScene() {
         return [
             console_('t_Scale 1'),
-            console_('r_AntialiasingMode 3'),
+            console_('r_AntialiasingMode 1'),
             console_('r_MotionBlur 2')
         ];
     }
 
     // --- protocols ---------------------------------------------------------
 
-    // Step 0 of A1. Two captures with nothing armed; the diff between them is the
-    // noise floor, and without it the A1 result has nothing to be compared to.
+    // Two captures with nothing armed; the diff between them is the noise floor
+    // every capture comparison needs.
     function runNoiseFloor() {
         return { a: capture(0), b: capture(0), status: status() };
-    }
-
-    // A1: does writing m_ViewCamera change the image?
-    function runA1(yawDegrees) {
-        var yaw = yawDegrees || 10.0;
-        var out = { yawDegrees: yaw };
-        out.before = capture(0);
-        // Float args cannot go through the thread route, so this one still uses
-        // NativeFunction -- it takes no lock, so an abort cannot poison anything.
-        out.arm = callTolerant('PreyVR_SetCameraYawEdit', 'uint32', ['float'], [yaw]);
-        out.armStatus = Number(callTolerant('PreyVR_GetCameraEditStatus', 'uint32', []).value);
-        if (out.armStatus !== 2) {
-            out.aborted = 'camera edit did not arm';
-            return out;
-        }
-        out.after = capture(1);
-        callTolerant('PreyVR_SetCameraYawEdit', 'uint32', ['float'], [0.0]);
-        out.status = status();
-        // The acceptance criterion that must never be skipped.
-        out.restoreFailures = String(out.status.restoreFailures);
-        out.applied = String(out.status.applied);
-        out.verdict = (Number(out.status.restoreFailures) === 0 && Number(out.status.applied) > 0)
-            ? 'ran cleanly - now diff the two dumps'
-            : 'DO NOT TRUST: restore failed or the edit never applied';
-        return out;
     }
 
     // A2: alternating-eye stereo. Captures until it has one dump of each eye,
@@ -252,36 +226,6 @@ var PreyVR = (function () {
         out.verdict = (Number(out.status.restoreFailures) === 0 && out.bothEyesCaptured)
             ? 'got a pair - now run New-StereoView -Mode Anaglyph'
             : 'DO NOT TRUST: restore failed or only one eye was captured';
-        return out;
-    }
-
-    // A3: the double render. Defaults to a budget of ONE frame -- the first
-    // question is only whether the engine survives it.
-    function runA3(frameBudget, ipd, halfFov) {
-        var budget = frameBudget || 1;
-        var out = { frameBudget: budget };
-        var before = Number(callTolerant('PreyVR_GetDoubleRenderedFrameCount', 'uint64', []).value);
-
-        out.arm = callTolerant('PreyVR_SetDoubleRenderStereo', 'uint32',
-                               ['float', 'float', 'uint32'],
-                               [ipd || 0.064, halfFov || 50.0, budget]);
-        out.armStatus = Number(callTolerant('PreyVR_GetCameraEditStatus', 'uint32', []).value);
-        if (out.armStatus !== 2) {
-            out.aborted = 'double render did not arm';
-            return out;
-        }
-
-        Thread.sleep(Math.min(5.0, 0.5 + budget / 100.0));
-        callTolerant('PreyVR_SetDoubleRenderStereo', 'uint32', ['float', 'float', 'uint32'],
-                     [0.0, 0.0, 0]);
-
-        out.status = status();
-        out.doubleRenderedDelta = Number(out.status.doubleRendered) - before;
-        out.verdict = (Number(out.status.restoreFailures) === 0 && out.doubleRenderedDelta > 0)
-            ? 'the engine rendered twice in a frame and survived'
-            : (out.doubleRenderedDelta === 0
-                ? 'no double-rendered frames completed - check the log for detail=double_render_'
-                : 'DO NOT TRUST: restore failed');
         return out;
     }
 
@@ -472,160 +416,11 @@ var PreyVR = (function () {
         return out;
     }
 
-    // The full bring-up, in the order the engine requires it.
-    //
-    // **Every step here goes through `act`, and that is not stylistic.** Calling
-    // the float-taking `PreyVR_SetSyntheticStereo` directly from Frida aborts
-    // (F-009) *while holding the camera-edit mutex*, which then refuses every
-    // later control call with `detail=busy` and cannot be released without
-    // restarting the game. Measured 2026-09-05, and it cost a headset session.
-    // The `Ptr` variants exist precisely so the whole sequence can run on a real
-    // thread; use them.
-    // Paths here use FORWARD slashes deliberately. Windows accepts them and JS
-    // never treats them as escapes. The backslash form was silently mangled --
-    // the escape sequences were eaten, the manifest was never found, and it
-    // surfaced as an unavailable SESSION rather than as a bad path, which sent
-    // the first diagnosis at the headset instead of at a string.
-    function startVr(opts) {
-        var o = opts || {};
-        var ipd = o.ipd || 0.064;          // wearer-chosen after a live sweep
-        var halfFov = o.halfFov || 50.0;
-        var manifest = o.manifest ||
-            'C:/Program Files/Virtual Desktop Streamer/OpenXR/virtualdesktop-openxr.json';
-        var out = { step: 'start-vr', ipd: ipd };
-
-        // MinHook is initialised inside the observer's enable path and nowhere
-        // else, so no other hook can install until this has run.
-        out.observer = enableObserver();
-        if (!out.observer.enabled) {
-            out.verdict = 'ABORTED: frame observer did not enable, so no hook can install';
-            return out;
-        }
-        // Both of these must precede StartXrSession. Prey inherits Steam's
-        // environment, so the runtime has to be chosen rather than assumed.
-        out.runtime = act('PreyVR_SetXrRuntimeManifest', Memory.allocUtf8String(manifest)).returned;
-        out.srgb = act('PreyVR_SetXrPreferSrgbFormatPtr', ptr(1)).returned;
-        out.session = act('PreyVR_StartXrSession', NULL, 25).returned;
-        if (out.session !== 1) {
-            out.verdict = 'ABORTED: session status ' + out.session +
-                ' (2 = adapter mismatch, and that needs r_overrideDXGIAdapter set BEFORE launch)';
-            return out;
-        }
-        // **Before arming stereo, so the first eye built already uses it.**
-        // Without this the eye camera's projection is REPLACED with a synthetic
-        // halfFov frustum carrying mirrored asymmetry, while the submission path
-        // still declares Prey's own 120x88.5 -- so we declare one frustum over an
-        // image rendered with another. In a headset that reads as wall-eyed
-        // divergence plus a horizontal stretch, and it also makes the dynamic sun
-        // swing with head yaw. Measured 2026-09-05; all three cleared the instant
-        // this was set.
-        //
-        // It defaults to FALSE, and the run STEREO_ROUTE records as PASSED had it
-        // on -- recorded in that section's heading rather than in its settings
-        // table, which is exactly how rebuilding "the known-good config" from the
-        // table missed it.
-        // Cumulative for the session, so baseline it: a stale count from an
-        // earlier arm would either raise a false alarm or mask a real one.
-        var divergeBefore = Number(callTolerant('PreyVR_GetDeclaredFovDivergeCount', 'uint64', []).value);
-        // `nativeProjection: false` deliberately arms the configuration that
-        // shipped broken on 2026-09-05. It exists so the guard below can be
-        // shown to FIRE -- a check that has only ever returned "fine" is
-        // decoration, and this project has shipped that mistake before.
-        var wantNative = (o.nativeProjection === false) ? 0 : 1;
-        out.nativeProjection = act('PreyVR_SetNativeProjectionPtr', ptr(wantNative)).returned;
-        out.nativeProjectionRequested = wantNative;
-
-        var args = Memory.alloc(8);
-        args.writeFloat(ipd); args.add(4).writeFloat(halfFov);
-        // halfFov is inert while native projection is on: the eye is built by
-        // translation alone and Prey's own projection is left untouched. It is
-        // still passed so the call is valid if native projection is ever off.
-        out.stereo = act('PreyVR_SetSyntheticStereoPtr', args).returned;
-        out.cameraEdit = Number(callTolerant('PreyVR_GetCameraEditStatus', 'uint32', []).value);
-        if (out.cameraEdit !== 2) {
-            out.verdict = 'ABORTED: synthetic stereo did not arm (status ' + out.cameraEdit +
-                '). If the log says detail=busy, the control mutex is held and only a restart clears it.';
-            return out;
-        }
-        out.submission = act('PreyVR_SetXrStereoSubmissionPtr', ptr(1)).returned;
-        // Motion blur is a requirement, not a preference: it read as a focus
-        // artifact on near geometry. TAA 3 was chosen over the other three modes.
-        out.motionBlur = console_('r_MotionBlur 0').lastResult;
-        out.aa = console_('r_AntialiasingMode 3').lastResult;
-
-        // **The viewmodel FOV, matched to the world's.** Prey draws near objects
-        // through a separate pass with its own field (r_DrawNearFoV), tuned for a
-        // flat screen -- so by default the weapon is rendered at a different
-        // projection from the world it sits in, which reads in a headset as the
-        // weapon belonging to a different photograph. Confirmed 2026-09-05: the
-        // weapon changes and the world does not, which is what proves the cvar
-        // reaches that pass.
-        //
-        // **Derived, not hardcoded.** The world FOV follows the player's own
-        // slider, so a fixed 88.507 is only right for the machine it was measured
-        // on. Read the live frustum and match it.
-        //
-        // It resets to Prey's default every launch, which is why this belongs in
-        // the bring-up rather than in someone's memory.
-        var fovBuf = Memory.alloc(16);
-        try {
-            new NativeFunction(module_().getExportByName('PreyVR_ReadDeclaredFovPtr'),
-                               'uint32', ['pointer'])(fovBuf);
-            // The export returns TANGENT half-extents, not angles.
-            // **The buffer is offset by one field.** A live read returns
-            // [0, -1.7321, +1.7321, -0.9743]: index 0 is a leading value, then
-            // tanLeft, tanRight, tanUp. Treating indices 2 and 3 as the vertical
-            // pair mixes a HORIZONTAL tangent with a vertical one and yields
-            // 104.254 degrees, which was set live twice and looked wrong in a
-            // headset before the numbers were checked.
-            var tanRight = fovBuf.add(8).readFloat(), tanUp = fovBuf.add(12).readFloat();
-            var tanDown = tanUp;   // symmetric vertically; Prey reports no asymmetry
-            var verticalDeg = (Math.atan(Math.abs(tanUp)) + Math.atan(Math.abs(tanDown))) * 180.0 / Math.PI;
-            // Sanity: Prey's own frustum is 120 x 88.507. A derived value far from
-            // 88.5 means the struct was misread, not that the FOV changed.
-            if (verticalDeg > 20.0 && verticalDeg < 170.0) {
-                out.nearFovDegrees = Math.round(verticalDeg * 1000) / 1000;
-                out.nearFov = console_('r_DrawNearFoV ' + out.nearFovDegrees).lastResult;
-            } else {
-                out.nearFov = 'skipped - derived value ' + verticalDeg + ' is not plausible';
-            }
-        } catch (e) {
-            out.nearFov = 'unavailable: ' + String(e.message || e);
-        }
-        Thread.sleep(2);
-        out.frames = String(callTolerant('PreyVR_GetXrSubmittedFrameCount', 'uint64', []).value);
-
-        // **The geometry check no external tool can make.** xr-tape sees what the
-        // runtime located and what we declared, never what the engine rendered
-        // with -- so its checks can all be in their correct state while the image
-        // is a lie. A non-zero delta here means the declared frustum does not
-        // describe these pixels, and the run is not worth a person's time.
-        //
-        // Proven able to fail before being trusted: with native projection off it
-        // reads 140 diverged in 4 s at 732 milli-tan, and freezes the moment the
-        // flag goes back on (2026-09-05).
-        out.fovDiverged = Number(callTolerant('PreyVR_GetDeclaredFovDivergeCount', 'uint64', []).value) - divergeBefore;
-        out.fovAgreed = String(callTolerant('PreyVR_GetDeclaredFovAgreeCount', 'uint64', []).value);
-        // **Session high-water mark, not this run's.** Reported under a name that
-        // says so, because a worst-case number printed beside a passing verdict
-        // reads as this run's and is the exact shape of metric that has misled
-        // this project before.
-        out.fovWorstMilliTanSession = Number(callTolerant('PreyVR_GetDeclaredFovWorstMilliTan', 'uint32', []).value);
-        if (out.fovDiverged > 0) {
-            out.verdict = 'STOP - declared frustum does not match what was rendered (' +
-                out.fovDiverged + ' frames, ' + out.fovWorstMilliTanSession +
-                ' milli-tan session worst). Do not judge depth, scale or comfort through this; fix the declaration first.';
-            return out;
-        }
-        if (out.fovAgreed === '0') {
-            // Silence is not a pass. If nothing was compared, the check proved
-            // nothing -- which is the failure shape this project keeps meeting.
-            out.verdict = 'stereo running, but the frustum check never ran (no eye built yet). Re-check after a few seconds.';
-            return out;
-        }
-        out.verdict = 'stereo running, declared frustum matches rendered - now runSixDof observe/rotation/position';
-        return out;
-    }
+    // VR start is the mod's own `vr.enable` (VrMode.cpp), sent through the command
+    // channel: `tools/Send-PreyVR.ps1 vr.enable`, or F11 in game. Wait for
+    // `vr.status` to read vr=active before the protocols below. This harness had
+    // its own copy, which drifted (antialiasing mode 3 where VR start uses 1); it
+    // was removed on 2026-10-18.
 
     // The native input path (H-006 / R-070). Read-only: resolves and validates,
     // calls nothing. Safe to run any time, including at a menu.
@@ -847,7 +642,6 @@ var PreyVR = (function () {
     return {
         status: status,
         watchHealth: watchHealth,
-        startVr: startVr,
         resolveInputPath: resolveInputPath,
         runSixDof: runSixDof,
         runIkCapture: runIkCapture,
@@ -861,11 +655,9 @@ var PreyVR = (function () {
         freezeScene: freezeScene,
         thawScene: thawScene,
         runNoiseFloor: runNoiseFloor,
-        runA1: runA1,
         runA2: runA2,
         runA2bStep: runA2bStep,
-        endA2b: endA2b,
-        runA3: runA3
+        endA2b: endA2b
     };
 })();
 

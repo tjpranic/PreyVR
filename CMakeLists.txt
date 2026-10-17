@@ -134,8 +134,6 @@ add_library(preyvr_core STATIC
     src/common/StereoCamera.cpp
     src/common/StereoFrame.cpp
     src/common/VrMath.cpp
-    src/common/DepthSubmission.cpp
-    src/common/FrameClock.cpp
     src/common/FrameTiming.cpp
     src/common/FrustumCoverage.cpp
     src/common/WeaponAim.cpp
@@ -411,8 +409,6 @@ if(PREYVR_BUILD_TESTS)
     preyvr_add_test(physical_interactions tests/PhysicalInteractionsTests.cpp)
     preyvr_add_test(psi_medkit_contracts tests/PsiMedkitTests.cpp TARGET preyvr_psi_medkit_tests)
     preyvr_add_test(frustum_coverage tests/FrustumCoverageTests.cpp)
-    preyvr_add_test(depth_submission tests/DepthSubmissionTests.cpp)
-    preyvr_add_test(frame_clock tests/FrameClockTests.cpp)
     preyvr_add_test(frame_timing tests/FrameTimingTests.cpp)
     preyvr_add_test(input_event tests/InputEventTests.cpp)
     preyvr_add_test(input_queue tests/InputQueueTests.cpp)
@@ -450,9 +446,6 @@ if(PREYVR_BUILD_TESTS)
             INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/dll"
             DEFS WIN32_LEAN_AND_MEAN NOMINMAX
             LIBS preyvr_core preyvr_imgui d3d11)
-        preyvr_add_test(wrist_panel tests/WristPanelTests.cpp SOURCES src/dll/WristPanel.cpp
-            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
-            LIBS preyvr_core gdi32 user32)
         preyvr_add_test(native_wrist tests/NativeWristTests.cpp SOURCES src/dll/NativeWristTexture.cpp
             DEFS WIN32_LEAN_AND_MEAN NOMINMAX
             LIBS preyvr_core d3d11 d3dcompiler)

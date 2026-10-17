@@ -509,7 +509,6 @@ DWORD WatchArmedMask()
 
 DWORD WatchArmedThreadCount() { return gArmedThreads.load(std::memory_order_relaxed); }
 DWORD WatchMissedThreadCount() { return gMissedThreads.load(std::memory_order_relaxed); }
-DWORD WatchHandlerInstalled() { return gHandler != nullptr ? 1u : 0u; }
 unsigned long long WatchForeignTrapCount()
 {
     return gForeignTraps.load(std::memory_order_relaxed);

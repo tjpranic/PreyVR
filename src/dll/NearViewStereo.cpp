@@ -205,26 +205,6 @@ std::atomic<unsigned long long> gRefused{0};
 std::atomic<unsigned long long> gNoEye{0};
 std::atomic<int> gLastDeltaMicrometres{0};
 
-// The camera's right axis in world space, from the engine's own view camera.
-// The displacement has to be a world-space vector because the matrix rows it is
-// combined with are the world axes' contributions to clip space.
-bool CameraRightAxis(Vec3& out)
-{
-    const std::uint8_t* const camera = LiveViewCamera();
-    if (camera == nullptr) {
-        return false;
-    }
-    const stereo::Matrix34 m =
-        stereo::ReadMatrix(std::span<const std::uint8_t>(camera, engine::CameraLayout::size));
-    // Engine basis: column 0 is right.
-    out = Vec3{m[0], m[4], m[8]};
-    const float length = std::sqrt(out.x * out.x + out.y * out.y + out.z * out.z);
-    if (!std::isfinite(length) || length < 0.9f || length > 1.1f) {
-        return false;   // not an orthonormal basis; refuse rather than guess
-    }
-    return true;
-}
-
 // A projection-shaped matrix has a finite, non-trivial magnitude. Several callers
 // build temporary view-info and share this packer, so this is the guard against
 // editing something that is not the pass we mean.

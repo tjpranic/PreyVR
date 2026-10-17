@@ -269,8 +269,8 @@ enum class XrResolution : unsigned int {
 };
 DWORD XrResolutionChain(XrResolution field);
 
-unsigned long long DeclaredFovAgreeCount();
-unsigned long long DeclaredFovDivergeCount();
-DWORD DeclaredFovWorstMilliTan();
+// Eye images published with their render contract, and contracts refused.
+unsigned long long EyeContractsPublishedCount();
+unsigned long long EyeContractsRefusedCount();
 
 } // namespace preyvr::dll

@@ -25,7 +25,7 @@ Line numbers are as of commit 8c07a51, before the section A fixes. Files those f
 - **2026-10-18, group 1:** B12 (most of it), D5, E1, E2 and E3 were done, uncommitted; see their status notes.
   - Build passes with no new warnings; 81/81 ctest pass (the four VR scheme replays are new), and 12 runs in a row at `-j12` were clean.
   - Every unpinned `tools/re` verifier prints byte-identical output before and after.
-  - Offline only: nothing here needs a headset run beyond the usual smoke check.
+  - Offline only: nothing here needs a headset run beyond the usual smoke check. PreyVR-16 passed that check in the headset.
 - **Decisions (user, 2026-10-18):**
   - **A9:** a malformed command value keeps falling back to a default; it is not refused. B9 keeps today's fallbacks.
   - **Engine calls:** guard them with SEH (the `CallX` style). B6's shared wrappers are guarded. NearFovOverride's unguarded call to the engine's original is a detour forwarding, not a wrapper, and is not changed.
@@ -452,6 +452,36 @@ Left:
 
 ## C. Dead or superseded code (needs your sign-off; biggest single LOC win)
 
+**Sign-off, user, 2026-10-18.**
+- **Cut:**
+  - the CameraEditHook experiments, keeping the `CSystem::Render` hook and its live path;
+  - the HeadTrackingHook SetCamera hook;
+  - DepthSubmission, FrameClock and WristPanel;
+  - the unused functions and the FOV-divergence leftovers;
+  - the bring-up copies in Invoke-PreyVRStartup and the harness's `startVr`;
+  - Publish-PreyVR051.
+- **Kept:** DualSceneStereo modes 1 and 2; the AimState, InteractionQuery and WrenchQuery leftovers; run-graphify.
+
+**Status 2026-10-18: all signed-off items cut, uncommitted.** About 3,300 lines net. Build passes with no new warnings, and 78/78 ctest pass (three tests went with their code: frame_clock, wrist_panel and depth_submission).
+- **CameraEditHook:** 2,134 → 850 lines, header 502 → 264.
+  - Removed: A1 yaw edit, A3 double render, A4 second pass, A6 interpose (its `RenderWorld` hook was only ever installed when armed), A7 frame shape, the render-view probe, upstream and kept head rotation, the watchdog and the step trace.
+  - The `CSystem::Render` hook keeps its live path unchanged: drains, lanes, the stereo edit with restore and verify, the render contract and the dual-eye build.
+  - About 25 exports went with them, as did HeadTrackingHook's `ApplyHeadRotation`, whose only caller was the upstream-rotation experiment.
+  - The pure `cameraedit::ApplyYaw` stays: the restore and orthonormality tests use it to perturb a camera.
+- **HeadTrackingHook:** the SetCamera hook and its three exports are gone. Head tracking runs on the `ArkPlayerCamera::UpdateView` seam, as before.
+- **DepthSubmission:** gone, with XrSessionHost's depth fields and helpers. The instance no longer requests `XR_KHR_composition_layer_depth`, and the `xr_depth extension_supported=` log line is gone. **Headset check needed.**
+- **FrameClock, WristPanel and Publish-PreyVR051:** deleted.
+- **Unused functions:** `carry::YawOf`, `CameraRightAxis`, `ConsumeRenderedEye`, `InputPathGEnv` (and its now-unread `gGEnv`), `WatchHandlerInstalled` and `gFirstQpc`. WristLane's `Conj` was already gone.
+- **FOV leftovers:** the three `PreyVR_GetDeclaredFov*` exports, the worst-case and logged-once state, and the orphaned comment are gone.
+  - The two counters are renamed for what they count (`EyeContractsPublished`/`Refused`).
+  - The report keeps the field names `fovAgreed`/`fovDiverged`, because the research log reads them under those names.
+- **Invoke-PreyVRStartup.ps1:** 390 → 159 lines. It now sends `vr.enable`, polls `vr.status` until it reads active, failed or off, and prints the resolution chain and state.
+  - Kept: the pre-session render size, supersampling and mirror FOV.
+  - Its IPD, half-FOV, controls, hands, reticle and UI switches are gone: `vr.enable` arms all of them and uses the runtime's IPD.
+  - Checked offline against a fake responder.
+- **preyvr-harness.js:** `startVr`, `runA1` and `runA3` are gone (−208 lines). A note points to `vr.enable`, and `thawScene` restores AA mode 1, which is what VR start sets.
+- **Docs:** README and tools/README updated. Older dated docs that name removed exports are left as history.
+
 | Item | Approx LOC | Evidence / caveat |
 |---|---|---|
 | `CameraEditHook` research experiments A3/A4/A6/A7 + render-view probe (:143-236, :456-922, :935-1012, :1065-1135, :1626-2029; header :250-470; Bootstrap :512-716/:767-788) | ~1,350 | The shipped path is DualSceneStereo mode 3, and VrMode never calls these. `tools/live/preyvr-harness.js:265` still drives `SetDoubleRenderStereo`. 104 of 185 exports are unreferenced by tools or tests. If kept, there are about 120 more lines of internal repeats (watchdog arming ×4, budget check ×4). |
@@ -624,7 +654,7 @@ Left:
    - ~~B3 SafeMemory.h together with B2 HookInstall.h.~~ Done on 2026-10-18; headset-verified (PreyVR-15).
 3. ~~Build: D2 `preyvr_add_test`.~~ Done on 2026-10-18.
    - ~~Note: `tools/re/vr_scheme_review` (D5) already fails to link on its own.~~ Folded into the root build on 2026-10-18.
-4. Prune dead code (C). Keep the CameraEditHook experiments (user, 2026-10-18); the rest still needs sign-off.
+4. ~~Prune dead code (C).~~ Signed off and cut on 2026-10-18, CameraEditHook experiments included; awaiting a headset run.
 5. Tools: ~~E6~~ (done 2026-10-18), ~~then E1, E2 (unpinned scripts only) and E3~~ (done 2026-10-18, with B12 and D5).
 6. Larger refactors that need a headset run afterwards: B6, B7, B9, B10, B11.
 

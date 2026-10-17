@@ -43,10 +43,11 @@ evaluating whether this accelerates your own work, read the open list first.
 
 ### Confirmed in a headset
 
-- **Stereo, head tracking, and per-eye projection.** Bring-up is scripted end to
-  end by `tools/Invoke-PreyVRStartup.ps1`, in the one order that works: `xr.srgb`
-  before `xr.start` (gamma is a swapchain format, not a cvar), `view.recenter`
-  before `view.apply`, and the near-pass FOV derived from the render aspect.
+- **Stereo, head tracking, and per-eye projection.** Bring-up is the mod's own
+  `vr.enable` (F11 in game, or `tools/Invoke-PreyVRStartup.ps1` from a shell), in
+  the one order that works: gamma before the session (it is a swapchain format,
+  not a cvar), a recenter before head tracking, and the near-pass FOV derived
+  from the render aspect.
 - **The hand and weapon move together and the arm bends** (R-104). Writing the
   controller's wrist into the rig's own animation-driven-IK target, at the entry
   of `ProcessAnimationDrivenIK`, makes Prey's two-bone solver solve the arm.

@@ -426,18 +426,8 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetSubmittedConsoleCommandCoun
     return preyvr::dll::SubmittedConsoleCommandCount();
 }
 
-// The first write to the render path. Wraps CSystem::Render so a bounded yaw is
-// applied to m_ViewCamera for the duration of one render and then restored, with
-// the restore verified byte for byte. Pass 0 to disarm; the hook stays installed
-// as a pass-through because F-009 recorded that our unhook path has never been
-// observed restoring a prologue on a live host.
-//
-// Returns 0 unavailable, 1 ready, 2 armed, 3 failed.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetCameraYawEdit(float degrees)
-{
-    return preyvr::dll::SetCameraYawEdit(degrees);
-}
-
+// The CSystem::Render hook (CameraEditHook.h): 0 unavailable, 1 ready, 2 armed
+// (stereo is editing the camera each frame), 3 failed.
 extern "C" __declspec(dllexport) DWORD PreyVR_GetCameraEditStatus()
 {
     return preyvr::dll::CameraEditStatusValue();
@@ -504,109 +494,6 @@ extern "C" __declspec(dllexport) int PreyVR_GetLastRenderedEye()
     return preyvr::dll::LastRenderedEye();
 }
 
-// The double-render experiment: calls CSystem::Render twice in one frame, once
-// per eye. This is the one remaining architectural unknown for native stereo and
-// the only genuinely risky mode here - run the alternating-eye stereo first, so
-// that a crash cannot be ambiguous between "cannot render twice" and "the second
-// camera was malformed". frameBudget is a hard ceiling, capped at 600; there is
-// no unbounded option. Pass ipd 0 or budget 0 to disarm.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetDoubleRenderStereo(
-    float ipdMetres, float halfFovDegrees, unsigned int frameBudget)
-{
-    return preyvr::dll::SetDoubleRenderStereo(ipdMetres, halfFovDegrees, frameBudget);
-}
-
-// A4: one extra RenderWorld per frame for the second eye, with its own pass info
-// and the recursive render view. The successor to the double render (A3), which
-// wedged the engine by re-entering CSystem::Render and forcing both eyes through
-// one pass info and one view (F-013).
-//
-// The game's own frame renders first and untouched, so this path never writes the
-// game's camera. Bounded by a frame budget and by the wall-clock watchdog.
-// args[0] = IPD metres, args[1] = half-FOV degrees, args[2] = frame budget.
-struct PreyVRSecondPassArgs {
-    float ipdMetres;
-    float halfFovDegrees;
-    unsigned int frameBudget;
-    // Non-zero runs the zero-camera-delta control: identical pass, identical
-    // view, zero eye offset. Whatever changes is a side effect, not stereo.
-    unsigned int zeroCameraDelta;
-    // Non-zero sets the R-073 secondary-pass flag. Off is the F-014 A/B: it
-    // separates "a second RenderWorld is fatal" from "marking it secondary is".
-    unsigned int markSecondary;
-};
-
-extern "C" __declspec(dllexport) DWORD PreyVR_SetSecondPassStereoPtr(
-    const PreyVRSecondPassArgs* args)
-{
-    if (args == nullptr) {
-        return static_cast<DWORD>(preyvr::dll::CameraEditStatus::failed);
-    }
-    return preyvr::dll::SetSecondPassStereo(
-        args->ipdMetres, args->halfFovDegrees, args->frameBudget,
-        args->zeroCameraDelta != 0, args->markSecondary != 0);
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetSecondPassFrameCount()
-{
-    return preyvr::dll::SecondPassFrameCount();
-}
-
-// 0 idle, 1 armed, 2 ran at least once, 3 refused because something could not be
-// resolved.
-// Non-zero means a second pass advanced renderer frame bookkeeping: a positive
-// side-effect detection, and a failure of BN-SFX-001's gate.
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetSecondPassFrameIdMovedCount()
-{
-    return preyvr::dll::SecondPassFrameIdMovedCount();
-}
-
-extern "C" __declspec(dllexport) DWORD PreyVR_GetSecondPassStatus()
-{
-    return preyvr::dll::SecondPassStatusValue();
-}
-
-// A6: the interpose shape. Hooks RenderWorld and calls the original twice from
-// inside it, so the frame still contains one CSystem::Render, one HUD draw and
-// one present -- which is what A4 got wrong and F-014 charged us for.
-//
-// The first test is zero-delta: both calls take the game's own unmodified pass
-// info, so the only variable is whether the call can be repeated at this point.
-// args[0] = frame budget, args[1] = mode (0 share all, 1 own recursive view,
-// 2 own view plus secondary flag). Pointer-taking so it runs on a real thread.
-struct PreyVRInterposeArgs {
-    unsigned int frameBudget;
-    unsigned int mode;
-};
-
-extern "C" __declspec(dllexport) DWORD PreyVR_SetInterposeStereoPtr(
-    const PreyVRInterposeArgs* args)
-{
-    if (args == nullptr) {
-        return static_cast<DWORD>(preyvr::dll::CameraEditStatus::failed);
-    }
-    return preyvr::dll::SetInterposeStereo(args->frameBudget, args->mode);
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetInterposeFrameCount()
-{
-    return preyvr::dll::InterposeFrameCount();
-}
-
-// A7: the Crysis VR shape -- two full CSystem::Render calls with
-// CSystem::RenderBegin between them. That middle call is the one thing A3 and A6
-// were both missing, and the Crysis VR source names its absence as "messed up
-// object culling", which is exactly the symptom A4 crashed inside.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetFrameShapeStereo(unsigned int frameBudget)
-{
-    return preyvr::dll::SetFrameShapeStereo(frameBudget);
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetFrameShapeFrameCount()
-{
-    return preyvr::dll::FrameShapeFrameCount();
-}
-
 // Reads Prey's live view camera and returns the frustum PreyVR must DECLARE to
 // OpenXR, through the shipped code path rather than a re-derivation.
 //
@@ -671,37 +558,6 @@ extern "C" __declspec(dllexport) DWORD PreyVR_ReadDeclaredFovPtr(PreyVRDeclaredF
     return 1;
 }
 
-// The sub-step the stereo path was last in.
-//
-// **Exported because F-014 proved a breadcrumb readable on only one failure path
-// is not a breadcrumb.** It was previously printed by the watchdog on deadline
-// expiry alone, so a mode that disarmed cleanly and then crashed the render
-// thread a second later left no trace of where it had been. Readable at any time,
-// including after the fact from a surviving process.
-extern "C" __declspec(dllexport) const char* PreyVR_GetStereoStep()
-{
-    return preyvr::dll::StereoStepName();
-}
-
-// Arms the one-shot render-view probe. It runs on the next rendered frame and
-// nothing needs to be armed for it to work.
-//
-// Settles R-072: whether `pRenderer->GetRenderViewForThread(slot, 1)` hands back
-// a render view distinct from the type-0 one every Prey pass uses. That decides
-// whether a second per-eye pass can own its own view -- which is the whole
-// question left open by F-013.
-extern "C" __declspec(dllexport) DWORD PreyVR_ProbeRenderViews()
-{
-    return preyvr::dll::ProbeRenderViews();
-}
-
-// 0 not run, 1 views differ (R-072 holds), 2 same view (refuted), 3 unresolved,
-// 4 recursive view was null.
-extern "C" __declspec(dllexport) DWORD PreyVR_GetRenderViewProbeStatus()
-{
-    return preyvr::dll::RenderViewProbeStatusValue();
-}
-
 // ---------------------------------------------------------------------------
 // Pointer-argument variants, for automation
 // ---------------------------------------------------------------------------
@@ -741,37 +597,6 @@ extern "C" __declspec(dllexport) DWORD PreyVR_SetSyntheticStereoPtr(const float*
         return static_cast<DWORD>(preyvr::dll::CameraEditStatus::failed);
     }
     return preyvr::dll::SetSyntheticStereo(args[0], args[1]);
-}
-
-extern "C" __declspec(dllexport) DWORD PreyVR_SetCameraYawEditPtr(const float* degrees)
-{
-    if (degrees == nullptr) {
-        return static_cast<DWORD>(preyvr::dll::CameraEditStatus::failed);
-    }
-    return preyvr::dll::SetCameraYawEdit(*degrees);
-}
-
-// Laid out as two floats followed by a frame budget, so one allocation carries
-// the whole call.
-struct PreyVRDoubleRenderArgs {
-    float ipdMetres;
-    float halfFovDegrees;
-    unsigned int frameBudget;
-};
-
-extern "C" __declspec(dllexport) DWORD PreyVR_SetDoubleRenderStereoPtr(
-    const PreyVRDoubleRenderArgs* args)
-{
-    if (args == nullptr) {
-        return static_cast<DWORD>(preyvr::dll::CameraEditStatus::failed);
-    }
-    return preyvr::dll::SetDoubleRenderStereo(
-        args->ipdMetres, args->halfFovDegrees, args->frameBudget);
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetDoubleRenderedFrameCount()
-{
-    return preyvr::dll::DoubleRenderedFrameCount();
 }
 
 // --- Hurdle 2: an OpenXR session hosted inside Prey ------------------------
@@ -888,12 +713,6 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetPassCameraLastDifferenceMil
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetPassCameraMaxDifferenceMillidegrees()
 {
     return preyvr::dll::PassCameraMaxDifferenceMillidegrees();
-}
-
-// Leaves head rotation on the camera so the next frame's occlusion job sees it.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetKeepHeadRotationPtr(void* enabled)
-{
-    return preyvr::dll::SetKeepHeadRotation(PtrArg(enabled));
 }
 
 // The indicative overlay: Prey's own crosshair follows the controller ray.
@@ -1061,43 +880,10 @@ extern "C" __declspec(dllexport) DWORD PreyVR_GetViewHookLastNearPlaneMicrometre
     return static_cast<DWORD>(preyvr::dll::ViewHookLastNearPlane() * 1.0e6f + 0.5f);
 }
 
-// Head rotation on the upstream camera, which is the one the engine culls from.
-// Recenter first.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetUpstreamHeadRotationPtr(void* enabled)
-{
-    return preyvr::dll::SetUpstreamHeadRotation(PtrArg(enabled));
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetUpstreamHeadRotationApplied()
-{
-    return preyvr::dll::UpstreamHeadRotationApplied();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetUpstreamHeadRotationRefused()
-{
-    return preyvr::dll::UpstreamHeadRotationRefused();
-}
-
-// M1 head tracking, on the CRenderView::SetCamera seam. Recenter first: arming
-// without a reference is refused rather than snapping the world to engine north.
+// M1 head tracking.
 extern "C" __declspec(dllexport) DWORD PreyVR_RecenterHeadTracking()
 {
     return preyvr::dll::RecenterHeadTracking();
-}
-
-extern "C" __declspec(dllexport) DWORD PreyVR_SetHeadTrackingEnabledPtr(void* enabled)
-{
-    return preyvr::dll::SetHeadTrackingEnabled(PtrArg(enabled));
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetHeadTrackingAppliedCount()
-{
-    return preyvr::dll::HeadTrackingAppliedCount();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetHeadTrackingRefusedCount()
-{
-    return preyvr::dll::HeadTrackingRefusedCount();
 }
 
 // The handoff segment of pose latency only -- it excludes the runtime's own
@@ -1480,33 +1266,6 @@ extern "C" __declspec(dllexport) DWORD PreyVR_GetWatchCaptureSlotPtr(void* index
 {
     preyvr::dll::WatchCapture capture{};
     return ReadCaptureAt(index, capture) ? capture.slot : 0;
-}
-
-// ---------------------------------------------------------------------------
-// The declared-vs-rendered assert. The one geometry check no external tool can
-// make: xr-tape sees what the runtime located and what we declared, never what
-// the engine rendered with.
-// ---------------------------------------------------------------------------
-
-// Frames where the declared frustum matched the rendered one within tolerance.
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetDeclaredFovAgreeCount()
-{
-    return preyvr::dll::DeclaredFovAgreeCount();
-}
-
-// Frames where it did not. **Non-zero means the image is a lie**, even if every
-// XR-boundary check is in its correct state -- which for an injector means
-// submitted_fov_matches_located FAILING.
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetDeclaredFovDivergeCount()
-{
-    return preyvr::dll::DeclaredFovDivergeCount();
-}
-
-// Worst per-edge tangent delta seen, in thousandths. The 50-vs-60 degree
-// half-angle case that shipped on 2026-09-05 reads about 540 here.
-extern "C" __declspec(dllexport) DWORD PreyVR_GetDeclaredFovWorstMilliTan()
-{
-    return preyvr::dll::DeclaredFovWorstMilliTan();
 }
 
 // ---------------------------------------------------------------------------

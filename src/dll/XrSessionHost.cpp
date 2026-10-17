@@ -1,7 +1,6 @@
 #include "XrSessionHost.h"
 #include "EngineAccess.h"
 
-#include "preyvr/DepthSubmission.h"
 #include "preyvr/FrameTiming.h"
 #include "preyvr/FrustumCoverage.h"
 
@@ -269,14 +268,6 @@ struct Host {
     std::uint32_t viewCount = 0;
     bool viewsDiffer = false;          // per-eye sizes are allowed to differ
     std::uint32_t heldWidth = 0, heldHeight = 0, heldFormat = 0;
-    // Depth submission (XR_KHR_composition_layer_depth). The swapchain is built
-    // only when the runtime offers the game's own depth format, because the copy
-    // is a straight CopyResource and a format mismatch there fails at the API
-    // rather than converting.
-    bool depthSupported = false;                    // extension enabled
-    XrSwapchain depthSwapchain = XR_NULL_HANDLE;
-    std::vector<XrSwapchainImageD3D11KHR> depthImages;
-    std::uint32_t depthFormat = 0;                  // DXGI format actually created
     std::uint32_t submittedWidth = 0, submittedHeight = 0;
     // Set when Prey's backbuffer no longer matches the size this session was
     // built at, which makes every copy invalid until a restart.
@@ -573,9 +564,6 @@ bool CreateInstanceAndSystem()
                 if(std::strcmp(extension.extensionName,XR_EXT_LOCAL_FLOOR_EXTENSION_NAME)==0) {
                     enabled.push_back(XR_EXT_LOCAL_FLOOR_EXTENSION_NAME);gHost.localFloorSupported=true;
                 }
-                if(std::strcmp(extension.extensionName,XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME)==0) {
-                    enabled.push_back(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME);gHost.depthSupported=true;
-                }
                 if(std::strcmp(extension.extensionName,XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME)==0) {
                     enabled.push_back(XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME);gHost.cylinderSupported=true;
                 }
@@ -591,7 +579,6 @@ bool CreateInstanceAndSystem()
         const bool on=std::find(inputExtensions.begin(),inputExtensions.end(),wanted)!=inputExtensions.end();
         Log(std::string("xr_input_extension name=")+wanted+" enabled="+(on?"1":"0"));
     }
-    Log(std::string("xr_depth extension_supported=")+(gHost.depthSupported?"1":"0"));
     Log(std::string("ui_cylinder supported=")+(gHost.cylinderSupported?"1":"0 flat_fallback=1"));
     // Newest-first with a fallback: xr-sim accepts 1.1, VirtualDesktopXR does not
     // (F-010). One build has to work against both.
@@ -1099,82 +1086,15 @@ float UiFitMargin() {
     return static_cast<float>(gUiFitMarginPercent.load(std::memory_order_relaxed))*.01f;
 }
 
-std::atomic<bool> gDepthEnabled{false};
-std::atomic<unsigned long long> gDepthSubmitted{0}, gDepthRefused{0};
-std::atomic<int> gDepthNearMilli{0}, gDepthFarMilli{0};
-std::atomic<bool> gDepthReversed{false};
-
-// R-130: the renderer holds its depth-stencil view at +0x9970, proved by the
-// OMSetRenderTargets call that passes it in the pDepthStencilView slot. A view
-// is not a resource, so the texture behind it has to be fetched -- which is also
-// the check that the offset still points at a DSV, because GetResource on
-// anything else does not survive the QueryInterface below.
-ID3D11Texture2D* GameDepthTexture(D3D11_TEXTURE2D_DESC& desc)
-{
-    constexpr std::uintptr_t kNativeZSurface = 0x9970;
-    const auto base = PreyBase();
-    if (base == 0) { return nullptr; }
-    auto* const renderer =
-        *reinterpret_cast<std::uint8_t**>(base + engine::RendererLayout::singletonPointerRva);
-    if (renderer == nullptr) { return nullptr; }
-    auto* const view =
-        *reinterpret_cast<ID3D11DepthStencilView**>(renderer + kNativeZSurface);
-    if (view == nullptr) { return nullptr; }
-
-    ID3D11Resource* resource = nullptr;
-    view->GetResource(&resource);
-    if (resource == nullptr) { return nullptr; }
-    ID3D11Texture2D* texture = nullptr;
-    resource->QueryInterface(__uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&texture));
-    resource->Release();
-    if (texture == nullptr) { return nullptr; }
-    texture->GetDesc(&desc);
-    return texture;   // caller releases
-}
-
-// The engine's own near and far, live, in engine units. Same receiver as
-// DeclaredFovFromLiveCamera, so the planes and the frustum come from one camera
-// rather than two reads that could straddle a frame.
-bool GameDepthPlanes(float& nearPlane, float& farPlane)
-{
-    const auto base = PreyBase();
-    if (base == 0) { return false; }
-    auto* const systemPtr =
-        *reinterpret_cast<std::uint8_t**>(base + engine::SystemLayout::pointerRva);
-    if (systemPtr == nullptr) { return false; }
-    const auto* const camera =
-        reinterpret_cast<const std::uint8_t*>(
-            reinterpret_cast<std::uintptr_t>(systemPtr) + engine::SystemLayout::viewCamera);
-    // GetNearPlane()/GetFarPlane() are the .y of the edge vectors, per the
-    // camera layout -- +4 into each, not the vector base.
-    std::memcpy(&nearPlane, camera + engine::CameraLayout::edgeNearLeftTop + 4, sizeof(float));
-    std::memcpy(&farPlane, camera + engine::CameraLayout::edgeFarLeftTop + 4, sizeof(float));
-    return true;
-}
-
 std::atomic<std::uint32_t> gRuntimePeriodUs{0};
 
-std::atomic<unsigned long long> gFovAgree{0};
-std::atomic<unsigned long long> gFovDiverge{0};
-std::atomic<unsigned int> gWorstDivergenceMilliTan{0};
-std::atomic<bool> gDivergenceLogged{false};
+// Eye images published with the render contract that produced them, and
+// contracts refused. The declaration is bound to its pixels at that one point
+// (FAIL-STR-044), so a refused contract is a frame not submitted rather than one
+// submitted with the wrong frustum.
+std::atomic<unsigned long long> gEyeContractsPublished{0};
+std::atomic<unsigned long long> gEyeContractsRefused{0};
 
-// Compares what we are about to DECLARE against what we actually RENDERED with.
-//
-// **No tool outside this process can perform this check.** xr-tape sees the FOV
-// the runtime located and the FOV we declared; the engine's own projection never
-// crosses the OpenXR boundary. So `submitted_fov_matches_located` can be in its
-// correct state -- failing, which for an injector is the pass -- while the image
-// is still a lie, because the mod itself replaced the projection and left the
-// declaration behind. That is exactly what happened on 2026-09-05.
-//
-// Compared in **tangent** space, not degrees: every correct operation on a
-// frustum is linear in tangents, and a degrees-space comparison mis-weights the
-// edges where the error actually shows.
-//
-// Read-only and advisory. It counts and logs; it never edits a submission,
-// because a wrong declaration is a bug to fix at its source, not to paper over
-// at the boundary.
 // **Why the flat mirror looks small, and the one knob for it.**
 //
 // Without a held eye pair -- at the main menu, or any time Prey is not rendering
@@ -1303,7 +1223,7 @@ bool SubmitStereoPair(
     // submitted: its poses are in tracking space, which neither changes. Only a
     // change of the space itself strands it (SubmittableRenderContract).
     if(!SubmittableRenderContract(contract,dll::HeadTrackingSpaceEpoch())) {
-        gFovDiverge.fetch_add(1);
+        gEyeContractsRefused.fetch_add(1);
         static unsigned refused=0;
         if(++refused%300==1) Log("result=refused detail=render_contract eye="+std::to_string(contract.eye)+
             " valid="+std::to_string(contract.valid)+" time="+std::to_string(contract.displayTime)+
@@ -1363,7 +1283,7 @@ bool SubmitStereoPair(
                 std::atan(contract.tangents[2]), std::atan(contract.tangents[3])};
             gHost.requestedFov[target] = views[target].fov;
             gHost.requestedFovValid[target] = true;
-            gFovAgree.fetch_add(1, std::memory_order_relaxed);
+            gEyeContractsPublished.fetch_add(1, std::memory_order_relaxed);
             gHost.eyeDisplayTime[target] = contract.displayTime;
             gHost.eyeImageValid[target] = true;
         }
@@ -1395,7 +1315,7 @@ bool SubmitStereoPair(
         gHost.requestedFovValid[target] = true;
         // Checked here, at the one point the declaration is bound to the pixels
         // it describes -- the same publication unit FAIL-STR-044 established.
-        gFovAgree.fetch_add(1, std::memory_order_relaxed); // same immutable camera record
+        gEyeContractsPublished.fetch_add(1, std::memory_order_relaxed); // same immutable camera record
         gHost.eyeDisplayTime[target] = contract.displayTime;
         gHost.eyeImageValid[target] = true;
     }
@@ -3150,9 +3070,8 @@ DWORD XrResolutionChain(XrResolution field)
     return index<state.size() && gResolution.TryRead(state)?state[index]:0;
 }
 
-unsigned long long DeclaredFovAgreeCount() { return gFovAgree.load(std::memory_order_relaxed); }
-unsigned long long DeclaredFovDivergeCount() { return gFovDiverge.load(std::memory_order_relaxed); }
-DWORD DeclaredFovWorstMilliTan() { return gWorstDivergenceMilliTan.load(std::memory_order_relaxed); }
+unsigned long long EyeContractsPublishedCount() { return gEyeContractsPublished.load(std::memory_order_relaxed); }
+unsigned long long EyeContractsRefusedCount() { return gEyeContractsRefused.load(std::memory_order_relaxed); }
 
 bool HoldDualFirstEye(void* renderer)
 {

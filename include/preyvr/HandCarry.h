@@ -53,7 +53,6 @@ Vec3 TrackingToWorld(Vec3 v, float yawRadians);
 // Engine Z is up.
 Vec3 Horizontal(Vec3 v);
 Quaternion YawRotation(float radians);   // about engine Z
-float YawOf(Vec3 horizontalDirection);   // atan2 of a direction in the XY plane
 
 // --- the hand's motion, for throwing ---------------------------------------------
 //

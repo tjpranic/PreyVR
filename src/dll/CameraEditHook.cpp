@@ -64,8 +64,6 @@ constexpr auto kControlLockTimeout = std::chrono::milliseconds(250);
 std::atomic<DWORD> gStatus{static_cast<DWORD>(CameraEditStatus::unavailable)};
 std::atomic<SystemRenderFn> gOriginal{nullptr};
 std::atomic<UpdateFrustumFn> gUpdateFrustum{nullptr};
-std::atomic<float> gYawDegrees{0.0f};
-std::atomic<bool> gArmed{false};
 std::atomic<unsigned long long> gApplied{0};
 std::atomic<unsigned long long> gRestoreFailures{0};
 std::atomic<bool> gLoggedFirstApplication{false};
@@ -127,11 +125,6 @@ std::atomic<bool> gNativeProjection{false};
 std::atomic<bool> gRuntimeFrustum{false};
 std::atomic<unsigned long long> gRuntimeFrustumUsed{0}, gRuntimeFrustumMissing{0};
 
-// Head rotation on the upstream camera -- the one culling reads from.
-std::atomic<bool> gHeadRotationArmed{false};
-std::atomic<unsigned long long> gHeadRotationApplied{0};
-std::atomic<unsigned long long> gHeadRotationRefused{0};
-
 // The forward axis the edit last wrote, for the pass-camera probe to compare
 // against. Three floats rather than a matrix: the question is only which way the
 // camera faces, and a direction is cheap to publish without a lock.
@@ -140,110 +133,6 @@ std::atomic<float> gWrittenForwardY{0.0f};
 std::atomic<float> gWrittenForwardZ{0.0f};
 std::atomic<bool> gHaveWrittenForward{false};
 
-// Leave the head rotation on the camera instead of restoring it, so the next
-// frame's occlusion job sees it. Off by default: it changes what every reader of
-// the global camera sees, which is a bigger commitment than a bounded edit.
-std::atomic<bool> gKeepHeadRotation{false};
-std::atomic<bool> gDoubleRender{false};
-std::atomic<unsigned int> gDoubleRenderBudget{0};
-
-// **A deadline, because the frame budget did not contain F-013.**
-//
-// The budget counts frames and disarms when it reaches zero, which assumes frames
-// keep completing. On 2026-09-01 the engine wedged at roughly frame 4 of 300, so
-// no further frames completed, the budget never drained, and the mode stayed
-// armed until the process was killed from outside.
-//
-// A budget expressed in frames cannot bound a failure that stops frames. This one
-// is wall-clock and is enforced by a watchdog thread, so it still fires when the
-// render thread is stuck.
-//
-// **What it does and does not buy.** It bounds *exposure* -- how long the mode
-// can keep attempting double renders -- and it is honest that it cannot bound
-// *damage*: a render thread already stuck inside the original function is not
-// freed by clearing a flag. It would not have saved the A3 session. It does mean
-// the next experiment cannot run away while somebody reaches for the keyboard.
-std::atomic<bool> gDoubleRenderWatchdogRunning{false};
-std::atomic<unsigned long long> gDoubleRenderDeadlineMs{0};
-
-std::atomic<bool> gProbeRenderViews{false};
-std::atomic<DWORD> gRenderViewProbeStatus{
-    static_cast<DWORD>(RenderViewProbeStatus::notRun)};
-
-// A4: the recursive second pass. See the header for why this replaces A3.
-std::atomic<bool> gSecondPass{false};
-std::atomic<unsigned int> gSecondPassBudget{0};
-std::atomic<unsigned long long> gSecondPassFrames{0};
-std::atomic<DWORD> gSecondPassStatus{static_cast<DWORD>(SecondPassStatus::idle)};
-std::atomic<bool> gLoggedFirstSecondPass{false};
-std::atomic<bool> gSecondPassZeroDelta{false};
-std::atomic<bool> gSecondPassMarkSecondary{true};
-
-std::atomic<unsigned long long> gSecondPassFrameIdMoved{0};
-std::atomic<bool> gLoggedFrameIdMove{false};
-
-// **A breadcrumb naming the sub-step in flight.**
-//
-// F-013 is the argument for it: when A3 wedged we knew four frames had completed
-// and nothing about which step of the fifth killed it. Prior art (FEAR VR, via
-// ss2vr-work/docs/UEVR_STEREO_LESSONS.md) sets a string before every sub-step so
-// a crash or hang names the step in the log. One pointer store per step, and the
-// watchdog prints it on expiry -- which is exactly the moment it is worth having.
-//
-// A string literal only, so the pointer is always valid to read from the
-// watchdog thread without any lifetime question.
-std::atomic<const char*> gStereoStep{"idle"};
-
-void Step(const char* name)
-{
-    gStereoStep.store(name, std::memory_order_release);
-}
-
-// SRenderingPassInfo::CreateGeneralPassRenderingInfo (R-071), byte-gated as the
-// landmark `pass.create_general`. Signature from its decompilation: it fills a
-// caller-supplied buffer and returns it.
-constexpr std::uintptr_t kCreatePassInfoRva = 0x1E5B30;
-using CreatePassInfoFn = void*(__fastcall*)(void* out, const void* camera, std::uint32_t flags,
-                                            int auxWindow);
-std::atomic<CreatePassInfoFn> gCreatePassInfo{nullptr};
-
-// RenderWorld, reached through CSystem::m_pProcess's vtable (R-054/R-059).
-using RenderWorldFn = void(__fastcall*)(void* process, int flags, void* passInfo,
-                                        const char* debugName);
-// A6: the interpose shape. Hooks RenderWorld itself rather than appending after
-// CSystem::Render, so both eyes are drawn before the HUD and present.
-constexpr std::uintptr_t kRenderWorldRva = 0x21F520;
-std::atomic<RenderWorldFn> gRenderWorldOriginal{nullptr};
-void* gRenderWorldTarget = nullptr;
-bool gRenderWorldHookCreated = false;
-std::atomic<bool> gInterpose{false};
-std::atomic<unsigned int> gInterposeBudget{0};
-std::atomic<unsigned long long> gInterposeFrames{0};
-std::atomic<bool> gInterposeActive{false};
-std::atomic<bool> gLoggedFirstInterpose{false};
-
-// A7: the Crysis VR shape. CSystem::RenderBegin between the two full renders.
-constexpr std::uintptr_t kRenderBeginRva = 0xE0BD80;
-using RenderBeginFn = void(__fastcall*)(void* system);
-std::atomic<RenderBeginFn> gRenderBegin{nullptr};
-std::atomic<bool> gFrameShape{false};
-std::atomic<unsigned int> gFrameShapeBudget{0};
-std::atomic<unsigned long long> gFrameShapeFrames{0};
-std::atomic<bool> gLoggedFirstFrameShape{false};
-// 0 shares everything (A6 as first run); 1 gives the second render its own
-// recursive render view; 2 also marks it a secondary pass (R-073).
-std::atomic<unsigned int> gInterposeMode{0};
-std::atomic<std::uintptr_t> gPreyBase{0};
-
-// CRenderView vtable slots that CreateGeneralPassRenderingInfo drives on the view
-// it selected. They have to be re-driven on the recursive view after the swap,
-// or the pass would carry state derived from the default view instead.
-constexpr std::uintptr_t kRenderViewSetFlagsSlot = 0x20;
-constexpr std::uintptr_t kRenderViewDerivedSlot = 0x58;
-using RenderViewSetFlagsFn = void(__fastcall*)(void* view, std::uint32_t flags);
-using RenderViewDerivedFn = void*(__fastcall*)(void* view);
-using RegisterPassCameraFn = void*(__fastcall*)(void* engine, const void* camera);
-std::atomic<unsigned long long> gDoubleRendered{0};
 void* gTarget = nullptr;
 bool gHookCreated = false;
 
@@ -446,471 +335,6 @@ bool BuildSyntheticEye(
     return true;
 }
 
-// Renderer vtable slots, read straight out of CreateGeneralPassRenderingInfo
-// (R-071). Both are called there in exactly this shape, so this replicates the
-// engine's own usage rather than inventing a call.
-constexpr std::uintptr_t kRendererQuerySlot = engine::RendererLayout::vtableQuery;  // EF_Query
-constexpr std::uintptr_t kRendererGetRenderViewSlot = engine::RendererLayout::vtableGetRenderViewForThread;
-constexpr int kRenderThreadListQuery = engine::RendererLayout::queryRenderThreadList;
-
-using EfQueryFn = void(__fastcall*)(void*, int, void*, int, int, int);
-using GetRenderViewFn = void*(__fastcall*)(void*, int, int);
-using GetFrameIdFn = std::uint32_t(__fastcall*)(void*, int);
-
-// Asks the renderer for the Default and Recursive render views and compares them.
-// See the header for why this decides whether native stereo is reachable.
-void RunRenderViewProbe(void* system)
-{
-    const auto unresolved = [](const char* detail) {
-        gRenderViewProbeStatus.store(static_cast<DWORD>(RenderViewProbeStatus::unresolved),
-                                     std::memory_order_release);
-        std::ostringstream line;
-        line << "preyvr_render_view_probe result=unresolved detail=" << detail;
-        lifecycle::Log(line.str());
-    };
-
-    if (system == nullptr) {
-        unresolved("null_system");
-        return;
-    }
-    auto* const gEnv = *reinterpret_cast<std::uint8_t**>(
-        reinterpret_cast<std::uintptr_t>(system) + engine::SystemLayout::gEnvPointer);
-    if (gEnv == nullptr) {
-        unresolved("null_genv");
-        return;
-    }
-    auto* const renderer = *reinterpret_cast<std::uint8_t**>(
-        gEnv + engine::GlobalEnvironmentLayout::renderer);
-    if (renderer == nullptr) {
-        unresolved("null_renderer");
-        return;
-    }
-    auto* const vtable = *reinterpret_cast<std::uint8_t**>(renderer);
-    if (vtable == nullptr) {
-        unresolved("null_renderer_vtable");
-        return;
-    }
-
-    const auto query = *reinterpret_cast<EfQueryFn*>(vtable + kRendererQuerySlot);
-    const auto getView = *reinterpret_cast<GetRenderViewFn*>(vtable + kRendererGetRenderViewSlot);
-    if (query == nullptr || getView == nullptr) {
-        unresolved("null_vtable_slot");
-        return;
-    }
-
-    // The engine writes four bytes here and then keeps only the low one, so the
-    // slot is masked to a byte to match its own usage exactly.
-    int queried = 0;
-    query(renderer, kRenderThreadListQuery, &queried, static_cast<int>(sizeof(queried)), 0, 0);
-    const int slot = queried & 0xFF;
-
-    void* const defaultView = getView(renderer, slot, 0);
-    void* const recursiveView = getView(renderer, slot, 1);
-
-    RenderViewProbeStatus status = RenderViewProbeStatus::viewsIdentical;
-    if (recursiveView == nullptr) {
-        status = RenderViewProbeStatus::recursiveUnavailable;
-    } else if (recursiveView != defaultView) {
-        status = RenderViewProbeStatus::viewsDiffer;
-    }
-    gRenderViewProbeStatus.store(static_cast<DWORD>(status), std::memory_order_release);
-
-    std::ostringstream line;
-    line << "preyvr_render_view_probe result=0 slot=" << slot
-         << " defaultView=0x" << std::hex << reinterpret_cast<std::uintptr_t>(defaultView)
-         << " recursiveView=0x" << reinterpret_cast<std::uintptr_t>(recursiveView) << std::dec
-         << " verdict=" << (status == RenderViewProbeStatus::viewsDiffer ? "distinct"
-                            : status == RenderViewProbeStatus::recursiveUnavailable ? "recursive_null"
-                                                                                    : "same_view");
-    lifecycle::Log(line.str());
-}
-
-// Issues one extra RenderWorld for the second eye, with its own pass info and
-// the recursive render view. See the header for why this is not A3.
-//
-// Everything it needs is resolved fresh each call and every step is null-checked,
-// because this runs on the render thread and a wrong pointer here is a crash
-// rather than a wrong number.
-bool RunSecondPass(void* system)
-{
-    Step("second_pass:resolve");
-    const auto createPass = gCreatePassInfo.load(std::memory_order_acquire);
-    const UpdateFrustumFn updateFrustum = gUpdateFrustum.load(std::memory_order_acquire);
-    if (system == nullptr || createPass == nullptr || updateFrustum == nullptr) {
-        return false;
-    }
-
-    auto* const gEnv = *reinterpret_cast<std::uint8_t**>(
-        reinterpret_cast<std::uintptr_t>(system) + engine::SystemLayout::gEnvPointer);
-    if (gEnv == nullptr) {
-        return false;
-    }
-    auto* const renderer = *reinterpret_cast<std::uint8_t**>(
-        gEnv + engine::GlobalEnvironmentLayout::renderer);
-    if (renderer == nullptr) {
-        return false;
-    }
-    auto* const rendererVtable = *reinterpret_cast<std::uint8_t**>(renderer);
-    if (rendererVtable == nullptr) {
-        return false;
-    }
-
-    // RenderWorld is dispatched through CSystem::m_pProcess, not through
-    // gEnv->p3DEngine, even though R-059 measured them as the same object.
-    auto* const process = *reinterpret_cast<std::uint8_t**>(
-        reinterpret_cast<std::uintptr_t>(system) + engine::SystemLayout::processPointer);
-    if (process == nullptr) {
-        return false;
-    }
-    auto* const processVtable = *reinterpret_cast<std::uint8_t**>(process);
-    if (processVtable == nullptr) {
-        return false;
-    }
-    const auto renderWorld = *reinterpret_cast<RenderWorldFn*>(
-        processVtable + engine::SystemLayout::vtableRenderWorld);
-    if (renderWorld == nullptr) {
-        return false;
-    }
-
-    const auto query = *reinterpret_cast<EfQueryFn*>(
-        rendererVtable + engine::RendererLayout::vtableQuery);
-    const auto getView = *reinterpret_cast<GetRenderViewFn*>(
-        rendererVtable + engine::RendererLayout::vtableGetRenderViewForThread);
-    if (query == nullptr || getView == nullptr) {
-        return false;
-    }
-
-    Step("second_pass:query_slot");
-    int queried = 0;
-    query(renderer, engine::RendererLayout::queryRenderThreadList, &queried,
-          static_cast<int>(sizeof(queried)), 0, 0);
-    const int slot = queried & 0xFF;
-    void* const recursiveView =
-        getView(renderer, slot, engine::RendererLayout::viewTypeRecursive);
-    if (recursiveView == nullptr) {
-        return false;
-    }
-
-    // The eye camera is built in our own memory from the game's live camera and
-    // is never written back -- the game's camera is not touched by this path at
-    // all, which is why there is no restore point here.
-    Step("second_pass:build_eye_camera");
-    auto* const liveCamera = reinterpret_cast<const std::uint8_t*>(
-        reinterpret_cast<std::uintptr_t>(system) + engine::SystemLayout::viewCamera);
-    std::array<std::uint8_t, cameraedit::kCameraSize> eyeCamera{};
-    std::memcpy(eyeCamera.data(), liveCamera, cameraedit::kCameraSize);
-    // **The zero-delta control (BN-SFX-001).** Everything on this path runs
-    // identically -- same pass info, same recursive view, same RenderWorld call --
-    // and only the eye offset is zero, so the second image should be the first
-    // image. Anything that changes is therefore a *side effect* of repeating the
-    // pass, not stereo. That is the discriminator the playbook's fast_test names,
-    // and without it "the second pass changed the picture" cannot be told from
-    // "the second pass advanced something that runs once per frame".
-    const bool zeroDelta = gSecondPassZeroDelta.load(std::memory_order_acquire);
-    const float eyeIpd = zeroDelta ? 0.0f : gStereoIpd.load(std::memory_order_acquire);
-    if (!BuildSyntheticEye(eyeCamera, 1, eyeIpd,
-                           gStereoHalfFov.load(std::memory_order_acquire))) {
-        return false;
-    }
-    updateFrustum(eyeCamera.data());
-    if (!cameraedit::RotationIsSafeToWrite(eyeCamera)) {
-        return false;
-    }
-
-    // Built by the engine's own constructor into our buffer, so every field it
-    // derives -- frame ids, zoom, the camera registration at +0x18 -- is derived
-    // the way the engine derives it rather than guessed at here.
-    Step("second_pass:create_pass_info");
-    std::array<std::uint8_t, engine::PassInfoLayout::size> passInfo{};
-    createPass(passInfo.data(), eyeCamera.data(), engine::PassInfoLayout::generalPassFlags, 0);
-
-    // The constructor selected the *default* view and drove two calls on it.
-    // Swapping the pointer alone would leave the pass carrying state derived
-    // from a view it no longer references, so both are re-driven on the
-    // recursive view.
-    // **Mark it secondary before anything else (R-073).** RenderWorld and its
-    // dispatch guard about nine once-per-frame sites on this byte being zero:
-    // the frame counter, UpdateRenderingCamera, the default-material setup, the
-    // CVar snapshot, the occlusion and bbox update. Setting it makes the engine
-    // skip its own per-frame work and render only the world -- which is exactly
-    // what a second eye needs, and is the engine's own mechanism rather than a
-    // gate we invented.
-    Step("second_pass:mark_secondary");
-    const bool markSecondary = gSecondPassMarkSecondary.load(std::memory_order_acquire);
-    if (markSecondary) {
-        passInfo[engine::PassInfoLayout::secondaryPassFlag] = 1;
-    }
-
-    Step("second_pass:swap_render_view");
-    std::memcpy(passInfo.data() + engine::PassInfoLayout::renderView, &recursiveView,
-                sizeof(recursiveView));
-    auto* const viewVtable = *reinterpret_cast<std::uint8_t**>(recursiveView);
-    if (viewVtable == nullptr) {
-        return false;
-    }
-    std::uint32_t passFlags = 0;
-    std::memcpy(&passFlags, passInfo.data() + engine::PassInfoLayout::flags, sizeof(passFlags));
-    const auto setFlags =
-        *reinterpret_cast<RenderViewSetFlagsFn*>(viewVtable + kRenderViewSetFlagsSlot);
-    if (setFlags == nullptr) {
-        return false;
-    }
-    setFlags(recursiveView, passFlags);
-    const auto derived =
-        *reinterpret_cast<RenderViewDerivedFn*>(viewVtable + kRenderViewDerivedSlot);
-    if (derived == nullptr) {
-        return false;
-    }
-    void* const derivedValue = derived(recursiveView);
-    std::memcpy(passInfo.data() + engine::PassInfoLayout::renderViewDerived, &derivedValue,
-                sizeof(derivedValue));
-
-    // **The side-effect counter (BN-SFX-001).** Read the renderer's own frame ids
-    // either side of the call. If issuing a second RenderWorld advances
-    // renderer-side per-frame bookkeeping, these move -- and a pass that advances
-    // bookkeeping is a pass that may be advancing simulation, particles and audio
-    // with it. Zero deltas do not prove the absence of every side effect, but a
-    // non-zero delta is a positive detection, which is what a gate needs.
-    const auto getFrameId =
-        *reinterpret_cast<GetFrameIdFn*>(rendererVtable + engine::RendererLayout::vtableGetFrameId);
-    std::uint32_t beforeA = 0;
-    std::uint32_t beforeB = 0;
-    if (getFrameId != nullptr) {
-        beforeA = getFrameId(renderer, 1);
-        beforeB = getFrameId(renderer, 0);
-    }
-
-    Step("second_pass:render_world");
-    renderWorld(process, engine::PassInfoLayout::renderWorldFlags, passInfo.data(),
-                "PreyVR::SecondPass");
-    Step("second_pass:done");
-
-    if (getFrameId != nullptr) {
-        const std::uint32_t afterA = getFrameId(renderer, 1);
-        const std::uint32_t afterB = getFrameId(renderer, 0);
-        if (afterA != beforeA || afterB != beforeB) {
-            gSecondPassFrameIdMoved.fetch_add(1, std::memory_order_relaxed);
-            if (!gLoggedFrameIdMove.exchange(true)) {
-                std::ostringstream moved;
-                moved << "preyvr_second_pass result=0 detail=frame_id_advanced"
-                      << " a=" << beforeA << "->" << afterA
-                      << " b=" << beforeB << "->" << afterB;
-                lifecycle::Log(moved.str());
-            }
-        }
-    }
-
-    const unsigned long long done = gSecondPassFrames.fetch_add(1, std::memory_order_relaxed) + 1;
-    if (!gLoggedFirstSecondPass.exchange(true)) {
-        std::ostringstream line;
-        line << "preyvr_second_pass result=0 detail=first_frame"
-             << " zeroDelta=" << (zeroDelta ? 1 : 0)
-             << " markSecondary=" << (markSecondary ? 1 : 0) << " slot=" << slot
-             << " recursiveView=0x" << std::hex
-             << reinterpret_cast<std::uintptr_t>(recursiveView) << std::dec
-             << " done=" << done;
-        lifecycle::Log(line.str());
-    }
-    return true;
-}
-
-// The A6 hook. Calls the original world render twice from inside itself, so the
-// frame still contains exactly one CSystem::Render, one HUD draw and one present.
-void __fastcall RenderWorldInterpose(void* process, int flags, void* passInfo,
-                                     const char* debugName)
-{
-    const RenderWorldFn original = gRenderWorldOriginal.load(std::memory_order_acquire);
-    if (original == nullptr) {
-        return;
-    }
-    if (!gInterpose.load(std::memory_order_acquire)) {
-        original(process, flags, passInfo, debugName);
-        return;
-    }
-
-    // Re-entrancy guard, per the StereoRenderGuard prior art. The trampoline
-    // does not route back through this hook, but a nested world render inside
-    // the engine would, and doubling that would be unbounded.
-    if (gInterposeActive.exchange(true, std::memory_order_acq_rel)) {
-        original(process, flags, passInfo, debugName);
-        return;
-    }
-
-    const unsigned int remaining = gInterposeBudget.load(std::memory_order_acquire);
-    if (remaining == 0) {
-        gInterpose.store(false, std::memory_order_release);
-        gInterposeActive.store(false, std::memory_order_release);
-        lifecycle::Log("preyvr_interpose result=0 detail=budget_exhausted");
-        original(process, flags, passInfo, debugName);
-        return;
-    }
-    gInterposeBudget.store(remaining - 1, std::memory_order_release);
-
-    Step("interpose:eye0");
-    original(process, flags, passInfo, debugName);
-
-    // Mode 0 repeats the call with the game's own pass info -- the first A6 run,
-    // which reached 13 frames and then deadlocked inside this second call.
-    //
-    // Modes 1 and 2 test the exhaustion hypothesis from F-015: if the deadlock is
-    // contention over per-frame render resources, giving the second render its
-    // **own** view is what separates them. The pass info is copied byte for byte
-    // from the game's and only the view pointer is changed, so exactly one
-    // variable moves. Mode 2 additionally marks it secondary (R-073).
-    const unsigned int mode = gInterposeMode.load(std::memory_order_acquire);
-    std::array<std::uint8_t, engine::PassInfoLayout::size> ownPass{};
-    void* secondPassInfo = passInfo;
-    if (mode > 0 && passInfo != nullptr) {
-        Step("interpose:build_own_pass");
-        std::memcpy(ownPass.data(), passInfo, engine::PassInfoLayout::size);
-
-        // Mode 3 keeps the primary view deliberately: the workflow's decompilation
-        // of the dispatch shows the per-frame prepare FUN_1802114D0 runs only when
-        // +0x01 == 0, so marking the SECOND pass secondary makes prepare run once
-        // per frame instead of twice -- which is the 13-19 frame leak -- while the
-        // shared primary view is the one that prepare just prepared. Mode 1 failed
-        // precisely because its own recursive view had nothing prepare it.
-        const bool wantRecursiveView = (mode == 1 || mode == 2);
-        const bool wantSecondaryFlag = (mode == 2 || mode == 3 || mode == 4);
-        // Mode 4 = mode 3 plus a real per-eye camera on the second pass.
-        //
-        // **This is the test that mode 3 could not be.** Mode 3 ran 600 frames
-        // and cost 7% uncapped (301 -> 280 fps), which is far too cheap for a
-        // real world render -- but both its passes used an identical camera, so
-        // the picture looked the same whether the second pass drew or not. Give
-        // the second pass a different camera and the image itself answers it:
-        // changed means it renders, identical means it is hollow.
-        const bool wantEyeCamera = (mode == 4);
-        if (wantSecondaryFlag) {
-            ownPass[engine::PassInfoLayout::secondaryPassFlag] = 1;
-        }
-        secondPassInfo = ownPass.data();
-
-        if (wantEyeCamera) {
-            Step("interpose:build_eye_camera");
-            const std::uintptr_t preyBase = gPreyBase.load(std::memory_order_acquire);
-            const UpdateFrustumFn updateFrustum = gUpdateFrustum.load(std::memory_order_acquire);
-            auto* const systemPtr = preyBase != 0
-                ? *reinterpret_cast<std::uint8_t**>(preyBase + engine::SystemLayout::pointerRva)
-                : nullptr;
-            // process IS gEnv->p3DEngine: R-059 measured CSystem::m_pProcess equal
-            // to it, so IProcess is C3DEngine's primary base and needs no adjust.
-            auto* const engineVtable = *reinterpret_cast<std::uint8_t**>(process);
-            if (systemPtr != nullptr && updateFrustum != nullptr && engineVtable != nullptr) {
-                const auto* const liveCamera = reinterpret_cast<const std::uint8_t*>(
-                    reinterpret_cast<std::uintptr_t>(systemPtr) + engine::SystemLayout::viewCamera);
-                static thread_local std::array<std::uint8_t, cameraedit::kCameraSize> eyeCamera{};
-                std::memcpy(eyeCamera.data(), liveCamera, cameraedit::kCameraSize);
-                if (BuildSyntheticEye(eyeCamera, 1, gStereoIpd.load(std::memory_order_acquire),
-                                      gStereoHalfFov.load(std::memory_order_acquire))) {
-                    updateFrustum(eyeCamera.data());
-                    if (cameraedit::RotationIsSafeToWrite(eyeCamera)) {
-                        const auto registerCamera = *reinterpret_cast<RegisterPassCameraFn*>(
-                            engineVtable + engine::ThreeDEngineLayout::vtableRegisterPassCamera);
-                        if (registerCamera != nullptr) {
-                            void* const registered = registerCamera(process, eyeCamera.data());
-                            std::memcpy(ownPass.data() + engine::PassInfoLayout::camera,
-                                        &registered, sizeof(registered));
-                        }
-                    }
-                }
-            }
-        }
-
-        const std::uintptr_t base = wantRecursiveView
-            ? gPreyBase.load(std::memory_order_acquire) : 0;
-        auto* const renderer = base != 0
-            ? *reinterpret_cast<std::uint8_t**>(
-                  base + engine::GlobalEnvironmentLayout::baseRva +
-                  engine::GlobalEnvironmentLayout::renderer)
-            : nullptr;
-        auto* const rendererVtable = renderer != nullptr
-            ? *reinterpret_cast<std::uint8_t**>(renderer) : nullptr;
-        if (rendererVtable != nullptr) {
-            const auto getView = *reinterpret_cast<GetRenderViewFn*>(
-                rendererVtable + engine::RendererLayout::vtableGetRenderViewForThread);
-            const int slot = ownPass[engine::PassInfoLayout::threadSlot];
-            void* const recursiveView = getView != nullptr
-                ? getView(renderer, slot, engine::RendererLayout::viewTypeRecursive) : nullptr;
-            if (recursiveView != nullptr) {
-                std::memcpy(ownPass.data() + engine::PassInfoLayout::renderView, &recursiveView,
-                            sizeof(recursiveView));
-                // Re-drive what the constructor drove on the view it picked.
-                auto* const viewVtable = *reinterpret_cast<std::uint8_t**>(recursiveView);
-                if (viewVtable != nullptr) {
-                    std::uint32_t passFlags = 0;
-                    std::memcpy(&passFlags, ownPass.data() + engine::PassInfoLayout::flags,
-                                sizeof(passFlags));
-                    const auto setFlags = *reinterpret_cast<RenderViewSetFlagsFn*>(
-                        viewVtable + kRenderViewSetFlagsSlot);
-                    if (setFlags != nullptr) {
-                        setFlags(recursiveView, passFlags);
-                    }
-                    const auto derived = *reinterpret_cast<RenderViewDerivedFn*>(
-                        viewVtable + kRenderViewDerivedSlot);
-                    if (derived != nullptr) {
-                        void* const value = derived(recursiveView);
-                        std::memcpy(ownPass.data() + engine::PassInfoLayout::renderViewDerived,
-                                    &value, sizeof(value));
-                    }
-                }
-            }
-        }
-    }
-
-    Step("interpose:eye1");
-    original(process, flags, secondPassInfo,
-             secondPassInfo == passInfo ? debugName : "PreyVR::Eye1");
-    Step("interpose:done");
-
-    const unsigned long long done = gInterposeFrames.fetch_add(1, std::memory_order_relaxed) + 1;
-    if (!gLoggedFirstInterpose.exchange(true)) {
-        std::ostringstream line;
-        line << "preyvr_interpose result=0 detail=first_frame mode=" << mode
-             << " ownView=" << (secondPassInfo == passInfo ? 0 : 1) << " flags=" << flags
-             << " debugName=\"" << (debugName != nullptr ? debugName : "?") << "\""
-             << " done=" << done;
-        lifecycle::Log(line.str());
-    }
-    gInterposeActive.store(false, std::memory_order_release);
-}
-
-// Wall-clock stop for the double render, run off the render thread so it still
-// fires when that thread is the thing that is stuck. See the deadline note above
-// for what this does and does not bound.
-DWORD WINAPI DoubleRenderWatchdog(LPVOID)
-{
-    // Covers both risky modes: A3's double render and A4's second pass. Either
-    // one stopping the frame loop is exactly the case the in-band budgets cannot
-    // see, which is the whole reason this thread exists.
-    while (gDoubleRender.load(std::memory_order_acquire) ||
-           gSecondPass.load(std::memory_order_acquire) ||
-           gInterpose.load(std::memory_order_acquire) ||
-           gFrameShape.load(std::memory_order_acquire)) {
-        const unsigned long long deadline = gDoubleRenderDeadlineMs.load(std::memory_order_acquire);
-        if (deadline != 0 && GetTickCount64() >= deadline) {
-            gDoubleRender.store(false, std::memory_order_release);
-            gDoubleRenderBudget.store(0, std::memory_order_release);
-            gSecondPass.store(false, std::memory_order_release);
-            gSecondPassBudget.store(0, std::memory_order_release);
-            gInterpose.store(false, std::memory_order_release);
-            gInterposeBudget.store(0, std::memory_order_release);
-            gFrameShape.store(false, std::memory_order_release);
-            gFrameShapeBudget.store(0, std::memory_order_release);
-            gStereoIpd.store(0.0f, std::memory_order_release);
-            SetFrameCaptureTagOverride(-1);
-            std::ostringstream expiry;
-            expiry << "preyvr_camera_edit result=0 detail=deadline_expired step="
-                   << gStereoStep.load(std::memory_order_acquire);
-            lifecycle::Log(expiry.str());
-            break;
-        }
-        Sleep(50);
-    }
-    gDoubleRenderWatchdogRunning.store(false, std::memory_order_release);
-    return 0;
-}
-
 void __fastcall RenderWithCameraEdit(void* system)
 {
     const SystemRenderFn original = gOriginal.load(std::memory_order_acquire);
@@ -922,89 +346,7 @@ void __fastcall RenderWithCameraEdit(void* system)
         original(target);
     };
 
-    // One-shot, and ahead of the armed check because the probe is independent of
-    // any edit -- it needs this thread, not an armed camera.
-    if (gProbeRenderViews.exchange(false, std::memory_order_acq_rel)) {
-        RunRenderViewProbe(system);
-    }
-
-    // A7: the Crysis VR shape. Two full renders with RenderBegin between them.
-    if (gFrameShape.load(std::memory_order_acquire)) {
-        const RenderBeginFn renderBegin = gRenderBegin.load(std::memory_order_acquire);
-        const unsigned int remaining = gFrameShapeBudget.load(std::memory_order_acquire);
-        if (remaining == 0 || renderBegin == nullptr || original == nullptr) {
-            gFrameShape.store(false, std::memory_order_release);
-            lifecycle::Log("preyvr_frame_shape result=0 detail=budget_exhausted");
-            if (original != nullptr) {
-                renderOriginal(system);
-            }
-            return;
-        }
-        gFrameShapeBudget.store(remaining - 1, std::memory_order_release);
-
-        Step("frame_shape:eye0");
-        renderOriginal(system);
-        // The line the Crysis VR source calls not optional. Without it the second
-        // pass inherits state the first left behind, and culling breaks first.
-        Step("frame_shape:render_begin");
-        renderBegin(system);
-        Step("frame_shape:eye1");
-        renderOriginal(system);
-        Step("frame_shape:done");
-
-        const unsigned long long done =
-            gFrameShapeFrames.fetch_add(1, std::memory_order_relaxed) + 1;
-        if (!gLoggedFirstFrameShape.exchange(true)) {
-            std::ostringstream line;
-            line << "preyvr_frame_shape result=0 detail=first_frame done=" << done;
-            lifecycle::Log(line.str());
-        }
-        return;
-    }
-
-    // A4. Its own branch and its own early return, so it cannot interact with
-    // the camera-edit or alternating-stereo modes below. The game's frame is
-    // rendered first and untouched -- that is the first eye, and it is why this
-    // path never writes the game's camera and needs no restore point.
-    if (gSecondPass.load(std::memory_order_acquire)) {
-        const unsigned int remaining = gSecondPassBudget.load(std::memory_order_acquire);
-        if (remaining == 0) {
-            gSecondPass.store(false, std::memory_order_release);
-            gStereoIpd.store(0.0f, std::memory_order_release);
-            lifecycle::Log("preyvr_second_pass result=0 detail=budget_exhausted");
-            if (original != nullptr) {
-                renderOriginal(system);
-            }
-            return;
-        }
-        // Decremented before the work, so a call that never returns still costs
-        // exactly one frame of the allowance.
-        gSecondPassBudget.store(remaining - 1, std::memory_order_release);
-
-        if (original != nullptr) {
-            renderOriginal(system);
-        }
-        if (RunSecondPass(system)) {
-            gSecondPassStatus.store(static_cast<DWORD>(SecondPassStatus::ranAtLeastOnce),
-                                    std::memory_order_release);
-        } else {
-            // Disarm on the first refusal rather than retrying every frame: if a
-            // pointer could not be resolved once it will not resolve next frame,
-            // and a log line per frame would bury the reason.
-            gSecondPass.store(false, std::memory_order_release);
-            gStereoIpd.store(0.0f, std::memory_order_release);
-            gSecondPassStatus.store(static_cast<DWORD>(SecondPassStatus::refusedUnresolved),
-                                    std::memory_order_release);
-            lifecycle::Log("preyvr_second_pass result=refused detail=unresolved");
-        }
-        return;
-    }
-
     const bool stereoArmed = gStereoIpd.load(std::memory_order_acquire) > 0.0f;
-    // Head rotation is an arming condition in its own right. Without it here the
-    // edit is armed, reports success, and never runs -- which is exactly what
-    // happened on the first upstream run, and cost a test cycle to find because
-    // "armed" and "applied" were only distinguishable by a counter.
     // **Queued input is drained here, not on the thread that produced it.**
     // `CSystem::Render` is the engine's main thread and, unlike the gameplay
     // camera callback, it still runs while a menu is up -- which is exactly the
@@ -1022,8 +364,7 @@ void __fastcall RenderWithCameraEdit(void* system)
     UpdateTurnAndFireLanes();
     ServiceBindingDump();
 
-    if ((!gArmed.load(std::memory_order_acquire) && !stereoArmed &&
-         !gHeadRotationArmed.load(std::memory_order_acquire)) || system == nullptr) {
+    if (!stereoArmed || system == nullptr) {
         if (original != nullptr) {
             UpdateAimReticleForRender();
             renderOriginal(system);
@@ -1051,107 +392,11 @@ void __fastcall RenderWithCameraEdit(void* system)
 
     const UpdateFrustumFn updateFrustum = gUpdateFrustum.load(std::memory_order_acquire);
 
-    if (gDoubleRender.load(std::memory_order_acquire) && updateFrustum != nullptr) {
-        // Render both eyes inside one frame. The budget is decremented first so
-        // that a call which never returns still costs exactly one frame of the
-        // allowance rather than leaving the mode armed forever.
-        const unsigned int remaining = gDoubleRenderBudget.load(std::memory_order_acquire);
-        if (remaining == 0) {
-            gDoubleRender.store(false, std::memory_order_release);
-            gStereoIpd.store(0.0f, std::memory_order_release);
-            SetFrameCaptureTagOverride(-1);
-            lifecycle::Log("preyvr_camera_edit result=0 detail=double_render_budget_exhausted");
-            if (original != nullptr) {
-                renderOriginal(system);
-            }
-            return;
-        }
-        gDoubleRenderBudget.store(remaining - 1, std::memory_order_release);
-
-        const float ipd = gStereoIpd.load(std::memory_order_acquire);
-        const float halfFov = gStereoHalfFov.load(std::memory_order_acquire);
-        bool bothEyesOk = true;
-
-        for (int eye = 0; eye < 2 && bothEyesOk; ++eye) {
-            std::array<std::uint8_t, cameraedit::kCameraSize> eyeCamera{};
-            std::memcpy(eyeCamera.data(), restore.bytes.data(), cameraedit::kCameraSize);
-            if (!BuildSyntheticEye(eyeCamera, eye, ipd, halfFov)) {
-                bothEyesOk = false;
-                break;
-            }
-            updateFrustum(eyeCamera.data());
-            if (!cameraedit::RotationIsSafeToWrite(eyeCamera)) {
-                bothEyesOk = false;
-                break;
-            }
-            // Each eye is built from the *original* camera, not from the previous
-            // eye's, so an error cannot accumulate across the two passes.
-            std::memcpy(camera, eyeCamera.data(), cameraedit::kCameraSize);
-            gLastEye.store(eye, std::memory_order_release);
-            SetFrameCaptureTagOverride(eye);
-            if (original != nullptr) {
-                UpdateAimReticleForRender();
-                renderOriginal(system);
-            }
-        }
-
-        std::memcpy(camera, restore.bytes.data(), cameraedit::kCameraSize);
-        if (!cameraedit::MatchesRestorePoint(live, restore)) {
-            gRestoreFailures.fetch_add(1, std::memory_order_relaxed);
-            gDoubleRender.store(false, std::memory_order_release);
-            gStereoIpd.store(0.0f, std::memory_order_release);
-            SetFrameCaptureTagOverride(-1);
-            lifecycle::Log("preyvr_camera_edit result=restore_failed detail=double_render_disarmed");
-            return;
-        }
-        if (!bothEyesOk) {
-            gDoubleRender.store(false, std::memory_order_release);
-            gStereoIpd.store(0.0f, std::memory_order_release);
-            SetFrameCaptureTagOverride(-1);
-            lifecycle::Log("preyvr_camera_edit result=refused detail=double_render_eye_build_failed");
-            return;
-        }
-
-        const unsigned long long done = gDoubleRendered.fetch_add(1, std::memory_order_relaxed) + 1;
-        if (!gLoggedFirstApplication.exchange(true)) {
-            std::ostringstream line;
-            line << "preyvr_camera_edit result=0 detail=double_render_first_frame"
-                 << " ipd=" << ipd << " budget=" << remaining << " done=" << done;
-            lifecycle::Log(line.str());
-        }
-        return;
-    }
-
-    // **Head rotation goes here, upstream, because this is the camera the engine
-    // culls from.** Driving it from CRenderView::SetCamera was measured on
-    // 2026-09-03 and broke level culling: that seam is downstream of visibility,
-    // so the engine culled against an unrotated camera and then rendered through
-    // a rotated one. The playbook's rule is to keep the RenderView override for
-    // stereo and projection and never for CPU culling.
-    //
-    // Applied **before** the eye offset, so the offset is taken along the head's
-    // own right axis rather than the body's. Reversed, the eyes would separate
-    // along a fixed world axis and the stereo would shear as the player looked
-    // around.
-    //
-    // A refusal here is not fatal: the camera is simply left as the engine built
-    // it for this frame, which is a frame without head tracking rather than a
-    // broken one.
     Pose renderHead{};
     const bool haveRenderHead=ConsumeHeadRenderPose(edited.data(),renderHead,
         renderContract.displayTime,renderContract.reference,renderContract.spaceEpoch);
-    bool headRotationApplied = false;
-    if (gHeadRotationArmed.load(std::memory_order_acquire)) {
-        headRotationApplied = ApplyHeadRotation(edited.data(), edited.size());
-        if (!headRotationApplied) {
-            gHeadRotationRefused.fetch_add(1, std::memory_order_relaxed);
-        } else {
-            gHeadRotationApplied.fetch_add(1, std::memory_order_relaxed);
-        }
-    }
-
-    bool built = headRotationApplied;
-    if (stereoArmed && gDualStereo.load(std::memory_order_acquire)) {
+    bool built = false;
+    if (gDualStereo.load(std::memory_order_acquire)) {
         // Rung 1b: both eyes in this frame. The engine culls and prepares the
         // frame from the head camera, left exactly as it is; the render thread
         // submits it twice and builds, publishes and draws each eye there
@@ -1171,8 +416,8 @@ void __fastcall RenderWithCameraEdit(void* system)
         }
         const auto fov = stereoframe::TangentsFromCamera(edited);
         if (fov) renderContract.tangents = {fov->tanLeft, fov->tanRight, fov->tanUp, fov->tanDown};
-        renderContract.valid = haveRenderHead && !headRotationApplied && fov.has_value();
-    } else if (stereoArmed) {
+        renderContract.valid = haveRenderHead && fov.has_value();
+    } else {
         // Alternate every frame. With the simulation frozen, consecutive frames
         // differ only by the eye, which is exactly a stereo pair.
         // A locked eye is held for as long as it is set, so a capture taken a
@@ -1200,16 +445,8 @@ void __fastcall RenderWithCameraEdit(void* system)
                 (eye==0 ? -.5f : .5f)*renderIpd,0,0}});
             const auto fov=stereoframe::TangentsFromCamera(edited);
             if(fov) renderContract.tangents={fov->tanLeft,fov->tanRight,fov->tanUp,fov->tanDown};
-            renderContract.valid=haveRenderHead && !headRotationApplied && fov.has_value();
+            renderContract.valid=haveRenderHead && fov.has_value();
         }
-    } else if (!headRotationApplied) {
-        // The research yaw edit is an *alternative* to head tracking, not
-        // something to compose with it. ApplyYaw rotates the matrix in place, so
-        // running it here would add a fixed offset on top of the live head
-        // orientation -- harmless while the yaw is zero, and a slowly-rotating
-        // world the moment it is not.
-        const cameraedit::YawEdit edit{gYawDegrees.load(std::memory_order_acquire)};
-        built = cameraedit::ApplyYaw(edited, edit);
     }
 
     if (!built || updateFrustum == nullptr) {
@@ -1226,9 +463,8 @@ void __fastcall RenderWithCameraEdit(void* system)
     // satisfies the engine's own check.
     if (!cameraedit::RotationIsSafeToWrite(edited)) {
         lifecycle::Log("preyvr_camera_edit result=refused detail=unsafe_rotation");
-        // Disarm *both* producers. Leaving stereo armed after rejecting its
-        // camera would retry the same bad build every frame.
-        gArmed.store(false, std::memory_order_release);
+        // Disarm stereo: leaving it armed after rejecting its camera would retry
+        // the same bad build every frame.
         gStereoIpd.store(0.0f, std::memory_order_release);
         SetFrameCaptureTagOverride(-1);
         if (original != nullptr) {
@@ -1255,79 +491,16 @@ void __fastcall RenderWithCameraEdit(void* system)
         renderOriginal(system);
     }
 
-    // **Head rotation is deliberately left in place; everything else is restored.**
-    //
-    // The occlusion job is spawned from `GetViewCamera()` in the frame's update,
-    // *before* CSystem::Render is called at all, so a rotation that is written
-    // during Render and undone before returning is never visible to culling. That
-    // is the whole reason the cull frustum followed the mouse while the pass
-    // camera agreed with us to zero millidegrees.
-    //
-    // Leaving it means the next frame's occlusion job reads a camera carrying the
-    // previous frame's head rotation. One frame stale, which for a *cull* frustum
-    // is cheap: it decides what to submit, and a frame of lag on that shows as
-    // slightly-wrong edges during a fast turn rather than as missing rooms.
-    //
-    // **This is a real behavioural change, not just a timing one.** A rotation
-    // left on the global camera is visible to every reader of it, including the
-    // cached aim ray, so aim will follow the head. That is a different tradeoff
-    // from the transient per-eye offset, which was restored precisely because no
-    // engine expects it -- a rotated view camera is ordinary, and is what those
-    // readers see whenever the player turns with a mouse.
-    //
-    // The alternative is a bounded window: write before the occlusion job and
-    // restore after Render. That needs the address of Prey's PrepareOcclusion
-    // call, which the static hunt has not yet produced.
-    const bool keepRotation =
-        headRotationApplied && gKeepHeadRotation.load(std::memory_order_acquire);
-
-    // **Restore everything, unconditionally.** The previous form skipped the
-    // restore whenever the rotation was being kept, which left the *eye
-    // translation and the projection* on the global camera too -- not what the
-    // paragraph above describes, and precisely the shape of FAIL-HAND-037: a
-    // half-IPD translation escaping into consumers that have no idea it is
-    // there, alternating every frame. Latent only because the flag defaults off.
+    // **Restore everything, and verify it.** A restore that is merely performed
+    // is a hope; FAIL-HAND-037 was a half-IPD translation escaping into
+    // consumers that had no idea it was there, alternating every frame.
     std::memcpy(camera, restore.bytes.data(), cameraedit::kCameraSize);
-
-    // Verified, not assumed. A restore that is merely performed is a hope. This
-    // now runs on every path, including the keep-rotation one, because the
-    // comparison happens *before* the basis is deliberately put back.
     if (!cameraedit::MatchesRestorePoint(live, restore)) {
         gRestoreFailures.fetch_add(1, std::memory_order_relaxed);
-        gArmed.store(false, std::memory_order_release);
         gStereoIpd.store(0.0f, std::memory_order_release);
         SetFrameCaptureTagOverride(-1);
         lifecycle::Log("preyvr_camera_edit result=restore_failed detail=disarmed");
         return;
-    }
-
-    if (keepRotation) {
-        // Put back the **basis only**: columns 0-2 of the 3x4 are the axes,
-        // column 3 is the translation, which stays exactly as the engine left
-        // it. Built in our own memory and validated before it touches game
-        // state, the same discipline the edit itself uses -- and the frustum is
-        // recomputed so the struct we leave behind is self-consistent rather
-        // than carrying planes belonging to a different orientation.
-        std::array<std::uint8_t, cameraedit::kCameraSize> kept{};
-        std::memcpy(kept.data(), restore.bytes.data(), cameraedit::kCameraSize);
-        const stereo::Matrix34 rotated = stereo::ReadMatrix(edited);
-        stereo::Matrix34 keep = stereo::ReadMatrix(kept);
-        for (int row = 0; row < 3; ++row) {
-            for (int col = 0; col < 3; ++col) {
-                keep[row * 4 + col] = rotated[row * 4 + col];
-            }
-        }
-        if (stereo::WriteMatrix(kept, keep)) {
-            updateFrustum(kept.data());
-            if (cameraedit::RotationIsSafeToWrite(kept)) {
-                std::memcpy(camera, kept.data(), cameraedit::kCameraSize);
-            } else {
-                lifecycle::Log(
-                    "preyvr_camera_edit result=refused detail=keep_rotation_unsafe");
-            }
-        } else {
-            lifecycle::Log("preyvr_camera_edit result=refused detail=keep_rotation_write_failed");
-        }
     }
 
     const unsigned long long applied = gApplied.fetch_add(1, std::memory_order_relaxed) + 1;
@@ -1336,15 +509,10 @@ void __fastcall RenderWithCameraEdit(void* system)
         // bury everything else in the smoke log within seconds.
         const auto position = cameraedit::PositionOf(restore.bytes);
         std::ostringstream line;
-        line << "preyvr_camera_edit result=0 detail=first_application"
-             << " mode=" << (stereoArmed ? "stereo" : "yaw");
-        if (stereoArmed) {
-            line << " ipd=" << gStereoIpd.load(std::memory_order_acquire)
-                 << " eye=" << gLastEye.load(std::memory_order_acquire);
-        } else {
-            line << " yawDegrees=" << gYawDegrees.load(std::memory_order_acquire);
-        }
-        line << " originalPos=" << position[0] << ',' << position[1] << ',' << position[2]
+        line << "preyvr_camera_edit result=0 detail=first_application mode=stereo"
+             << " ipd=" << gStereoIpd.load(std::memory_order_acquire)
+             << " eye=" << gLastEye.load(std::memory_order_acquire)
+             << " originalPos=" << position[0] << ',' << position[1] << ',' << position[2]
              << " applied=" << applied;
         lifecycle::Log(line.str());
     }
@@ -1484,44 +652,6 @@ unsigned long long BuiltEyeLookupMissCount()
     return gBuiltEyeMisses.load(std::memory_order_relaxed);
 }
 
-DWORD SetCameraYawEdit(float degrees)
-{
-    std::unique_lock lock(gMutex, kControlLockTimeout);
-    if (!lock.owns_lock()) {
-        lifecycle::Log("preyvr_camera_edit result=refused detail=busy step=SetCameraYawEdit");
-        return static_cast<DWORD>(CameraEditStatus::failed);
-    }
-
-    if (degrees == 0.0f) {
-        gArmed.store(false, std::memory_order_release);
-        if (gHookCreated) {
-            gStatus.store(static_cast<DWORD>(CameraEditStatus::ready), std::memory_order_release);
-        }
-        lifecycle::Log("preyvr_camera_edit result=0 detail=disarmed");
-        return gStatus.load(std::memory_order_acquire);
-    }
-
-    if (!cameraedit::IsWithinBounds({degrees})) {
-        lifecycle::Log("preyvr_camera_edit result=refused detail=out_of_bounds");
-        return static_cast<DWORD>(CameraEditStatus::failed);
-    }
-
-    if (!EnsureHook()) {
-        gStatus.store(static_cast<DWORD>(CameraEditStatus::unavailable), std::memory_order_release);
-        return static_cast<DWORD>(CameraEditStatus::unavailable);
-    }
-
-    gYawDegrees.store(degrees, std::memory_order_release);
-    gLoggedFirstApplication.store(false, std::memory_order_release);
-    gArmed.store(true, std::memory_order_release);
-    gStatus.store(static_cast<DWORD>(CameraEditStatus::armed), std::memory_order_release);
-
-    std::ostringstream line;
-    line << "preyvr_camera_edit result=0 detail=armed yawDegrees=" << degrees;
-    lifecycle::Log(line.str());
-    return static_cast<DWORD>(CameraEditStatus::armed);
-}
-
 DWORD SetRuntimeFrustum(unsigned int enabled)
 {
     const bool on = enabled != 0;
@@ -1591,373 +721,6 @@ DWORD SetSyntheticStereo(float ipdMetres, float halfFovDegrees)
     return static_cast<DWORD>(CameraEditStatus::armed);
 }
 
-DWORD SetDoubleRenderStereo(float ipdMetres, float halfFovDegrees, unsigned int frameBudget)
-{
-    if (ipdMetres == 0.0f || frameBudget == 0) {
-        std::unique_lock lock(gMutex, kControlLockTimeout);
-        gDoubleRender.store(false, std::memory_order_release);
-        gDoubleRenderBudget.store(0, std::memory_order_release);
-        gStereoIpd.store(0.0f, std::memory_order_release);
-        SetFrameCaptureTagOverride(-1);
-        lifecycle::Log("preyvr_camera_edit result=0 detail=double_render_disarmed");
-        return gStatus.load(std::memory_order_acquire);
-    }
-
-    // A ceiling on the ceiling: this is the riskiest thing the DLL can do, and
-    // an experiment that runs for ten thousand frames is not an experiment.
-    if (frameBudget > 600) {
-        lifecycle::Log("preyvr_camera_edit result=refused detail=double_render_budget_too_large");
-        return static_cast<DWORD>(CameraEditStatus::failed);
-    }
-
-    // Reuses the synthetic-stereo bounds check, then swaps the mode over.
-    const DWORD armed = SetSyntheticStereo(ipdMetres, halfFovDegrees);
-    if (armed != static_cast<DWORD>(CameraEditStatus::armed)) {
-        return armed;
-    }
-
-    std::unique_lock lock(gMutex, kControlLockTimeout);
-    if (!lock.owns_lock()) {
-        lifecycle::Log("preyvr_camera_edit result=refused detail=busy step=double_render");
-        return static_cast<DWORD>(CameraEditStatus::failed);
-    }
-    gDoubleRenderBudget.store(frameBudget, std::memory_order_release);
-
-    // Wall-clock stop alongside the frame budget, whichever comes first. Sized
-    // generously against the budget so it only fires when frames have stopped
-    // arriving, which is precisely the case the frame budget cannot see.
-    const unsigned long long allowanceMs =
-        2000ull + static_cast<unsigned long long>(frameBudget) * 40ull;
-    gDoubleRenderDeadlineMs.store(GetTickCount64() + allowanceMs, std::memory_order_release);
-    gDoubleRender.store(true, std::memory_order_release);
-
-    if (!gDoubleRenderWatchdogRunning.exchange(true)) {
-        const HANDLE watchdog = CreateThread(nullptr, 0, DoubleRenderWatchdog, nullptr, 0, nullptr);
-        if (watchdog == nullptr) {
-            // Refuse to arm rather than run the risky mode with no stop. The
-            // whole point of F-013 is that the in-band budget is not enough.
-            gDoubleRenderWatchdogRunning.store(false, std::memory_order_release);
-            gDoubleRender.store(false, std::memory_order_release);
-            gDoubleRenderBudget.store(0, std::memory_order_release);
-            gStereoIpd.store(0.0f, std::memory_order_release);
-            lifecycle::Log("preyvr_camera_edit result=refused detail=watchdog_thread_failed");
-            return static_cast<DWORD>(CameraEditStatus::failed);
-        }
-        CloseHandle(watchdog);
-    }
-
-    std::ostringstream line;
-    line << "preyvr_camera_edit result=0 detail=double_render_armed frameBudget=" << frameBudget
-         << " deadlineMs=" << allowanceMs;
-    lifecycle::Log(line.str());
-    return static_cast<DWORD>(CameraEditStatus::armed);
-}
-
-// Resolves the pass constructor behind its own gate, separately from EnsureHook.
-//
-// Deliberately not folded into EnsureHook: a mismatch here must block only A4,
-// not the camera edit and alternating stereo that already work. The bytes come
-// from the landmark table rather than a second copy in this file, so there is one
-// definition of what this function is expected to look like.
-bool EnsureSecondPassTargets()
-{
-    if (gCreatePassInfo.load(std::memory_order_acquire) != nullptr) {
-        return true;
-    }
-    const auto base = PreyBase();
-    if (base == 0) {
-        return false;
-    }
-
-    const engine::Landmark* landmark = engine::FindLandmark("pass.create_general");
-    if (landmark == nullptr) {
-        lifecycle::Log("preyvr_second_pass result=unavailable detail=landmark_missing");
-        return false;
-    }
-    if (landmark->rva != kCreatePassInfoRva) {
-        lifecycle::Log("preyvr_second_pass result=unavailable detail=landmark_rva_disagrees");
-        return false;
-    }
-    const auto address = base + landmark->rva;
-    if (!PrologueMatches(address, landmark->expected.data(), landmark->expected.size())) {
-        lifecycle::Log("preyvr_second_pass result=unavailable detail=create_pass_prologue");
-        return false;
-    }
-    gCreatePassInfo.store(reinterpret_cast<CreatePassInfoFn>(address),
-                          std::memory_order_release);
-    return true;
-}
-
-// Installs the RenderWorld hook behind its own byte gate, separately from the
-// CSystem::Render hook so a mismatch blocks only A6.
-bool EnsureRenderWorldHook()
-{
-    if (gRenderWorldHookCreated) {
-        return true;
-    }
-    const auto base = PreyBase();
-    if (base == 0) {
-        return false;
-    }
-
-    const engine::Landmark* landmark = engine::FindLandmark("world.render_world");
-    if (landmark == nullptr || landmark->rva != kRenderWorldRva) {
-        lifecycle::Log("preyvr_interpose result=unavailable detail=landmark_missing");
-        return false;
-    }
-    const auto address = base + landmark->rva;
-    if (!PrologueMatches(address, landmark->expected.data(), landmark->expected.size())) {
-        lifecycle::Log("preyvr_interpose result=unavailable detail=render_world_prologue");
-        return false;
-    }
-
-    gRenderWorldTarget = reinterpret_cast<void*>(address);
-    const auto installed =
-        hook::Install(gRenderWorldTarget, reinterpret_cast<void*>(&RenderWorldInterpose), gRenderWorldOriginal);
-    if (!installed) {
-        lifecycle::Log(std::string("preyvr_interpose result=failed detail=") + hook::StepName(installed.step) +
-                       " minhook=" + MH_StatusToString(installed.status));
-        return false;
-    }
-    gRenderWorldHookCreated = true;
-    std::ostringstream line;
-    line << "preyvr_interpose result=ready targetRva=0x" << std::hex << std::uppercase
-         << kRenderWorldRva << " target=0x" << address;
-    lifecycle::Log(line.str());
-    return true;
-}
-
-DWORD SetFrameShapeStereo(unsigned int frameBudget)
-{
-    if (frameBudget == 0) {
-        gFrameShape.store(false, std::memory_order_release);
-        gFrameShapeBudget.store(0, std::memory_order_release);
-        lifecycle::Log("preyvr_frame_shape result=0 detail=disarmed");
-        return static_cast<DWORD>(CameraEditStatus::ready);
-    }
-    if (frameBudget > 600) {
-        lifecycle::Log("preyvr_frame_shape result=refused detail=budget_too_large");
-        return static_cast<DWORD>(CameraEditStatus::failed);
-    }
-    if (!EnsureHook()) {
-        return static_cast<DWORD>(CameraEditStatus::unavailable);
-    }
-
-    // RenderBegin behind its own byte gate, taken from the landmark table so
-    // there is one definition of what it should look like.
-    if (gRenderBegin.load(std::memory_order_acquire) == nullptr) {
-        const auto base = PreyBase();
-        if (base == 0) {
-            return static_cast<DWORD>(CameraEditStatus::unavailable);
-        }
-        const engine::Landmark* landmark = engine::FindLandmark("system.render_begin");
-        if (landmark == nullptr || landmark->rva != kRenderBeginRva) {
-            lifecycle::Log("preyvr_frame_shape result=unavailable detail=landmark_missing");
-            return static_cast<DWORD>(CameraEditStatus::unavailable);
-        }
-        const auto address = base + landmark->rva;
-        if (!PrologueMatches(address, landmark->expected.data(), landmark->expected.size())) {
-            lifecycle::Log("preyvr_frame_shape result=unavailable detail=render_begin_prologue");
-            return static_cast<DWORD>(CameraEditStatus::unavailable);
-        }
-        gRenderBegin.store(reinterpret_cast<RenderBeginFn>(address), std::memory_order_release);
-    }
-
-    gFrameShapeBudget.store(frameBudget, std::memory_order_release);
-    const unsigned long long allowanceMs =
-        2000ull + static_cast<unsigned long long>(frameBudget) * 40ull;
-    gDoubleRenderDeadlineMs.store(GetTickCount64() + allowanceMs, std::memory_order_release);
-    gFrameShape.store(true, std::memory_order_release);
-
-    if (!gDoubleRenderWatchdogRunning.exchange(true)) {
-        const HANDLE watchdog = CreateThread(nullptr, 0, DoubleRenderWatchdog, nullptr, 0, nullptr);
-        if (watchdog == nullptr) {
-            gDoubleRenderWatchdogRunning.store(false, std::memory_order_release);
-            gFrameShape.store(false, std::memory_order_release);
-            gFrameShapeBudget.store(0, std::memory_order_release);
-            lifecycle::Log("preyvr_frame_shape result=refused detail=watchdog_thread_failed");
-            return static_cast<DWORD>(CameraEditStatus::failed);
-        }
-        CloseHandle(watchdog);
-    }
-    std::ostringstream line;
-    line << "preyvr_frame_shape result=0 detail=armed frameBudget=" << frameBudget
-         << " deadlineMs=" << allowanceMs;
-    lifecycle::Log(line.str());
-    return static_cast<DWORD>(CameraEditStatus::armed);
-}
-
-unsigned long long FrameShapeFrameCount()
-{
-    return gFrameShapeFrames.load(std::memory_order_acquire);
-}
-
-DWORD SetInterposeStereo(unsigned int frameBudget, unsigned int mode)
-{
-    if (frameBudget == 0) {
-        gInterpose.store(false, std::memory_order_release);
-        gInterposeBudget.store(0, std::memory_order_release);
-        lifecycle::Log("preyvr_interpose result=0 detail=disarmed");
-        return static_cast<DWORD>(CameraEditStatus::ready);
-    }
-    if (frameBudget > 600) {
-        lifecycle::Log("preyvr_interpose result=refused detail=budget_too_large");
-        return static_cast<DWORD>(CameraEditStatus::failed);
-    }
-    if (!EnsureRenderWorldHook()) {
-        return static_cast<DWORD>(CameraEditStatus::unavailable);
-    }
-
-    gInterposeBudget.store(frameBudget, std::memory_order_release);
-    gInterposeMode.store(mode, std::memory_order_release);
-    gPreyBase.store(PreyBase(),
-                    std::memory_order_release);
-    const unsigned long long allowanceMs =
-        2000ull + static_cast<unsigned long long>(frameBudget) * 40ull;
-    gDoubleRenderDeadlineMs.store(GetTickCount64() + allowanceMs, std::memory_order_release);
-    gInterpose.store(true, std::memory_order_release);
-
-    if (!gDoubleRenderWatchdogRunning.exchange(true)) {
-        const HANDLE watchdog = CreateThread(nullptr, 0, DoubleRenderWatchdog, nullptr, 0, nullptr);
-        if (watchdog == nullptr) {
-            gDoubleRenderWatchdogRunning.store(false, std::memory_order_release);
-            gInterpose.store(false, std::memory_order_release);
-            gInterposeBudget.store(0, std::memory_order_release);
-            lifecycle::Log("preyvr_interpose result=refused detail=watchdog_thread_failed");
-            return static_cast<DWORD>(CameraEditStatus::failed);
-        }
-        CloseHandle(watchdog);
-    }
-    std::ostringstream line;
-    line << "preyvr_interpose result=0 detail=armed frameBudget=" << frameBudget
-         << " mode=" << mode << " deadlineMs=" << allowanceMs;
-    lifecycle::Log(line.str());
-    return static_cast<DWORD>(CameraEditStatus::armed);
-}
-
-unsigned long long InterposeFrameCount()
-{
-    return gInterposeFrames.load(std::memory_order_acquire);
-}
-
-DWORD SetSecondPassStereo(float ipdMetres, float halfFovDegrees, unsigned int frameBudget,
-                          bool zeroCameraDelta, bool markSecondary)
-{
-    if (ipdMetres == 0.0f || frameBudget == 0) {
-        std::unique_lock lock(gMutex, kControlLockTimeout);
-        gSecondPass.store(false, std::memory_order_release);
-        gSecondPassBudget.store(0, std::memory_order_release);
-        gStereoIpd.store(0.0f, std::memory_order_release);
-        gSecondPassStatus.store(static_cast<DWORD>(SecondPassStatus::idle),
-                                std::memory_order_release);
-        lifecycle::Log("preyvr_second_pass result=0 detail=disarmed");
-        return gStatus.load(std::memory_order_acquire);
-    }
-
-    if (frameBudget > 600) {
-        lifecycle::Log("preyvr_second_pass result=refused detail=budget_too_large");
-        return static_cast<DWORD>(CameraEditStatus::failed);
-    }
-
-    // Reuses the synthetic-stereo bounds check, which also installs the hook.
-    const DWORD armed = SetSyntheticStereo(ipdMetres, halfFovDegrees);
-    if (armed != static_cast<DWORD>(CameraEditStatus::armed)) {
-        return armed;
-    }
-    if (!EnsureSecondPassTargets()) {
-        gStereoIpd.store(0.0f, std::memory_order_release);
-        gSecondPassStatus.store(static_cast<DWORD>(SecondPassStatus::refusedUnresolved),
-                                std::memory_order_release);
-        return static_cast<DWORD>(CameraEditStatus::unavailable);
-    }
-
-    std::unique_lock lock(gMutex, kControlLockTimeout);
-    if (!lock.owns_lock()) {
-        lifecycle::Log("preyvr_second_pass result=refused detail=busy");
-        return static_cast<DWORD>(CameraEditStatus::failed);
-    }
-    gSecondPassBudget.store(frameBudget, std::memory_order_release);
-    gSecondPassZeroDelta.store(zeroCameraDelta, std::memory_order_release);
-    gSecondPassMarkSecondary.store(markSecondary, std::memory_order_release);
-
-    // Same wall-clock stop as the double render, for the same F-013 reason.
-    const unsigned long long allowanceMs =
-        2000ull + static_cast<unsigned long long>(frameBudget) * 40ull;
-    gDoubleRenderDeadlineMs.store(GetTickCount64() + allowanceMs, std::memory_order_release);
-    gSecondPass.store(true, std::memory_order_release);
-    gSecondPassStatus.store(static_cast<DWORD>(SecondPassStatus::armed), std::memory_order_release);
-
-    if (!gDoubleRenderWatchdogRunning.exchange(true)) {
-        const HANDLE watchdog = CreateThread(nullptr, 0, DoubleRenderWatchdog, nullptr, 0, nullptr);
-        if (watchdog == nullptr) {
-            gDoubleRenderWatchdogRunning.store(false, std::memory_order_release);
-            gSecondPass.store(false, std::memory_order_release);
-            gSecondPassBudget.store(0, std::memory_order_release);
-            gStereoIpd.store(0.0f, std::memory_order_release);
-            lifecycle::Log("preyvr_second_pass result=refused detail=watchdog_thread_failed");
-            return static_cast<DWORD>(CameraEditStatus::failed);
-        }
-        CloseHandle(watchdog);
-    }
-
-    std::ostringstream line;
-    line << "preyvr_second_pass result=0 detail=armed frameBudget=" << frameBudget
-         << " zeroCameraDelta=" << (zeroCameraDelta ? 1 : 0)
-         << " markSecondary=" << (markSecondary ? 1 : 0)
-         << " deadlineMs=" << allowanceMs << " ipd=" << ipdMetres;
-    lifecycle::Log(line.str());
-    return static_cast<DWORD>(CameraEditStatus::armed);
-}
-
-unsigned long long SecondPassFrameCount()
-{
-    return gSecondPassFrames.load(std::memory_order_acquire);
-}
-
-unsigned long long SecondPassFrameIdMovedCount()
-{
-    return gSecondPassFrameIdMoved.load(std::memory_order_acquire);
-}
-
-DWORD SecondPassStatusValue()
-{
-    return gSecondPassStatus.load(std::memory_order_acquire);
-}
-
-DWORD ProbeRenderViews()
-{
-    // The probe runs inside the render hook, so the hook has to exist. Arming it
-    // without this left the flag set and the status stuck at notRun on a live
-    // host -- indistinguishable from "ran and found nothing" until the log showed
-    // the hook had never been installed.
-    if (!EnsureHook()) {
-        gRenderViewProbeStatus.store(static_cast<DWORD>(RenderViewProbeStatus::unresolved),
-                                     std::memory_order_release);
-        lifecycle::Log("preyvr_render_view_probe result=unresolved detail=hook_unavailable");
-        return static_cast<DWORD>(CameraEditStatus::unavailable);
-    }
-    gRenderViewProbeStatus.store(static_cast<DWORD>(RenderViewProbeStatus::notRun),
-                                 std::memory_order_release);
-    gProbeRenderViews.store(true, std::memory_order_release);
-    lifecycle::Log("preyvr_render_view_probe result=0 detail=armed");
-    return gStatus.load(std::memory_order_acquire);
-}
-
-const char* StereoStepName()
-{
-    return gStereoStep.load(std::memory_order_acquire);
-}
-
-DWORD RenderViewProbeStatusValue()
-{
-    return gRenderViewProbeStatus.load(std::memory_order_acquire);
-}
-
-unsigned long long DoubleRenderedFrameCount()
-{
-    return gDoubleRendered.load(std::memory_order_acquire);
-}
-
 DWORD SetStereoAsymmetry(float outerScale)
 {
     if (!std::isfinite(outerScale) || outerScale < 1.0f || outerScale > 1.5f) {
@@ -1983,11 +746,6 @@ DWORD SetStereoEyeLock(unsigned int eye)
          << (value < 0 ? "alternate" : (value == 0 ? "left" : "right"));
     lifecycle::Log(line.str());
     return static_cast<DWORD>(gStatus.load(std::memory_order_acquire));
-}
-
-int ConsumeRenderedEye()
-{
-    RenderContract out{}; return eyehandoff::Consume(out) ? out.eye : -1;
 }
 
 bool ConsumeRenderedContract(RenderContract& out) { return eyehandoff::Consume(out); }
@@ -2030,17 +788,6 @@ void SetStereoEyeLockFromRenderThread(int eye)
     gEyeLock.store((eye == 0 || eye == 1) ? eye : -1, std::memory_order_release);
 }
 
-DWORD SetKeepHeadRotation(unsigned int enabled)
-{
-    const bool on = enabled != 0u;
-    gKeepHeadRotation.store(on, std::memory_order_release);
-    std::ostringstream line;
-    line << "preyvr_camera_edit result=0 detail=keep_head_rotation enabled="
-         << (on ? "1" : "0");
-    lifecycle::Log(line.str());
-    return static_cast<DWORD>(gStatus.load(std::memory_order_acquire));
-}
-
 bool LastWrittenCameraForward(Vec3& out)
 {
     if (!gHaveWrittenForward.load(std::memory_order_acquire)) {
@@ -2050,37 +797,6 @@ bool LastWrittenCameraForward(Vec3& out)
     out.y = gWrittenForwardY.load(std::memory_order_relaxed);
     out.z = gWrittenForwardZ.load(std::memory_order_relaxed);
     return true;
-}
-
-DWORD SetUpstreamHeadRotation(unsigned int enabled)
-{
-    const bool on = enabled != 0u;
-    if (on) {
-        // The hook has to exist for the edit to run at all. Arming without it
-        // would report success and change nothing.
-        if (!EnsureHook()) {
-            lifecycle::Log("preyvr_camera_edit result=refused detail=head_rotation_no_hook");
-            return static_cast<DWORD>(CameraEditStatus::unavailable);
-        }
-        gHeadRotationApplied.store(0, std::memory_order_relaxed);
-        gHeadRotationRefused.store(0, std::memory_order_relaxed);
-    }
-    gHeadRotationArmed.store(on, std::memory_order_release);
-    std::ostringstream line;
-    line << "preyvr_camera_edit result=0 detail=upstream_head_rotation enabled="
-         << (on ? "1" : "0");
-    lifecycle::Log(line.str());
-    return static_cast<DWORD>(gStatus.load(std::memory_order_acquire));
-}
-
-unsigned long long UpstreamHeadRotationApplied()
-{
-    return gHeadRotationApplied.load(std::memory_order_relaxed);
-}
-
-unsigned long long UpstreamHeadRotationRefused()
-{
-    return gHeadRotationRefused.load(std::memory_order_relaxed);
 }
 
 DWORD SetNativeProjection(unsigned int enabled)

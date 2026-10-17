@@ -41,7 +41,6 @@ namespace preyvr::dll {
 // rather than a failure), non-zero otherwise.
 DWORD ResolveInputPath();
 
-unsigned long long InputPathGEnv();
 unsigned long long InputPathInputPointer();
 unsigned long long InputPathVtable();
 

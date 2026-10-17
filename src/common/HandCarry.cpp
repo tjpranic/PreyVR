@@ -34,7 +34,6 @@ Vec3 TrackingToWorld(Vec3 v, float yawRadians)
 
 Vec3 Horizontal(Vec3 v) { return {v.x, v.y, 0.0f}; }
 Quaternion YawRotation(float radians) { return stereo::YawQuaternion(radians); }
-float YawOf(Vec3 d) { return std::atan2(d.y, d.x); }
 
 // --- motion ---------------------------------------------------------------------------
 
