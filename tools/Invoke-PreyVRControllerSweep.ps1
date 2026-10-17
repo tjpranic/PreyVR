@@ -44,7 +44,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$XrSimRoot = 'D:\Dev Debug\xr-sim',
+    [string]$XrSimRoot = '',
     [string]$StateName = 'preyvr',
     # **The run's own state directory, and the reason it exists.** A run
     # launched by Invoke-PreyVRLaunch.ps1 gets a unique XRSIM_DIR; pointing this
@@ -69,6 +69,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'PreyVRCommon.ps1')
+if (-not $XrSimRoot) { $XrSimRoot = Resolve-XrSimRoot }
 
 if ($StateDir) { $stateDir = $StateDir } else { $stateDir = Join-Path $env:LOCALAPPDATA "xr-sim\$StateName" }
 $statePath  = Join-Path $stateDir 'state.json'

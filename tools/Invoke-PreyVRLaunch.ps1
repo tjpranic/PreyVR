@@ -41,8 +41,9 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$GameExe = 'D:\SteamLibrary\steamapps\common\Prey\Binaries\Danielle\x64\Release\Prey.exe',
-    [string]$GameRoot = 'D:\SteamLibrary\steamapps\common\Prey',
+    # Both default to the Steam install of Prey (PreyVRCommon.ps1).
+    [string]$GameExe = '',
+    [string]$GameRoot = '',
     # Defaults to build\configure, else build\headless: whichever this checkout has.
     [string]$Dll = '',
     [string]$XrSimRuntime = "$env:LOCALAPPDATA\xr-sim\runtime\xrsim-x64.json",
@@ -115,6 +116,9 @@ $ErrorActionPreference = 'Stop'
 # tools/ as often as from the root, and "mod DLL not found" from tools/ with a
 # freshly built DLL cost a headset session its first ten minutes.
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'PreyVRCommon.ps1')
+if (-not $GameRoot) { $GameRoot = Resolve-PreyInstall }
+if (-not $GameExe) { $GameExe = Join-Path $GameRoot 'Binaries\Danielle\x64\Release\Prey.exe' }
 if (-not $Dll) {
     $Dll = 'build\configure\Release\PreyVR.dll'
     $headless = Join-Path $repoRoot 'build\headless\Release\PreyVR.dll'

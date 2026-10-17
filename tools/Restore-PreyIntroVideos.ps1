@@ -21,7 +21,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$VideoDir = 'D:\SteamLibrary\steamapps\common\Prey\GameSDK\Videos',
+    # Defaults to the Steam install of Prey (PreyVRCommon.ps1).
+    [string]$VideoDir = '',
     [switch]$Apply,
     # Restore a file whose hash does not match. Off by default: an unexpected
     # hash means the file is not the one that was renamed.
@@ -30,6 +31,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'PreyVRCommon.ps1')
+if (-not $VideoDir) { $VideoDir = Join-Path (Resolve-PreyInstall) 'GameSDK\Videos' }
 
 $expected = @{
     'Ryzen_Bumper'                             = '59F7343B5EA4B4F1FFE7A733D11ECCB2E5FC51E2045523B299E15F99B39F534C'

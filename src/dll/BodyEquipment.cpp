@@ -121,7 +121,7 @@ void UpdateHolsterInput(const TrackingFrame& f,bool valid){
  const auto& r=f.hands[1];const auto& l=f.hands[0];
  valid=valid&&HolstersEnabled()&&!fault.load()&&HudGameplayInputAllowed()&&!(ref&1)&&
   FreshSample(MonotonicNanoseconds(),f.publishedNs)&&
-  IsPoseUsable(f.head,f.headValidity,200000000)&&IsPoseUsable(r.gripPose,r.gripValidity,200000000)&&
+  IsPoseUsable(f.head,f.headValidity,kMaxPoseAgeNs)&&IsPoseUsable(r.gripPose,r.gripValidity,kMaxPoseAgeNs)&&
   !TwoHandedAimHeld()&&l.squeezeValue<.45f&&!r.triggerPressed&&!FaceButtonHeld(r)&&!f.play.special&&!f.play.weaponWheel&&!f.play.psychoscope;
  // The slots sit on the body the player sees (BodyFollow's torso).
  float torso=0;const bool shared=BodyTorsoYaw(torso);

@@ -3,13 +3,10 @@
 The models demonstrate why the existing counters cannot rule out eye-age or
 coverage problems. They do not reproduce or diagnose the user's actual pixels.
 """
-import hashlib
 import json
-import struct
 from pathlib import Path
 
-from verify_h005_skinning import DEFAULT_MODULE as MODULE  # PREYVR_PREYDLL or the Steam library holding Prey
-SHA256 = "7d6e322f61b28331095a400f0ba5f09bd9a39c57bf993602285dd6acb05311a7"
+from preydll import DEFAULT_MODULE as MODULE, Image
 ANCHORS = {
     "legacy_zero_vp_to_parameter_cache": (0xF18ABE, "8b813002000089843e648d0000"),
     "builder_selected_render_view": (0xFB1732, "498b96e0020000"),
@@ -20,30 +17,12 @@ ANCHORS = {
 
 
 def verify_native(path):
-    data = path.read_bytes()
-    digest = hashlib.sha256(data).hexdigest()
-    if digest != SHA256:
-        raise ValueError(f"Unsupported image: {digest}")
-    u16 = lambda offset: struct.unpack_from("<H", data, offset)[0]
-    u32 = lambda offset: struct.unpack_from("<I", data, offset)[0]
-    pe = u32(0x3C)
-    opt = pe + 24
-    if u16(pe + 4) != 0x8664 or u16(opt) != 0x20B:
-        raise ValueError("Expected x64 PE32+")
-    sections = []
-    for index in range(u16(pe + 6)):
-        off = opt + u16(pe + 20) + index * 40
-        sections.append((u32(off + 12), u32(off + 16), u32(off + 20)))
+    image = Image(path)
     for name, (rva, hexbytes) in ANCHORS.items():
         expected = bytes.fromhex(hexbytes)
-        section = next((s for s in sections if s[0] <= rva and
-                        rva + len(expected) <= s[0] + s[1]), None)
-        if section is None:
-            raise ValueError(f"Unmapped landmark: {name}")
-        start, _, raw = section
-        if data[raw + rva - start:raw + rva - start + len(expected)] != expected:
+        if image.at(rva, len(expected)) != expected:
             raise ValueError(f"Landmark mismatch: {name}")
-    return {"sha256": digest, "landmarks": list(ANCHORS)}
+    return {"sha256": image.sha256, "landmarks": list(ANCHORS)}
 
 
 def counterexamples():

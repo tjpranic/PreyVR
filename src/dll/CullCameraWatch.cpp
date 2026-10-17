@@ -4,6 +4,7 @@
 #include "Bootstrap.h"
 #include "Logger.h"
 #include "MinHookInit.h"
+#include "AtomicMax.h"
 #include <MinHook.h>
 #include <array>
 #include <atomic>
@@ -166,13 +167,6 @@ std::atomic<ULONGLONG> gNextSummary{0};
 void Log(const std::string& line)
 {
     lifecycle::Log("preyvr_cull_watch " + line);
-}
-
-void Raise(std::atomic<unsigned>& peak, unsigned value)
-{
-    unsigned seen = peak.load(std::memory_order_relaxed);
-    while (value > seen && !peak.compare_exchange_weak(seen, value, std::memory_order_relaxed)) {
-    }
 }
 
 bool SpanMatches(const void* at, const std::uint8_t* bytes, std::size_t size)
@@ -382,8 +376,8 @@ void Conclude(void* engine, const Before& before)
     if (ambiguous) gAmbiguous.fetch_add(1, std::memory_order_relaxed);
     if (freed) gFreeing.fetch_add(1, std::memory_order_relaxed);
     for (const Pool& pool : before.pools) {
-        Raise(gMaxPages, pool.pages);
-        Raise(gMaxOverflowCameras, pool.overflowCameras);
+        StoreMax(gMaxPages, pool.pages);
+        StoreMax(gMaxOverflowCameras, pool.overflowCameras);
         if (pool.pagesTruncated) gPagesTruncated.fetch_add(1, std::memory_order_relaxed);
     }
     if (!queue.read) gQueueUnread.fetch_add(1, std::memory_order_relaxed);
@@ -391,7 +385,7 @@ void Conclude(void* engine, const Before& before)
     if (queue.scanFault) gScanFaults.fetch_add(1, std::memory_order_relaxed);
     if (queue.pending != 0 && !queue.inconsistent) {
         gPendingResets.fetch_add(1, std::memory_order_relaxed);
-        Raise(gPendingMax, queue.pending);
+        StoreMax(gPendingMax, queue.pending);
     }
     if (stale != 0) {
         gStaleResets.fetch_add(1, std::memory_order_relaxed);

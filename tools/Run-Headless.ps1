@@ -2,12 +2,15 @@
 param(
     [ValidateSet('Debug', 'Release')][string]$Configuration = 'Release',
     [string]$BuildDirectory = '',
-    [string]$GameReleasePath = 'D:\SteamLibrary\steamapps\common\Prey\Binaries\Danielle\x64\Release',
+    # Defaults to the Steam install of Prey (PreyVRCommon.ps1).
+    [string]$GameReleasePath = '',
     [switch]$NoFresh,
     [switch]$RequireGameBaseline
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'PreyVRCommon.ps1')
+if (-not $GameReleasePath) { $GameReleasePath = Join-Path (Resolve-PreyInstall) 'Binaries\Danielle\x64\Release' }
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($BuildDirectory)) {
     $BuildDirectory = Join-Path $repoRoot 'build\headless'

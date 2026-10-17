@@ -690,8 +690,7 @@ bool RunSecondPass(void* system)
         const std::uint32_t afterB = getFrameId(renderer, 0);
         if (afterA != beforeA || afterB != beforeB) {
             gSecondPassFrameIdMoved.fetch_add(1, std::memory_order_relaxed);
-            bool loggedMove = false;
-            if (gLoggedFrameIdMove.compare_exchange_strong(loggedMove, true)) {
+            if (!gLoggedFrameIdMove.exchange(true)) {
                 std::ostringstream moved;
                 moved << "preyvr_second_pass result=0 detail=frame_id_advanced"
                       << " a=" << beforeA << "->" << afterA
@@ -702,8 +701,7 @@ bool RunSecondPass(void* system)
     }
 
     const unsigned long long done = gSecondPassFrames.fetch_add(1, std::memory_order_relaxed) + 1;
-    bool expected = false;
-    if (gLoggedFirstSecondPass.compare_exchange_strong(expected, true)) {
+    if (!gLoggedFirstSecondPass.exchange(true)) {
         std::ostringstream line;
         line << "preyvr_second_pass result=0 detail=first_frame"
              << " zeroDelta=" << (zeroDelta ? 1 : 0)
@@ -866,8 +864,7 @@ void __fastcall RenderWorldInterpose(void* process, int flags, void* passInfo,
     Step("interpose:done");
 
     const unsigned long long done = gInterposeFrames.fetch_add(1, std::memory_order_relaxed) + 1;
-    bool expected = false;
-    if (gLoggedFirstInterpose.compare_exchange_strong(expected, true)) {
+    if (!gLoggedFirstInterpose.exchange(true)) {
         std::ostringstream line;
         line << "preyvr_interpose result=0 detail=first_frame mode=" << mode
              << " ownView=" << (secondPassInfo == passInfo ? 0 : 1) << " flags=" << flags
@@ -957,8 +954,7 @@ void __fastcall RenderWithCameraEdit(void* system)
 
         const unsigned long long done =
             gFrameShapeFrames.fetch_add(1, std::memory_order_relaxed) + 1;
-        bool expectedShape = false;
-        if (gLoggedFirstFrameShape.compare_exchange_strong(expectedShape, true)) {
+        if (!gLoggedFirstFrameShape.exchange(true)) {
             std::ostringstream line;
             line << "preyvr_frame_shape result=0 detail=first_frame done=" << done;
             lifecycle::Log(line.str());
@@ -1117,8 +1113,7 @@ void __fastcall RenderWithCameraEdit(void* system)
         }
 
         const unsigned long long done = gDoubleRendered.fetch_add(1, std::memory_order_relaxed) + 1;
-        bool expectedFirst = false;
-        if (gLoggedFirstApplication.compare_exchange_strong(expectedFirst, true)) {
+        if (!gLoggedFirstApplication.exchange(true)) {
             std::ostringstream line;
             line << "preyvr_camera_edit result=0 detail=double_render_first_frame"
                  << " ipd=" << ipd << " budget=" << remaining << " done=" << done;
@@ -1336,8 +1331,7 @@ void __fastcall RenderWithCameraEdit(void* system)
     }
 
     const unsigned long long applied = gApplied.fetch_add(1, std::memory_order_relaxed) + 1;
-    bool expected = false;
-    if (gLoggedFirstApplication.compare_exchange_strong(expected, true)) {
+    if (!gLoggedFirstApplication.exchange(true)) {
         // Logged once rather than per frame: at 144 Hz a per-frame line would
         // bury everything else in the smoke log within seconds.
         const auto position = cameraedit::PositionOf(restore.bytes);
@@ -1637,8 +1631,7 @@ DWORD SetDoubleRenderStereo(float ipdMetres, float halfFovDegrees, unsigned int 
     gDoubleRenderDeadlineMs.store(GetTickCount64() + allowanceMs, std::memory_order_release);
     gDoubleRender.store(true, std::memory_order_release);
 
-    bool expected = false;
-    if (gDoubleRenderWatchdogRunning.compare_exchange_strong(expected, true)) {
+    if (!gDoubleRenderWatchdogRunning.exchange(true)) {
         const HANDLE watchdog = CreateThread(nullptr, 0, DoubleRenderWatchdog, nullptr, 0, nullptr);
         if (watchdog == nullptr) {
             // Refuse to arm rather than run the risky mode with no stop. The
@@ -1776,8 +1769,7 @@ DWORD SetFrameShapeStereo(unsigned int frameBudget)
     gDoubleRenderDeadlineMs.store(GetTickCount64() + allowanceMs, std::memory_order_release);
     gFrameShape.store(true, std::memory_order_release);
 
-    bool expected = false;
-    if (gDoubleRenderWatchdogRunning.compare_exchange_strong(expected, true)) {
+    if (!gDoubleRenderWatchdogRunning.exchange(true)) {
         const HANDLE watchdog = CreateThread(nullptr, 0, DoubleRenderWatchdog, nullptr, 0, nullptr);
         if (watchdog == nullptr) {
             gDoubleRenderWatchdogRunning.store(false, std::memory_order_release);
@@ -1825,8 +1817,7 @@ DWORD SetInterposeStereo(unsigned int frameBudget, unsigned int mode)
     gDoubleRenderDeadlineMs.store(GetTickCount64() + allowanceMs, std::memory_order_release);
     gInterpose.store(true, std::memory_order_release);
 
-    bool expected = false;
-    if (gDoubleRenderWatchdogRunning.compare_exchange_strong(expected, true)) {
+    if (!gDoubleRenderWatchdogRunning.exchange(true)) {
         const HANDLE watchdog = CreateThread(nullptr, 0, DoubleRenderWatchdog, nullptr, 0, nullptr);
         if (watchdog == nullptr) {
             gDoubleRenderWatchdogRunning.store(false, std::memory_order_release);
@@ -1896,8 +1887,7 @@ DWORD SetSecondPassStereo(float ipdMetres, float halfFovDegrees, unsigned int fr
     gSecondPass.store(true, std::memory_order_release);
     gSecondPassStatus.store(static_cast<DWORD>(SecondPassStatus::armed), std::memory_order_release);
 
-    bool expected = false;
-    if (gDoubleRenderWatchdogRunning.compare_exchange_strong(expected, true)) {
+    if (!gDoubleRenderWatchdogRunning.exchange(true)) {
         const HANDLE watchdog = CreateThread(nullptr, 0, DoubleRenderWatchdog, nullptr, 0, nullptr);
         if (watchdog == nullptr) {
             gDoubleRenderWatchdogRunning.store(false, std::memory_order_release);

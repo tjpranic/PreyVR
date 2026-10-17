@@ -454,8 +454,8 @@ void RunHudProbe(float screenX, float screenY)
     out << " stage1=" << on;
     if (on == 0) { out << " stage1X=" << nativeOnX << " stage1Y=" << nativeOnY; }
 
-    const float frameWidth = static_cast<float>(XrResolutionChain(4));
-    const float frameHeight = static_cast<float>(XrResolutionChain(5));
+    const float frameWidth = static_cast<float>(XrResolutionChain(XrResolution::backBufferWidth));
+    const float frameHeight = static_cast<float>(XrResolutionChain(XrResolution::backBufferHeight));
     const auto ours = preyvr::aim::ViewportToHudCanvas(screenX, screenY, frameWidth, frameHeight);
     out << " frame=" << static_cast<int>(frameWidth) << "x" << static_cast<int>(frameHeight)
         << " oursX=" << ours.x << " oursY=" << ours.y;

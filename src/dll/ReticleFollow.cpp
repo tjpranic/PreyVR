@@ -296,8 +296,8 @@ bool WriteReticleForCamera(void* player, const Vec3& rayOrigin,
         // R-118 -- so the defect can be reproduced deliberately rather than
         // remembered. A wearer can step 1 -> 2 -> 0 in one session and say which
         // sits on the target.
-        const float frameWidth = static_cast<float>(XrResolutionChain(4));
-        const float frameHeight = static_cast<float>(XrResolutionChain(5));
+        const float frameWidth = static_cast<float>(XrResolutionChain(XrResolution::backBufferWidth));
+        const float frameHeight = static_cast<float>(XrResolutionChain(XrResolution::backBufferHeight));
         const unsigned int mode = gCanvasMode.load(std::memory_order_acquire);
         float displayX=fractionX,displayY=fractionY;
         // Preserve off-panel coordinates: the private target clips the symbol.

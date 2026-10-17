@@ -1,14 +1,13 @@
 """Verify H-018 contracts on disk and synthetic snapshots; no process access.
 Usage: C:/Python314/python.exe -B tools/re/verify_h018_static_gaps.py [PreyDll.dll]
 """
-import hashlib
 import json
 import struct
 import sys
 from pathlib import Path
 
 sys.dont_write_bytecode = True
-from verify_h005_skinning import DEFAULT_MODULE, EXPECTED_SHA256
+from preydll import DEFAULT_MODULE, Image
 from decode_h018_bind_snapshot import fixture_checks
 
 # Exact readings from the target Ghidra program, independently checked on disk.
@@ -209,27 +208,8 @@ VTABLES = {
 
 
 def verify(path):
-    data = path.read_bytes()
-    digest = hashlib.sha256(data).hexdigest()
-    if digest != EXPECTED_SHA256:
-        raise ValueError(f"Unsupported module SHA-256: {digest}")
-    def u16(offset): return struct.unpack_from("<H", data, offset)[0]
-    def u32(offset): return struct.unpack_from("<I", data, offset)[0]
-    pe = u32(0x3C)
-    opt = pe+24
-    if (data[:2] != b"MZ" or data[pe:pe+4] != b"PE"+bytes(2)
-            or u16(pe+4) != 0x8664 or u16(opt) != 0x20B):
-        raise ValueError("Expected x64 PE32+")
-    base = struct.unpack_from("<Q", data, opt+24)[0]
-    sections = []
-    for i in range(u16(pe+6)):
-        offset = opt+u16(pe+20)+40*i
-        sections.append((u32(offset+12), u32(offset+16), u32(offset+20)))
-    def at(rva, size):
-        for start, length, file_offset in sections:
-            if start <= rva and rva+size <= start+length:
-                return data[file_offset+rva-start:file_offset+rva-start+size]
-        raise ValueError(f"Unmapped file-backed RVA {rva:#x}")
+    image = Image(path)
+    data, digest, base, at = image.data, image.sha256, image.base, image.at
     checks = []
     for name, (rva, expected) in ANCHORS.items():
         expected = bytes.fromhex(expected)
@@ -237,16 +217,17 @@ def verify(path):
             raise ValueError(f"Byte mismatch: {name} at {rva:#x}")
         checks.append(name)
     for name, (call, target) in CALLS.items():
-        actual = call+5+struct.unpack("<i", at(call+1, 4))[0]
-        if at(call, 1) != bytes([0xE8]) or actual != target:
-            raise ValueError(f"Call mismatch: {name} at {call:#x}: {actual:#x}")
+        actual = image.call_target(call)
+        if actual != target:
+            raise ValueError(f"Call mismatch: {name} at {call:#x}: "
+                             f"{'not a call' if actual is None else hex(actual)}")
         checks.append(name)
     for name, (slot, target) in VTABLES.items():
         if struct.unpack("<Q", at(slot, 8))[0] != base+target:
             raise ValueError(f"Vtable mismatch: {name} at {slot:#x}")
         checks.append(name)
     # Exception directory (index 3) uses RVA triples, not 64-bit vtable entries.
-    exception_rva, exception_size = struct.unpack_from("<II", data, opt+112+3*8)
+    exception_rva, exception_size = image.directory(3)
     record = 0x2D609B8
     if not (exception_rva <= record and record+12 <= exception_rva+exception_size
             and (record-exception_rva) % 12 == 0

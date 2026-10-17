@@ -2,6 +2,7 @@
 #include "SafeMemory.h"
 #include "HookInstall.h"
 #include "EngineAccess.h"
+#include "preyvr/TextFormat.h"
 
 #include "AimTakeover.h"
 #include "CarryLane.h"
@@ -283,14 +284,6 @@ void ReadInfo(std::uintptr_t interaction, std::array<InfoRecord, 4>& out)
         Read(at + 0x14, r.hold);
     }
 }
-
-std::string Fixed(float v, int decimals)
-{
-    char text[32];
-    std::snprintf(text, sizeof(text), "%.*f", decimals, static_cast<double>(v));
-    return text;
-}
-std::string Point(Vec3 v) { return Fixed(v.x, 3) + "," + Fixed(v.y, 3) + "," + Fixed(v.z, 3); }
 
 // --- the selector seam ---------------------------------------------------------
 

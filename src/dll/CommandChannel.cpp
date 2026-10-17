@@ -1141,19 +1141,20 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         // The measured chain: what the runtime asks for, what Prey renders, what
         // is held, and what is submitted. Ratios are given so "soft" has a
         // number; the scene's own render target is NOT covered here.
-        const DWORD recW = XrResolutionChain(0), recH = XrResolutionChain(1);
-        const DWORD backW = XrResolutionChain(4), backH = XrResolutionChain(5);
+        using enum XrResolution;
+        const DWORD recW = XrResolutionChain(recommendedWidth), recH = XrResolutionChain(recommendedHeight);
+        const DWORD backW = XrResolutionChain(backBufferWidth), backH = XrResolutionChain(backBufferHeight);
         out << "xr.resolution result=0"
             << " recommended=" << recW << "x" << recH
-            << " max=" << XrResolutionChain(2) << "x" << XrResolutionChain(3)
+            << " max=" << XrResolutionChain(maxWidth) << "x" << XrResolutionChain(maxHeight)
             << " backbuffer=" << backW << "x" << backH
-            << " heldEye=" << XrResolutionChain(6) << "x" << XrResolutionChain(7)
-            << " submitted=" << XrResolutionChain(8) << "x" << XrResolutionChain(9)
-            << " recommendedSamples=" << XrResolutionChain(10)
-            << " viewsDiffer=" << XrResolutionChain(11)
-            << " heldFormat=" << XrResolutionChain(12)
-            << " views=" << XrResolutionChain(13)
-            << " sizeMismatch=" << XrResolutionChain(14);
+            << " heldEye=" << XrResolutionChain(heldEyeWidth) << "x" << XrResolutionChain(heldEyeHeight)
+            << " submitted=" << XrResolutionChain(submittedWidth) << "x" << XrResolutionChain(submittedHeight)
+            << " recommendedSamples=" << XrResolutionChain(recommendedSamples)
+            << " viewsDiffer=" << XrResolutionChain(viewsDiffer)
+            << " heldFormat=" << XrResolutionChain(heldFormat)
+            << " views=" << XrResolutionChain(views)
+            << " sizeMismatch=" << XrResolutionChain(sizeMismatch);
         if (recW != 0 && recH != 0 && backW != 0 && backH != 0) {
             // Per-eye pixels the runtime wants against per-eye pixels it gets.
             const double want = static_cast<double>(recW) * recH;

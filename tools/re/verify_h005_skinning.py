@@ -3,46 +3,14 @@
 Usage: py -3 tools/re/verify_h005_skinning.py [path/to/PreyDll.dll]
 This verifies the researched bytes, not runtime execution or hand control.
 """
-import hashlib
 import json
-import os
-import re
 import struct
 import sys
 from pathlib import Path
 
-EXPECTED_SHA256 = "7d6e322f61b28331095a400f0ba5f09bd9a39c57bf993602285dd6acb05311a7"
-_PREYDLL = Path("steamapps/common/Prey/Binaries/Danielle/x64/Release/PreyDll.dll")
-_UPSTREAM_LIBRARY = Path(r"D:\SteamLibrary")
-
-
-def resolve_module():
-    """PREYVR_PREYDLL if set, else the first Steam library holding Prey.
-
-    The upstream library is tried first, so a machine that has it resolves as
-    before; a fork installed elsewhere is found through Steam's own library list.
-    """
-    override = os.environ.get("PREYVR_PREYDLL")
-    if override:
-        return Path(override)
-    libraries = [_UPSTREAM_LIBRARY]
-    try:
-        import winreg
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as key:
-            steam = Path(winreg.QueryValueEx(key, "SteamPath")[0])
-        folders = (steam / "steamapps" / "libraryfolders.vdf").read_text(encoding="utf-8", errors="replace")
-        libraries += [Path(path.replace("\\\\", "\\")) for path in re.findall(r'"path"\s+"([^"]+)"', folders)]
-    except (ImportError, OSError):
-        pass
-    for library in libraries:
-        if (library / _PREYDLL).is_file():
-            return library / _PREYDLL
-    return _UPSTREAM_LIBRARY / _PREYDLL
-
-
-# Imported by most verifiers here; the receipt-pinned ones among them pick up
-# the resolved path without their own bytes changing.
-DEFAULT_MODULE = resolve_module()
+# Re-exported: the receipt-pinned verifiers import these two names from here,
+# so they pick up the resolved path without their own bytes changing.
+from preydll import DEFAULT_MODULE, EXPECTED_SHA256, Image
 
 # Ghidra instruction listings and raw bytes, recorded 2026-09-05.
 ANCHORS = {
@@ -68,29 +36,8 @@ VTABLES = {
 
 
 def verify(path):
-    data = path.read_bytes()
-    digest = hashlib.sha256(data).hexdigest()
-    if digest != EXPECTED_SHA256:
-        raise ValueError(f"Unsupported module SHA-256: {digest}")
-    u16 = lambda off: struct.unpack_from("<H", data, off)[0]
-    u32 = lambda off: struct.unpack_from("<I", data, off)[0]
-    pe = u32(0x3C)
-    opt = pe + 24
-    if data[:2] != b"MZ" or data[pe:pe+4] != b"PE\0\0" or u16(pe+4) != 0x8664 or u16(opt) != 0x20B:
-        raise ValueError("Expected an x64 PE32+ image")
-    base = struct.unpack_from("<Q", data, opt+24)[0]
-    sections = []
-    for i in range(u16(pe+6)):
-        off = opt + u16(pe+20) + i*40
-        sections.append((u32(off+12), u32(off+16), u32(off+20)))
-
-    def at(rva, length):
-        for start, size, fileoff in sections:
-            if start <= rva and rva+length <= start+size:
-                offset = fileoff+rva-start
-                return data[offset:offset+length]
-        raise ValueError(f"Unmapped file-backed RVA {rva:#x}")
-
+    image = Image(path)
+    digest, base, at = image.sha256, image.base, image.at
     checks = []
     for name, (rva, hexbytes) in ANCHORS.items():
         expected = bytes.fromhex(hexbytes)

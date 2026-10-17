@@ -38,12 +38,14 @@
 param(
     [string]$SimDir = '',
     [string]$LogDir = '',
-    [string]$XrSimRoot = 'D:\Dev Debug\xr-sim',
+    [string]$XrSimRoot = '',
     [int]$SettleMs = 900
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'PreyVRCommon.ps1')
+if (-not $XrSimRoot) { $XrSimRoot = Resolve-XrSimRoot }
 
 $latest = $null
 if (-not $SimDir -or -not $LogDir) {
@@ -71,26 +73,7 @@ if (-not $owner -or $owner.ProcessName -ne 'Prey') {
 Write-Host "sim:   $SimDir  (PID $($state.pid), frame $($state.frame))"
 Write-Host "chan:  $LogDir"
 
-$cmdFile = Join-Path $LogDir 'commands.txt'
-$resFile = Join-Path $LogDir 'results.txt'
-
-function Send-Cmd([string]$line) {
-    $before = [datetime]::MinValue
-    if (Test-Path -LiteralPath $resFile) { $before = (Get-Item -LiteralPath $resFile).LastWriteTime }
-    Set-Content -LiteralPath $cmdFile -Value $line -Encoding ASCII
-    $deadline = (Get-Date).AddSeconds(20)
-    while ((Get-Date) -lt $deadline) {
-        Start-Sleep -Milliseconds 200
-        if (Test-Path -LiteralPath $resFile) {
-            $item = Get-Item -LiteralPath $resFile
-            if ($item.LastWriteTime -gt $before) {
-                $text = Get-Content -LiteralPath $resFile -Raw
-                if ($text) { return $text.Trim() }
-            }
-        }
-    }
-    return '(no result)'
-}
+function Send-Cmd([string]$line) { Send-PreyVRCommand $LogDir $line -TimeoutSeconds 20 }
 
 function Get-Counters {
     $report = Send-Cmd 'report'
@@ -100,7 +83,7 @@ function Get-Counters {
                          'fireReleased', 'fireRefused', 'inputPosted', 'inputDropped',
                          'moveHooked', 'moveMode', 'turnEnabled', 'fireEnabled',
                          'stickL', 'stickR', 'trigL', 'trigR', 'xrSyncs', 'xrNotFocused')) {
-        if ($report -match "\b$field=([^\s]+)") { $out[$field] = $Matches[1] } else { $out[$field] = '?' }
+        $out[$field] = Get-ReportField $report $field
     }
     return $out
 }

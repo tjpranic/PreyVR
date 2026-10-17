@@ -5,6 +5,7 @@
 #include "XrInput.h"
 #include "MinHookInit.h"
 #include "BodyFollow.h"
+#include "AtomicMax.h"
 
 #include "Logger.h"
 #include "preyvr/BodyFollow.h"
@@ -256,10 +257,7 @@ bool TryReadHeadPose(Pose& out, unsigned long long& ageMicroseconds)
     const auto age = static_cast<unsigned long long>(
         ((QpcNow() - publishedQpc) * 1000000ll) / QpcFrequency());
     gLastPoseAgeMicroseconds.store(age, std::memory_order_relaxed);
-    unsigned long long previousMax = gMaxPoseAgeMicroseconds.load(std::memory_order_relaxed);
-    while (age > previousMax &&
-           !gMaxPoseAgeMicroseconds.compare_exchange_weak(previousMax, age)) {
-    }
+    StoreMax(gMaxPoseAgeMicroseconds, age);
     out = pose;
     ageMicroseconds = age;
     return age <= 200000ull;
@@ -636,7 +634,7 @@ DWORD RecenterHeadTracking(bool recalibrateHeight)
     TrackingFrame frame{};
     if (!TryGetTrackingFrame(frame) ||
         !FreshSample(MonotonicNanoseconds(), frame.publishedNs) ||
-        !IsPoseUsable(frame.head, frame.headValidity, 200000000ull)) {
+        !IsPoseUsable(frame.head, frame.headValidity, kMaxPoseAgeNs)) {
         LogRecenterRefusal("no_fresh_tracked_head");
         return 1;
     }
@@ -679,7 +677,7 @@ DWORD SnapTurnHeadTracking(int steps,unsigned degrees) {
     TrackingFrame frame{}; RoomReference room{};
     if(!gHaveReference.load() || !TryGetTrackingFrame(frame) ||
        !FreshSample(MonotonicNanoseconds(),frame.publishedNs) ||
-       !IsPoseUsable(frame.head,frame.headValidity,200000000ull)) return 2;
+       !IsPoseUsable(frame.head,frame.headValidity,kMaxPoseAgeNs)) return 2;
     std::unique_lock lock(gRecenterMutex,std::try_to_lock);
     if(!lock.owns_lock() || sampledReference%2 || sampledReference!=gReferenceGeneration.load() ||
        !gRoomReference.TryRead(room)) return 3;

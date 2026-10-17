@@ -1,5 +1,6 @@
 #pragma once
 
+#include "preyvr/MonotonicClock.h"
 #include "preyvr/VrMath.h"
 
 #include <cstdint>
@@ -69,7 +70,7 @@ bool Usable(const Sample& sample,
             std::uint64_t currentEquipGeneration,
             std::uint64_t currentReferenceGeneration,
             std::uint64_t nowNs,
-            std::uint64_t maximumAgeNs = 200000000ull);
+            std::uint64_t maximumAgeNs = kMaxPoseAgeNs);
 
 // The barrel direction for a rigid weapon: the tracked grip, then the calibrated
 // grip-to-barrel rotation.

@@ -1,5 +1,6 @@
 #include "Bootstrap.h"
 #include "EngineAccess.h"
+#include "WideText.h"
 
 #include "CameraEditHook.h"
 #include "XrSessionHost.h"
@@ -58,23 +59,6 @@ std::filesystem::path ModulePath(HMODULE module)
     }
     buffer.resize(length);
     return std::filesystem::path(buffer);
-}
-
-std::string Narrow(const std::wstring& value)
-{
-    if (value.empty()) {
-        return {};
-    }
-    const int needed = WideCharToMultiByte(
-        CP_UTF8, 0, value.data(), static_cast<int>(value.size()), nullptr, 0, nullptr, nullptr);
-    if (needed <= 0) {
-        return {};
-    }
-    std::string result(static_cast<std::size_t>(needed), '\0');
-    WideCharToMultiByte(
-        CP_UTF8, 0, value.data(), static_cast<int>(value.size()),
-        result.data(), needed, nullptr, nullptr);
-    return result;
 }
 
 std::string Sha256File(const std::filesystem::path& path)
@@ -180,9 +164,9 @@ DWORD RunBootstrap(HMODULE self)
     const auto selfPath = ModulePath(self);
     std::ostringstream identity;
     identity << "preyvr_smoke_start version=" << PREYVR_VERSION
-             << " dll=\"" << Narrow(selfPath.wstring()) << "\""
+             << " dll=\"" << Utf8(selfPath.wstring()) << "\""
              << " dllSha256=" << Sha256File(selfPath)
-             << " host=\"" << Narrow(ModulePath(nullptr).wstring()) << "\""
+             << " host=\"" << Utf8(ModulePath(nullptr).wstring()) << "\""
              << " expectedLandmarks=" << engine::Landmarks().size()
              << " hooks=compiled_default_off openxr=preflight_only";
     lifecycle::Log(identity.str());
@@ -250,8 +234,8 @@ DWORD RunBootstrap(HMODULE self)
     std::ostringstream openxrLine;
     openxrLine << "preyvr_openxr_preflight status=" << ToString(openxr.status)
                << " runtimeSource=" << openxr.runtimeSource
-               << " runtimeManifest=\"" << Narrow(openxr.runtimeManifest.wstring()) << "\""
-               << " loader=\"" << Narrow(openxr.loader.wstring()) << "\""
+               << " runtimeManifest=\"" << Utf8(openxr.runtimeManifest.wstring()) << "\""
+               << " loader=\"" << Utf8(openxr.loader.wstring()) << "\""
                << " action=none";
     lifecycle::Log(openxrLine.str());
 
@@ -349,6 +333,17 @@ DWORD CaptureRenderViewsToLog()
 }
 
 } // namespace preyvr::dll
+
+namespace {
+
+// The `...Ptr` exports take their one argument in the pointer slot, so a thread
+// start (one pointer) can call them; this is that argument as a number.
+unsigned int PtrArg(void* value)
+{
+    return static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(value));
+}
+
+} // namespace
 
 extern "C" __declspec(dllexport) DWORD PreyVR_GetSmokeStatus()
 {
@@ -500,8 +495,7 @@ extern "C" __declspec(dllexport) DWORD PreyVR_SetNativeProjection(unsigned int e
 // shape.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetNativeProjectionPtr(void* enabled)
 {
-    return preyvr::dll::SetNativeProjection(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetNativeProjection(PtrArg(enabled));
 }
 
 // Which eye the most recent render used, or -1.
@@ -818,32 +812,28 @@ extern "C" __declspec(dllexport) DWORD PreyVR_GetXrSessionStatus()
 // over them rather than the runtime's. Pointer-taking per F-009.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetXrStereoSubmissionPtr(void* enabled)
 {
-    return preyvr::dll::SetXrStereoSubmission(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetXrStereoSubmission(PtrArg(enabled));
 }
 
 // Asks for the sRGB swapchain format -- the double-encoded-gamma fix. Must be
 // set before PreyVR_StartXrSession. Pointer-taking per F-009.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetXrPreferSrgbFormatPtr(void* enabled)
 {
-    return preyvr::dll::SetXrPreferSrgbFormat(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetXrPreferSrgbFormat(PtrArg(enabled));
 }
 
 // Sends each eye's image to the other eye's socket. Safe to toggle live, and the
 // only way to settle inverted stereo without a rebuild. Pointer-taking per F-009.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetXrSwapEyesPtr(void* enabled)
 {
-    return preyvr::dll::SetXrSwapEyes(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetXrSwapEyes(PtrArg(enabled));
 }
 
 // In-headset A/B. Cycles the eye offset and antialiasing mode from Ctrl+Alt
 // chords so two values can be compared seconds apart instead of minutes apart.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetHotkeysEnabledPtr(void* enabled)
 {
-    return preyvr::dll::SetHotkeysEnabled(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetHotkeysEnabled(PtrArg(enabled));
 }
 
 // Eye offset in tenths of a millimetre: 640 is 0.064 m.
@@ -872,8 +862,7 @@ extern "C" __declspec(dllexport) DWORD PreyVR_GetHotkeyPressCount()
 // Is the camera the engine culls with the camera we wrote? Read-only.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetPassCameraProbeEnabledPtr(void* enabled)
 {
-    return preyvr::dll::SetPassCameraProbeEnabled(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetPassCameraProbeEnabled(PtrArg(enabled));
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetPassCameraSamples()
@@ -904,15 +893,13 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetPassCameraMaxDifferenceMill
 // Leaves head rotation on the camera so the next frame's occlusion job sees it.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetKeepHeadRotationPtr(void* enabled)
 {
-    return preyvr::dll::SetKeepHeadRotation(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetKeepHeadRotation(PtrArg(enabled));
 }
 
 // The indicative overlay: Prey's own crosshair follows the controller ray.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetReticleFollowEnabledPtr(void* enabled)
 {
-    return preyvr::dll::SetReticleFollowEnabled(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetReticleFollowEnabled(PtrArg(enabled));
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetReticleFollowApplied()
@@ -941,8 +928,7 @@ extern "C" __declspec(dllexport) DWORD PreyVR_GetReticleFollowLastY()
 // matters is aim, look away, toggle, aim again.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetAimTakeoverEnabledPtr(void* enabled)
 {
-    return preyvr::dll::SetAimTakeoverEnabled(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetAimTakeoverEnabled(PtrArg(enabled));
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetAimTakeoverApplied()
@@ -1045,14 +1031,12 @@ extern "C" __declspec(dllexport) DWORD PreyVR_ReadControllerPtr(PreyVRController
 // FOV back, not assumed.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetViewHookObservingPtr(void* enabled)
 {
-    return preyvr::dll::SetViewHookObserving(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetViewHookObserving(PtrArg(enabled));
 }
 
 extern "C" __declspec(dllexport) DWORD PreyVR_SetViewHookApplyingPtr(void* enabled)
 {
-    return preyvr::dll::SetViewHookApplying(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetViewHookApplying(PtrArg(enabled));
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetViewHookObservedCount()
@@ -1081,8 +1065,7 @@ extern "C" __declspec(dllexport) DWORD PreyVR_GetViewHookLastNearPlaneMicrometre
 // Recenter first.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetUpstreamHeadRotationPtr(void* enabled)
 {
-    return preyvr::dll::SetUpstreamHeadRotation(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetUpstreamHeadRotation(PtrArg(enabled));
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetUpstreamHeadRotationApplied()
@@ -1104,8 +1087,7 @@ extern "C" __declspec(dllexport) DWORD PreyVR_RecenterHeadTracking()
 
 extern "C" __declspec(dllexport) DWORD PreyVR_SetHeadTrackingEnabledPtr(void* enabled)
 {
-    return preyvr::dll::SetHeadTrackingEnabled(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetHeadTrackingEnabled(PtrArg(enabled));
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetHeadTrackingAppliedCount()
@@ -1139,8 +1121,7 @@ extern "C" __declspec(dllexport) DWORD PreyVR_GetHeadTrackingHasReference()
 // acceptance check H-008 called required and that has never been run.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetAimRayProbeEnabledPtr(void* enabled)
 {
-    return preyvr::dll::SetAimRayProbeEnabled(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetAimRayProbeEnabled(PtrArg(enabled));
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetAimRaySampleCount()
@@ -1205,8 +1186,7 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetXrSubmittedFrameCount()
 
 extern "C" __declspec(dllexport) DWORD PreyVR_ArmIkCapturePtr(void* maxCaptures)
 {
-    return preyvr::dll::ArmIkCapture(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(maxCaptures)));
+    return preyvr::dll::ArmIkCapture(PtrArg(maxCaptures));
 }
 
 extern "C" __declspec(dllexport) DWORD PreyVR_DisarmIkCapture()
@@ -1295,14 +1275,12 @@ extern "C" __declspec(dllexport) DWORD PreyVR_GetIkProducerCount()
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetIkProducerRvaPtr(void* index)
 {
-    return preyvr::dll::IkProducerRva(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(index)));
+    return preyvr::dll::IkProducerRva(PtrArg(index));
 }
 
 extern "C" __declspec(dllexport) DWORD PreyVR_GetIkProducerHitsPtr(void* index)
 {
-    return preyvr::dll::IkProducerHits(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(index)));
+    return preyvr::dll::IkProducerHits(PtrArg(index));
 }
 
 // 1 means the reported RVA is the instruction *after* the store. Published rather
@@ -1337,8 +1315,7 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWatchForeignTraps()
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWatchHitCountPtr(void* slot)
 {
-    return preyvr::dll::WatchHitCount(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(slot)));
+    return preyvr::dll::WatchHitCount(PtrArg(slot));
 }
 
 extern "C" __declspec(dllexport) DWORD PreyVR_GetWatchCaptureCount()
@@ -1366,8 +1343,7 @@ extern "C" __declspec(dllexport) DWORD PreyVR_DisarmAllWatches()
 
 extern "C" __declspec(dllexport) DWORD PreyVR_SetViewPositionApplyingPtr(void* enabled)
 {
-    return preyvr::dll::SetViewPositionApplying(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetViewPositionApplying(PtrArg(enabled));
 }
 
 // Thousandths; 1000 == the measured unitsPerMetre of 1. Needing a value far from
@@ -1375,8 +1351,7 @@ extern "C" __declspec(dllexport) DWORD PreyVR_SetViewPositionApplyingPtr(void* e
 // quietly compensating for.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetViewPositionScaleMilliPtr(void* scaleMilli)
 {
-    return preyvr::dll::SetViewPositionScaleMilli(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(scaleMilli)));
+    return preyvr::dll::SetViewPositionScaleMilli(PtrArg(scaleMilli));
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetViewPositionApplied()
@@ -1437,8 +1412,7 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetInputPathPostInputEventRva(
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetInputPathSlotRvaPtr(void* slot)
 {
-    return preyvr::dll::InputPathSlotRva(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(slot)));
+    return preyvr::dll::InputPathSlotRva(PtrArg(slot));
 }
 
 // ---------------------------------------------------------------------------
@@ -1455,9 +1429,9 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetInputPathSlotRvaPtr(void* s
 
 namespace {
 
-bool ReadCaptureAt(unsigned int index, preyvr::dll::WatchCapture& out)
+bool ReadCaptureAt(void* index, preyvr::dll::WatchCapture& out)
 {
-    return preyvr::dll::ReadWatchCapture(index, out);
+    return preyvr::dll::ReadWatchCapture(PtrArg(index), out);
 }
 
 unsigned long long ToPreyRva(unsigned long long address)
@@ -1477,10 +1451,7 @@ unsigned long long ToPreyRva(unsigned long long address)
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWatchCaptureRipRvaPtr(void* index)
 {
     preyvr::dll::WatchCapture capture{};
-    if (!ReadCaptureAt(static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(index)), capture)) {
-        return 0;
-    }
-    return ToPreyRva(capture.rip);
+    return ReadCaptureAt(index, capture) ? ToPreyRva(capture.rip) : 0;
 }
 
 // `[rsp]` at the trap, as a PreyDll RVA. A hint, not a proven caller -- it is only
@@ -1488,10 +1459,7 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWatchCaptureRipRvaPtr(void*
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWatchCaptureStackTopRvaPtr(void* index)
 {
     preyvr::dll::WatchCapture capture{};
-    if (!ReadCaptureAt(static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(index)), capture)) {
-        return 0;
-    }
-    return ToPreyRva(capture.stackTop);
+    return ReadCaptureAt(index, capture) ? ToPreyRva(capture.stackTop) : 0;
 }
 
 // Monotonic across every trap, so captures can be put back in the order they
@@ -1499,28 +1467,19 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWatchCaptureStackTopRvaPtr(
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWatchCaptureSequencePtr(void* index)
 {
     preyvr::dll::WatchCapture capture{};
-    if (!ReadCaptureAt(static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(index)), capture)) {
-        return 0;
-    }
-    return capture.sequence;
+    return ReadCaptureAt(index, capture) ? capture.sequence : 0;
 }
 
 extern "C" __declspec(dllexport) DWORD PreyVR_GetWatchCaptureThreadIdPtr(void* index)
 {
     preyvr::dll::WatchCapture capture{};
-    if (!ReadCaptureAt(static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(index)), capture)) {
-        return 0;
-    }
-    return capture.threadId;
+    return ReadCaptureAt(index, capture) ? capture.threadId : 0;
 }
 
 extern "C" __declspec(dllexport) DWORD PreyVR_GetWatchCaptureSlotPtr(void* index)
 {
     preyvr::dll::WatchCapture capture{};
-    if (!ReadCaptureAt(static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(index)), capture)) {
-        return 0;
-    }
-    return capture.slot;
+    return ReadCaptureAt(index, capture) ? capture.slot : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -1587,8 +1546,7 @@ extern "C" __declspec(dllexport) DWORD PreyVR_ArmIkApplyOffsetPtr(const ApplyOff
 
 extern "C" __declspec(dllexport) DWORD PreyVR_DisarmIkApplyOffsetPtr(void* slot)
 {
-    return preyvr::dll::DisarmApplyOffset(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(slot)));
+    return preyvr::dll::DisarmApplyOffset(PtrArg(slot));
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetIkApplyAppliedCount()
@@ -1674,14 +1632,12 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWatchCaptureRegisterPtr(
 
 extern "C" __declspec(dllexport) DWORD PreyVR_SetNearViewStereoPtr(void* enabled)
 {
-    return preyvr::dll::SetNearViewStereo(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetNearViewStereo(PtrArg(enabled));
 }
 
 extern "C" __declspec(dllexport) DWORD PreyVR_SetNearViewHalfIpdMmPtr(void* millimetres)
 {
-    return preyvr::dll::SetNearViewHalfIpdMillimetres(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(millimetres)));
+    return preyvr::dll::SetNearViewHalfIpdMillimetres(PtrArg(millimetres));
 }
 
 // The zero-delta control: every code path armed, displacement zero. A correct
@@ -1689,8 +1645,7 @@ extern "C" __declspec(dllexport) DWORD PreyVR_SetNearViewHalfIpdMmPtr(void* mill
 // flag is the edit being wrong rather than stereo appearing.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetNearViewZeroDeltaControlPtr(void* enabled)
 {
-    return preyvr::dll::SetNearViewZeroDeltaControl(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetNearViewZeroDeltaControl(PtrArg(enabled));
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetNearViewApplied()
@@ -1731,14 +1686,12 @@ extern "C" __declspec(dllexport) int PreyVR_GetNearViewLastDeltaMicrometres()
 // build is pixel-identical to no hook.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetHandRigModePtr(void* mode)
 {
-    return preyvr::dll::SetHandRigTakeoverMode(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(mode)));
+    return preyvr::dll::SetHandRigTakeoverMode(PtrArg(mode));
 }
 
 extern "C" __declspec(dllexport) DWORD PreyVR_SetHandRigJointPtr(void* jointIndex)
 {
-    return preyvr::dll::SetHandRigJoint(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(jointIndex)));
+    return preyvr::dll::SetHandRigJoint(PtrArg(jointIndex));
 }
 
 namespace {
@@ -1768,8 +1721,7 @@ extern "C" __declspec(dllexport) DWORD PreyVR_GetHandRigJointNamePtr(void* reque
 
 extern "C" __declspec(dllexport) int PreyVR_GetHandRigJointParentPtr(void* index)
 {
-    return preyvr::dll::HandRigJointParent(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(index)));
+    return preyvr::dll::HandRigJointParent(PtrArg(index));
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetHandRigForwarded()
@@ -1846,8 +1798,7 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetCommandChannelRejected()
 // hand mesh and nothing else - confirmed in a headset by R-086.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetWeaponAttachObservingPtr(void* enabled)
 {
-    return preyvr::dll::SetWeaponAttachmentObserving(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetWeaponAttachmentObserving(PtrArg(enabled));
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWeaponAttachmentPointer()
@@ -1857,14 +1808,12 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWeaponAttachmentPointer()
 
 extern "C" __declspec(dllexport) int PreyVR_GetWeaponMountPosMmPtr(void* axis)
 {
-    return preyvr::dll::WeaponMountPositionMillimetres(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(axis)));
+    return preyvr::dll::WeaponMountPositionMillimetres(PtrArg(axis));
 }
 
 extern "C" __declspec(dllexport) int PreyVR_GetWeaponMountQuatMilliPtr(void* component)
 {
-    return preyvr::dll::WeaponMountQuaternionMilli(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(component)));
+    return preyvr::dll::WeaponMountQuaternionMilli(PtrArg(component));
 }
 
 namespace { struct WeaponOffsetArgs { int x, y, z; }; }
@@ -1879,8 +1828,7 @@ extern "C" __declspec(dllexport) DWORD PreyVR_SetWeaponOffsetMmPtr(const WeaponO
 // construction rather than by remembering the previous value.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetWeaponOffsetEnabledPtr(void* enabled)
 {
-    return preyvr::dll::SetWeaponOffsetEnabled(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetWeaponOffsetEnabled(PtrArg(enabled));
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWeaponOffsetApplied()
@@ -1898,8 +1846,7 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWeaponOffsetRefused()
 // the existing 0x81D377 observation point.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetRenderFrameCapturePtr(void* enabled)
 {
-    return preyvr::dll::SetRenderFrameCapture(
-        static_cast<unsigned int>(reinterpret_cast<std::uintptr_t>(enabled)));
+    return preyvr::dll::SetRenderFrameCapture(PtrArg(enabled));
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetRenderFrameCaptures()

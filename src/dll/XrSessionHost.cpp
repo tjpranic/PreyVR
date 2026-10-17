@@ -349,7 +349,8 @@ XrResult XRAPI_CALL DestroyUnheldSwapchain(XrSwapchain swapchain)
 }
 
 namespace {
-LatestSnapshot<std::array<DWORD,15>> gResolution;
+// In XrResolution order.
+LatestSnapshot<std::array<DWORD,static_cast<std::size_t>(XrResolution::count)>> gResolution;
 LatestSnapshot<std::array<XrFovf,2>> gOptics;
 void PublishResolution() {
     gResolution.Publish({gHost.recommendedWidth,gHost.recommendedHeight,gHost.maxWidth,gHost.maxHeight,
@@ -2539,8 +2540,8 @@ void ServiceXrFrame(void* renderer)
     // Each condition as a bit (wrist.report shows which one closed the gate).
     const bool wristTracking=TryGetTrackingFrame(wristFrame)&&wristFrame.displayTime==frameState.predictedDisplayTime&&
         FreshSample(MonotonicNanoseconds(),wristFrame.publishedNs)&&
-        IsPoseUsable(wristFrame.head,wristFrame.headValidity,200000000)&&
-        IsPoseUsable(wristFrame.hands[0].gripPose,wristFrame.hands[0].gripValidity,200000000);
+        IsPoseUsable(wristFrame.head,wristFrame.headValidity,kMaxPoseAgeNs)&&
+        IsPoseUsable(wristFrame.hands[0].gripPose,wristFrame.hands[0].gripValidity,kMaxPoseAgeNs);
     const unsigned wristGate=(WristDisplayEnabled()?1u:0u)|(haveViews?2u:0u)|(rendered?4u:0u)|(!panelActive?8u:0u)|
         (!optionsActive?16u:0u)|(HudGameplayInputAllowed()?32u:0u)|(!TwoHandedAimHeld()?64u:0u)|
         (!(reference&1)?128u:0u)|(wristTracking?256u:0u);
@@ -3128,8 +3129,8 @@ std::string XrCoverageReport()
         // The equal-density target size, so the figure lands as pixels rather
         // than as a ratio to be multiplied out by hand later. Margin for
         // reprojection is NOT included; this is the floor, not a launch preset.
-        const DWORD width = XrResolutionChain(4);
-        const DWORD height = XrResolutionChain(5);
+        const DWORD width = XrResolutionChain(XrResolution::backBufferWidth);
+        const DWORD height = XrResolutionChain(XrResolution::backBufferHeight);
         if (width > 0 && height > 0) {
             out << name << "EqualDensity="
                 << static_cast<int>(static_cast<float>(width) *
@@ -3142,10 +3143,11 @@ std::string XrCoverageReport()
     return out.str();
 }
 
-DWORD XrResolutionChain(unsigned int field)
+DWORD XrResolutionChain(XrResolution field)
 {
-    std::array<DWORD,15> state{};
-    return field<state.size() && gResolution.TryRead(state)?state[field]:0;
+    std::array<DWORD,static_cast<std::size_t>(XrResolution::count)> state{};
+    const auto index = static_cast<std::size_t>(field);
+    return index<state.size() && gResolution.TryRead(state)?state[index]:0;
 }
 
 unsigned long long DeclaredFovAgreeCount() { return gFovAgree.load(std::memory_order_relaxed); }

@@ -55,7 +55,7 @@ void UpdatePsychoscopeGesture(const GameplayPoseFrame& frame,bool tracking){
  previous=f.displayTime;
  const auto& hand=f.hands[0];
  const bool usable=FreshSample(MonotonicNanoseconds(),f.publishedNs)&&
-   IsPoseUsable(f.head,f.headValidity,200000000)&&IsPoseUsable(hand.gripPose,hand.gripValidity,200000000)&&
+   IsPoseUsable(f.head,f.headValidity,kMaxPoseAgeNs)&&IsPoseUsable(hand.gripPose,hand.gripValidity,kMaxPoseAgeNs)&&
    !f.hands[1].gripPressed&&!FaceButtonHeld(hand);
  const auto& q=f.head.orientation;
  const Vec3 delta{hand.gripPose.position.x-f.head.position.x,hand.gripPose.position.y-f.head.position.y,hand.gripPose.position.z-f.head.position.z};

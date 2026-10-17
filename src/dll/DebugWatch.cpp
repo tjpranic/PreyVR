@@ -1,4 +1,5 @@
 #include "DebugWatch.h"
+#include "preyvr/TextFormat.h"
 
 #include "Logger.h"
 
@@ -272,22 +273,6 @@ bool EnsureHandler()
         return false;
     }
     return true;
-}
-
-std::string Hex(unsigned long long value)
-{
-    static const char* const digits = "0123456789abcdef";
-    std::string out = "0x";
-    bool leading = true;
-    for (int shift = 60; shift >= 0; shift -= 4) {
-        const unsigned int nibble = static_cast<unsigned int>((value >> shift) & 0xFull);
-        if (nibble == 0 && leading && shift != 0) {
-            continue;
-        }
-        leading = false;
-        out.push_back(digits[nibble]);
-    }
-    return out;
 }
 
 } // namespace

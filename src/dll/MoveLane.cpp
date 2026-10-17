@@ -326,7 +326,7 @@ void UpdateMoveLane()
     }
     if(haveInput && gHeadRelative.load()) {
         const auto yaw=stereo::RecenterYawFromHeadPose(movementFrame.head);
-        if(!yaw || !IsPoseUsable(movementFrame.head,movementFrame.headValidity,200000000ull)) haveInput=false;
+        if(!yaw || !IsPoseUsable(movementFrame.head,movementFrame.headValidity,kMaxPoseAgeNs)) haveInput=false;
         else {
             const auto v=comfort::HeadRelativeStick({state.x,state.y},
                 *yaw-HeadTrackingReferenceYaw(),gStrafeScale.load(),gBackwardScale.load());

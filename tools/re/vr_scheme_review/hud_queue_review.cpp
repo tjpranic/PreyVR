@@ -9,7 +9,15 @@ std::string lastLog;
 namespace preyvr::lifecycle {
 void Log(std::string_view line) { loggedThread = GetCurrentThreadId(); lastLog = line; }
 }
-namespace preyvr::dll { DWORD EnsureRenderHookInstalled() { return 0; } }
+namespace preyvr::dll {
+DWORD EnsureRenderHookInstalled() { return 0; }
+// No options panel, inventory pointer or XR session.
+bool VrOptionsInputOwned() { return false; }
+DWORD EnsureInventoryPointerCapture() { return 1; }
+void BeginInventoryPointerEvent(int) {}
+void EndInventoryPointerEvent(int) {}
+DWORD XrResolutionChain(XrResolution) { return 0; }
+}
 int main() {
     using namespace preyvr::dll;
     if (GetModuleHandleW(L"PreyDll.dll")) { return 2; }

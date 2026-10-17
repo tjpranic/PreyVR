@@ -1,43 +1,17 @@
 """Read-only Steam psi targeting and medkit ABI witnesses. No process attach."""
-import hashlib,json,re,struct,sys
+import json,struct,sys
 from pathlib import Path
-from verify_h005_skinning import DEFAULT_MODULE,EXPECTED_SHA256
+from preydll import DEFAULT_MODULE,Image,fnv1a64 as fnv,native_rows
 ROOT=Path(__file__).resolve().parents[2]
 
 def verify():
-    data=DEFAULT_MODULE.read_bytes();digest=hashlib.sha256(data).hexdigest()
-    assert digest==EXPECTED_SHA256,digest
-    u16=lambda p:struct.unpack_from('<H',data,p)[0]
-    u32=lambda p:struct.unpack_from('<I',data,p)[0]
-    pe=u32(0x3c);opt=pe+24
-    assert u16(pe+4)==0x8664 and u16(opt)==0x20b
-    sections=[]
-    for i in range(u16(pe+6)):
-        p=opt+u16(pe+20)+40*i
-        sections.append((u32(p+12),u32(p+16),u32(p+20)))
-    def at(rva,n):
-        for va,size,raw in sections:
-            if va<=rva and rva+n<=va+size:
-                b=data[raw+rva-va:raw+rva-va+n];assert len(b)==n;return b
-        raise ValueError(hex(rva))
-    def fnv(b):
-        h=14695981039346656037
-        for v in b:h=((h^v)*1099511628211)&((1<<64)-1)
-        return h
-    entries=re.findall(r'\{0x([0-9A-F]+),(\d+),0x([0-9A-F]+)ull\}, // (\w+)',
-        (ROOT/'include/preyvr/PsiMedkitNative.h').read_text())
+    image=Image(DEFAULT_MODULE);digest,at=image.sha256,image.at
+    entries=native_rows(ROOT/'include/preyvr/PsiMedkitNative.h')
     assert len(entries)==18
-    reloc_rva,reloc_size=struct.unpack_from('<II',data,opt+112+5*8)
-    relocs=set();cursor=0
-    while cursor<reloc_size:
-        page,size=struct.unpack('<II',at(reloc_rva+cursor,8));assert size>=8
-        for offset in range(8,size,2):
-            entry=struct.unpack('<H',at(reloc_rva+cursor+offset,2))[0]
-            if entry>>12:relocs.add(page+(entry&0xfff))
-        cursor+=size
+    relocs=image.relocations()
     checks=[]
     for rva,size,expected,name in entries:
-        rva=int(rva,16);size=int(size);expected=int(expected,16);b=at(rva,size)
+        b=at(rva,size)
         assert fnv(b)==expected,name
         assert not any(rva<=p<rva+size for p in relocs),name+' has a base relocation'
         for pos in {0,size//2,size-1}:

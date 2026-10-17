@@ -14,9 +14,9 @@ set(PREYVR_OPENXR_GIT_COMMIT "64f2b37c8c6da3d83c9b4d11865ba1fb752cb8ec" CACHE ST
 set(PREYVR_IMGUI_GIT_COMMIT "f1cc2ae15e53a861a874c3034aae6798fde194ab" CACHE STRING "Pinned Dear ImGui commit (v1.92.9b)")
 set(
     PREYVR_GAME_RELEASE_DIR
-    "D:/SteamLibrary/steamapps/common/Prey/Binaries/Danielle/x64/Release"
+    ""
     CACHE PATH
-    "Prey release directory used by the read-only build doctor"
+    "Prey release directory used by the read-only build doctor; empty finds the Steam install"
 )
 
 set(CMAKE_CXX_STANDARD 20)
@@ -476,6 +476,14 @@ if(PREYVR_BUILD_TESTS)
         preyvr_add_test(hook_install tests/HookInstallTests.cpp
             DEFS WIN32_LEAN_AND_MEAN NOMINMAX
             LIBS minhook)
+        # The offline VR scheme replays: the real MoveLane, AimTakeover, HudBridge and
+        # ReticleFollow sources, with the game, input and hook boundaries stubbed.
+        foreach(review IN ITEMS scheme aim hud_queue reticle)
+            preyvr_add_test(${review}_review tools/re/vr_scheme_review/${review}_review.cpp
+                INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+                DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+                LIBS preyvr_core minhook)
+        endforeach()
 
         # Links nothing and loads the built DLL, so it stays outside preyvr_add_test.
         add_executable(preyvr_dll_smoke_host tests/DllSmokeHost.cpp)
@@ -544,10 +552,10 @@ if(PREYVR_BUILD_TESTS)
         )
     endif()
     if(PREYVR_POWERSHELL_EXECUTABLE AND PREYVR_BUILD_TOOLS AND WIN32)
-        set(PREYVR_DOCTOR_ARGUMENTS
-            -GameReleasePath "${PREYVR_GAME_RELEASE_DIR}"
-            -EngineMapProbe $<TARGET_FILE:preyvr_engine_map_probe>
-        )
+        set(PREYVR_DOCTOR_ARGUMENTS -EngineMapProbe $<TARGET_FILE:preyvr_engine_map_probe>)
+        if(PREYVR_GAME_RELEASE_DIR)
+            list(APPEND PREYVR_DOCTOR_ARGUMENTS -GameReleasePath "${PREYVR_GAME_RELEASE_DIR}")
+        endif()
         if(NOT PREYVR_REQUIRE_GAME_BASELINE)
             list(APPEND PREYVR_DOCTOR_ARGUMENTS -AllowMissingGame)
         endif()

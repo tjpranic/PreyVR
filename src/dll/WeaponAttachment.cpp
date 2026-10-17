@@ -128,8 +128,8 @@ void* __fastcall FiringPositionObserved(void* weapon, void* output, std::uint32_
     if (!firing) { return result; }
     sample.nativeOrigin = firing->origin; sample.cameraFallback = firing->cameraFallback;
     const auto& hand = frame.tracking.hands[static_cast<unsigned int>(Hand::right)];
-    if (!IsPoseUsable(hand.aimPose, hand.aimValidity, 200000000ull) ||
-        !IsPoseUsable(hand.gripPose, hand.gripValidity, 200000000ull)) { return result; }
+    if (!IsPoseUsable(hand.aimPose, hand.aimValidity, kMaxPoseAgeNs) ||
+        !IsPoseUsable(hand.gripPose, hand.gripValidity, kMaxPoseAgeNs)) { return result; }
     sample.aimOrigin = animik::ControllerWorldFromHead(frame.yaw, frame.nativeEye, frame.tracking.head, hand.aimPose).position;
     const Pose gripWorld = animik::ControllerWorldFromHead(
         frame.yaw, frame.nativeEye, frame.tracking.head, hand.gripPose);

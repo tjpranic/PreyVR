@@ -1,29 +1,16 @@
 """Verify Steam ArkPlayer view-rotation and entity-transform contracts offline; never opens a process.
 
 Usage: py -3 tools/re/verify_view_rotation.py [out.json]
-PREYVR_PREYDLL overrides the module path (a fork's machine may not use DEFAULT_MODULE).
+PREYVR_PREYDLL overrides the module path (preydll.resolve_module).
 Static byte contracts for docs/BODY-YAW-2026-10-11.md: they say what the setter writes,
 not that calling it per frame is safe, nor how the body looks in a headset.
 """
-import hashlib,json,os,struct,sys
+import json,struct,sys
 from pathlib import Path
-from verify_h005_skinning import DEFAULT_MODULE,EXPECTED_SHA256
-MODULE=Path(os.environ.get('PREYVR_PREYDLL',DEFAULT_MODULE))
+from preydll import DEFAULT_MODULE as MODULE,Image
 IMAGE_BASE=0x180000000
 def verify():
- data=MODULE.read_bytes();digest=hashlib.sha256(data).hexdigest()
- assert digest==EXPECTED_SHA256,digest
- u16=lambda p:struct.unpack_from('<H',data,p)[0]
- u32=lambda p:struct.unpack_from('<I',data,p)[0]
- pe=u32(0x3c);assert u16(pe+4)==0x8664 and u16(pe+24)==0x20b
- sections=[]
- for n in range(u16(pe+6)):
-  off=pe+24+u16(pe+20)+n*40
-  sections.append((u32(off+12),u32(off+16),u32(off+20)))
- def at(rva,count):
-  for va,size,raw in sections:
-   if va<=rva and rva+count<=va+size:return data[raw+rva-va:raw+rva-va+count]
-  raise ValueError(hex(rva))
+ image=Image(MODULE);digest,at=image.sha256,image.at
  checks=[]
  def proof(name,rva,hexbytes):
   b=bytes.fromhex(hexbytes);assert at(rva,len(b))==b,name;checks.append(name)

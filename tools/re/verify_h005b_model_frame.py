@@ -3,14 +3,13 @@
 Usage: py -3 tools/re/verify_h005b_model_frame.py [path/to/PreyDll.dll]
 The synthetic fixtures check the algebra, not engine execution or headset behavior.
 """
-import hashlib
 import json
 import math
 import struct
 import sys
 from pathlib import Path
 
-from verify_h005_skinning import DEFAULT_MODULE, EXPECTED_SHA256
+from preydll import DEFAULT_MODULE, Image
 
 ANCHORS = {
     "render_matrix_copy_all_12_floats": (0x81D194, "41 8b 06 89 03 41 8b 46 04 89 43 04 41 8b 46 08 89 43 08 41 8b 46 0c 89 43 0c 41 8b 46 10 89 43 10 41 8b 46 14 89 43 14 41 8b 46 18 89 43 18 41 8b 46 1c 89 43 1c 41 8b 46 20 89 43 20 41 8b 46 24 89 43 24 41 8b 46 28 89 43 28 41 8b 46 2c 89 43 2c"),
@@ -130,28 +129,8 @@ def fixtures():
 
 
 def verify(path):
-    data = path.read_bytes()
-    digest = hashlib.sha256(data).hexdigest()
-    if digest != EXPECTED_SHA256:
-        raise ValueError(f"Unsupported module SHA-256: {digest}")
-    u16 = lambda off: struct.unpack_from("<H", data, off)[0]
-    u32 = lambda off: struct.unpack_from("<I", data, off)[0]
-    pe = u32(0x3C)
-    opt = pe+24
-    if data[:2] != b"MZ" or data[pe:pe+4] != b"PE\0\0" or u16(pe+4) != 0x8664 or u16(opt) != 0x20B:
-        raise ValueError("Expected an x64 PE32+ image")
-    base = struct.unpack_from("<Q", data, opt+24)[0]
-    sections = []
-    for i in range(u16(pe+6)):
-        off = opt+u16(pe+20)+40*i
-        sections.append((u32(off+12), u32(off+16), u32(off+20)))
-
-    def at(rva, length):
-        for start, size, offset in sections:
-            if start <= rva and rva+length <= start+size:
-                return data[offset+rva-start:offset+rva-start+length]
-        raise ValueError(f"Unmapped RVA {rva:#x}")
-
+    image = Image(path)
+    digest, base, at = image.sha256, image.base, image.at
     checks = []
     for name, (rva, expected) in ANCHORS.items():
         pattern = bytes.fromhex(expected)

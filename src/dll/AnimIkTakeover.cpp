@@ -973,7 +973,7 @@ void DriveHand(unsigned int hand, std::uint8_t* relative, std::uint8_t* absolute
             gNoPose.fetch_add(1, std::memory_order_relaxed);
             return;
         }
-        if (!IsPoseUsable(state.gripPose, state.gripValidity, 200000000ull)) {
+        if (!IsPoseUsable(state.gripPose, state.gripValidity, kMaxPoseAgeNs)) {
             gNoPose.fetch_add(1, std::memory_order_relaxed);
             return;
         }
@@ -1011,7 +1011,7 @@ void DriveHand(unsigned int hand, std::uint8_t* relative, std::uint8_t* absolute
             gWeaponVtableRva.store(ReadVtableRva(owner.weapon), std::memory_order_relaxed);
             gAlignSequence = frame.tracking.sequence;
             gAlignBasis = {};
-            if (!IsPoseUsable(state.aimPose, state.aimValidity, 200000000ull)) {
+            if (!IsPoseUsable(state.aimPose, state.aimValidity, kMaxPoseAgeNs)) {
                 gAlignStatus = weaponrig::Status::staleAim;
                 ++gAlignRefused;
                 return;

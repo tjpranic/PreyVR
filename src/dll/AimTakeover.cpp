@@ -134,9 +134,9 @@ void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking)
     const unsigned gates=(region?0u:1u)|(tracking?0u:2u)|(MedkitOwnsGrip()?4u:0u)|
         (frame.headYawUsable?0u:8u)|(frame.cameraCentreValid?0u:16u)|
         (gEnabled.load()&&gTwoHandEnabled.load()?0u:32u)|(HudGameplayInputAllowed()?0u:64u)|
-        (IsPoseUsable(right.aimPose,right.aimValidity,200000000ull)&&
-         IsPoseUsable(right.gripPose,right.gripValidity,200000000ull)&&
-         IsPoseUsable(left.gripPose,left.gripValidity,200000000ull)?0u:128u);
+        (IsPoseUsable(right.aimPose,right.aimValidity,kMaxPoseAgeNs)&&
+         IsPoseUsable(right.gripPose,right.gripValidity,kMaxPoseAgeNs)&&
+         IsPoseUsable(left.gripPose,left.gripValidity,kMaxPoseAgeNs)?0u:128u);
     gTwoHandGates.store(gates);
     if(gates) gTwoHandGatesSeen.fetch_or(gates);
     input.usable=gates==0;
@@ -222,7 +222,7 @@ void __fastcall UpdateCachedRayWithTakeover(void* player)
     }
     gNativeMagnitude.store(static_cast<unsigned int>(nativeLength * 1000.0f + 0.5f));
     const bool haveTracking = TryGetTrackingFrame(frame.tracking) &&
-        IsPoseUsable(frame.tracking.head, frame.tracking.headValidity, 200000000ull);
+        IsPoseUsable(frame.tracking.head, frame.tracking.headValidity, kMaxPoseAgeNs);
     frame.referenceGeneration = HeadTrackingReferenceGeneration();
     frame.referenceYaw = HeadTrackingReferenceYaw();
     frame.cameraYaw = GameCameraYaw();
@@ -375,7 +375,7 @@ void __fastcall UpdateCachedRayWithTakeover(void* player)
                 reference.yawRadians, engineOrigin, headPose, controller.gripPose);
             if(frame.twoHand.blend>0) grip.orientation=Normalize(Multiply(frame.twoHand.correction,grip.orientation));
             Vec3 muzzle{};
-            if (IsPoseUsable(controller.gripPose, controller.gripValidity, 200000000ull) &&
+            if (IsPoseUsable(controller.gripPose, controller.gripValidity, kMaxPoseAgeNs) &&
                 TryGetMuzzleFromGrip(grip, sample.equipGeneration, muzzle)) {
                 chosen = muzzle;
                 haveMuzzle = true;
@@ -549,7 +549,7 @@ bool TryGetGameplayPoseFrame(GameplayPoseFrame& out, bool requireTracking)
         hand.gripValidity.ageNanoseconds = age;
         hand.aimValidity.ageNanoseconds = age;
     }
-    return IsPoseUsable(out.tracking.head, out.tracking.headValidity, 200000000ull);
+    return IsPoseUsable(out.tracking.head, out.tracking.headValidity, kMaxPoseAgeNs);
 }
 
 DWORD SetAimBodyYaw(unsigned int enabled)

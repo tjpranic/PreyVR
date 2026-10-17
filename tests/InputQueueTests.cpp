@@ -100,7 +100,10 @@ void TestConcurrentProducersNeverTearAnEvent()
 
     std::thread consumer([&] {
         std::uint8_t out[kEventSize];
-        while (producing.load(std::memory_order_acquire) || true) {
+        for (;;) {
+            // Read before the pop: a push landing between a failed pop and a
+            // later read of the flag would otherwise be left in the queue.
+            const bool stopped = !producing.load(std::memory_order_acquire);
             if (queue.Pop(out)) {
                 if (!Coherent(out)) {
                     torn.fetch_add(1, std::memory_order_relaxed);
@@ -108,7 +111,7 @@ void TestConcurrentProducersNeverTearAnEvent()
                 drained.fetch_add(1, std::memory_order_relaxed);
                 continue;
             }
-            if (!producing.load(std::memory_order_acquire)) {
+            if (stopped) {
                 break;   // drained dry after the producers stopped
             }
         }

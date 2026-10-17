@@ -8,7 +8,6 @@ and mixed-eye samples. They do not prove runtime binding or rendered behavior.
 """
 import argparse
 import ctypes as ct
-import hashlib
 import itertools
 import json
 import struct
@@ -17,7 +16,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 
-from verify_h005_skinning import DEFAULT_MODULE, EXPECTED_SHA256
+from preydll import DEFAULT_MODULE, Image
 from verify_h005b_model_frame import inverse, mm, near, rotation, translation
 
 
@@ -62,27 +61,8 @@ def require(ok, message):
 
 
 def byte_checks(path):
-    data = path.read_bytes()
-    digest = hashlib.sha256(data).hexdigest()
-    require(digest == EXPECTED_SHA256, f"Unsupported module SHA-256: {digest}")
-    u16 = lambda o: struct.unpack_from("<H", data, o)[0]
-    u32 = lambda o: struct.unpack_from("<I", data, o)[0]
-    pe = u32(0x3C)
-    opt = pe + 24
-    require(data[:2] == b"MZ" and data[pe:pe+4] == b"PE\0\0"
-            and u16(pe+4) == 0x8664 and u16(opt) == 0x20B, "Expected x64 PE32+")
-    base = struct.unpack_from("<Q", data, opt+24)[0]
-    sections = []
-    for i in range(u16(pe+6)):
-        o = opt + u16(pe+20) + 40*i
-        sections.append((u32(o+12), u32(o+16), u32(o+20)))
-
-    def at(rva, length):
-        for start, size, offset in sections:
-            if start <= rva and rva+length <= start+size:
-                return data[offset+rva-start:offset+rva-start+length]
-        raise ValueError(f"Unmapped file-backed RVA {rva:#x}")
-
+    image = Image(path)
+    digest, base, at = image.sha256, image.base, image.at
     checks = []
     for name, (rva, expected) in ANCHORS.items():
         pattern = bytes.fromhex(expected)

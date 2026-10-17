@@ -74,7 +74,7 @@ UiPointerVisual PublishUiPointer(const ui::Surface* surface,unsigned width,unsig
     const auto hand=UiPointerHand();
     if(surface&&hand<2&&width>0&&width<=8192&&height>0&&height<=8192&&TryGetTrackingFrame(frame)) {
         const auto& state=frame.hands[hand];
-        if(IsPoseUsable(state.aimPose,state.aimValidity,200000000)) {
+        if(IsPoseUsable(state.aimPose,state.aimValidity,kMaxPoseAgeNs)) {
             sample.active=true;sample.pressed=state.triggerPressed;sample.epoch=frame.epoch*4+hand;
             visual.active=true;
             visual.aim=state.aimPose;visual.pressed=sample.pressed;

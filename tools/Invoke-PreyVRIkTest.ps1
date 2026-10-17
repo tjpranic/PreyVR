@@ -34,43 +34,12 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-if (-not $LogDir) {
-    if ($RunDir) {
-        # Invoke-PreyVRLaunch.ps1 keeps the channel in <run>\log; Start-PreyVR.ps1
-        # keeps it beside PreyVR.log in the run directory itself.
-        $LogDir = if (Test-Path -LiteralPath (Join-Path $RunDir 'log')) { Join-Path $RunDir 'log' } else { $RunDir }
-    } else {
-        # The newest run that has a log, as Send-PreyVR.ps1 picks it.
-        $latest = Get-ChildItem "$env:LOCALAPPDATA\PreyVR\runs" -Filter 'PreyVR.log' -Recurse -File -ErrorAction SilentlyContinue |
-                  Sort-Object LastWriteTime -Descending | Select-Object -First 1
-        if (-not $latest) { Write-Error 'no PreyVR.log under any run; launch first'; exit 1 }
-        $LogDir = $latest.DirectoryName
-    }
-}
+. (Join-Path $PSScriptRoot 'PreyVRCommon.ps1')
+if (-not $LogDir) { $LogDir = Find-PreyVRChannel $RunDir }
 $log = $LogDir
-$cmd = Join-Path $log 'commands.txt'
-$res = Join-Path $log 'results.txt'
 
-function Send($line) {
-    $before = [datetime]::MinValue
-    if (Test-Path -LiteralPath $res) { $before = (Get-Item -LiteralPath $res).LastWriteTime }
-    Set-Content -LiteralPath $cmd -Value $line -Encoding ASCII
-    $deadline = (Get-Date).AddSeconds(20)
-    while ((Get-Date) -lt $deadline) {
-        Start-Sleep -Milliseconds 250
-        if ((Test-Path -LiteralPath $res) -and (Get-Item -LiteralPath $res).LastWriteTime -gt $before) {
-            # Empty while the mod is still writing it: -Raw then returns $null,
-            # and .Trim() on that throws under StrictMode. Keep polling.
-            $text = Get-Content -LiteralPath $res -Raw
-            if ($text) { return $text.Trim() }
-        }
-    }
-    return '(no result)'
-}
-function Field($report, $name) {
-    if ($report -match "(?:^| )$name=([^ ]+)") { return $Matches[1] }
-    return '?'
-}
+function Send($line) { Send-PreyVRCommand $log $line -TimeoutSeconds 20 }
+function Field($report, $name) { Get-ReportField $report $name }
 
 Write-Host "channel: $log"
 Write-Host ''

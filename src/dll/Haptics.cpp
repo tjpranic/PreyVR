@@ -35,7 +35,7 @@ unsigned HapticStrength(){return strength.load();}
 void ServiceHaptics(XrSession session,XrAction action,const std::array<XrPath,2>& paths,const TrackingFrame& frame,bool focused){
     const auto now=MonotonicNanoseconds(),reference=HeadTrackingReferenceGeneration(),gen=generation.load();
     const bool allowed=focused&&session&&action&&enabled.load()&&strength.load()&&!(reference&1)&&
-        FreshSample(now,frame.publishedNs)&&IsPoseUsable(frame.head,frame.headValidity,200000000);
+        FreshSample(now,frame.publishedNs)&&IsPoseUsable(frame.head,frame.headValidity,kMaxPoseAgeNs);
     if(!allowed||frame.epoch!=previousEpoch||reference!=previousReference||gen!=previousGeneration)
         Stop(session,action,paths);
     previousEpoch=frame.epoch;previousReference=reference;previousGeneration=gen;
@@ -44,7 +44,7 @@ void ServiceHaptics(XrSession session,XrAction action,const std::array<XrPath,2>
         haptics::Request request{};
         if(!pending[h].TryRead(request))continue;
         const auto pulse=policies[h].Consume(request,now,frame.epoch,reference,gen,strength.load(),allowed&&
-            IsPoseUsable(frame.hands[h].gripPose,frame.hands[h].gripValidity,200000000));
+            IsPoseUsable(frame.hands[h].gripPose,frame.hands[h].gripValidity,kMaxPoseAgeNs));
         if(!pulse.duration)continue;
         XrHapticActionInfo info{XR_TYPE_HAPTIC_ACTION_INFO};info.action=action;info.subactionPath=paths[h];
         XrHapticVibration vibration{XR_TYPE_HAPTIC_VIBRATION};vibration.duration=pulse.duration;

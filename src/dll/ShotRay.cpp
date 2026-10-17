@@ -2,6 +2,7 @@
 #include "SafeMemory.h"
 #include "HookInstall.h"
 #include "EngineAccess.h"
+#include "preyvr/TextFormat.h"
 
 #include "AimTakeover.h"
 #include "HeadTrackingHook.h"
@@ -139,19 +140,6 @@ std::atomic<int> gMuzzleOffAimMm{-1}, gMuzzleAlongAimMm{0}, gBarrelAxisMdeg{-1},
 LatestSnapshot<ShotTrace> gLastShot;
 std::atomic<unsigned long long> gShotIndex{0};
 
-std::string Point(Vec3 v)
-{
-    char text[64];
-    std::snprintf(text, sizeof(text), "%.3f,%.3f,%.3f", v.x, v.y, v.z);
-    return text;
-}
-std::string Fixed(float v, int decimals)
-{
-    char text[32];
-    std::snprintf(text, sizeof(text), "%.*f", decimals, static_cast<double>(v));
-    return text;
-}
-
 // The equipped weapon's ammo helper in world space, by the same native call the
 // firing position makes. False for a weapon without one (the wrench).
 bool ReadMuzzleRaw(std::uintptr_t weapon, float* matrix)
@@ -206,14 +194,14 @@ bool FiringPositionNow(void* weapon, std::uint32_t flags, FiringPosition& out)
 bool AimWorld(const GameplayPoseFrame& frame, Pose& out)
 {
     const auto& hand = frame.tracking.hands[static_cast<unsigned>(Hand::right)];
-    if (!frame.cameraCentreValid || !IsPoseUsable(hand.aimPose, hand.aimValidity, 200000000ull)) { return false; }
+    if (!frame.cameraCentreValid || !IsPoseUsable(hand.aimPose, hand.aimValidity, kMaxPoseAgeNs)) { return false; }
     out = animik::ControllerWorldFromHead(frame.yaw, frame.cameraCentre, frame.tracking.head, hand.aimPose);
     return Finite(out.position);
 }
 bool GripWorld(const GameplayPoseFrame& frame, Vec3& out)
 {
     const auto& hand = frame.tracking.hands[static_cast<unsigned>(Hand::right)];
-    if (!frame.cameraCentreValid || !IsPoseUsable(hand.gripPose, hand.gripValidity, 200000000ull)) { return false; }
+    if (!frame.cameraCentreValid || !IsPoseUsable(hand.gripPose, hand.gripValidity, kMaxPoseAgeNs)) { return false; }
     out = animik::ControllerWorldFromHead(frame.yaw, frame.cameraCentre, frame.tracking.head, hand.gripPose).position;
     return Finite(out);
 }

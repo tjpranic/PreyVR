@@ -118,44 +118,13 @@ if ($WeaponAimAlignment -and (-not $Controls -or $NoHands)) {
     throw '-WeaponAimAlignment requires -Controls with hands enabled.'
 }
 
-if (-not $LogDir) {
-    if ($RunDir) {
-        # Invoke-PreyVRLaunch.ps1 keeps the channel in <run>\log; Start-PreyVR.ps1
-        # keeps it beside PreyVR.log in the run directory itself.
-        $LogDir = if (Test-Path -LiteralPath (Join-Path $RunDir 'log')) { Join-Path $RunDir 'log' } else { $RunDir }
-    } else {
-        # The newest run that has a log, as Send-PreyVR.ps1 picks it: it finds
-        # either launcher's layout, and the empty directory of a failed start
-        # cannot shadow the session that is really up.
-        $latest = Get-ChildItem "$env:LOCALAPPDATA\PreyVR\runs" -Filter 'PreyVR.log' -Recurse -File -ErrorAction SilentlyContinue |
-                  Sort-Object LastWriteTime -Descending | Select-Object -First 1
-        if (-not $latest) { Write-Error 'no PreyVR.log under any run; launch the game first'; exit 1 }
-        $LogDir = $latest.DirectoryName
-    }
-}
+. (Join-Path $PSScriptRoot 'PreyVRCommon.ps1')
+if (-not $LogDir) { $LogDir = Find-PreyVRChannel $RunDir }
 $log = $LogDir
-$cmd = Join-Path $log 'commands.txt'
-$res = Join-Path $log 'results.txt'
 if (-not (Test-Path -LiteralPath $log)) { Write-Error "no channel at $log"; exit 1 }
 Write-Host "channel: $log"
 
-function Send-Cmd($line) {
-    $before = [datetime]::MinValue
-    if (Test-Path -LiteralPath $res) { $before = (Get-Item -LiteralPath $res).LastWriteTime }
-    Set-Content -LiteralPath $cmd -Value $line -Encoding ASCII
-    $deadline = (Get-Date).AddSeconds(25)
-    while ((Get-Date) -lt $deadline) {
-        Start-Sleep -Milliseconds 250
-        if (Test-Path -LiteralPath $res) {
-            $item = Get-Item -LiteralPath $res
-            if ($item.LastWriteTime -gt $before) {
-                $text = Get-Content -LiteralPath $res -Raw
-                if ($text) { return $text.Trim() }
-            }
-        }
-    }
-    return '(no result)'
-}
+function Send-Cmd($line) { Send-PreyVRCommand $log $line }
 
 $failures = 0
 function Step($label, $line, [switch]$AllowNonZero) {

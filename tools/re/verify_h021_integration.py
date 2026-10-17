@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 from verify_h021_static import verify
-from verify_h005_skinning import DEFAULT_MODULE
+from preydll import DEFAULT_MODULE
 
 if __name__ == "__main__":
     try:

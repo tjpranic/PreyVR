@@ -2,6 +2,7 @@
 #include "SafeMemory.h"
 #include "HookInstall.h"
 #include "EngineAccess.h"
+#include "preyvr/TextFormat.h"
 
 #include "AimTakeover.h"
 #include "Haptics.h"
@@ -419,14 +420,6 @@ void CallDrop(std::uintptr_t carry)
     }
 }
 
-std::string Fixed(float v, int decimals = 3)
-{
-    char text[32];
-    std::snprintf(text, sizeof(text), "%.*f", decimals, static_cast<double>(v));
-    return text;
-}
-std::string Point(Vec3 v) { return Fixed(v.x) + "," + Fixed(v.y) + "," + Fixed(v.z); }
-
 std::uintptr_t PlayerCarry(std::uintptr_t player)
 {
     return player ? player + engine::ArkPlayerLayout::interaction + kCarryInInteraction : 0;
@@ -477,12 +470,12 @@ HandNow LeftHandNow(const GameplayPoseFrame& f)
     HandNow h{};
     if (!f.cameraCentreValid || !f.headYawUsable || (f.referenceGeneration & 1) || !std::isfinite(f.yaw)) { return h; }
     const auto& left = f.tracking.hands[static_cast<unsigned>(Hand::left)];
-    if (!IsPoseUsable(left.gripPose, left.gripValidity, 200000000ull)) { return h; }
+    if (!IsPoseUsable(left.gripPose, left.gripValidity, kMaxPoseAgeNs)) { return h; }
     h.grip = animik::ControllerWorldFromHead(f.yaw, f.cameraCentre, f.tracking.head, left.gripPose);
     if (!Finite(h.grip.position) || !Finite(h.grip.orientation)) { return h; }
     h.palm = Rotate(h.grip.orientation, stereo::ToEngineSpace(Vec3{1, 0, 0}));
     h.forward = Rotate(h.grip.orientation, stereo::ToEngineSpace(Vec3{0, 0, -1}));
-    if (IsPoseUsable(left.aimPose, left.aimValidity, 200000000ull)) {
+    if (IsPoseUsable(left.aimPose, left.aimValidity, kMaxPoseAgeNs)) {
         const Pose aim = animik::ControllerWorldFromHead(f.yaw, f.cameraCentre, f.tracking.head, left.aimPose);
         h.aimDirection = Rotate(aim.orientation, stereo::ToEngineSpace(Vec3{0, 0, -1}));
     } else {
@@ -998,7 +991,7 @@ void RecordCarryMotion(const TrackingFrame& frame)
     std::lock_guard lock(gMotionMutex);
     for (unsigned h = 0; h < 2; ++h) {
         const auto& s = frame.hands[h];
-        if (!IsPoseUsable(s.gripPose, s.gripValidity, 200000000ull)) { continue; }
+        if (!IsPoseUsable(s.gripPose, s.gripValidity, kMaxPoseAgeNs)) { continue; }
         carry::MotionSample m{};
         m.time = frame.displayTime;
         m.position = s.gripPose.position;

@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <cmath>
 #include <mutex>
+#include <ranges>
 namespace preyvr::dll {
 namespace {
 options::Menu menu; // XR thread only
@@ -88,15 +89,16 @@ void HandleChange(const options::Change& change,const TrackingFrame& f,Hand hand
  }
 }
 // The panel's navigation (MenuInput::navigate) as four held directions,
-// with the navigator's hysteresis: engage past 0.6, release under 0.35, so a
-// resting stick cannot chatter. ImGui does the repeat. Buttons stay up until
+// with the navigator's hysteresis (MenuNavigatorPolicy), so a resting stick
+// cannot chatter. ImGui does the repeat. Buttons stay up until
 // the menu is armed (the opening hold, or a press carried in from the game
 // menu, must not also act on the panel).
 void CaptureUiInput(const TrackingFrame& f,const std::optional<ui::RayHit>& hit,bool armed,float dt,bool trigger){
  VrOptionsUiInput in;in.dt=dt;
  if(hit&&hit->inside){in.pointer=true;in.u=hit->u;in.v=hit->v;}
  const auto& l=f.hands[0];const auto& r=f.hands[1];
- const auto held=[](bool& state,float value){state=state?value>.35f:value>.6f;return state;};
+ const auto held=[](bool& state,float value){
+  constexpr input::MenuNavigatorPolicy nav{};state=state?value>nav.release:value>nav.engage;return state;};
  const bool up=held(stickUp,f.menu.navigate.y),down=held(stickDown,-f.menu.navigate.y);
  const bool left=held(stickLeft,-f.menu.navigate.x),right=held(stickRight,f.menu.navigate.x);
  // The grips step through the tabs when let go, and not when both were held: a
@@ -253,16 +255,18 @@ void LoadVrOptions(){
  }catch(...){lifecycle::Log("preyvr_options load=failed defaults_retained=1");}
  ready.store(true);
 }
-void ApplySavedVrOptions(){
+// Applies the saved value of each of `ids` the file holds, and logs the count.
+template<class Ids> void ApplySaved(const Ids& ids,const char* counter){
  options::Values v;options::Present p;
  {std::lock_guard lock(savedMutex);v=saved;p=present;}
- unsigned applied=0;
- for(unsigned i=0;i<options::Count;++i){
-  if(!p[i])continue;
-  Apply(i,v[i]);++applied;
+ unsigned count=0;
+ for(const unsigned id:ids){
+  if(!p[id])continue;
+  Apply(id,v[id]);++count;
  }
- lifecycle::Log("preyvr_options applied="+std::to_string(applied));
+ lifecycle::Log(std::string("preyvr_options ")+counter+"="+std::to_string(count));
 }
+void ApplySavedVrOptions(){ApplySaved(std::views::iota(0u,static_cast<unsigned>(options::Count)),"applied");}
 // What the menu panel looks like: its size, fit, curvature, guide card,
 // distance and place, the text panel's distance and the laser's hand. VR start
 // sets none of them itself, and each setter only stores a value (a panel refit
@@ -270,16 +274,7 @@ void ApplySavedVrOptions(){
 constexpr options::Setting kPanelSettings[]={options::UiScale,options::UiMargin,options::UiCurve,
  options::UiGuide,options::UiDistance,options::UiOffsetRight,options::UiOffsetUp,options::UiText,
  options::PointerHand};
-void ApplySavedPanelOptions(){
- options::Values v;options::Present p;
- {std::lock_guard lock(savedMutex);v=saved;p=present;}
- unsigned applied=0;
- for(const auto id:kPanelSettings){
-  if(!p[id])continue;
-  Apply(id,v[id]);++applied;
- }
- lifecycle::Log("preyvr_options panel_applied="+std::to_string(applied));
-}
+void ApplySavedPanelOptions(){ApplySaved(kPanelSettings,"panel_applied");}
 void ServiceVrOptions(){
  if(!ready.load())return;
  std::optional<ViewRequest> view;
@@ -310,7 +305,7 @@ void ServiceVrOptions(){
 }
 bool ProcessVrOptionsInput(const TrackingFrame& f){
  options::Input i;const auto& l=f.hands[0];const auto& r=f.hands[1];
- i.valid=ready.load()&&FreshSample(MonotonicNanoseconds(),f.publishedNs)&&IsPoseUsable(f.head,f.headValidity,200000000);
+ i.valid=ready.load()&&FreshSample(MonotonicNanoseconds(),f.publishedNs)&&IsPoseUsable(f.head,f.headValidity,kMaxPoseAgeNs);
  i.modal=HudMenuStateKnown()&&HudMenuIsOpen();i.epoch=f.epoch;
  i.start=f.system.pause;i.accept=f.menu.confirm;i.cancel=f.menu.back;
  i.previous=l.gripPressed;i.next=r.gripPressed;i.chord=l.gripPressed&&r.gripPressed;
@@ -323,7 +318,7 @@ bool ProcessVrOptionsInput(const TrackingFrame& f){
  // a previous frame's hover location to decide a new trigger press.
  std::optional<ui::RayHit> hit;
  if(pointerSurface&&surfaceReference==HeadTrackingReferenceGeneration()&&hand<2&&
-    IsPoseUsable(f.hands[hand].aimPose,f.hands[hand].aimValidity,200000000)){
+    IsPoseUsable(f.hands[hand].aimPose,f.hands[hand].aimValidity,kMaxPoseAgeNs)){
   hit=ui::Intersect(*pointerSurface,f.hands[hand].aimPose);
  }
  const auto wanted=request.exchange(0);
@@ -341,7 +336,7 @@ UiPointerVisual OptionsPointer(const ui::Surface& surface){
  UiPointerVisual visual;TrackingFrame f{};const auto hand=UiPointerHand();
  if(!open.load()||hand>=2||!TryGetTrackingFrame(f)||!FreshSample(MonotonicNanoseconds(),f.publishedNs))return visual;
  const auto& state=f.hands[hand];
- if(!IsPoseUsable(state.aimPose,state.aimValidity,200000000))return visual;
+ if(!IsPoseUsable(state.aimPose,state.aimValidity,kMaxPoseAgeNs))return visual;
  visual.active=true;visual.aim=state.aimPose;visual.pressed=state.triggerPressed;
  visual.hit=ui::Intersect(surface,state.aimPose);
  return visual;

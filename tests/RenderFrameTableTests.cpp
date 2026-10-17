@@ -244,7 +244,14 @@ StressResult RunStress(Table& table, int generations, int readerCount)
         });
     }
 
-    for (int generation = 1; generation <= generations; ++generation) {
+    // At least `generations`, then on until a reader has seen one: on a loaded
+    // machine the readers can sit descheduled through a whole fixed run, which
+    // proves nothing either way. Bounded, so a table no reader can read still fails.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    for (long long generation = 1;
+         generation <= generations ||
+         (reads.load(std::memory_order_relaxed) == 0 && std::chrono::steady_clock::now() < deadline);
+         ++generation) {
         float matrix[kMatrixFloats]{};
         Fill(matrix, static_cast<float>(generation));
         table.Capture(kKey, matrix, true);

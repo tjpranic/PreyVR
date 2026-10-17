@@ -33,7 +33,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$XrSimRoot = 'D:\Dev Debug\xr-sim',
+    [string]$XrSimRoot = '',
     # Defaults to build/configure, else build/headless: whichever this checkout has.
     [string]$Probe = '',
     [string]$StateName = 'preyvr',
@@ -52,6 +52,8 @@ $stickCases = @(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'PreyVRCommon.ps1')
+if (-not $XrSimRoot) { $XrSimRoot = Resolve-XrSimRoot }
 
 $stateDir = Join-Path $env:LOCALAPPDATA "xr-sim\$StateName"
 $statePath = Join-Path $stateDir 'state.json'

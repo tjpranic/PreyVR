@@ -10,7 +10,7 @@ import sys
 import zlib
 
 sys.dont_write_bytecode = True
-from verify_h005_skinning import EXPECTED_SHA256
+from preydll import EXPECTED_SHA256
 
 
 def number(value):

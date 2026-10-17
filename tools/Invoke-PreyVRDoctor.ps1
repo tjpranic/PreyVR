@@ -1,11 +1,14 @@
 [CmdletBinding()]
 param(
-    [string]$GameReleasePath = 'D:\SteamLibrary\steamapps\common\Prey\Binaries\Danielle\x64\Release',
+    # Defaults to the Steam install of Prey (PreyVRCommon.ps1).
+    [string]$GameReleasePath = '',
     [string]$EngineMapProbe = '',
     [switch]$AllowMissingGame
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'PreyVRCommon.ps1')
+if (-not $GameReleasePath) { $GameReleasePath = Join-Path (Resolve-PreyInstall) 'Binaries\Danielle\x64\Release' }
 $passed = 0
 $warnings = 0
 $failures = 0

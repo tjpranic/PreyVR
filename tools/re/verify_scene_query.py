@@ -1,38 +1,16 @@
 """Read-only Steam scene-query contract verification, with byte-mutation controls."""
-import hashlib,json,re,struct,sys
+import json,struct,sys
 from pathlib import Path
-from verify_h005_skinning import DEFAULT_MODULE,EXPECTED_SHA256
+from preydll import DEFAULT_MODULE,Image,fnv1a64 as fnv,native_rows
 ROOT=Path(__file__).resolve().parents[2]
 
 def verify():
-    data=DEFAULT_MODULE.read_bytes()
-    digest=hashlib.sha256(data).hexdigest()
-    assert digest==EXPECTED_SHA256,digest
-    u16=lambda p:struct.unpack_from('<H',data,p)[0]
-    u32=lambda p:struct.unpack_from('<I',data,p)[0]
-    pe=u32(0x3c)
-    assert u16(pe+4)==0x8664 and u16(pe+24)==0x20b
-    sections=[]
-    for n in range(u16(pe+6)):
-        p=pe+24+u16(pe+20)+n*40
-        sections.append((u32(p+12),u32(p+16),u32(p+20)))
-    def at(rva,count):
-        for va,size,raw in sections:
-            if va<=rva and rva+count<=va+size:
-                result=data[raw+rva-va:raw+rva-va+count]
-                assert len(result)==count
-                return result
-        raise ValueError(hex(rva))
-    def fnv(b):
-        h=14695981039346656037
-        for value in b:h=((h^value)*1099511628211)&((1<<64)-1)
-        return h
-    entries=re.findall(r'\{0x([0-9A-F]+),(\d+),0x([0-9A-F]+)ull\}, // (\w+)',
-        (ROOT/'include/preyvr/SceneQueryNative.h').read_text())
+    image=Image(DEFAULT_MODULE);digest,at=image.sha256,image.at
+    entries=native_rows(ROOT/'include/preyvr/SceneQueryNative.h')
     assert len(entries)==7
     checks=[]
     for rva,size,expected,name in entries:
-        b=at(int(rva,16),int(size));expected=int(expected,16)
+        b=at(rva,size)
         assert fnv(b)==expected,name
         assert fnv(bytes([b[0]^1])+b[1:])!=expected,name+' negative control'
         checks.append(name+': full body matches; one-bit mutation refused')

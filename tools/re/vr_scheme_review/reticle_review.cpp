@@ -12,6 +12,13 @@ DWORD CallHudOneFloat(const char* name, float value) {
     calls.emplace_back(name, value);
     return 0;
 }
+// No scene reticle, HUD layer or XR frame size: the projection is the plain
+// viewport fraction, dispatched as is.
+unsigned SceneReticleEnabled() { return 0; }
+bool HudLayerReticle(float, float, float&, float&) { return false; }
+DWORD HudScreenToFlashFraction(float, float, bool, float*, float*) { return 1; }
+DWORD XrResolutionChain(XrResolution) { return 0; }
+unsigned long long HeadTrackingReferenceGeneration() { return 0; }
 }
 int failures = 0;
 void Check(bool ok, const std::string& name) {

@@ -166,10 +166,10 @@ void TickVrMode() {
         if(GetTickCount64()>deadline) { Fail("headset_tracking_timeout"); return; }
         TrackingFrame frame{};
         if(!TryGetTrackingFrame(frame) || !FreshSample(MonotonicNanoseconds(),frame.publishedNs) ||
-            !IsPoseUsable(frame.head,frame.headValidity,200000000ull)) return;
+            !IsPoseUsable(frame.head,frame.headValidity,kMaxPoseAgeNs)) return;
         const float ipd=XrRuntimeIpdMetres();
         if(!std::isfinite(ipd) || ipd<.045f || ipd>.085f) { Fail("runtime_eye_separation"); return; }
-        const auto width=XrResolutionChain(4),height=XrResolutionChain(5);
+        const auto width=XrResolutionChain(XrResolution::backBufferWidth),height=XrResolutionChain(XrResolution::backBufferHeight);
         if(!width || !height) { Fail("render_dimensions"); return; }
         const auto nearFov=static_cast<unsigned>(std::lround(
             2*std::atan(std::tan(1.0471975512f)*static_cast<float>(height)/width)*572.9577951f));
@@ -244,7 +244,7 @@ void TickVrMode() {
     }
     if(phase==Phase::rendering) {
         if(GetTickCount64()>deadline) { Fail("no_rendered_frames"); return; }
-        if(XrSubmittedFrameCount()<firstFrame+3 || XrResolutionChain(14)!=0)return;
+        if(XrSubmittedFrameCount()<firstFrame+3 || XrResolutionChain(XrResolution::sizeMismatch)!=0)return;
         phase=Phase::active;
         nextStatusReport=GetTickCount64()+kStatusReportMs;
         Log("state=active panel=automatic recenter=F12_or_menu_and_both_grips");

@@ -52,15 +52,9 @@ $ErrorActionPreference = 'Stop'
 # folder, as Send-PreyVR.ps1 picks it: Invoke-PreyVRLaunch.ps1 runs keep it in
 # <run>\log, Start-PreyVR.ps1 runs in the run folder itself, and the empty
 # folder of a failed start must not shadow the session that is up.
+. (Join-Path $PSScriptRoot 'PreyVRCommon.ps1')
 $runsRoot = Join-Path $env:LOCALAPPDATA 'PreyVR\runs'
-if (-not (Test-Path -LiteralPath $runsRoot)) {
-    Write-Error "no PreyVR runs directory at $runsRoot -- has the mod ever run?"
-    exit 1
-}
-$latestLog = Get-ChildItem -LiteralPath $runsRoot -Filter 'PreyVR.log' -Recurse -File -ErrorAction SilentlyContinue |
-             Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if ($null -eq $latestLog) { Write-Error 'no PreyVR.log under any run folder'; exit 1 }
-$logDir = $latestLog.DirectoryName
+$logDir = Find-PreyVRChannel
 
 if (-not $ReleaseDirectory) {
     $loaded = $null
@@ -75,8 +69,6 @@ if (-not $ReleaseDirectory) {
     }
     $ReleaseDirectory = Split-Path -Parent $loaded.FileName
 }
-$commandFile = Join-Path $logDir 'commands.txt'
-$resultFile = Join-Path $logDir 'results.txt'
 
 if (-not $OutputDirectory) {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -90,29 +82,7 @@ function Write-Line([string]$text) {
     $transcript.Add($text) | Out-Null
 }
 
-# A command is only answered when results.txt is rewritten. Comparing the write
-# time against the value taken before the send is what separates a fresh answer
-# from the previous command's -- the mistake that made an early sweep in this
-# project read stale values and reach a confident wrong conclusion.
-function Send-Command([string]$line) {
-    $before = [datetime]::MinValue
-    if (Test-Path -LiteralPath $resultFile) {
-        $before = (Get-Item -LiteralPath $resultFile).LastWriteTime
-    }
-    Set-Content -LiteralPath $commandFile -Value $line -Encoding ASCII
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ((Get-Date) -lt $deadline) {
-        Start-Sleep -Milliseconds 200
-        if (Test-Path -LiteralPath $resultFile) {
-            $item = Get-Item -LiteralPath $resultFile
-            if ($item.LastWriteTime -gt $before) {
-                $text = Get-Content -LiteralPath $resultFile -Raw
-                if ($text) { return $text.Trim() }
-            }
-        }
-    }
-    return '(no result within timeout)'
-}
+function Send-Command([string]$line) { Send-PreyVRCommand $logDir $line $TimeoutSeconds }
 
 function Invoke-Step([string]$label, [string]$command) {
     $answer = Send-Command $command

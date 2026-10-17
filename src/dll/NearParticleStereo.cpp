@@ -116,7 +116,7 @@ bool BridgeFor(const std::uint8_t* context, Vec3& shift)
     thread_local std::uint64_t forwardNs = 0;
     aim::Sample sample{};
     const std::uint64_t now = MonotonicNanoseconds();
-    if (TryGetAimSample(sample) && FreshSample(now, sample.publishedNs, 200000000ull)) {
+    if (TryGetAimSample(sample) && FreshSample(now, sample.publishedNs, kMaxPoseAgeNs)) {
         forward = sample.direction; forwardNs = now;
     }
     if (!forwardNs || now - forwardNs > 100000000ull || !nearfx::BridgeShift(offset, forward, shift)) {
@@ -159,8 +159,7 @@ void __fastcall InitHook(std::uint8_t* context, float maxContainerPixels, void* 
                 }
                 camera[0] = origin.x; camera[1] = origin.y; camera[2] = origin.z;
                 c.corrected.fetch_add(1, std::memory_order_relaxed);
-                bool expected = false;
-                if (gLoggedFirstGeometry.compare_exchange_strong(expected, true)) {
+                if (!gLoggedFirstGeometry.exchange(true)) {
                     Log("result=0 detail=first_correction path=geometry eye=" + std::to_string(which));
                 }
             } else {
@@ -205,8 +204,7 @@ void* __fastcall RenderMatrixHook(void* particle, float* vX, float* vY, float* v
         vT[0] += offset.x; vT[1] += offset.y; vT[2] += offset.z;
         NoteShift(offset);
         gSpriteMoved.fetch_add(1, std::memory_order_relaxed);
-        bool expected = false;
-        if (gLoggedFirstSprite.compare_exchange_strong(expected, true)) {
+        if (!gLoggedFirstSprite.exchange(true)) {
             Log("result=0 detail=first_correction path=sprites eye=" + std::to_string(which));
         }
     } else {

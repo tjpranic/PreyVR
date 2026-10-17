@@ -608,16 +608,23 @@ DWORD EnsureHooks()
          reinterpret_cast<void*>(&SwitchUsageModeDetour), &switchUsageMode},
         {"view.clear", kClearRva, reinterpret_cast<void*>(&ClearDetour), &clear},
     };
-    for (auto& target : targets) {
-        const auto* landmark = FindLandmark(target.id);
-        if (landmark == nullptr || landmark->rva != target.rva) {
-            Log(std::string("result=unavailable detail=landmark_missing id=") + target.id);
+    // 0, or 1 when `id` is not its landmark at `rva`, or 2 when its prologue moved.
+    const auto gate = [base](const char* id, std::uintptr_t rva, std::uintptr_t& address) -> DWORD {
+        const auto* landmark = FindLandmark(id);
+        if (landmark == nullptr || landmark->rva != rva) {
+            Log(std::string("result=unavailable detail=landmark_missing id=") + id);
             return 1;
         }
-        target.address = base + landmark->rva;
-        if (!PrologueMatches(target.address, *landmark)) {
-            Log(std::string("result=unavailable detail=prologue_mismatch id=") + target.id);
+        address = base + landmark->rva;
+        if (!PrologueMatches(address, *landmark)) {
+            Log(std::string("result=unavailable detail=prologue_mismatch id=") + id);
             return 2;
+        }
+        return 0;
+    };
+    for (auto& target : targets) {
+        if (const DWORD refused = gate(target.id, target.rva, target.address)) {
+            return refused;
         }
     }
     // The engine functions mode 2 calls but never hooks. Gated the same way, so a
@@ -634,15 +641,8 @@ DWORD EnsureHooks()
         {"camera.update_frustum", kUpdateFrustumRva},
     };
     for (auto& callee : callees) {
-        const auto* landmark = FindLandmark(callee.id);
-        if (landmark == nullptr || landmark->rva != callee.rva) {
-            Log(std::string("result=unavailable detail=landmark_missing id=") + callee.id);
-            return 1;
-        }
-        callee.address = base + landmark->rva;
-        if (!PrologueMatches(callee.address, *landmark)) {
-            Log(std::string("result=unavailable detail=prologue_mismatch id=") + callee.id);
-            return 2;
+        if (const DWORD refused = gate(callee.id, callee.rva, callee.address)) {
+            return refused;
         }
     }
     gRendererSetCamera.store(reinterpret_cast<RendererSetCameraFn>(callees[0].address),

@@ -1,6 +1,7 @@
 #include "IkTargetProbe.h"
 #include "SafeMemory.h"
 #include "EngineAccess.h"
+#include "preyvr/TextFormat.h"
 
 #include "DebugWatch.h"
 #include "Logger.h"
@@ -85,22 +86,6 @@ bool WriteGate(std::uint8_t value, std::uint8_t& previous)
     return true;
 }
 
-std::string Hex(unsigned long long value)
-{
-    static const char* const digits = "0123456789abcdef";
-    std::string out = "0x";
-    bool leading = true;
-    for (int shift = 60; shift >= 0; shift -= 4) {
-        const unsigned int nibble = static_cast<unsigned int>((value >> shift) & 0xFull);
-        if (nibble == 0 && leading && shift != 0) {
-            continue;
-        }
-        leading = false;
-        out.push_back(digits[nibble]);
-    }
-    return out;
-}
-
 } // namespace
 
 DWORD ArmIkCapture(unsigned int maxCaptures)
@@ -170,13 +155,14 @@ DWORD DisarmIkCapture()
     return 0;
 }
 
-unsigned int IkTargetRowCount()
+namespace {
+
+// Each distinct target's first capture, in capture order, from the first
+// `captures` captures. Folded on demand rather than maintained live, because
+// the folding must not happen inside the exception handler.
+unsigned int DistinctTargets(unsigned int captures, std::array<WatchCapture, kMaxRows>& firsts)
 {
-    // Folded on demand rather than maintained live, because the folding must not
-    // happen inside the exception handler.
-    std::array<unsigned long long, kMaxRows> seen{};
     unsigned int rows = 0;
-    const unsigned int captures = WatchCaptureCount();
     for (unsigned int i = 0; i < captures && rows < kMaxRows; ++i) {
         WatchCapture capture{};
         if (!ReadWatchCapture(i, capture) || capture.slot != kCaptureSlot) {
@@ -184,70 +170,61 @@ unsigned int IkTargetRowCount()
         }
         bool known = false;
         for (unsigned int r = 0; r < rows; ++r) {
-            if (seen[r] == capture.r12) {
+            if (firsts[r].r12 == capture.r12) {
                 known = true;
                 break;
             }
         }
         if (!known) {
-            seen[rows++] = capture.r12;
+            firsts[rows++] = capture;
         }
     }
     return rows;
 }
 
+} // namespace
+
+unsigned int IkTargetRowCount()
+{
+    std::array<WatchCapture, kMaxRows> firsts{};
+    return DistinctTargets(WatchCaptureCount(), firsts);
+}
+
 bool ReadIkTargetRow(unsigned int index, IkTargetRow& out)
 {
-    std::array<unsigned long long, kMaxRows> seen{};
-    unsigned int rows = 0;
+    std::array<WatchCapture, kMaxRows> firsts{};
     const unsigned int captures = WatchCaptureCount();
-    for (unsigned int i = 0; i < captures && rows <= index && rows < kMaxRows; ++i) {
-        WatchCapture capture{};
-        if (!ReadWatchCapture(i, capture) || capture.slot != kCaptureSlot) {
-            continue;
-        }
-        bool known = false;
-        for (unsigned int r = 0; r < rows; ++r) {
-            if (seen[r] == capture.r12) {
-                known = true;
-                break;
-            }
-        }
-        if (known) {
-            continue;
-        }
-        if (rows == index) {
-            out = IkTargetRow{};
-            out.targetAddress = capture.r12;
-            out.limbId = capture.rsi;
-            out.owner = capture.r13;
-            out.skeleton = capture.rdi;
-            for (unsigned int j = 0; j < captures; ++j) {
-                WatchCapture other{};
-                if (ReadWatchCapture(j, other) && other.slot == kCaptureSlot &&
-                    other.r12 == capture.r12) {
-                    ++out.hits;
-                }
-            }
-            float values[7]{};
-            if (capture.r12 != 0 &&
-                ReadableFloats(reinterpret_cast<const void*>(capture.r12), values, 7)) {
-                out.readable = 1;
-                const float magnitude = std::sqrt(values[0] * values[0] +
-                                                  values[1] * values[1] +
-                                                  values[2] * values[2] +
-                                                  values[3] * values[3]);
-                out.quatMagnitude =
-                    static_cast<unsigned int>(magnitude * 1000.0f + 0.5f);
-                out.posX = static_cast<int>(values[4] * 1000.0f);
-                out.posY = static_cast<int>(values[5] * 1000.0f);
-                out.posZ = static_cast<int>(values[6] * 1000.0f);
-            }
-            return true;
-        }
-        seen[rows++] = capture.r12;
+    if (index >= DistinctTargets(captures, firsts)) {
+        return false;
     }
-    return false;
+    const WatchCapture& capture = firsts[index];
+    out = IkTargetRow{};
+    out.targetAddress = capture.r12;
+    out.limbId = capture.rsi;
+    out.owner = capture.r13;
+    out.skeleton = capture.rdi;
+    for (unsigned int j = 0; j < captures; ++j) {
+        WatchCapture other{};
+        if (ReadWatchCapture(j, other) && other.slot == kCaptureSlot &&
+            other.r12 == capture.r12) {
+            ++out.hits;
+        }
+    }
+    float values[7]{};
+    if (capture.r12 != 0 &&
+        ReadableFloats(reinterpret_cast<const void*>(capture.r12), values, 7)) {
+        out.readable = 1;
+        const float magnitude = std::sqrt(values[0] * values[0] +
+                                          values[1] * values[1] +
+                                          values[2] * values[2] +
+                                          values[3] * values[3]);
+        out.quatMagnitude =
+            static_cast<unsigned int>(magnitude * 1000.0f + 0.5f);
+        out.posX = static_cast<int>(values[4] * 1000.0f);
+        out.posY = static_cast<int>(values[5] * 1000.0f);
+        out.posZ = static_cast<int>(values[6] * 1000.0f);
+    }
+    return true;
 }
 
 DWORD ArmIkProducerWatch(unsigned long long targetAddress, unsigned int maxCaptures)

@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <limits>
 
 namespace preyvr::timing {
@@ -150,14 +149,6 @@ void IntervalSeries::SetBudgetMicroseconds(std::uint32_t microseconds)
 std::uint32_t IntervalSeries::BudgetMicroseconds() const
 {
     return mBudget.load(std::memory_order_relaxed);
-}
-
-std::uint64_t MonotonicNanoseconds()
-{
-    return static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
-            .count());
 }
 
 } // namespace preyvr::timing

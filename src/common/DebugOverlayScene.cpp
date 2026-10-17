@@ -1,4 +1,5 @@
 #include "preyvr/DebugOverlayScene.h"
+#include "preyvr/TextFormat.h"
 
 #include <algorithm>
 #include <cmath>
@@ -9,13 +10,6 @@ namespace {
 
 constexpr float kNoticeSeconds = 1.2f;
 
-
-std::string Fixed(float value, int decimals)
-{
-    char text[32];
-    std::snprintf(text, sizeof(text), "%.*f", decimals, static_cast<double>(value));
-    return text;
-}
 
 bool NoticeLive(const Slot& slot) { return slot.notice != Notice::None && slot.noticeAge >= 0 && slot.noticeAge < kNoticeSeconds; }
 

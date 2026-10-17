@@ -258,7 +258,16 @@ bool XrRequestedEyeFov(int eye, float* left, float* right, float* up, float* dow
 const char* XrTrackingSpaceName();
 std::string XrCoverageReport();
 
-DWORD XrResolutionChain(unsigned int field);
+// What the runtime asks for, what Prey renders, what is held and what is
+// submitted; 0 before the session has published them.
+enum class XrResolution : unsigned int {
+    recommendedWidth, recommendedHeight, maxWidth, maxHeight,
+    backBufferWidth, backBufferHeight, heldEyeWidth, heldEyeHeight,
+    submittedWidth, submittedHeight, recommendedSamples, viewsDiffer,
+    heldFormat, views, sizeMismatch,
+    count
+};
+DWORD XrResolutionChain(XrResolution field);
 
 unsigned long long DeclaredFovAgreeCount();
 unsigned long long DeclaredFovDivergeCount();

@@ -16,7 +16,7 @@ void PublishSlotFeedback(equipment::SlotNotice kind,const GameplayPoseFrame& f){
 }
 bool ReadSlotFeedback(const TrackingFrame& f,equipment::SlotMessage& out){
     if(!BeltHintsEnabled()||!HudGameplayInputAllowed()||
-       !IsPoseUsable(f.head,f.headValidity,200000000ull)||
+       !IsPoseUsable(f.head,f.headValidity,kMaxPoseAgeNs)||
        !FreshSample(MonotonicNanoseconds(),f.publishedNs)||!feedback.TryRead(out)||
        !out.Current(MonotonicNanoseconds(),f.epoch,HeadTrackingReferenceGeneration(),HudMenuEpoch()))return false;
     const bool medkit=out.kind>=equipment::SlotNotice::MedkitReady&&out.kind<=equipment::SlotNotice::MedkitDenied;

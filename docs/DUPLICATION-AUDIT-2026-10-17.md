@@ -17,17 +17,27 @@ Line numbers are as of commit 8c07a51, before the section A fixes. Files those f
   - The user tested PreyVR-13 (the section A fixes) in the headset: everything worked.
   - Committed as `b5fc093` (fixes) and `8380154` (B1/D1/D2).
 - **2026-10-18, later:** B4, B5 and E6 were done; see their status notes. PreyVR-14 worked in the headset, and they are committed as `c370eff`.
-- **2026-10-18, latest:** B2 and B3 were done, uncommitted; see their status notes.
-  - Build passes, 77/77 ctest pass (one new test, `hook_install`), no new warnings.
-  - Not yet run in the headset.
   - Build passes, 76/76 ctest pass, no new warnings.
   - The engine-map probe and the six native-table verifiers pass against PreyDll.dll.
-- **Not started:** the rest of B–E.
+- **2026-10-18, latest:** B2 and B3 were done; see their status notes.
+  - Build passes, 77/77 ctest pass (one new test, `hook_install`), no new warnings.
+  - PreyVR-15 passed in the headset; committed as `fc7b335`.
+- **2026-10-18, group 1:** B12 (most of it), D5, E1, E2 and E3 were done, uncommitted; see their status notes.
+  - Build passes with no new warnings; 81/81 ctest pass (the four VR scheme replays are new), and 12 runs in a row at `-j12` were clean.
+  - Every unpinned `tools/re` verifier prints byte-identical output before and after.
+  - Offline only: nothing here needs a headset run beyond the usual smoke check.
+- **Decisions (user, 2026-10-18):**
+  - **A9:** a malformed command value keeps falling back to a default; it is not refused. B9 keeps today's fallbacks.
+  - **Engine calls:** guard them with SEH (the `CallX` style). B6's shared wrappers are guarded. NearFovOverride's unguarded call to the engine's original is a detour forwarding, not a wrapper, and is not changed.
+- **Not started:** B6–B11, C, D3, D4, E4, E5 and E7.
 - **Receipt pins (checked 2026-10-18).** These files have their committed content pinned by a receipt; edit none of them:
   - `include/preyvr/{Equipment,NativeWrist,PsiMedkit,Psychoscope}Native.h`
   - `src/dll/NativeHudValue.h`
   - `tests/test_extract_native_hud.py`
   - `tools/re/{extract_native_hud,map_native_hud,verify_body_equipment,verify_inventory_stereo,verify_native_wrist,verify_psychoscope}.py`
+  - `tools/re/verify_twohand_no_alias.py`, pinned from `docs/receipts/20261004-twohand-no-alias.json` (found 2026-10-18; the first scan covered only `receipts/`)
+
+  Not pins: `docs/evidence/prey-vr-comparison-20260916/manifest.json` and `docs/evidence/vr-interface-2026-09-09/final-player/verification.json` list hashes of about 60 source files as a historical inventory. Those files match only because they have not changed since.
 
   Compare against committed blobs, not the working tree: with `core.autocrlf` the checkout is CRLF, while receipts hashed the LF content. No pin was staled by `b5fc093` or `8380154`.
 - **CameraEditHook research experiments (C):** the user decided on 2026-10-18 to keep them for now.
@@ -67,7 +77,7 @@ The fixes are uncommitted on `custom`. They build, all 76 ctest tests pass, and 
 | A6 | **Fixed.** Each half of `EnsureTexture` resets its resources on failure. Calling `EnsureDepthCopy` from the depth half is still part of B10. |
 | A7 | **Fixed.** Hold frames now use `input::Pressed` with the same `gTriggerDown` state as live frames. Both paths run under the session lock. |
 | A8 | **Fixed.** A new `XrSwapEyes()` getter; the hotkey toggles the real flag, and `HotkeyEyeSwap()` reads it. |
-| A9 | **Not changed, on purpose.** Falling back on a malformed value is documented intent (`CommandChannel.cpp:89-91`, "a typo cannot arm something"), and every fallback lands somewhere safe: off, reset, or refused. Decide refuse vs fallback as part of B9. |
+| A9 | **Not changed, on purpose.** Falling back on a malformed value is documented intent (`CommandChannel.cpp:89-91`, "a typo cannot arm something"), and every fallback lands somewhere safe: off, reset, or refused. **Decided 2026-10-18 (user): keep the fallback.** |
 | A10 | **Fixed:**<br>• ControlDemo's `?:`.<br>• IkTest's empty-file guard.<br>• Startup, IkTest and HudValidation find the run by the newest `PreyVR.log` (Send-PreyVR's rule). An explicit `-RunDir` accepts either layout. ControlDemo keeps `<run>\log`: it only works with xr-sim launches.<br>• Launch and AimCheck fall back to `build\headless`.<br>• HudValidation takes the capture folder from the `PreyVR.dll` loaded in the running game.<br>• `verify_h005_skinning.DEFAULT_MODULE` resolves `PREYVR_PREYDLL`, then the upstream `D:\SteamLibrary`, then Steam's `libraryfolders.vdf`. The cull_camera_watch, h022 and vr_scheme_native verifiers now import it.<br><br>**Not changed (E3):** the game-install and xr-sim root defaults (`D:\…`) in Launch, Doctor, Run-Headless, Restore-PreyIntroVideos, AimCheck, ControlDemo, ControllerSweep and UnderXrSim. |
 | A11 | **New. Latent, not fixed.** HeadTrackingHook's `CRenderView::SetCamera` hook (0xEE7E80) would make DualSceneStereo's `view.set_camera` prologue gate refuse. It is reachable only through the unused `PreyVR_SetHeadTrackingEnabledPtr` export, and goes away with that hook's removal in C. |
 
@@ -387,6 +397,27 @@ Left:
 - **Lane-step scaffolding:** the reset-on-key-change, skip-repeated-displayTime and dt pattern repeats (BodyEquipment:113, Psychoscope:40, PsiMedkit:283, VrOptionsRuntime:320). dt is computed in about 15 places with different clamps.
 
 ### B12. Small exact duplicates (low value each, no risk)
+
+**Status 2026-10-18: done, except the items noted below.**
+- **New shared headers:**
+  - `include/preyvr/MonotonicClock.h`: `MonotonicNanoseconds`, `FreshSample` and `kMaxPoseAgeNs` (0.2 s). `timing::MonotonicNanoseconds` is now a using-declaration, and FrameTiming.cpp's copy is gone.
+  - `include/preyvr/TextFormat.h`: `Fixed`, `Point` and the lower-case `Hex`.
+  - `src/dll/WideText.h`: `Utf8`, replacing Bootstrap's `Narrow` and VrOptionsUi's `Utf8`.
+  - `src/dll/AtomicMax.h`: `StoreMax`. The two `src/dll` headers have no `preyvr/` includes.
+- **Replaced:**
+  - the 34 `200000000` pose ages, by `kMaxPoseAgeNs`, including DebugOverlay's own `kPoseAgeNs`;
+  - 3 `Hex`, 6 `Fixed`, 5 `Point` and 6 atomic-max copies;
+  - 13 `bool expected = false; compare_exchange_strong(expected, true)` flags (9 log-once, CameraEditHook's 4 watchdog arms), by the `!flag.exchange(true)` idiom used elsewhere;
+  - `XrResolutionChain(4)` and the like, by the `XrResolution` field enum;
+  - Bootstrap's 38 pointer-slot casts, by `PtrArg`, and its 5 capture getters, now one line each;
+  - VrOptionsRuntime's two saved-value loops, by one `ApplySaved`. The panel's 0.6/0.35 stick hysteresis now reads `MenuNavigatorPolicy`.
+  - DualSceneStereo's two landmark-gate loops share one lambda, and IkTargetProbe's two folds share `DistinctTargets`.
+- **Left as they are:**
+  - **The `100000000` (0.1 s) ages:** each lane chose its own tighter bound.
+  - **The two `LogResult` functions:** each is 6 lines and binds its own file's `Log` prefix.
+  - **FocusHold's upper-case `Hex(const void*)`:** its output differs.
+  - **The `.45f` grip literals and TwoHandedAim's .45/.65:** equal to `kGripPress.release` by value, but not shown to be the same setting, and TwoHandedAim's .65 is a different press threshold.
+  - **HudBridge, InputPost, UiPointer/VrOptionsRuntime and the wrist-card size:** they are on live input and HUD paths, so they go with the headset-tested batch (B7/B10).
 - **`Hex()`:**
   - Identical in DebugWatch:277, IkTargetProbe:95 and InputPathProbe:73.
   - FocusHold:114 is uppercase.
@@ -476,7 +507,14 @@ Left:
   - HandCarryTests:318-500 tests `use::UseButton`; move it to InteractionUseTests.
 - **D4. PowerShell launcher tests.** The 14-line preamble is repeated 3 times, and the assert-throws pattern 6 times. → `tests/LauncherTestCommon.ps1`. The temp directories under `build/` are never cleaned up.
 - **D5. `tools/re/vr_scheme_review` is a separate CMake project.** It hard-codes the minhook path and never runs in ctest. Fold it into the root build as tests.
+  - **Status 2026-10-18: done.** The four replays (`scheme_review`, `aim_review`, `hud_queue_review`, `reticle_review`) are root ctest tests linking `preyvr_core` and `minhook`, and the standalone CMakeLists is gone.
+  - About 60 missing stubs were added: the lanes had grown calls into other lanes since the replays were written.
+  - **The movement replay was ported to the controls redesign.** MoveLane now reads `TrackingFrame.play`, not per-hand thumbsticks, so the fixture feeds one tracking frame per tick, with snap turn and head-relative movement off. All ten of its original assertions are kept and pass.
+  - `review.cpp` is renamed `scheme_review.cpp`.
 - **Side notes:**
+  - **Two pre-existing test races, fixed 2026-10-18.** Both failed now and then under `ctest -j12` (`render_frame_table` 1 run in 6 before any of this; the active build doctor raised it):
+    - `RenderFrameTableTests` RunStress now publishes until a reader has seen one, up to 5 s.
+    - `InputQueueTests`' consumer read the stop flag after a failed pop, so it could quit with events still queued.
   - `tests/README.md` says "eleven" targets; there are about 75.
   - `test_extract_native_hud.py` isn't wired into CTest.
 
@@ -487,18 +525,40 @@ Left:
   - The run-dir lookup has 5 copies; only Send-PreyVR's handles both folder layouts.
   - Report-field parsing has 3 variants.
   - → `tools/PreyVRChannel.ps1`. Send-PreyVR ships in the package, so either add the module to the package or leave Send-PreyVR self-contained.
+  - **Status 2026-10-18: done** as `tools/PreyVRCommon.ps1`, which also holds E3's resolvers: `Find-PreyVRChannel`, `Send-PreyVRCommand` and `Get-ReportField`.
+    - Startup, IkTest and HudValidation take both the channel lookup and the send from it. ControlDemo takes the send and the field reader, and keeps its own `<run>\log` lookup (A10).
+    - Send-PreyVR and Start-PreyVR stay self-contained, since they ship alone.
+    - Checked offline against a fake responder: a fresh reply, a stale `results.txt`, and a timeout.
 - **E2. Python PE parsing (high value, about 220 LOC).**
   - The same e_lfanew → sections → `at(rva,n)` parse is written 18 times.
   - FNV-1a64 appears 5 times, the `*Native.h` table regex 5 times, reloc parsing twice (word for word), C++ byte-array reading twice, rel32 decoding 5 times, and the hash literal 5 times.
   - `verify_h005_skinning.py` has become a shared module by accident: 16 scripts import from it.
   - → `tools/re/preydll.py` with a `resolve_module()` that tries the env var, then D:, then E:.
   - Re-export `DEFAULT_MODULE` from it: the pinned scripts import that name, so they pick up the fixed path without their own bytes changing. Migrate only the unpinned scripts.
+  - **Status 2026-10-18: done.** `tools/re/preydll.py` holds:
+    - `resolve_module`/`DEFAULT_MODULE` and `EXPECTED_SHA256`;
+    - `Image`, the PE32+ parse with `at`, `u32`/`u64`/`i32`, `cstring`, `section`, `rip_target`, `call_target`, `vtable_target`, `directory`, `relocations` and `import_slots`;
+    - `fnv1a64`, `native_rows` (the `*Native.h` table) and `byte_arrays` (C++ gate arrays).
+  - 17 unpinned scripts use it, and `verify_h005_skinning` re-exports the two names the pinned verifiers import. FocusHold's verifier no longer has its own D:/E: module list.
+  - **Verification:**
+    - All 26 `tools/re` scripts print byte-identical stdout and stderr before and after, the pinned ones included.
+    - `map_carry_candidates` needs capstone, so its new parse was compared with its old one directly.
+    - A wrong build and a mutated image are still refused.
+  - About 320 lines net.
   - `verify_h021_static.verify(path, spec_json)` is already a data-driven verifier that h005/h005b/h013/h022/vr_scheme could use.
 - **E3. Path resolution.**
   - Build tree, game path and xr-sim root are each resolved in 6–8 scripts with contradictory defaults.
   - The game-path registry lookup exists once, in `Start-PreyVR:124`; the rest hard-code `D:\SteamLibrary`.
   - → `Resolve-PreyVRArtifact` / `Resolve-PreyInstall` / `$PreyVRXrSimRoot`.
   - Done so far (A10): the Launch and AimCheck build-tree fallback, and the Python module resolver. Note that Steam's uninstall registry key for Prey is empty on this machine, so `Resolve-PreyInstall` needs Steam's `libraryfolders.vdf` as a fallback, the way the Python resolver does.
+  - **Status 2026-10-18: done** in `tools/PreyVRCommon.ps1`:
+    - `Resolve-PreyInstall` tries Steam's uninstall key, then the upstream `D:\SteamLibrary`, then `libraryfolders.vdf`, and falls back to the upstream path. It finds `E:\Steam Games` here.
+    - `Resolve-XrSimRoot` reads `PREYVR_XRSIM_ROOT`, then upstream's `D:\Dev Debug\xr-sim`.
+  - **Users:**
+    - Launch (`-GameRoot`/`-GameExe`), Doctor and Run-Headless (`-GameReleasePath`), and Restore-PreyIntroVideos (`-VideoDir`);
+    - AimCheck, ControlDemo, ControllerSweep and UnderXrSim (`-XrSimRoot`).
+  - **CMake:** `PREYVR_GAME_RELEASE_DIR` now defaults to empty, and `build_doctor` then finds the install itself. On this machine it runs the 6 game checks it used to skip, and all pass.
+  - The `build/headless` cache entry was cleared with `cmake -U`. Re-run that in other build trees to pick up the new default.
 - **E4. Launchers.**
   - Start-PreyVR and Invoke-PreyVRLaunch share their core: ProcessStartInfo, SteamAppId, PREYVR_LOG_PATH, run folder, injector call. Share an `Invoke-PreyVRInjector`, but keep both entry points.
   - xr-sim env setup is done two different ways (UnderXrSim:76-122 vs Launch:178-192, which hand-builds the layer env). The xr-sim liveness check is written 3 times.
@@ -525,7 +585,7 @@ Left:
   - `RuntimeSnapshotWin32.cpp:19 PageIsReadable` (a VirtualQuery walk) vs the SEH reads: the walk never touches the page, so it cannot consume a PAGE_GUARD bit. It can live in SafeMemory.h, but must keep its semantics.
   - Composite single-`__try` blocks (CullCameraWatch ReadPool/ReadQueue, DualSceneStereo BuildEyes, FocusHold, NearFovOverride ApplyToRenderer, HudDispatchPointer) are all-or-nothing on purpose.
 - **Engine-call and verification policies:**
-  - SEH-guarded engine calls (HudBridge, BodyFollow) vs NearFovOverride's "never guard the engine's original": decide the policy before writing a generic guarded-call helper.
+  - SEH-guarded engine calls (HudBridge, BodyFollow) vs NearFovOverride's "never guard the engine's original". **Decided 2026-10-18 (user): guard engine calls.** The original-forwarding call in a detour stays unguarded.
   - Full-body FNV hashes vs prologue memcmp are deliberately different strengths. Share the implementation, not the policy.
   - Feature-local gates deliberately kept out of EngineMap: ConsoleBridgeWin32:66, IkTargetProbe:29, CullCameraWatch `kCode`, FocusHold.
   - The three routes to the renderer (gEnv+0x120, the singleton RVA, system+0x28) are distinct globals.
@@ -561,11 +621,11 @@ Left:
 2. Header-only, zero-behaviour work:
    - ~~Land these together: B1 (VrMath) + D1 (TestSupport.h).~~ Done on 2026-10-18.
    - ~~B4 NativeContract.h + FindLandmark + layout aliases, and B5 EngineAccess.h.~~ Done on 2026-10-18.
-   - ~~B3 SafeMemory.h together with B2 HookInstall.h.~~ Done on 2026-10-18; awaiting a headset run.
+   - ~~B3 SafeMemory.h together with B2 HookInstall.h.~~ Done on 2026-10-18; headset-verified (PreyVR-15).
 3. ~~Build: D2 `preyvr_add_test`.~~ Done on 2026-10-18.
-   - Note: `tools/re/vr_scheme_review` (D5) already fails to link on its own: about 65 unresolved DLL-lane symbols, none of them B1's. It needs folding into the root build, or an updated source list.
+   - ~~Note: `tools/re/vr_scheme_review` (D5) already fails to link on its own.~~ Folded into the root build on 2026-10-18.
 4. Prune dead code (C). Keep the CameraEditHook experiments (user, 2026-10-18); the rest still needs sign-off.
-5. Tools: ~~E6~~ (done 2026-10-18), then E1, E2 (unpinned scripts only) and E3.
+5. Tools: ~~E6~~ (done 2026-10-18), ~~then E1, E2 (unpinned scripts only) and E3~~ (done 2026-10-18, with B12 and D5).
 6. Larger refactors that need a headset run afterwards: B6, B7, B9, B10, B11.
 
 Rough totals (reviewer estimates):

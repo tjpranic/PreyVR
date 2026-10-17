@@ -1,5 +1,6 @@
 #include "AimRayProbe.h"
 #include "EngineAccess.h"
+#include "AtomicMax.h"
 
 #include "Logger.h"
 #include "preyvr/AimState.h"
@@ -125,18 +126,12 @@ void SampleAimRay()
                          origin.z - gPreviousOrigin.z};
         const auto gapMicrometres =
             static_cast<unsigned long long>(Length(delta) * 1.0e6f);
-        unsigned long long previousMax = gMaxOriginGapMicrometres.load(std::memory_order_relaxed);
-        while (gapMicrometres > previousMax &&
-               !gMaxOriginGapMicrometres.compare_exchange_weak(previousMax, gapMicrometres)) {
-        }
+        StoreMax(gMaxOriginGapMicrometres, gapMicrometres);
 
         const float angleDegrees = AngleBetweenDegrees(gPreviousDirection, direction);
         if (std::isfinite(angleDegrees)) {
             const auto milli = static_cast<unsigned long long>(angleDegrees * 1000.0f);
-            unsigned long long previousAngle = gMaxAngleGapMillidegrees.load(std::memory_order_relaxed);
-            while (milli > previousAngle &&
-                   !gMaxAngleGapMillidegrees.compare_exchange_weak(previousAngle, milli)) {
-            }
+            StoreMax(gMaxAngleGapMillidegrees, milli);
         }
     }
 

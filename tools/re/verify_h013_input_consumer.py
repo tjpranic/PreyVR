@@ -3,14 +3,13 @@
 Usage: py -3 tools/re/verify_h013_input_consumer.py [PreyDll.dll]
 These checks establish static routing and predicates, not live input acceptance.
 """
-import hashlib
 import json
 import struct
 import sys
 from pathlib import Path
 
 sys.dont_write_bytecode = True
-from verify_h005_skinning import DEFAULT_MODULE, EXPECTED_SHA256
+from preydll import DEFAULT_MODULE, Image
 
 # Independently read from Ghidra after following string anchors and constructors.
 ANCHORS = {
@@ -43,29 +42,8 @@ VTABLES = {
 
 
 def verify(path):
-    data = path.read_bytes()
-    digest = hashlib.sha256(data).hexdigest()
-    if digest != EXPECTED_SHA256:
-        raise ValueError(f"Unsupported module SHA-256: {digest}")
-    u16 = lambda offset: struct.unpack_from("<H", data, offset)[0]
-    u32 = lambda offset: struct.unpack_from("<I", data, offset)[0]
-    pe = u32(0x3C)
-    opt = pe + 24
-    if (data[:2] != b"MZ" or data[pe:pe+4] != b"PE\0\0"
-            or u16(pe+4) != 0x8664 or u16(opt) != 0x20B):
-        raise ValueError("Expected x64 PE32+")
-    base = struct.unpack_from("<Q", data, opt+24)[0]
-    sections = []
-    for i in range(u16(pe+6)):
-        offset = opt + u16(pe+20) + 40*i
-        sections.append((u32(offset+12), u32(offset+16), u32(offset+20)))
-
-    def at(rva, length):
-        for start, size, offset in sections:
-            if start <= rva and rva+length <= start+size:
-                return data[offset+rva-start:offset+rva-start+length]
-        raise ValueError(f"Unmapped file-backed RVA {rva:#x}")
-
+    image = Image(path)
+    digest, base, at = image.sha256, image.base, image.at
     checks = []
     for name, (rva, expected) in ANCHORS.items():
         expected = bytes.fromhex(expected)
@@ -78,8 +56,8 @@ def verify(path):
         checks.append(name)
     # Decode the handler's CALL independently of its surrounding signature.
     call = 0x138A945
-    target = call + 5 + struct.unpack("<i", at(call+1, 4))[0]
-    if at(call, 1) != b"\xe8" or target != 0x138BDA0:
+    target = image.call_target(call)
+    if target != 0x138BDA0:
         raise ValueError("Launcher handler does not call SetMainMenuMode")
     checks.append("launcher_calls_main_menu_mode")
 

@@ -1,6 +1,7 @@
 #include "PassCameraProbe.h"
 #include "HookInstall.h"
 #include "MinHookInit.h"
+#include "AtomicMax.h"
 
 #include "CameraEditHook.h"
 #include "Logger.h"
@@ -76,10 +77,7 @@ void* __fastcall CreateGeneralPassObserved(
             if (degrees >= 0.0f) {
                 const auto milli = static_cast<unsigned long long>(degrees * 1000.0f);
                 gLastDifference.store(milli, std::memory_order_relaxed);
-                unsigned long long previousMax = gMaxDifference.load(std::memory_order_relaxed);
-                while (milli > previousMax &&
-                       !gMaxDifference.compare_exchange_weak(previousMax, milli)) {
-                }
+                StoreMax(gMaxDifference, milli);
                 // A degree of tolerance: the edit and this call are a moment
                 // apart and the head is moving, so exact equality would report
                 // disagreement for a reason that is not the question being asked.

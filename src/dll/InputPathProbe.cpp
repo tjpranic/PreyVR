@@ -1,6 +1,7 @@
 #include "InputPathProbe.h"
 #include "SafeMemory.h"
 #include "EngineAccess.h"
+#include "preyvr/TextFormat.h"
 
 #include "Logger.h"
 #include "preyvr/EngineMap.h"
@@ -61,22 +62,6 @@ bool ReadPointer(std::uintptr_t address, std::uintptr_t& out)
 bool ReadBytes(std::uintptr_t address, std::uint8_t* out, std::size_t count)
 {
     return SafeCopy(out, reinterpret_cast<const void*>(address), count);
-}
-
-std::string Hex(unsigned long long value)
-{
-    static const char* const digits = "0123456789abcdef";
-    std::string out = "0x";
-    bool leading = true;
-    for (int shift = 60; shift >= 0; shift -= 4) {
-        const unsigned int nibble = static_cast<unsigned int>((value >> shift) & 0xFull);
-        if (nibble == 0 && leading && shift != 0) {
-            continue;
-        }
-        leading = false;
-        out.push_back(digits[nibble]);
-    }
-    return out;
 }
 
 // The alignment test, and the reason this probe is worth building rather than

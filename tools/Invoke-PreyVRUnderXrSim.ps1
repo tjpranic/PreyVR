@@ -29,7 +29,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$XrSimRoot = 'D:\Dev Debug\xr-sim',
+    [string]$XrSimRoot = '',
     [string]$Executable = 'build/headless/Release/preyvr_xr_adapter_probe.exe',
     [string[]]$Arguments = @(),
     [ValidateSet('x64', 'x86')][string]$Architecture = 'x64',
@@ -47,6 +47,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'PreyVRCommon.ps1')
+if (-not $XrSimRoot) { $XrSimRoot = Resolve-XrSimRoot }
 
 # --- preflight, each check named after the failure it prevents ---------------
 

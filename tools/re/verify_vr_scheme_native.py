@@ -1,11 +1,8 @@
 """Read-only native ABI landmarks for the September 8 VR scheme audit."""
-import hashlib
 import json
-import struct
 from pathlib import Path
 
-from verify_h005_skinning import DEFAULT_MODULE as MODULE  # PREYVR_PREYDLL or the Steam library holding Prey
-EXPECTED_SHA256 = "7d6e322f61b28331095a400f0ba5f09bd9a39c57bf993602285dd6acb05311a7"
+from preydll import DEFAULT_MODULE as MODULE, Image
 ANCHORS = {
     "x_fifth_argument_read": (0x158FD27, "f30f10442428"),
     "y_fifth_argument_read": (0x158FD87, "f30f104c2428"),
@@ -16,22 +13,11 @@ ANCHORS = {
 }
 
 def main():
-    data = MODULE.read_bytes()
-    digest = hashlib.sha256(data).hexdigest()
-    assert digest == EXPECTED_SHA256, f"Unsupported target: {digest}"
-    u16 = lambda at: struct.unpack_from("<H", data, at)[0]
-    u32 = lambda at: struct.unpack_from("<I", data, at)[0]
-    pe = u32(0x3C)
-    assert u16(pe + 4) == 0x8664 and u16(pe + 24) == 0x20B
-    sections = []
-    for index in range(u16(pe + 6)):
-        at = pe + 24 + u16(pe + 20) + index * 40
-        sections.append((u32(at + 12), u32(at + 16), u32(at + 20)))
+    image = Image(MODULE)
+    digest = image.sha256
     for name, (rva, expected) in ANCHORS.items():
         wanted = bytes.fromhex(expected)
-        start, size, raw = next(s for s in sections if s[0] <= rva < s[0] + s[1])
-        assert rva + len(wanted) <= start + size
-        assert data[raw + rva - start:raw + rva - start + len(wanted)] == wanted, name
+        assert image.at(rva, len(wanted)) == wanted, name
     # Stack arithmetic from the retained old Release object disassembly:
     # wrapper entry S, push rdi, sub rsp,20h, call rax -> native entry S-30h.
     # Native [rsp+28h] == S-8, which is the wrapper's saved RDI slot.

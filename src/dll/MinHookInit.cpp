@@ -30,8 +30,7 @@ bool EnsureMinHook()
         return false;
     }
     gReady.store(true, std::memory_order_release);
-    bool expected = false;
-    if (gLogged.compare_exchange_strong(expected, true)) {
+    if (!gLogged.exchange(true)) {
         lifecycle::Log("preyvr_minhook result=0 detail=initialised");
     }
     return true;

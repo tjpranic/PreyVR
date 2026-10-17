@@ -2,6 +2,7 @@
 #include "SafeMemory.h"
 #include "HookInstall.h"
 #include "EngineAccess.h"
+#include "AtomicMax.h"
 
 #include "AimTakeover.h"
 #include "HeadTrackingHook.h"
@@ -178,12 +179,6 @@ Vec3 gNudgePos{};
 int Mdeg(float radians)
 {
     return std::isfinite(radians) ? static_cast<int>(std::lround(radians * kDegrees * 1000.0f)) : 0;
-}
-
-void StoreMax(std::atomic<int>& slot, int value)
-{
-    int previous = slot.load(std::memory_order_relaxed);
-    while (value > previous && !slot.compare_exchange_weak(previous, value)) {}
 }
 
 bool ReadMemory(const void* at, void* out, std::size_t size)
@@ -511,7 +506,7 @@ void Tick(void* player)
     TrackingFrame frame{};
     const std::uint64_t now = MonotonicNanoseconds();
     if (!TryGetTrackingFrame(frame) || !FreshSample(now, frame.publishedNs) ||
-        !IsPoseUsable(frame.head, frame.headValidity, 200000000ull)) {
+        !IsPoseUsable(frame.head, frame.headValidity, kMaxPoseAgeNs)) {
         gNoHead.fetch_add(1, std::memory_order_relaxed);
         return;
     }

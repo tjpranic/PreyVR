@@ -2,6 +2,7 @@
 #include "SafeMemory.h"
 #include "HookInstall.h"
 #include "EngineAccess.h"
+#include "preyvr/TextFormat.h"
 
 #include "AimTakeover.h"
 #include "CarryLane.h"
@@ -432,13 +433,6 @@ bool CallFiringPosition(std::uintptr_t weapon, Vec3& out, bool& cameraFallback)
     return Finite(out);
 }
 
-std::string Fixed(float v, int decimals = 3)
-{
-    char text[32];
-    std::snprintf(text, sizeof(text), "%.*f", decimals, static_cast<double>(v));
-    return text;
-}
-std::string Point(Vec3 v) { return Fixed(v.x) + "," + Fixed(v.y) + "," + Fixed(v.z); }
 Vec3 Normalized(Vec3 v)
 {
     const float l = Length(v);
@@ -482,7 +476,7 @@ bool RightGrip(const GameplayPoseFrame& f, Pose& out)
 {
     const auto& hand = f.tracking.hands[static_cast<unsigned>(Hand::right)];
     if (!f.cameraCentreValid || !std::isfinite(f.yaw) ||
-        !IsPoseUsable(hand.gripPose, hand.gripValidity, 200000000ull)) {
+        !IsPoseUsable(hand.gripPose, hand.gripValidity, kMaxPoseAgeNs)) {
         return false;
     }
     out = animik::ControllerWorldFromHead(f.yaw, f.cameraCentre, f.tracking.head, hand.gripPose);

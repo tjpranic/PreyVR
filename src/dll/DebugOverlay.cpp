@@ -2,6 +2,7 @@
 
 #include "DebugOverlay.h"
 #include "D3D11SavedState.h"
+#include "preyvr/TextFormat.h"
 
 #include "AimTakeover.h"
 #include "HeadTrackingHook.h"
@@ -42,7 +43,6 @@ namespace dd = preyvr::debugdraw;
 
 constexpr std::uint64_t kRayAgeNs = 150000000ull;    // older rays are from a previous pose
 constexpr std::uint64_t kSlotAgeNs = 250000000ull;
-constexpr std::uint64_t kPoseAgeNs = 200000000ull;
 constexpr std::size_t kMaxVertices = 60000;
 constexpr float kPointerRange = 3.0f;               // left pointer without a hit, metres
 
@@ -140,13 +140,13 @@ dd::OverlayFrame Gather(unsigned mask)
     const auto now = MonotonicNanoseconds();
     const auto reference = HeadTrackingReferenceGeneration();
     TrackingFrame t{};
-    const bool tracking = TryGetTrackingFrame(t) && FreshSample(now, t.publishedNs, kPoseAgeNs);
-    f.headValid = tracking && IsPoseUsable(t.head, t.headValidity, kPoseAgeNs);
+    const bool tracking = TryGetTrackingFrame(t) && FreshSample(now, t.publishedNs, kMaxPoseAgeNs);
+    f.headValid = tracking && IsPoseUsable(t.head, t.headValidity, kMaxPoseAgeNs);
     f.head = t.head;
     for (int h = 0; h < 2; ++h) {
         const auto& c = t.hands[h];
-        f.hands[h].valid = tracking && IsPoseUsable(c.gripPose, c.gripValidity, kPoseAgeNs) &&
-                           IsPoseUsable(c.aimPose, c.aimValidity, kPoseAgeNs);
+        f.hands[h].valid = tracking && IsPoseUsable(c.gripPose, c.gripValidity, kMaxPoseAgeNs) &&
+                           IsPoseUsable(c.aimPose, c.aimValidity, kMaxPoseAgeNs);
         f.hands[h].grip = c.gripPose;
         f.hands[h].aim = c.aimPose;
         f.hands[h].gripPressed = c.gripPressed;
@@ -180,11 +180,11 @@ dd::OverlayFrame Gather(unsigned mask)
     // layer uses; whether the layer decided to show it comes from the layer.
     f.wrist.enabled = WristDisplayEnabled();
     WristCardRecord hologram{};
-    if (f.wrist.enabled && gWristCard.TryRead(hologram) && FreshSample(now, hologram.ns, kPoseAgeNs)) {
+    if (f.wrist.enabled && gWristCard.TryRead(hologram) && FreshSample(now, hologram.ns, kMaxPoseAgeNs)) {
         f.wrist = hologram.card;
         f.wrist.enabled = true;
     } else if (f.wrist.enabled && f.headValid && f.hands[0].valid) {
-        const bool fresh = FreshSample(now, gWristNs.load(), kPoseAgeNs);
+        const bool fresh = FreshSample(now, gWristNs.load(), kMaxPoseAgeNs);
         f.wrist.gate = fresh && gWristGate.load();
         f.wrist.visible = fresh && gWristVisible.load();
         f.wrist.card = equipment::WristPose(t.hands[0].gripPose);
@@ -493,14 +493,6 @@ Renderer gRenderer;          // render thread only
 std::vector<dd::Vertex> gVerticesScratch;
 dd::Scene gScene;
 
-std::string Fixed(float value, int decimals)
-{
-    char text[32];
-    std::snprintf(text, sizeof(text), "%.*f", decimals, static_cast<double>(value));
-    return text;
-}
-std::string Point(Vec3 v) { return Fixed(v.x, 3) + "," + Fixed(v.y, 3) + "," + Fixed(v.z, 3); }
-
 }  // namespace
 
 DWORD SetDebugOverlay(unsigned mask)
@@ -546,7 +538,7 @@ void DebugOverlayAim(const GameplayPoseFrame& frame, const aim::Sample& sample)
     const unsigned mask = gMask.load(std::memory_order_relaxed);
     if (!(mask & dd::kRays)) { return; }
     const auto& right = frame.tracking.hands[static_cast<unsigned>(Hand::right)];
-    if (!IsPoseUsable(right.aimPose, right.aimValidity, kPoseAgeNs) || !Finite(sample.origin) || !Finite(sample.direction)) {
+    if (!IsPoseUsable(right.aimPose, right.aimValidity, kMaxPoseAgeNs) || !Finite(sample.origin) || !Finite(sample.direction)) {
         gRight.Clear();
         return;
     }
@@ -603,7 +595,7 @@ void DebugOverlayGameFrame(const GameplayPoseFrame& frame, bool tracking)
     }
     const auto& left = frame.tracking.hands[static_cast<unsigned>(Hand::left)];
     // A hand holding what it carries points at nothing (CarryLane.h).
-    if (!tracking || frame.twoHand.held || !IsPoseUsable(left.aimPose, left.aimValidity, kPoseAgeNs) ||
+    if (!tracking || frame.twoHand.held || !IsPoseUsable(left.aimPose, left.aimValidity, kMaxPoseAgeNs) ||
         CarryHoldingInHand()) {
         gLeft.Clear();
         return;

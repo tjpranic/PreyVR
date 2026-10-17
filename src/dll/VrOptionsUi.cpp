@@ -1,5 +1,6 @@
 #include "VrOptionsUi.h"
 #include "D3D11SavedState.h"
+#include "WideText.h"
 
 #include <windows.h>
 
@@ -41,16 +42,6 @@ DXGI_FORMAT Unorm(DXGI_FORMAT typeless)
     return typeless == DXGI_FORMAT_B8G8R8A8_TYPELESS ? DXGI_FORMAT_B8G8R8A8_UNORM : DXGI_FORMAT_R8G8B8A8_UNORM;
 }
 
-std::string Utf8(std::wstring_view text)
-{
-    if (text.empty()) { return {}; }
-    const int size = WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    std::string out(size > 0 ? static_cast<std::size_t>(size) : 0u, '\0');
-    if (size > 0) {
-        WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), out.data(), size, nullptr, nullptr);
-    }
-    return out;
-}
 // A slider's format string shows a finished label: '%' must not start a conversion.
 std::string Literal(const std::string& text)
 {

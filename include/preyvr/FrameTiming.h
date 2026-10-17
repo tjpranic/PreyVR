@@ -1,5 +1,7 @@
 #pragma once
 
+#include "preyvr/MonotonicClock.h"
+
 #include <atomic>
 #include <cstdint>
 
@@ -120,8 +122,7 @@ private:
     std::atomic<unsigned long long> mOverBudget{0};
 };
 
-// The monotonic clock these are meant to be fed from. One definition, so two
-// call sites cannot disagree about the epoch or the unit.
-std::uint64_t MonotonicNanoseconds();
+// The monotonic clock these are meant to be fed from (MonotonicClock.h).
+using preyvr::MonotonicNanoseconds;
 
 } // namespace preyvr::timing

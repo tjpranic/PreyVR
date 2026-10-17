@@ -45,10 +45,28 @@ bool WriteReticleScreenPosition(void*, const Vec3& origin, const Vec3& direction
     if (context) drawnContext = *context;
     return true;
 }
+// The lanes the aim frame feeds, and the overlay, at rest: no rig, no two-handed
+// hold, no shot ray or scene hit, so the published ray is the takeover's own.
+bool HudGameplayInputAllowed() { return true; }
+bool MedkitOwnsGrip() { return false; }
+bool TryGetEquippedRig(std::uintptr_t, EquippedRig&) { return false; }
+bool ShotRayFrame(const GameplayPoseFrame&, aim::Sample&) { return false; }
+void QueryAimScene(const GameplayPoseFrame&, aim::Sample&) {}
+void PublishReticleTarget(const GameplayPoseFrame&, const aim::Sample&) {}
+void QueueHaptic(Hand, haptics::Event, const TrackingFrame&) {}
+void DebugOverlayAim(const GameplayPoseFrame&, const aim::Sample&) {}
+void DebugOverlayForegrip(const GameplayPoseFrame&, const twohand::Input&, const twohand::Output&, bool) {}
+void DebugOverlayGameFrame(const GameplayPoseFrame&, bool) {}
+void UpdateArmsLane(const GameplayPoseFrame&, bool) {}
+void UpdateBodyEquipment(const GameplayPoseFrame&, bool) {}
+void UpdateCarryLane(const GameplayPoseFrame&, bool) {}
+void UpdateGrenadeLane(const GameplayPoseFrame&, bool) {}
+void UpdateInteractionLane(const GameplayPoseFrame&, bool) {}
+void UpdatePhysicalInteractions(const GameplayPoseFrame&, bool) {}
+void UpdatePsiMedkit(const GameplayPoseFrame&, bool) {}
+void UpdatePsychoscopeGesture(const GameplayPoseFrame&, bool) {}
+void UpdateWristLane(const GameplayPoseFrame&, bool) {}
 }
-extern "C" MH_STATUS WINAPI MH_CreateHook(LPVOID, LPVOID, LPVOID*) { return MH_ERROR_UNSUPPORTED_FUNCTION; }
-extern "C" MH_STATUS WINAPI MH_EnableHook(LPVOID) { return MH_ERROR_NOT_CREATED; }
-extern "C" MH_STATUS WINAPI MH_RemoveHook(LPVOID) { return MH_ERROR_NOT_CREATED; }
 void __fastcall NativeRay(void* player) {
     auto* bytes = static_cast<std::uint8_t*>(player);
     const preyvr::Vec3 forward{0, 1, 0};
