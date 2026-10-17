@@ -192,6 +192,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/BodyFollow.cpp
         src/dll/DebugOverlay.cpp
         src/dll/ShotRay.cpp
+        src/dll/ReticleRayHook.cpp
         src/dll/InteractionLane.cpp
         src/dll/CarryLane.cpp
         src/dll/GrenadeLane.cpp

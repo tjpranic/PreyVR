@@ -43,7 +43,8 @@
 param(
     [string]$GameExe = 'D:\SteamLibrary\steamapps\common\Prey\Binaries\Danielle\x64\Release\Prey.exe',
     [string]$GameRoot = 'D:\SteamLibrary\steamapps\common\Prey',
-    [string]$Dll = 'build\configure\Release\PreyVR.dll',
+    # Defaults to build\configure, else build\headless: whichever this checkout has.
+    [string]$Dll = '',
     [string]$XrSimRuntime = "$env:LOCALAPPDATA\xr-sim\runtime\xrsim-x64.json",
     [string]$XrTapeLayer = "$env:LOCALAPPDATA\xr-tape\layer-x64",
     [string]$RunRoot = "$env:LOCALAPPDATA\PreyVR\runs",
@@ -114,6 +115,11 @@ $ErrorActionPreference = 'Stop'
 # tools/ as often as from the root, and "mod DLL not found" from tools/ with a
 # freshly built DLL cost a headset session its first ten minutes.
 $repoRoot = Split-Path -Parent $PSScriptRoot
+if (-not $Dll) {
+    $Dll = 'build\configure\Release\PreyVR.dll'
+    $headless = Join-Path $repoRoot 'build\headless\Release\PreyVR.dll'
+    if (-not (Test-Path -LiteralPath (Join-Path $repoRoot $Dll)) -and (Test-Path -LiteralPath $headless)) { $Dll = $headless }
+}
 if (-not [System.IO.Path]::IsPathRooted($Dll)) { $Dll = Join-Path $repoRoot $Dll }
 
 # --- preflight, each check named for the failure it prevents ------------------
@@ -147,9 +153,9 @@ $dllFull = (Resolve-Path -LiteralPath $Dll).Path
 $dllHash = (Get-FileHash -LiteralPath $dllFull -Algorithm SHA256).Hash
 $dllSize = (Get-Item -LiteralPath $dllFull).Length
 
-# **Record which build.** Older instructions in this repo point at
-# build\headless\Release\PreyVR.dll, a different and much older artifact; a run
-# that injects the wrong one produces findings about code that is not on disk.
+# **Record which build.** Two build trees exist (build\configure, preferred, and
+# build\headless) and either can be stale; a run that injects the wrong one
+# produces findings about code that is not on disk.
 Write-Host ("mod: {0}" -f $dllFull)
 Write-Host ("     {0} bytes, SHA-256 {1}" -f $dllSize, $dllHash)
 

@@ -35,7 +35,10 @@
 param(
     [string]$OutputDirectory,
     [int]$MaxWidth = 900,
-    [string]$ReleaseDirectory = 'D:\Dev Debug\PreyVR\build\configure\Release',
+    # Where the mod writes frame dumps. Defaults to the folder of the PreyVR.dll
+    # loaded in the running game, which is where they land unless the game was
+    # started with PREYVR_CAPTURE_DIR.
+    [string]$ReleaseDirectory = '',
     [int]$TimeoutSeconds = 25
 )
 
@@ -43,22 +46,34 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # --- the channel -----------------------------------------------------------
-# The mod polls commands.txt and writes results.txt in the newest run folder.
-# Discovering it rather than being told it means this cannot be pointed at a
-# stale session by accident.
+# The mod polls commands.txt and writes results.txt beside the newest
+# PreyVR.log. Discovering it rather than being told it means this cannot be
+# pointed at a stale session by accident. It is the newest log, not the newest
+# folder, as Send-PreyVR.ps1 picks it: Invoke-PreyVRLaunch.ps1 runs keep it in
+# <run>\log, Start-PreyVR.ps1 runs in the run folder itself, and the empty
+# folder of a failed start must not shadow the session that is up.
 $runsRoot = Join-Path $env:LOCALAPPDATA 'PreyVR\runs'
 if (-not (Test-Path -LiteralPath $runsRoot)) {
     Write-Error "no PreyVR runs directory at $runsRoot -- has the mod ever run?"
     exit 1
 }
-$latest = Get-ChildItem -LiteralPath $runsRoot -Directory |
-          Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if ($null -eq $latest) { Write-Error 'no run folders found'; exit 1 }
+$latestLog = Get-ChildItem -LiteralPath $runsRoot -Filter 'PreyVR.log' -Recurse -File -ErrorAction SilentlyContinue |
+             Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if ($null -eq $latestLog) { Write-Error 'no PreyVR.log under any run folder'; exit 1 }
+$logDir = $latestLog.DirectoryName
 
-$logDir = Join-Path $latest.FullName 'log'
-if (-not (Test-Path -LiteralPath $logDir)) {
-    Write-Error "run folder $($latest.Name) has no log directory"
-    exit 1
+if (-not $ReleaseDirectory) {
+    $loaded = $null
+    try {
+        $loaded = Get-Process -Name 'Prey' -ErrorAction Stop | Select-Object -First 1 |
+                  ForEach-Object { $_.Modules } | Where-Object { $_.ModuleName -eq 'PreyVR.dll' } |
+                  Select-Object -First 1
+    } catch { $loaded = $null }
+    if ($null -eq $loaded) {
+        Write-Error 'Prey is not running with PreyVR.dll loaded; pass -ReleaseDirectory'
+        exit 1
+    }
+    $ReleaseDirectory = Split-Path -Parent $loaded.FileName
 }
 $commandFile = Join-Path $logDir 'commands.txt'
 $resultFile = Join-Path $logDir 'results.txt'
@@ -143,7 +158,8 @@ function Get-Frame([int]$tag, [string]$name) {
 }
 
 Write-Line 'PreyVR HUD validation'
-Write-Line "run:    $($latest.Name)"
+Write-Line "run:    $($logDir.Substring($runsRoot.Length).TrimStart('\'))"
+Write-Line "frames: $ReleaseDirectory"
 Write-Line "output: $OutputDirectory"
 
 # --- 1. what the runtime wants against what we render -----------------------

@@ -21,6 +21,10 @@ struct InventorySwapchainApi {
 // it also drops the frame that hold frames would submit again, so a hold frame
 // never names a destroyed swapchain. XR frame thread, under the session lock.
 XrResult XRAPI_CALL DestroyUnheldSwapchain(XrSwapchain swapchain);
+// The size floor screens copies of the game's own render targets. Layers
+// painted from the mod's own pixels are smaller by design and pass their own
+// floor to the constructor (the slot card is 1024x224).
+inline constexpr UINT kInventoryMinWidth=640,kInventoryMinHeight=480;
 bool InventoryTextureCompatible(const D3D11_TEXTURE2D_DESC& a,
                                 const D3D11_TEXTURE2D_DESC& b);
 class InventorySwapchain {
@@ -31,7 +35,9 @@ public:
     enum class Refusal { none, session, source, presentationFormat, enumerateFormats, formatNotListed,
                          create, images, image };
     static const char* RefusalName(Refusal refusal);
-    explicit InventorySwapchain(InventorySwapchainApi api):api_(api){}
+    explicit InventorySwapchain(InventorySwapchainApi api,UINT minWidth=kInventoryMinWidth,
+                                UINT minHeight=kInventoryMinHeight)
+        :api_(api),minWidth_(minWidth),minHeight_(minHeight){}
     ~InventorySwapchain(){Reset();}
     InventorySwapchain(const InventorySwapchain&)=delete;
     InventorySwapchain& operator=(const InventorySwapchain&)=delete;
@@ -46,6 +52,7 @@ public:
     XrResult LastResult() const {return result_;}
 private:
     InventorySwapchainApi api_;
+    UINT minWidth_,minHeight_;
     XrSession session_=XR_NULL_HANDLE;
     XrSwapchain chain_=XR_NULL_HANDLE;
     D3D11_TEXTURE2D_DESC desc_{};

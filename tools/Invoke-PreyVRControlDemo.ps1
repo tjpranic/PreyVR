@@ -197,4 +197,6 @@ Write-Host '  - Sticks/Trig are what the MOD read back, so a case that posts not
 Write-Host '    with a zero here failed before the lane rather than inside it.'
 Write-Host '  - Left-from-right separation is NOT tested: xr-sim keeps one value per'
 Write-Host '    action, so both hands read the same stick. Only a headset settles that.'
-exit ($failures -gt 0 ? 1 : 0)
+# Not `?:`: that is PowerShell 7 only and a parse error under Windows PowerShell 5.1.
+if ($failures -gt 0) { exit 1 }
+exit 0

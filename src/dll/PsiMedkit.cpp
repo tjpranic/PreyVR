@@ -9,6 +9,7 @@
 #include "DebugOverlay.h"
 #include "MinHookInit.h"
 #include "MoveLane.h"
+#include "ReticleRayHook.h"
 #include "preyvr/PsiTargeting.h"
 #include "preyvr/MedkitSlot.h"
 #include "preyvr/PsiMedkitNative.h"
@@ -16,6 +17,7 @@
 #include <MinHook.h>
 #include <atomic>
 #include <cmath>
+#include <iterator>
 #include <mutex>
 
 namespace preyvr::dll {
@@ -31,12 +33,10 @@ std::mutex installMutex;
 using UpdateFn=void(__fastcall*)(std::uintptr_t,float);
 using ActivateFn=bool(__fastcall*)(std::uintptr_t);
 using SelectFn=bool(__fastcall*)(std::uintptr_t,int);
-using RayFn=psi::Ray*(__fastcall*)(std::uintptr_t,psi::Ray*);
 using CandidateFn=bool(__fastcall*)(std::uintptr_t,std::uintptr_t,bool);
 UpdateFn originalUpdate=nullptr;
 ActivateFn originalActivate=nullptr;
 SelectFn originalSelect=nullptr;
-RayFn originalRay=nullptr;
 CandidateFn originalCandidate=nullptr;
 thread_local psi::Context* context=nullptr;
 thread_local psi::Sample preview{};
@@ -93,14 +93,14 @@ bool InvokeSelect(std::uintptr_t self,int id,psi::Context* ctx){
     __try {result=originalSelect(self,id);} __finally {context=saved;}
     return result;
 }
-psi::Ray* __fastcall RayHook(std::uintptr_t receiver,psi::Ray* result){
-    auto* out=originalRay(receiver,result);
+// Runs after the native reticle getter (ReticleRayHook owns that detour).
+void RayFilter(std::uintptr_t receiver,void*,void* result,std::uintptr_t){
+    auto* out=static_cast<psi::Ray*>(result);
     if(context&&!fault.load()&&mode.load()&&context->sample.generation==generation.load()&&
        context->sample.reference==HeadTrackingReferenceGeneration()&&
        context->sample.menu==HudMenuEpoch()&&
        FreshSample(MonotonicNanoseconds(),context->sample.stamp,100000000)&&
        psi::Override(context,receiver,out))++rayReads;
-    return out;
 }
 bool __fastcall CandidateHook(std::uintptr_t parameters,std::uintptr_t entity,bool hudPreferred){
     // The native HUD candidate normally bypasses the angle check. It still
@@ -147,6 +147,9 @@ DWORD Gate(){
     const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
     if(!base)return ERROR_NOT_READY;
     for(const auto& c:native::Contracts){
+        // The shared hook checked this body against the same bytes before
+        // patching it; hashing it now would hash the detour's jump.
+        if(c.rva==native::Reticle&&ReticleRayHookInstalled())continue;
         std::uint64_t h=14695981039346656037ull;
         const auto* b=reinterpret_cast<const unsigned char*>(base+c.rva);
         for(std::size_t i=0;i<c.size;++i)h=(h^b[i])*1099511628211ull;
@@ -161,10 +164,10 @@ DWORD Install(){
     const auto gated=Gate();if(gated)return gated;
     if(!EnsureGameplayPoseObservation())return ERROR_NOT_READY;
     EnsureMinHook();
+    if(!EnsureReticleRayHook())return ERROR_INVALID_FUNCTION;
     const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
     struct Hook {std::uintptr_t rva;void* detour;void** original;};
-    const Hook hooks[]={{native::Reticle,reinterpret_cast<void*>(&RayHook),reinterpret_cast<void**>(&originalRay)},
-      {native::Update,reinterpret_cast<void*>(&UpdateHook),reinterpret_cast<void**>(&originalUpdate)},
+    const Hook hooks[]={{native::Update,reinterpret_cast<void*>(&UpdateHook),reinterpret_cast<void**>(&originalUpdate)},
       {native::Activate,reinterpret_cast<void*>(&ActivateHook),reinterpret_cast<void**>(&originalActivate)},
       {native::Select,reinterpret_cast<void*>(&SelectHook),reinterpret_cast<void**>(&originalSelect)},
       {native::Candidate,reinterpret_cast<void*>(&CandidateHook),reinterpret_cast<void**>(&originalCandidate)}};
@@ -175,10 +178,11 @@ DWORD Install(){
         ++made;
         if(MH_QueueEnableHook(target)!=MH_OK){queued=false;break;}
     }
-    if(made!=5||!queued||MH_ApplyQueued()!=MH_OK){
+    if(made!=std::size(hooks)||!queued||MH_ApplyQueued()!=MH_OK){
         for(unsigned i=0;i<made;++i){auto* target=reinterpret_cast<void*>(base+hooks[i].rva);MH_DisableHook(target);MH_RemoveHook(target);}
         return ERROR_INVALID_FUNCTION;
     }
+    SetReticleRayFilter(ReticleRayClient::psi,&RayFilter);
     installed=true;return 0;
 }
 

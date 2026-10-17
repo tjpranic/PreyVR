@@ -33,7 +33,6 @@ constexpr int kDefaultIpdIndex = 3;   // 0.064
 std::atomic<bool> gRunning{false};
 std::atomic<int> gIpdIndex{kDefaultIpdIndex};
 std::atomic<int> gAaMode{0};
-std::atomic<bool> gEyeSwap{false};
 std::atomic<unsigned int> gPressCount{0};
 std::thread gThread;
 
@@ -174,8 +173,9 @@ void Poll()
                     ApplyAa();
                     break;
                 case 4: {
-                    const bool next = !gEyeSwap.load(std::memory_order_relaxed);
-                    gEyeSwap.store(next, std::memory_order_relaxed);
+                    // The session host's flag, not a copy: the export can
+                    // change it too, and a copy then stops toggling.
+                    const bool next = !XrSwapEyes();
                     SetXrSwapEyes(next ? 1u : 0u);
                     Log(std::string("result=0 detail=swap_eyes enabled=") + (next ? "1" : "0"));
                     break;
@@ -285,7 +285,7 @@ DWORD HotkeyAaMode()
 
 DWORD HotkeyEyeSwap()
 {
-    return gEyeSwap.load(std::memory_order_relaxed) ? 1u : 0u;
+    return XrSwapEyes() ? 1u : 0u;
 }
 
 DWORD HotkeyPressCount()

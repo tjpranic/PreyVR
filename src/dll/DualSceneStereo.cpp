@@ -691,13 +691,31 @@ DWORD EnsureHooks()
     gSwitchUsageMode.store(reinterpret_cast<SwitchUsageModeFn>(switchUsageMode),
                            std::memory_order_release);
     gClear.store(reinterpret_cast<ClearFn>(clear), std::memory_order_release);
+    // Queued and applied together: enabling one at a time left the earlier hooks
+    // live when a later one failed, against "all three or none".
+    const char* failedStep = nullptr;
+    const char* failedId = "all";
+    MH_STATUS status = MH_OK;
     for (auto& target : targets) {
-        const MH_STATUS status = MH_EnableHook(reinterpret_cast<void*>(target.address));
+        status = MH_QueueEnableHook(reinterpret_cast<void*>(target.address));
         if (status != MH_OK) {
-            Log(std::string("result=failed detail=enable_hook id=") + target.id +
-                " minhook=" + MH_StatusToString(status));
-            return 3;
+            failedStep = "queue_enable_hook";
+            failedId = target.id;
+            break;
         }
+    }
+    if (failedStep == nullptr) {
+        status = MH_ApplyQueued();
+        if (status != MH_OK) { failedStep = "apply_queued"; }
+    }
+    if (failedStep != nullptr) {
+        Log(std::string("result=failed detail=") + failedStep + " id=" + failedId +
+            " minhook=" + MH_StatusToString(status));
+        for (auto& target : targets) {
+            MH_DisableHook(reinterpret_cast<void*>(target.address));
+            MH_RemoveHook(reinterpret_cast<void*>(target.address));
+        }
+        return 3;
     }
     gInstalled = true;
     // Frames are counted at RT_EndFrame; without the observer every report would

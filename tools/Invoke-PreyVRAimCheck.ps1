@@ -34,7 +34,8 @@
 [CmdletBinding()]
 param(
     [string]$XrSimRoot = 'D:\Dev Debug\xr-sim',
-    [string]$Probe = 'build/configure/Release/preyvr_xr_session_probe.exe',
+    # Defaults to build/configure, else build/headless: whichever this checkout has.
+    [string]$Probe = '',
     [string]$StateName = 'preyvr',
     [int]$Frames = 3000,
     [int]$InputEvery = 30,
@@ -55,6 +56,11 @@ $ErrorActionPreference = 'Stop'
 $stateDir = Join-Path $env:LOCALAPPDATA "xr-sim\$StateName"
 $statePath = Join-Path $stateDir 'state.json'
 $cmdScript = Join-Path $XrSimRoot 'tools\xrsim-cmd.ps1'
+if (-not $Probe) {
+    $Probe = 'build/configure/Release/preyvr_xr_session_probe.exe'
+    $headless = 'build/headless/Release/preyvr_xr_session_probe.exe'
+    if (-not (Test-Path -LiteralPath $Probe) -and (Test-Path -LiteralPath $headless)) { $Probe = $headless }
+}
 foreach ($required in @($cmdScript, $Probe)) {
     if (-not (Test-Path -LiteralPath $required)) {
         Write-Error "not found: $required"

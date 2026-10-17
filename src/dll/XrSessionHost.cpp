@@ -2634,11 +2634,25 @@ void ServiceXrFrame(void* renderer)
                 D3D11_TEXTURE2D_DESC d{};d.Width=SlotFeedbackWidth;d.Height=SlotFeedbackHeight;d.Format=gHost.slotFormat;
                 d.SampleDesc.Count=d.ArraySize=d.MipLevels=1;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
                 if(SUCCEEDED(gHost.device->CreateTexture2D(&d,nullptr,&gHost.slotTexture))){
+                    // The card is shorter than the default floor (480), which
+                    // refused it at creation; its own size is the floor.
                     gHost.slotSwapchain=std::make_unique<InventorySwapchain>(InventorySwapchainApi{
                         xrEnumerateSwapchainFormats,xrCreateSwapchain,xrEnumerateSwapchainImages,
-                        xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,DestroyUnheldSwapchain});
-                    if(!gHost.slotSwapchain->Prepare(gHost.session,d,gHost.slotFormat))gHost.slotSwapchain.reset();
+                        xrAcquireSwapchainImage,xrWaitSwapchainImage,xrReleaseSwapchainImage,DestroyUnheldSwapchain},
+                        SlotFeedbackWidth,SlotFeedbackHeight);
+                    if(!gHost.slotSwapchain->Prepare(gHost.session,d,gHost.slotFormat)){
+                        std::ostringstream line;
+                        line<<"result=refused detail=slot_swapchain reason="
+                            <<InventorySwapchain::RefusalName(gHost.slotSwapchain->LastRefusal())
+                            <<" xrResult="<<gHost.slotSwapchain->LastResult()<<" format="<<gHost.slotFormat;
+                        Log(line.str());
+                        gHost.slotSwapchain.reset();
+                    } else {
+                        Log("result=0 detail=slot_swapchain format="+std::to_string(gHost.slotFormat));
+                    }
                 }
+            } else {
+                Log("result=refused detail=slot_swapchain reason=no_srgb_format");
             }
         }
         if(panel&&gHost.slotTexture&&gHost.slotSwapchain){
@@ -2673,7 +2687,7 @@ void ServiceXrFrame(void* renderer)
     XrCompositionLayerQuad fadeLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
     bool fadeActive=false;
     {
-        // InventorySwapchain takes nothing under 640x480 (Supported): the first
+        // InventorySwapchain's default floor is 640x480 (Supported): the first
         // fade, at 4x4, was refused at creation and never drew. Repainted per
         // level change only, so the size costs nothing per frame.
         constexpr unsigned kFadeWidth=640, kFadeHeight=480, kFadeLevels=8;
@@ -3277,6 +3291,8 @@ DWORD SetXrSwapEyes(unsigned int enabled)
     Log(line.str());
     return static_cast<DWORD>(gStatus.load(std::memory_order_acquire));
 }
+
+bool XrSwapEyes() { return gSwapEyes.load(std::memory_order_acquire); }
 
 DWORD SetXrPreferSrgbFormat(unsigned int enabled)
 {

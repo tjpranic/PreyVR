@@ -8,7 +8,7 @@ import json
 import struct
 from pathlib import Path
 
-MODULE = Path(r"D:\SteamLibrary\steamapps\common\Prey\Binaries\Danielle\x64\Release\PreyDll.dll")
+from verify_h005_skinning import DEFAULT_MODULE as MODULE  # PREYVR_PREYDLL or the Steam library holding Prey
 SHA256 = "7d6e322f61b28331095a400f0ba5f09bd9a39c57bf993602285dd6acb05311a7"
 ANCHORS = {
     "legacy_zero_vp_to_parameter_cache": (0xF18ABE, "8b813002000089843e648d0000"),

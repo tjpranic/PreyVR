@@ -43,7 +43,7 @@
     The console queue holds exactly one command, so console sends are spaced.
 
 .PARAMETER RunDir
-    The launcher's run directory. Defaults to the most recent one.
+    The launcher's run directory. Defaults to the run with the newest PreyVR.log.
 
 .PARAMETER IpdMillimetres
     Interpupillary distance for the synthetic stereo pair.
@@ -118,13 +118,22 @@ if ($WeaponAimAlignment -and (-not $Controls -or $NoHands)) {
     throw '-WeaponAimAlignment requires -Controls with hands enabled.'
 }
 
-if (-not $RunDir -and -not $LogDir) {
-    $latest = Get-ChildItem "$env:LOCALAPPDATA\PreyVR\runs" -Directory -ErrorAction SilentlyContinue |
-              Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if (-not $latest) { Write-Error 'no run directory found; launch the game first'; exit 1 }
-    $RunDir = $latest.FullName
+if (-not $LogDir) {
+    if ($RunDir) {
+        # Invoke-PreyVRLaunch.ps1 keeps the channel in <run>\log; Start-PreyVR.ps1
+        # keeps it beside PreyVR.log in the run directory itself.
+        $LogDir = if (Test-Path -LiteralPath (Join-Path $RunDir 'log')) { Join-Path $RunDir 'log' } else { $RunDir }
+    } else {
+        # The newest run that has a log, as Send-PreyVR.ps1 picks it: it finds
+        # either launcher's layout, and the empty directory of a failed start
+        # cannot shadow the session that is really up.
+        $latest = Get-ChildItem "$env:LOCALAPPDATA\PreyVR\runs" -Filter 'PreyVR.log' -Recurse -File -ErrorAction SilentlyContinue |
+                  Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if (-not $latest) { Write-Error 'no PreyVR.log under any run; launch the game first'; exit 1 }
+        $LogDir = $latest.DirectoryName
+    }
 }
-$log = if ($LogDir) { $LogDir } else { Join-Path $RunDir 'log' }
+$log = $LogDir
 $cmd = Join-Path $log 'commands.txt'
 $res = Join-Path $log 'results.txt'
 if (-not (Test-Path -LiteralPath $log)) { Write-Error "no channel at $log"; exit 1 }

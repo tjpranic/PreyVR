@@ -5,12 +5,44 @@ This verifies the researched bytes, not runtime execution or hand control.
 """
 import hashlib
 import json
+import os
+import re
 import struct
 import sys
 from pathlib import Path
 
 EXPECTED_SHA256 = "7d6e322f61b28331095a400f0ba5f09bd9a39c57bf993602285dd6acb05311a7"
-DEFAULT_MODULE = Path(r"D:\SteamLibrary\steamapps\common\Prey\Binaries\Danielle\x64\Release\PreyDll.dll")
+_PREYDLL = Path("steamapps/common/Prey/Binaries/Danielle/x64/Release/PreyDll.dll")
+_UPSTREAM_LIBRARY = Path(r"D:\SteamLibrary")
+
+
+def resolve_module():
+    """PREYVR_PREYDLL if set, else the first Steam library holding Prey.
+
+    The upstream library is tried first, so a machine that has it resolves as
+    before; a fork installed elsewhere is found through Steam's own library list.
+    """
+    override = os.environ.get("PREYVR_PREYDLL")
+    if override:
+        return Path(override)
+    libraries = [_UPSTREAM_LIBRARY]
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as key:
+            steam = Path(winreg.QueryValueEx(key, "SteamPath")[0])
+        folders = (steam / "steamapps" / "libraryfolders.vdf").read_text(encoding="utf-8", errors="replace")
+        libraries += [Path(path.replace("\\\\", "\\")) for path in re.findall(r'"path"\s+"([^"]+)"', folders)]
+    except (ImportError, OSError):
+        pass
+    for library in libraries:
+        if (library / _PREYDLL).is_file():
+            return library / _PREYDLL
+    return _UPSTREAM_LIBRARY / _PREYDLL
+
+
+# Imported by most verifiers here; the receipt-pinned ones among them pick up
+# the resolved path without their own bytes changing.
+DEFAULT_MODULE = resolve_module()
 
 # Ghidra instruction listings and raw bytes, recorded 2026-09-05.
 ANCHORS = {

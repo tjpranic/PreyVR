@@ -700,8 +700,12 @@ bool EnsureTexture(ID3D11Device* device,ID3D11RenderTargetView* original,
         capture.texture.Reset();capture.target.Reset();capture.depth.Reset();capture.depthView.Reset();
         d.Format=view.Format;d.Usage=D3D11_USAGE_DEFAULT;d.CPUAccessFlags=0;d.MiscFlags=0;
         d.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+        // A half-built capture would match the size check next time and be
+        // returned with no view.
         if(FAILED(device->CreateTexture2D(&d,nullptr,&capture.texture)) ||
-           FAILED(device->CreateRenderTargetView(capture.texture.Get(),&view,&capture.target)))return false;
+           FAILED(device->CreateRenderTargetView(capture.texture.Get(),&view,&capture.target))) {
+            capture.texture.Reset();capture.target.Reset();return false;
+        }
     }
     // Preserve the native stencil contents used to clip Flash into its viewport.
     if(ds) {
@@ -713,7 +717,9 @@ bool EnsureTexture(ID3D11Device* device,ID3D11RenderTargetView* original,
             capture.depth.Reset();capture.depthView.Reset();
             D3D11_DEPTH_STENCIL_VIEW_DESC vd{};ds->GetDesc(&vd);
             if(FAILED(device->CreateTexture2D(&dd,nullptr,&capture.depth)) ||
-               FAILED(device->CreateDepthStencilView(capture.depth.Get(),&vd,&capture.depthView)))return false;
+               FAILED(device->CreateDepthStencilView(capture.depth.Get(),&vd,&capture.depthView))) {
+                capture.depth.Reset();capture.depthView.Reset();return false;
+            }
         }
     } else {capture.depth.Reset();capture.depthView.Reset();}
     return true;

@@ -23,8 +23,10 @@ std::uintptr_t __fastcall GetPlayer(){return player;}
 std::uintptr_t __fastcall GetPower(std::uintptr_t p){Check(p==player,"whole player receiver");return power;}
 std::uintptr_t __fastcall MockGetFocus(std::uintptr_t p){Check(p==player+0x678,"focus accessor secondary receiver");return focus;}
 psi::Ray* __fastcall GetRay(std::uintptr_t,psi::Ray* out){*out={{7,8,9},{1,0,0}};return out;}
-void __fastcall Update(std::uintptr_t p,float){Check(p==power,"psi update receiver");++updates;RayHook(player+0x40,&observed);}
-bool __fastcall Activate(std::uintptr_t p){if(p!=power){++foreignActivations;return true;}++activations;RayHook(player+0x40,&castRay);
+// The reticle getter as ReticleRayHook runs it: the native body, then psi's filter.
+psi::Ray* NativeGetter(std::uintptr_t r,psi::Ray* out){auto* result=GetRay(r,out);RayFilter(r,out,result,0);return result;}
+void __fastcall Update(std::uintptr_t p,float){Check(p==power,"psi update receiver");++updates;NativeGetter(player+0x40,&observed);}
+bool __fastcall Activate(std::uintptr_t p){if(p!=power){++foreignActivations;return true;}++activations;NativeGetter(player+0x40,&castRay);
     if(clearOnActivate)Field<int>(power,0x230)=-1;return true;}
 bool __fastcall Select(std::uintptr_t p,int id){Check(p==power,"psi select receiver");++selections;if(selectAllowed)Field<int>(p,0x230)=id;return selectAllowed;}
 bool __fastcall Candidate(std::uintptr_t,std::uintptr_t,bool preferred){return preferred;}
@@ -52,6 +54,9 @@ void PublishSlotFeedback(equipment::SlotNotice,const GameplayPoseFrame&){}
 bool PsiButtonHeld(){return psiPress;}
 void DebugOverlayMedkit(bool,Vec3,Vec3,bool,bool,bool,bool){}
 bool EnsureMinHook(){return false;}
+bool EnsureReticleRayHook(){return false;}
+bool ReticleRayHookInstalled(){return false;}
+void SetReticleRayFilter(ReticleRayClient,ReticleRayFilter){}
 bool EnsureGameplayPoseObservation(){return true;}
 DWORD InputDrainThreadId(){return drainThread;}
 unsigned long long HeadTrackingReferenceGeneration(){return reference;}
@@ -78,18 +83,18 @@ int main(){
     Field<std::uintptr_t>(player+scope::InputOffset,0)=moduleBase+scope::InputVtableRva;
     Field<std::uintptr_t>(player+scope::InputOffset,0x70)=player;
     const psi::Ray weapon{{70,80,90},{0,1,0}};Field<psi::Ray>(player,0x17d4)=weapon;
-    originalUpdate=Update;originalActivate=Activate;originalSelect=Select;originalRay=GetRay;originalCandidate=Candidate;installed=true;
+    originalUpdate=Update;originalActivate=Activate;originalSelect=Select;originalCandidate=Candidate;installed=true;
     published.player=player;published.cameraCentreValid=published.headYawUsable=true;
     published.cameraCentre={12,23,3};published.referenceGeneration=2;published.tracking.epoch=1;
     published.tracking.head={{},{0,1.65f,0}};published.tracking.headValidity={true,true,true,true,0};
     auto& left=published.tracking.hands[0];left.aimPose={{},{-.3f,1.2f,-.4f}};left.gripPose={{},{-.25f,1.f,.02f}};
     left.aimValidity=left.gripValidity={true,true,true,true,0};Tick();Tick();
-    psi::Ray outside{};RayHook(player+0x40,&outside);UpdateHook(power,.01f);
+    psi::Ray outside{};NativeGetter(player+0x40,&outside);UpdateHook(power,.01f);
     Check(outside.origin.x==7&&observed.origin.x==7&&updates==1,"original mode unchanged");
     Check(SetPsiTargetMode(1)==0,"enable head targeting");UpdateHook(power,.01f);
     Check(Near(observed.origin.x,12)&&Near(observed.direction.y,1)&&updates==2,"one native update with head ray");
-    RayHook(player+0x40,&outside);Check(outside.origin.x==7,"weapon getter outside scope unchanged");
-    psi::Context scoped{preview,true,0};context=&scoped;RayHook(player+0x48,&outside);context=nullptr;
+    NativeGetter(player+0x40,&outside);Check(outside.origin.x==7,"weapon getter outside scope unchanged");
+    psi::Context scoped{preview,true,0};context=&scoped;NativeGetter(player+0x48,&outside);context=nullptr;
     Check(outside.origin.x==7,"wrong secondary receiver stays native");
     scoped.reads=1;context=&scoped;Check(!CandidateHook(1,2,true),"HUD candidate must pass VR angle test");context=nullptr;
     Check(CandidateHook(1,2,true),"unscoped native candidate preference preserved");

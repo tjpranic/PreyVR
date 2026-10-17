@@ -11,7 +11,7 @@ import struct
 import sys
 from pathlib import Path
 
-MODULE = Path(r"D:\SteamLibrary\steamapps\common\Prey\Binaries\Danielle\x64\Release\PreyDll.dll")
+from verify_h005_skinning import DEFAULT_MODULE as MODULE  # PREYVR_PREYDLL or the Steam library holding Prey
 SHA256 = "7d6e322f61b28331095a400f0ba5f09bd9a39c57bf993602285dd6acb05311a7"
 SOURCE = Path(__file__).resolve().parents[2] / "src" / "dll" / "CullCameraWatch.cpp"
 RESET_RVA, ENGINE_VTABLE_RVA, RESET_SLOT = 0x2105A0, 0x1C912A0, 0x90

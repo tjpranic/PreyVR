@@ -4,6 +4,7 @@
 #include "HeadTrackingHook.h"
 #include "Logger.h"
 #include "MinHookInit.h"
+#include "ReticleRayHook.h"
 #include "SceneQuery.h"
 #include "WeaponAttachment.h"
 #include "preyvr/AnimIk.h"
@@ -64,13 +65,11 @@ constexpr std::array<std::uint8_t, 23> kPelletsPrologue{
     0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x20, 0x4C, 0x89,
     0x44, 0x24, 0x18, 0x55, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x57};
 
-// IArkPlayer::GetReticleViewPositionAndDir 0x157CBB0 (R-013): RCX = player+0x40,
-// RDX = 6 floats out (origin, direction). Every native reader of the cached ray
-// calls it; the probe below records who, to find firing routes that do not
-// go through GetReticleInfoForFiring.
-constexpr std::uintptr_t kGetterRva = 0x157CBB0;
-constexpr std::array<std::uint8_t, 14> kGetterPrologue{
-    0x8B, 0x81, 0x94, 0x17, 0x00, 0x00, 0x89, 0x02, 0x8B, 0x81, 0x98, 0x17, 0x00, 0x00};
+// IArkPlayer::GetReticleViewPositionAndDir 0x157CBB0 (R-013) is shared with
+// psi targeting, so ReticleRayHook owns its detour and this lane registers a
+// filter. Every native reader of the cached ray calls it; the probe below
+// records who, to find firing routes that do not go through
+// GetReticleInfoForFiring.
 // The Q-Beam (Instalaser), observed only. Its beam update 0x16A29E0 (RCX =
 // weapon+0x190) raycasts the damage ray from 0.7 m behind the ammo helper along
 // the beam direction, 0x16AD790 (RCX hit-out, RDX &origin, R8 &direction, XMM3
@@ -94,7 +93,6 @@ constexpr float kBeamRayBehind = .7f;   // 0x1C8FD90
 using BeamRayFn = float(__fastcall*)(void*, const Vec3*, const Vec3*, float, std::uint64_t, std::uint64_t,
                                      std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);
 using UpdateLaserFn = void*(__fastcall*)(void*, const Vec3*, const Vec3*, const Vec3*);
-using GetterFn = void*(__fastcall*)(void* player, void* out);
 using QueryFn = void*(__fastcall*)(void* weapon, void* out);
 using FiringPositionFn = void*(__fastcall*)(void*, void*, std::uint32_t, void*);
 using HelperWorldFn = void*(__fastcall*)(void* out, void* entity, int slot, const char* name, bool, bool);
@@ -106,7 +104,6 @@ std::uintptr_t gBase = 0;
 std::atomic<QueryFn> gQueryOriginal{nullptr};
 std::atomic<ProjectileSpawnFn> gProjectileOriginal{nullptr};
 std::atomic<PelletsFn> gPelletsOriginal{nullptr};
-std::atomic<GetterFn> gGetterOriginal{nullptr};
 std::atomic<BeamRayFn> gBeamRayOriginal{nullptr};
 std::atomic<UpdateLaserFn> gUpdateLaserOriginal{nullptr};
 bool gGetterHooked = false, gBeamHooked = false;
@@ -439,9 +436,8 @@ void RecordCaller(std::uint32_t rva)
     gCallersOverflow.fetch_add(1, std::memory_order_relaxed);
 }
 
-void* __fastcall GetterHook(void* player, void* out)
+void ShotGetterFilter(std::uintptr_t, void* out, void* result, std::uintptr_t caller)
 {
-    void* const result = gGetterOriginal.load(std::memory_order_acquire)(player, out);
     if (tScope.active) {
         if (result == out && MonotonicNanoseconds() - tScope.ns < 20000000ull &&
             CopyBytes(out, &tScope.origin, sizeof(tScope.origin))) {
@@ -450,10 +446,7 @@ void* __fastcall GetterHook(void* player, void* out)
             tScope.active = false;   // stale: never outlive the shot
         }
     }
-    if (gProbe.load(std::memory_order_relaxed)) {
-        RecordCaller(static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(_ReturnAddress()) - gBase));
-    }
-    return result;
+    if (gProbe.load(std::memory_order_relaxed)) { RecordCaller(static_cast<std::uint32_t>(caller - gBase)); }
 }
 
 // --- Q-Beam observer ----------------------------------------------------------
@@ -640,8 +633,8 @@ bool Install()
                          "projectile_spawn");
     gPelletsHooked = HookAt(kPelletsRva, kPelletsPrologue, reinterpret_cast<void*>(&PelletsHook), gPelletsOriginal,
                             "pellets");
-    gGetterHooked = HookAt(kGetterRva, kGetterPrologue, reinterpret_cast<void*>(&GetterHook), gGetterOriginal,
-                           "ray_getter");
+    gGetterHooked = EnsureReticleRayHook();
+    if (gGetterHooked) { SetReticleRayFilter(ReticleRayClient::shot, &ShotGetterFilter); }
     gBeamHooked = HookAt(kBeamRayRva, kBeamRayPrologue, reinterpret_cast<void*>(&BeamRayHook), gBeamRayOriginal,
                          "beam_ray") &&
                   HookAt(kUpdateLaserRva, kUpdateLaserPrologue, reinterpret_cast<void*>(&UpdateLaserHook),

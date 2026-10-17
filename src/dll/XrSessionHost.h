@@ -121,6 +121,7 @@ DWORD SetXrStereoSubmission(unsigned int enabled);
 // subtly wrong -- depth that will not settle, easily misattributed to judder or
 // to the frustum. One call settles it rather than a rebuild.
 DWORD SetXrSwapEyes(unsigned int enabled);
+bool XrSwapEyes();
 
 // **Rung 1b.** Called on the render thread between the two scene submissions of
 // a both-eyes frame (DualSceneStereo mode 3): copies the backbuffer -- the first

@@ -189,6 +189,23 @@ void HudShapeAndRefusalReasons() {
     CHECK(!owner.Prepare(XR_NULL_HANDLE,d,DXGI_FORMAT_R8G8B8A8_UNORM));Calls({});
     CHECK(owner.LastRefusal()==InventorySwapchain::Refusal::session);
 }
+void SizeFloor() {
+    // The slot card (1024x224) is shorter than the inventory floor: refused by
+    // default, created and copied with its own floor. Captures of the game's
+    // targets keep the inventory floor.
+    r.formats={DXGI_FORMAT_R8G8B8A8_UNORM_SRGB};
+    auto d=Description(1024);d.Height=224;
+    CHECK(!InventoryTextureCompatible(d,d));
+    InventorySwapchain inventory(Api());
+    CHECK(!inventory.Prepare(session,d,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB));Calls({});
+    CHECK(inventory.LastRefusal()==InventorySwapchain::Refusal::source);
+    InventorySwapchain card(Api(),1024,224);
+    CHECK(card.Prepare(session,d,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB));Calls({"create"});
+    auto source=Texture(d,0x80402010);
+    CHECK(card.Copy(r.context.Get(),source.Get())==InventorySwapchain::Upload::ready);
+    CheckPixels(r.image.Get(),0x80402010);Calls({"acquire","wait","release"});
+    card.Reset();Calls({"destroy"});
+}
 }
 int main() {
     try {
@@ -197,7 +214,8 @@ int main() {
         LifecycleAndPixels();Refusals();Calls({"destroy"});
         PresentationPolicy();
         HudShapeAndRefusalReasons();Calls({});
-        std::cout<<"inventory_swapchain PASS: real WARP copy/alpha, independent world texture, lifetime, resize, inherited linear/sRGB format, XR failures, refusal reasons\n";
+        SizeFloor();
+        std::cout<<"inventory_swapchain PASS: real WARP copy/alpha, independent world texture, lifetime, resize, inherited linear/sRGB format, XR failures, refusal reasons, per-layer size floor\n";
         return 0;
     } catch(const std::exception& e) {std::cerr<<e.what()<<'\n';return 1;}
 }

@@ -188,17 +188,14 @@ DWORD SetFrameObserverEnabled(bool enabled)
             return static_cast<DWORD>(FrameObserverRuntimeStatus::failed);
         }
         EndRendererSceneFn original = nullptr;
-        // Shared and idempotent: without it MH_CreateHook returns
-        // MH_ERROR_NOT_INITIALIZED and the feature reports "unavailable" for a
-        // reason unrelated to itself. See MinHookInit.h.
-        EnsureMinHook();
         status = MH_CreateHook(
             gTarget,
             reinterpret_cast<void*>(&ObserveEndRendererScene),
             reinterpret_cast<void**>(&original));
+        // A failure here never uninitializes MinHook: that would remove every
+        // other feature's hooks while EnsureMinHook still reports ready.
         if (status != MH_OK) {
             SetFailed("create", status);
-            MH_Uninitialize();
             return static_cast<DWORD>(FrameObserverRuntimeStatus::failed);
         }
         gOriginal.store(original, std::memory_order_release);
@@ -219,7 +216,6 @@ DWORD SetFrameObserverEnabled(bool enabled)
     if (status != MH_OK) {
         SetFailed("enable", status);
         MH_RemoveHook(gTarget);
-        MH_Uninitialize();
         gOriginal.store(nullptr, std::memory_order_release);
         gHookCreated = false;
         return static_cast<DWORD>(FrameObserverRuntimeStatus::failed);

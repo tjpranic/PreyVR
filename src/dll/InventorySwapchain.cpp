@@ -14,15 +14,18 @@ int Family(DXGI_FORMAT format) {
     default:return 0;
     }
 }
-bool Supported(const D3D11_TEXTURE2D_DESC& d) {
-    return Family(d.Format)!=0 && d.Width>=640 && d.Height>=480 &&
+bool Supported(const D3D11_TEXTURE2D_DESC& d,UINT minWidth,UINT minHeight) {
+    return Family(d.Format)!=0 && d.Width>=minWidth && d.Height>=minHeight &&
         d.Width<=8192 && d.Height<=8192 && d.ArraySize==1 && d.MipLevels==1 &&
         d.SampleDesc.Count==1 && d.SampleDesc.Quality==0;
 }
+bool Compatible(const D3D11_TEXTURE2D_DESC& a,const D3D11_TEXTURE2D_DESC& b,UINT minWidth,UINT minHeight) {
+    return Supported(a,minWidth,minHeight)&&Supported(b,minWidth,minHeight)&&
+        a.Width==b.Width&&a.Height==b.Height&&Family(a.Format)==Family(b.Format);
+}
 }
 bool InventoryTextureCompatible(const D3D11_TEXTURE2D_DESC& a,const D3D11_TEXTURE2D_DESC& b) {
-    return Supported(a)&&Supported(b)&&a.Width==b.Width&&a.Height==b.Height&&
-        Family(a.Format)==Family(b.Format);
+    return Compatible(a,b,kInventoryMinWidth,kInventoryMinHeight);
 }
 const char* InventorySwapchain::RefusalName(Refusal refusal) {
     switch(refusal) {
@@ -47,12 +50,12 @@ void InventorySwapchain::Reset() {
 }
 bool InventorySwapchain::Prepare(XrSession session,const D3D11_TEXTURE2D_DESC& source,DXGI_FORMAT presentationFormat) {
     if(attempted_ && session_==session && presentationFormat_==presentationFormat && desc_.Format==source.Format &&
-       InventoryTextureCompatible(desc_,source))return chain_!=XR_NULL_HANDLE&&!fault_;
+       Compatible(desc_,source,minWidth_,minHeight_))return chain_!=XR_NULL_HANDLE&&!fault_;
     Reset();attempted_=true;session_=session;desc_=source;
     presentationFormat_=presentationFormat;
     auto refuse=[&](Refusal why,XrResult result=XR_SUCCESS){refusal_=why;result_=result;return false;};
     if(!session)return refuse(Refusal::session);
-    if(!Supported(source))return refuse(Refusal::source);
+    if(!Supported(source,minWidth_,minHeight_))return refuse(Refusal::source);
     if((presentationFormat!=DXGI_FORMAT_R8G8B8A8_UNORM && presentationFormat!=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB &&
         presentationFormat!=DXGI_FORMAT_B8G8R8A8_UNORM && presentationFormat!=DXGI_FORMAT_B8G8R8A8_UNORM_SRGB) ||
        Family(presentationFormat)!=Family(source.Format))return refuse(Refusal::presentationFormat);
@@ -85,7 +88,7 @@ bool InventorySwapchain::Prepare(XrSession session,const D3D11_TEXTURE2D_DESC& s
     for(const auto& image:images_) {
         if(!image.texture)return discard(Refusal::image);
         D3D11_TEXTURE2D_DESC d{};image.texture->GetDesc(&d);
-        if(!InventoryTextureCompatible(source,d))return discard(Refusal::image);
+        if(!Compatible(source,d,minWidth_,minHeight_))return discard(Refusal::image);
     }
     return true;
 }
@@ -93,7 +96,7 @@ InventorySwapchain::Upload InventorySwapchain::Copy(ID3D11DeviceContext* context
     if(fault_)return Upload::sessionFault;
     if(!chain_ || !context || !source)return Upload::failed;
     D3D11_TEXTURE2D_DESC d{};source->GetDesc(&d);
-    if(!InventoryTextureCompatible(desc_,d))return Upload::failed;
+    if(!Compatible(desc_,d,minWidth_,minHeight_))return Upload::failed;
     uint32_t index=0;
     XrSwapchainImageAcquireInfo acquire{XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
     if(api_.acquire(chain_,&acquire,&index)!=XR_SUCCESS)return Upload::failed;

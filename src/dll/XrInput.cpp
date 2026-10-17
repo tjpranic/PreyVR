@@ -637,8 +637,12 @@ bool LocateHeldPointer(void* sessionHandle, void* spaceHandle, long long display
     get.subactionPath = gHands[index].subactionPath;
     get.action = Action(Role::trigger);
     XrActionStateFloat trigger{XR_TYPE_ACTION_STATE_FLOAT};
+    // The live frame's press and release points and state (UpdateXrInput):
+    // both run under the session lock, so a trigger resting between the two
+    // does not flip when a hold frame takes over.
     pressed = XR_SUCCEEDED(xrGetActionStateFloat(session, &get, &trigger)) && trigger.isActive &&
-              trigger.currentState >= 0.5f;
+              input::Pressed(gTriggerDown[index], trigger.currentState, input::kTriggerPress);
+    gTriggerDown[index] = pressed;
     return true;
 }
 

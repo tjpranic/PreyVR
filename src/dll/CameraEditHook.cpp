@@ -1409,6 +1409,10 @@ bool EnsureHook()
 
     status = MH_EnableHook(gTarget);
     if (status != MH_OK) {
+        // Removed so a retry can create it again rather than failing for ever
+        // with MH_ERROR_ALREADY_CREATED.
+        MH_RemoveHook(gTarget);
+        gOriginal.store(nullptr, std::memory_order_release);
         std::ostringstream line;
         line << "preyvr_camera_edit result=failed detail=enable_hook minhook="
              << MH_StatusToString(status);
@@ -1773,6 +1777,8 @@ bool EnsureRenderWorldHook()
     gRenderWorldOriginal.store(original, std::memory_order_release);
     status = MH_EnableHook(gRenderWorldTarget);
     if (status != MH_OK) {
+        MH_RemoveHook(gRenderWorldTarget);
+        gRenderWorldOriginal.store(nullptr, std::memory_order_release);
         std::ostringstream line;
         line << "preyvr_interpose result=failed detail=enable_hook minhook="
              << MH_StatusToString(status);

@@ -34,13 +34,20 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-if (-not $RunDir -and -not $LogDir) {
-    $latest = Get-ChildItem "$env:LOCALAPPDATA\PreyVR\runs" -Directory -ErrorAction SilentlyContinue |
-              Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if (-not $latest) { Write-Error 'no run directory; launch first'; exit 1 }
-    $RunDir = $latest.FullName
+if (-not $LogDir) {
+    if ($RunDir) {
+        # Invoke-PreyVRLaunch.ps1 keeps the channel in <run>\log; Start-PreyVR.ps1
+        # keeps it beside PreyVR.log in the run directory itself.
+        $LogDir = if (Test-Path -LiteralPath (Join-Path $RunDir 'log')) { Join-Path $RunDir 'log' } else { $RunDir }
+    } else {
+        # The newest run that has a log, as Send-PreyVR.ps1 picks it.
+        $latest = Get-ChildItem "$env:LOCALAPPDATA\PreyVR\runs" -Filter 'PreyVR.log' -Recurse -File -ErrorAction SilentlyContinue |
+                  Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if (-not $latest) { Write-Error 'no PreyVR.log under any run; launch first'; exit 1 }
+        $LogDir = $latest.DirectoryName
+    }
 }
-$log = if ($LogDir) { $LogDir } else { Join-Path $RunDir 'log' }
+$log = $LogDir
 $cmd = Join-Path $log 'commands.txt'
 $res = Join-Path $log 'results.txt'
 
@@ -52,7 +59,10 @@ function Send($line) {
     while ((Get-Date) -lt $deadline) {
         Start-Sleep -Milliseconds 250
         if ((Test-Path -LiteralPath $res) -and (Get-Item -LiteralPath $res).LastWriteTime -gt $before) {
-            return (Get-Content -LiteralPath $res -Raw).Trim()
+            # Empty while the mod is still writing it: -Raw then returns $null,
+            # and .Trim() on that throws under StrictMode. Keep polling.
+            $text = Get-Content -LiteralPath $res -Raw
+            if ($text) { return $text.Trim() }
         }
     }
     return '(no result)'
