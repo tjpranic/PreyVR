@@ -31,6 +31,7 @@ const char* OwnerName(Owner owner)
     case Owner::Legacy: return "legacy";
     case Owner::Hold: return "hold";
     case Owner::Draw: return "draw";
+    case Owner::Psi: return "psi";
     default: return "none";
     }
 }
@@ -43,12 +44,12 @@ void UseButton::Reset()
 ButtonOutput UseButton::Update(const ButtonInput& in)
 {
     ButtonOutput out{};
-    // A hand acts only on a fresh press: a grip still held from a menu, a
+    // A hand acts only on a fresh press: a press still held from a menu, a
     // medkit or a foregrip does nothing until it has been let go once.
-    const bool leftEdge = in.leftGrip && leftArmed_;
-    const bool rightEdge = in.rightGrip && rightArmed_;
-    if (!in.leftGrip) { leftArmed_ = true; }
-    if (!in.rightGrip) { rightArmed_ = true; }
+    const bool leftEdge = in.leftPress && leftArmed_;
+    const bool rightEdge = in.rightPress && rightArmed_;
+    if (!in.leftPress) { leftArmed_ = true; }
+    if (!in.rightPress) { rightArmed_ = true; }
     auto release = [&] {
         if (down_) { out.released = true; }
         down_ = false;
@@ -58,17 +59,17 @@ ButtonOutput UseButton::Update(const ButtonInput& in)
     if (!in.gameplay) {
         if (owner_ == Owner::Hold && in.carrying) {
             // A menu over a held object: it stays held (the game keeps carrying
-            // it), and the grip is judged again when play resumes.
-            if (in.rightGrip) { rightArmed_ = false; }
+            // it), and the press is judged again when play resumes.
+            if (in.rightPress) { rightArmed_ = false; }
             out.owner = owner_;
             return out;
         }
         // A menu opening, a death, the lane switching off: let go now, and do
-        // not act on a grip that was already down when gameplay returns.
+        // not act on a press that was already down when gameplay returns.
         release();
         clear_ = waited_ = guard_ = 0;
-        if (in.leftGrip) { leftArmed_ = false; }
-        if (in.rightGrip) { rightArmed_ = false; }
+        if (in.leftPress) { leftArmed_ = false; }
+        if (in.rightPress) { rightArmed_ = false; }
         out.owner = owner_;
         return out;
     }
@@ -76,18 +77,18 @@ ButtonOutput UseButton::Update(const ButtonInput& in)
     if (!in.leftHand) {
         // The original layout: the right grip is the native use/reload button.
         if (owner_ == Owner::Legacy) {
-            if (!in.rightGrip || in.rightBusy) {
+            if (!in.rightPress || in.rightBusy) {
                 release();
-                if (in.rightGrip) { rightArmed_ = false; }
+                if (in.rightPress) { rightArmed_ = false; }
             }
         } else if (owner_ != Owner::None) {
             release();   // switched layout mid-press
         } else if (rightEdge) {
             rightArmed_ = false;
-            if (in.rightBusy) { out.busy = true; }
+            if (in.rightBusy || in.chord) { out.busy = true; }
             else { owner_ = Owner::Legacy; down_ = true; out.pressed = true; }
         }
-        if (in.leftGrip) { leftArmed_ = false; }
+        if (in.leftPress) { leftArmed_ = false; }
         out.down = down_;
         out.owner = owner_;
         return out;
@@ -96,18 +97,18 @@ ButtonOutput UseButton::Update(const ButtonInput& in)
     switch (owner_) {
     case Owner::None:
         if (guard_ > 0) { --guard_; out.suppressTarget = true; }
-        if (leftEdge && !rightEdge && in.carrying && in.holdToHold) {
+        if (leftEdge && !rightEdge && in.carrying && in.holdToHold && !in.chord) {
             // Carrying something no press of ours picked up (it started after
-            // the grip opened, or before this layout): the next squeeze lets go.
+            // the press let go, or before this layout): the next press lets go.
             leftArmed_ = false;
             out.releaseCarry = true;
         } else if (leftEdge && rightEdge) {
-            // Both grips in the same frame: a recentre or a two-hand hold.
+            // Both presses in the same frame: neither is a use or a reload.
             leftArmed_ = rightArmed_ = false;
             out.busy = true;
         } else if (leftEdge) {
             leftArmed_ = false;
-            if (in.leftBusy || in.rightGrip) { out.busy = true; }
+            if (in.leftBusy || in.chord || in.rightPress) { out.busy = true; }
             else if (in.target && guard_ == 0) {
                 owner_ = Owner::Use;
                 down_ = true;
@@ -115,54 +116,55 @@ ButtonOutput UseButton::Update(const ButtonInput& in)
                 pressedTarget_ = in.targetId;
                 tap_ = in.holdToHold && in.tapOnly ? kTapFrames : 0;
             }
+            else if (in.psi && !in.target) { owner_ = Owner::Psi; out.psi = true; }
             else { out.noTarget = true; }
         } else if (rightEdge) {
             rightArmed_ = false;
-            if (in.rightBusy || in.leftGrip) { out.busy = true; }
+            if (in.rightBusy || in.chord || in.leftPress) { out.busy = true; }
             else if (in.holstered && !in.carrying) { owner_ = Owner::Draw; out.drawWeapon = true; }
             else { owner_ = Owner::Reload; clear_ = 0; waited_ = 0; out.suppressTarget = true; }
         }
         break;
     case Owner::Use:
         if (in.carrying && in.holdToHold) {
-            // The press picked something up, and now the grip holds it. The
+            // The press picked something up, and now holding it holds it. The
             // button goes up: the game acts on its next PRESS (a drop), never
             // on this release, and nothing else needs it down any more.
             if (down_) { out.released = true; }
             down_ = false;
             owner_ = Owner::Hold;
-            if (!in.leftGrip) {
+            if (!in.leftPress) {
                 // Picked up and let go within the same frame.
                 owner_ = Owner::None;
                 out.releaseCarry = true;
             }
-            if (in.rightGrip) { rightArmed_ = false; }
+            if (in.rightPress) { rightArmed_ = false; }
             break;
         }
         if (tap_ > 0 && --tap_ == 0 && down_) {
-            // A pickup's tap: up again, the grip may stay closed.
+            // A pickup's tap: up again, the press may stay held.
             down_ = false;
             out.released = true;
         }
         if (in.holdToHold && down_ && pressedTarget_ && in.targetId != pressedTarget_) {
-            // Taken (an item into the inventory): the press is spent. The grip
+            // Taken (an item into the inventory): the press is spent. The hand
             // may stay closed; the button does not, so no hoover follows.
             down_ = false;
             out.released = true;
         }
-        // Held for as long as the grip is: a hold-to-carry object or a body
+        // Held for as long as the press is: a hold-to-carry object or a body
         // needs the button down after the press, even once the target changes.
-        if (!in.leftGrip || in.leftBusy) {
+        if (!in.leftPress || in.leftBusy) {
             release();
-            if (in.leftGrip) { leftArmed_ = false; }
+            if (in.leftPress) { leftArmed_ = false; }
         }
-        if (in.rightGrip) { rightArmed_ = false; }
+        if (in.rightPress) { rightArmed_ = false; }
         break;
     case Owner::Reload:
         out.suppressTarget = true;
-        if (in.leftGrip) { leftArmed_ = false; }
+        if (in.leftPress) { leftArmed_ = false; }
         if (!down_) {
-            if (!in.rightGrip || in.rightBusy) {
+            if (!in.rightPress || in.rightBusy) {
                 owner_ = Owner::None;   // let go before the selection cleared: nothing sent
                 break;
             }
@@ -176,10 +178,10 @@ ButtonOutput UseButton::Update(const ButtonInput& in)
                 owner_ = Owner::None;
                 out.gaveUp = true;
             }
-        } else if (!in.rightGrip || in.rightBusy) {
+        } else if (!in.rightPress || in.rightBusy) {
             release();
             guard_ = kGuardFrames;
-            if (in.rightGrip) { rightArmed_ = false; }
+            if (in.rightPress) { rightArmed_ = false; }
         }
         break;
     case Owner::Legacy:
@@ -187,20 +189,31 @@ ButtonOutput UseButton::Update(const ButtonInput& in)
         break;
     case Owner::Draw:
         // The X button never goes down: holding on would holster again.
-        if (!in.rightGrip) { owner_ = Owner::None; }
-        if (in.leftGrip) { leftArmed_ = false; }
+        if (!in.rightPress) { owner_ = Owner::None; }
+        if (in.leftPress) { leftArmed_ = false; }
+        break;
+    case Owner::Psi:
+        // Psi's for as long as the press is held, whatever comes under the
+        // hand meanwhile; a lane taking the hand (the two-hand hold) ends it.
+        if (!in.leftPress || in.leftBusy) {
+            owner_ = Owner::None;
+            if (in.leftPress) { leftArmed_ = false; }
+        } else {
+            out.psi = true;
+        }
+        if (in.rightPress) { rightArmed_ = false; }
         break;
     case Owner::Hold:
         if (!in.carrying) {
             // The carry ended without us: thrown with the trigger, broken,
-            // knocked out of the hand. A grip still closed acts only once reopened.
+            // knocked out of the hand. A press still held acts only once let go.
             owner_ = Owner::None;
-            if (in.leftGrip) { leftArmed_ = false; }
-        } else if (!in.leftGrip) {
+            if (in.leftPress) { leftArmed_ = false; }
+        } else if (!in.leftPress) {
             owner_ = Owner::None;
             out.releaseCarry = true;
         }
-        if (in.rightGrip) { rightArmed_ = false; }
+        if (in.rightPress) { rightArmed_ = false; }
         break;
     }
     if (owner_ == Owner::Reload) { out.suppressTarget = true; }

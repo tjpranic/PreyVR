@@ -69,7 +69,7 @@ long long previousTime=0;
 VrOptionsUiInput uiInput;      // XR thread: this frame's controls, for the panel
 TrackingFrame uiFrame{};       // XR thread: the sample they came from (haptics)
 bool stickUp=false,stickDown=false,stickLeft=false,stickRight=false;
-bool previousGripWas=false,nextGripWas=false;
+input::ReleaseTap previousTab,nextTab;
 bool grabbing=false;unsigned grabSerial=0;float grabPush=0; // XR thread: VrOptionsGrab
 // One change from the panel: buttons queue their action, a setting takes its
 // value and saves on the command worker, and a changed value pulses `hand`.
@@ -87,7 +87,7 @@ void HandleChange(const options::Change& change,const TrackingFrame& f,Hand hand
   if(before!=change.value)QueueHaptic(hand,haptics::Event::MenuChange,f);
  }
 }
-// The panel's navigation (TrackingFrame::navigate) as four held directions,
+// The panel's navigation (MenuInput::navigate) as four held directions,
 // with the navigator's hysteresis: engage past 0.6, release under 0.35, so a
 // resting stick cannot chatter. ImGui does the repeat. Buttons stay up until
 // the menu is armed (the opening hold, or a press carried in from the game
@@ -97,15 +97,21 @@ void CaptureUiInput(const TrackingFrame& f,const std::optional<ui::RayHit>& hit,
  if(hit&&hit->inside){in.pointer=true;in.u=hit->u;in.v=hit->v;}
  const auto& l=f.hands[0];const auto& r=f.hands[1];
  const auto held=[](bool& state,float value){state=state?value>.35f:value>.6f;return state;};
- const bool up=held(stickUp,f.navigate.y),down=held(stickDown,-f.navigate.y);
- const bool left=held(stickLeft,-f.navigate.x),right=held(stickRight,f.navigate.x);
- const bool previous=l.gripPressed&&!previousGripWas,next=r.gripPressed&&!nextGripWas;
- previousGripWas=l.gripPressed;nextGripWas=r.gripPressed;
+ const bool up=held(stickUp,f.menu.navigate.y),down=held(stickDown,-f.menu.navigate.y);
+ const bool left=held(stickLeft,-f.menu.navigate.x),right=held(stickRight,f.menu.navigate.x);
+ // The grips step through the tabs when let go, and not when both were held: a
+ // two-handed hold, or the recenter chord (ReleaseTap, as in the game's menus).
+ // A grip let go as the panel arms is no tab.
+ const bool grips=l.gripPressed&&r.gripPressed;
+ const bool previous=previousTab.Update(l.gripPressed,grips),next=nextTab.Update(r.gripPressed,grips);
+ if(!armed){previousTab.Reset();nextTab.Reset();}
  if(armed){
-  in.click=trigger;in.accept=r.menuAccept;in.up=up;in.down=down;in.left=left;in.right=right;
+  in.click=trigger;in.accept=f.menu.confirm;in.up=up;in.down=down;in.left=left;in.right=right;
   in.previousPage=previous;in.nextPage=next;
-  // The left stick scrolls the list; it moves nothing else while the panel is open.
-  if(std::isfinite(l.thumbstickY)&&std::fabs(l.thumbstickY)>.2f)in.scroll=l.thumbstickY;
+  // The scroll stick (the left one) scrolls the list; it moves nothing else
+  // while the panel is open.
+  const float scroll=f.menu.scroll.y;
+  if(std::isfinite(scroll)&&std::fabs(scroll)>.2f)in.scroll=scroll;
  }
  // **While the panel is held**, the trigger holds it rather than clicking, and
  // the laser hand's stick pushes it away or pulls it in; the sticks navigate
@@ -204,6 +210,7 @@ constexpr Wiring wiring[]={
  {options::InventoryLayer,Set<SetInventoryCaptureEnabled>,Get<InventoryCaptureEnabled>},
  {options::InventoryStereo,Set<SetInventoryStereoEnabled>,Get<InventoryStereoEnabled>},
  {options::InventoryDepth,Set<SetInventoryDepthPercent>,Get<InventoryDepthPercent>},
+ {options::FingerCurl,Set<SetAnimIkFingerCurl>,Get<AnimIkFingerCurl>},
 };
 constexpr bool InSettingOrder(){
  for(unsigned i=0;i<std::size(wiring);++i)if(wiring[i].id!=i)return false;
@@ -287,10 +294,10 @@ bool ProcessVrOptionsInput(const TrackingFrame& f){
  options::Input i;const auto& l=f.hands[0];const auto& r=f.hands[1];
  i.valid=ready.load()&&FreshSample(MonotonicNanoseconds(),f.publishedNs)&&IsPoseUsable(f.head,f.headValidity,200000000);
  i.modal=HudMenuStateKnown()&&HudMenuIsOpen();i.epoch=f.epoch;
- i.start=l.menuStart||r.menuStart;i.accept=r.menuAccept;i.cancel=r.menuCancel;
- i.previous=l.gripPressed;i.next=r.gripPressed;
+ i.start=f.system.pause;i.accept=f.menu.confirm;i.cancel=f.menu.back;
+ i.previous=l.gripPressed;i.next=r.gripPressed;i.chord=l.gripPressed&&r.gripPressed;
  // Navigation held is not "at rest" when the panel arms.
- i.x=f.navigate.x;i.y=f.navigate.y;
+ i.x=f.menu.navigate.x;i.y=f.menu.navigate.y;
  const auto hand=UiPointerHand();i.trigger=hand<2?f.hands[hand].triggerPressed:false;
  i.dt=previousTime&&f.displayTime>previousTime?static_cast<float>(f.displayTime-previousTime)*1e-9f:0;
  previousTime=f.displayTime;
@@ -326,6 +333,39 @@ void SetVrOptionsSurface(const ui::Surface* surface,std::uint64_t reference){
  surfaceReference=reference;
 }
 VrOptionsUiInput VrOptionsUiFrameInput(){return uiInput;}
+std::vector<VrOptionsControlRow> VrOptionsControlRows(const std::vector<XrBoundControl>& bound){
+ std::vector<VrOptionsControlRow> rows;
+ const auto names=[&](input::Role role){
+  std::string text;
+  for(const auto& control:bound)if(control.role==role)for(const auto& source:control.sources)
+   text+=(text.empty()?"":" / ")+source;
+  return text;
+ };
+ // An optional action nothing binds (the Frame's D-pad on Touch) is left out;
+ // a required one shows as not bound.
+ const auto add=[&](input::ActionSet set){
+  for(const auto& action:input::Actions()){
+   if(action.set!=set||action.kind==input::Kind::pose||action.kind==input::Kind::haptic||
+      action.kind==input::Kind::touch||action.role==input::Role::trigger||action.role==input::Role::squeeze)continue;
+   std::string buttons=names(action.role);
+   if(buttons.empty()&&!action.required)continue;
+   rows.push_back({action.label,std::move(buttons),false});
+  }
+ };
+ rows.push_back({"PLAY","",true});
+ add(input::ActionSet::gameplay);
+ rows.push_back({"Two-Hand Aim","Left grip, at a long weapon's foregrip",false});
+ rows.push_back({"MENUS","",true});
+ add(input::ActionSet::menu);
+ rows.push_back({"Tabs","Grips, on release",false});
+ rows.push_back({"ANY TIME","",true});
+ add(input::ActionSet::common);
+ const std::string pause=names(input::Role::pause);
+ rows.push_back({"Recenter",(pause.empty()?std::string("Menu"):pause)+" + both grips",false});
+ rows.push_back({"To change any of these: SteamVR > Settings > Controllers > Manage Controller Bindings > Prey.",
+  "",true});
+ return rows;
+}
 VrOptionsGrab VrOptionsGrabState(){return {grabbing&&menu.Open(),grabSerial,grabPush};}
 void ApplyVrOptionsUi(const VrOptionsUiResult& result){
  if(!menu.Open())return; // a frame drawn after closing changes nothing
@@ -348,7 +388,7 @@ bool VrOptionsReady(){return ready.load();}
 bool VrOptionsInputOwned(){return owned.load();}
 void RequestVrOptions(bool on){request=on?1:-1;}
 void ResetVrOptionsSession(){menu={};open=false;owned=false;request=0;{std::lock_guard lock(viewMutex);viewPending.reset();++viewGeneration;viewResult=-1;}pointerSurface.reset();previousTime=0;
- uiInput={};uiFrame={};stickUp=stickDown=stickLeft=stickRight=false;previousGripWas=nextGripWas=false;
+ uiInput={};uiFrame={};stickUp=stickDown=stickLeft=stickRight=false;previousTab.Reset();nextTab.Reset();
  grabbing=false;grabPush=0;ClearUiPointer();}
 bool VrOptionsSaveFailed(){return saveFailed.load();}
 std::wstring VrSetupMessage(){

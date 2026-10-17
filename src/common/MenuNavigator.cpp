@@ -117,41 +117,41 @@ unsigned int ModalMenuRouter::Update(const ModalMenuState& state, bool modal, fl
     if (state.start && !startWas_) { out[count++] = MenuAction::Start; }
     startWas_ = state.start;
     const bool buttons[] = {state.accept, state.cancel, state.previousTab,
-                            state.nextTab, state.secondary, state.tertiary,state.previousPage,state.nextPage};
+                            state.nextTab, state.secondary, state.tertiary,state.previousPage,state.nextPage,
+                            state.exit};
+    constexpr unsigned kButtons = sizeof(buttons) / sizeof(buttons[0]);
     if (!modal || !modal_) {
         navigator_.Reset();
         blockStick_ = std::fabs(state.stickX) > .35f || std::fabs(state.stickY) > .35f;
-        for (unsigned i = 0; i < 8; ++i) { blocked_[i] = buttons[i]; }
+        for (unsigned i = 0; i < kButtons; ++i) { blocked_[i] = buttons[i]; }
         for (bool& held : was_) { held = false; }
-        tabPending_[0]=tabPending_[1]=false;tabChord_=false;
+        previousTab_.Reset(); nextTab_.Reset();
     }
     modal_ = modal;
     if (!modal) { return count; }
     if (std::fabs(state.stickX) <= .35f && std::fabs(state.stickY) <= .35f) { blockStick_ = false; }
-    for (unsigned i = 0; i < 8; ++i) { if (!buttons[i]) { blocked_[i] = false; } }
+    for (unsigned i = 0; i < kButtons; ++i) { if (!buttons[i]) { blocked_[i] = false; } }
     ControllerMenuState nav{};
     nav.stickX = blockStick_ ? 0 : state.stickX;
     nav.stickY = blockStick_ ? 0 : state.stickY;
     nav.accept = state.accept && !blocked_[0];
     nav.cancel = state.cancel && !blocked_[1];
     if (count < capacity) { count += navigator_.Update(nav, seconds, out+count, capacity-count); }
-    constexpr MenuAction extra[] = {MenuAction::PreviousTab, MenuAction::NextTab,
-                                    MenuAction::Secondary, MenuAction::Tertiary,MenuAction::PreviousPage,MenuAction::NextPage};
-    if(state.previousTab && state.nextTab) {
-        tabChord_=true;tabPending_[0]=tabPending_[1]=false;
+    const auto emit = [&](MenuAction action) { if (count < capacity) { out[count++] = action; } };
+    const auto down = [&](unsigned i) { return buttons[i] && !blocked_[i]; };
+    // The tabs act on release, and not at all when both grips were held
+    // meanwhile (ReleaseTap).
+    const bool grips = state.previousTab && state.nextTab;
+    if (previousTab_.Update(down(2), grips)) { emit(MenuAction::PreviousTab); }
+    if (nextTab_.Update(down(3), grips)) { emit(MenuAction::NextTab); }
+    // X, Y, the pages and exit act on press.
+    constexpr struct { unsigned button; MenuAction action; } pressed[] = {
+        {4, MenuAction::Secondary}, {5, MenuAction::Tertiary}, {6, MenuAction::PreviousPage},
+        {7, MenuAction::NextPage}, {8, MenuAction::Exit}};
+    for (const auto& [i, action] : pressed) {
+        if (down(i) && !was_[i]) { emit(action); }
+        was_[i] = down(i);
     }
-    for (unsigned i = 0; i < 6; ++i) {
-        const bool down = buttons[i+2] && !blocked_[i+2];
-        if(i<2) {
-            if(down && !was_[i] && !tabChord_)tabPending_[i]=true;
-            if(!down && tabPending_[i]) {
-                if(!tabChord_ && count<capacity)out[count++]=extra[i];
-                tabPending_[i]=false;
-            }
-        } else if (down && !was_[i] && count < capacity) { out[count++] = extra[i]; }
-        was_[i] = down;
-    }
-    if(!state.previousTab && !state.nextTab)tabChord_=false;
     return count;
 }
 

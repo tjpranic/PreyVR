@@ -337,7 +337,7 @@ void TestHoldToHold()
     auto b = Ready();
     auto in = Base();
     in.target = true;
-    in.leftGrip = true;
+    in.leftPress = true;
     auto out = b.Update(in);
     Require(out.down && out.owner == use::Owner::Use, "press picks up");
     // The carry starts while the grip is closed: the grip now holds it.
@@ -349,7 +349,7 @@ void TestHoldToHold()
         out = b.Update(in);
         Require(!out.down && !out.releaseCarry && out.owner == use::Owner::Hold, "held");
     }
-    in.leftGrip = false;
+    in.leftPress = false;
     out = b.Update(in);
     Require(out.releaseCarry && out.owner == use::Owner::None && !out.down, "opening the grip lets go");
     out = b.Update(in);
@@ -361,9 +361,9 @@ void TestHoldPickUpAndLetGoSameFrame()
     auto b = Ready();
     auto in = Base();
     in.target = true;
-    in.leftGrip = true;
+    in.leftPress = true;
     b.Update(in);
-    in.leftGrip = false;
+    in.leftPress = false;
     in.carrying = true;
     const auto out = b.Update(in);
     Require(out.releaseCarry && !out.down, "picked up and let go in one frame");
@@ -376,7 +376,7 @@ void TestUnownedCarry()
     in.carrying = true;   // carried, but no press of ours started it
     auto out = b.Update(in);
     Require(!out.releaseCarry, "nothing while the grip is open");
-    in.leftGrip = true;
+    in.leftPress = true;
     out = b.Update(in);
     Require(out.releaseCarry && !out.down, "the next squeeze lets go; no button");
     out = b.Update(in);
@@ -388,7 +388,7 @@ void TestCarryEndsWhileHeld()
     auto b = Ready();
     auto in = Base();
     in.target = true;
-    in.leftGrip = true;
+    in.leftPress = true;
     b.Update(in);
     in.carrying = true;
     b.Update(in);
@@ -399,9 +399,9 @@ void TestCarryEndsWhileHeld()
     Require(out.owner == use::Owner::None && !out.releaseCarry && !out.down, "ended natively");
     out = b.Update(in);
     Require(!out.down, "a grip still closed does not use the next target");
-    in.leftGrip = false;
+    in.leftPress = false;
     b.Update(in);
-    in.leftGrip = true;
+    in.leftPress = true;
     out = b.Update(in);
     Require(out.down && out.pressed, "a fresh squeeze does");
 }
@@ -411,14 +411,14 @@ void TestHoldThroughMenu()
     auto b = Ready();
     auto in = Base();
     in.target = true;
-    in.leftGrip = true;
+    in.leftPress = true;
     b.Update(in);
     in.carrying = true;
     b.Update(in);
     in.gameplay = false;   // the inventory opens
     auto out = b.Update(in);
     Require(out.owner == use::Owner::Hold && !out.releaseCarry, "held through a menu");
-    in.leftGrip = false;   // let go while it is open
+    in.leftPress = false;   // let go while it is open
     out = b.Update(in);
     Require(!out.releaseCarry, "judged when play resumes");
     in.gameplay = true;
@@ -432,7 +432,7 @@ void TestTakeLetsGo()
     auto in = Base();
     in.target = true;
     in.targetId = 64587;
-    in.leftGrip = true;
+    in.leftPress = true;
     auto out = b.Update(in);
     Require(out.down, "press on an item");
     // A hold-to-carry object keeps the selection while the button is held.
@@ -442,10 +442,10 @@ void TestTakeLetsGo()
     out = b.Update(in);
     Require(!out.down && out.released, "taken: the button goes up (no hoover)");
     for (int i = 0; i < 10; ++i) { Require(!b.Update(in).down, "stays up while the grip is closed"); }
-    in.leftGrip = false;
+    in.leftPress = false;
     out = b.Update(in);
     Require(!out.down && out.owner == use::Owner::None && !out.released, "grip opened");
-    in.leftGrip = true;
+    in.leftPress = true;
     out = b.Update(in);
     Require(out.down && out.pressed, "the next squeeze takes the next one");
     // Toggle mode keeps the phase-1 button (held whatever the target does).
@@ -454,7 +454,7 @@ void TestTakeLetsGo()
     tin.holdToHold = false;
     tin.target = true;
     tin.targetId = 1;
-    tin.leftGrip = true;
+    tin.leftPress = true;
     t.Update(tin);
     tin.targetId = 2;
     Require(t.Update(tin).down, "toggle: unchanged");
@@ -467,7 +467,7 @@ void TestPickupTap()
     in.target = true;
     in.targetId = 64587;
     in.tapOnly = true;
-    in.leftGrip = true;
+    in.leftPress = true;
     auto out = b.Update(in);
     Require(out.down && out.pressed, "press");
     int frames = 1;
@@ -487,12 +487,12 @@ void TestToggleUnchanged()
     auto in = Base();
     in.holdToHold = false;
     in.target = true;
-    in.leftGrip = true;
+    in.leftPress = true;
     b.Update(in);
     in.carrying = true;
     auto out = b.Update(in);
     Require(out.down && out.owner == use::Owner::Use && !out.releaseCarry, "toggle: the phase-1 button");
-    in.leftGrip = false;
+    in.leftPress = false;
     out = b.Update(in);
     Require(!out.down && !out.releaseCarry, "released, still carried");
 }

@@ -23,8 +23,10 @@ std::vector<std::uint8_t> MakeMenuGuide() {
     TextOutW(dc,30,13,title,lstrlenW(title));
     SetTextColor(dc,RGB(240,244,248));
     const wchar_t* line1=L"Point + trigger: click / drag   A: select   B: back";
-    const wchar_t* line2=L"Stick: navigate   Grips: tabs   Grips + Y: reset view";
-    const wchar_t* line3=L"Hold left menu: VR options   Tap left menu: pause / resume";
+    // Worded for every controller: Menu is Touch's left button and the Steam
+    // Frame's right one; the D-pad is the Frame's.
+    const wchar_t* line2=L"Stick / D-pad: navigate   Grips: tabs   Menu + grips: reset view";
+    const wchar_t* line3=L"Hold Menu: VR options   Tap Menu: pause / resume";
     TextOutW(dc,30,51,line1,lstrlenW(line1));
     TextOutW(dc,30,85,line2,lstrlenW(line2));
     TextOutW(dc,30,119,line3,lstrlenW(line3));

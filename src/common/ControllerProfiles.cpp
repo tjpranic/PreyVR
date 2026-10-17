@@ -1,104 +1,164 @@
 #include "preyvr/ControllerProfiles.h"
 
 #include <initializer_list>
-#include <utility>
 
 namespace preyvr::input {
 namespace {
 using R = Role;
+using S = ActionSet;
+using K = Kind;
 
-// Poses, sticks, triggers, grips and haptics, which every profile names alike,
-// and the right stick's click for the weapon wheel. Component paths are
-// checked against the bundled Khronos xr.xml registry; runtime acceptance is
-// logged separately (XrInput).
+// In Role order (ControllerProfilesTests). The labels are what a player sees in
+// SteamVR's binding UI, so they say what the action does, not where it is.
+constexpr std::array<Action, kRoleCount> kActions{{
+    {R::gripPose, S::common, K::pose, "grip_pose", "Hand Pose (Grip)", true},
+    {R::aimPose, S::common, K::pose, "aim_pose", "Hand Pose (Aim)", true},
+    {R::trigger, S::common, K::analog, "trigger", "Hand Trigger (Laser Click, Menu Pages, Medkit Slot)", true},
+    {R::squeeze, S::common, K::analog, "squeeze", "Hand Grip (Foregrip, Holsters, Tabs, Recenter)", true},
+    {R::haptic, S::common, K::haptic, "feedback", "Controller Feedback", false},
+    {R::thumbTouch, S::common, K::touch, "thumb_touch", "Thumb Resting (Finger Shape)", false},
+    {R::indexTouch, S::common, K::touch, "index_touch", "Index Finger on the Trigger (Finger Shape)", false},
+    {R::pause, S::common, K::button, "pause", "Pause (Hold: VR Options; With Both Grips: Recenter)", true},
+    {R::move, S::gameplay, K::stick, "move", "Move", true},
+    {R::turn, S::gameplay, K::stick, "turn", "Turn", true},
+    {R::fire, S::gameplay, K::analog, "fire", "Fire", true},
+    {R::grab, S::gameplay, K::analog, "grab", "Grab and Use (With Nothing to Grab: Psi Power)", true},
+    {R::reload, S::gameplay, K::analog, "reload", "Reload (Hold: Holster)", true},
+    {R::jump, S::gameplay, K::button, "jump", "Jump", true},
+    {R::crouch, S::gameplay, K::button, "crouch", "Crouch", true},
+    {R::inventory, S::gameplay, K::button, "inventory", "TranScribe", true},
+    {R::weaponWheel, S::gameplay, K::button, "weapon_wheel", "Swap Weapon (Hold: Weapon Wheel)", true},
+    {R::sprint, S::gameplay, K::button, "sprint", "Sprint", false},
+    {R::psychoscope, S::gameplay, K::button, "psychoscope", "Psychoscope", true},
+    {R::quickSlotLeft, S::gameplay, K::button, "quick_slot_left", "Quick Slot Left", false},
+    {R::quickSlotRight, S::gameplay, K::button, "quick_slot_right", "Quick Slot Right", false},
+    {R::quickSlotDown, S::gameplay, K::button, "quick_slot_down", "Quick Slot Down", false},
+    {R::torch, S::gameplay, K::button, "torch", "Torch", false},
+    {R::navigate, S::menu, K::stick, "navigate", "Navigate", true},
+    {R::navigateUp, S::menu, K::button, "navigate_up", "Navigate Up", false},
+    {R::navigateDown, S::menu, K::button, "navigate_down", "Navigate Down", false},
+    {R::navigateLeft, S::menu, K::button, "navigate_left", "Navigate Left", false},
+    {R::navigateRight, S::menu, K::button, "navigate_right", "Navigate Right", false},
+    {R::scroll, S::menu, K::stick, "scroll", "Scroll", true},
+    {R::confirm, S::menu, K::button, "confirm", "Select", true},
+    {R::back, S::menu, K::button, "back", "Back", true},
+    {R::secondary, S::menu, K::button, "secondary", "Prey's X Action (Equip...)", true},
+    {R::tertiary, S::menu, K::button, "tertiary", "Prey's Y Action (Search, Eat...)", true},
+    {R::exit, S::menu, K::button, "exit", "Close Menu", false},
+}};
+constexpr std::array<ActionSetInfo, static_cast<std::size_t>(S::count)> kSets{{
+    {"common", "Hands and System"}, {"gameplay", "Gameplay"}, {"menus", "Menus"}}};
+
+// What every profile binds alike: both hands' poses, triggers, grips and
+// haptics; the sticks (move and scroll on the left, turn and navigate on the
+// right); fire on the right trigger and grab on the left one; reload on the
+// right grip; A and B on the right; the right stick's click for the
+// psychoscope, as on Prey's gamepad. Core profiles' component paths are checked against the bundled
+// Khronos xr.xml registry, the Steam Frame's against Valve's list
+// (ControllerProfilesTests); runtime acceptance is logged separately (XrInput).
 std::vector<Binding> Shared()
 {
     return {
         {R::gripPose, "/user/hand/left/input/grip/pose"}, {R::gripPose, "/user/hand/right/input/grip/pose"},
         {R::aimPose, "/user/hand/left/input/aim/pose"}, {R::aimPose, "/user/hand/right/input/aim/pose"},
-        {R::thumbstick, "/user/hand/left/input/thumbstick"}, {R::thumbstick, "/user/hand/right/input/thumbstick"},
         {R::trigger, "/user/hand/left/input/trigger/value"}, {R::trigger, "/user/hand/right/input/trigger/value"},
         {R::squeeze, "/user/hand/left/input/squeeze/value"}, {R::squeeze, "/user/hand/right/input/squeeze/value"},
         {R::haptic, "/user/hand/left/output/haptic"}, {R::haptic, "/user/hand/right/output/haptic"},
-        {R::weaponWheel, "/user/hand/right/input/thumbstick/click"},
+        {R::indexTouch, "/user/hand/left/input/trigger/touch"}, {R::indexTouch, "/user/hand/right/input/trigger/touch"},
+        {R::move, "/user/hand/left/input/thumbstick"}, {R::turn, "/user/hand/right/input/thumbstick"},
+        {R::fire, "/user/hand/right/input/trigger/value"}, {R::grab, "/user/hand/left/input/trigger/value"},
+        {R::reload, "/user/hand/right/input/squeeze/value"},
+        {R::jump, "/user/hand/right/input/a/click"}, {R::crouch, "/user/hand/right/input/b/click"},
+        {R::psychoscope, "/user/hand/right/input/thumbstick/click"},
+        {R::navigate, "/user/hand/right/input/thumbstick"}, {R::scroll, "/user/hand/left/input/thumbstick"},
+        {R::confirm, "/user/hand/right/input/a/click"}, {R::back, "/user/hand/right/input/b/click"},
     };
 }
 
-std::vector<Binding> With(std::vector<Binding> bindings, std::initializer_list<Binding> more)
+std::vector<Binding> With(std::initializer_list<Binding> more)
 {
+    auto bindings = Shared();
     bindings.insert(bindings.end(), more);
     return bindings;
 }
 
 ControllerProfile Touch()
 {
-    // A/B are right-hand only on Touch and X/Y left-hand only, so accept and
-    // cancel bind to one controller each. The menu button is the left one;
-    // its right-hand counterpart is reserved by the runtime.
-    return {"touch", "/interaction_profiles/oculus/touch_controller", nullptr,
-            {{"all", With(Shared(), {
-                {R::accept, "/user/hand/right/input/a/click"}, {R::cancel, "/user/hand/right/input/b/click"},
-                {R::accept, "/user/hand/left/input/x/click"}, {R::cancel, "/user/hand/left/input/y/click"},
-                {R::start, "/user/hand/left/input/menu/click"},
-            })}}};
+    // X and Y are on the left: X opens the TranScribe in play and is Prey's X
+    // in its menus; Y is Prey's Y in both. The left stick's click sprints. The
+    // menu button is the left one; its right-hand counterpart is reserved by
+    // the runtime.
+    return {"touch", {"/interaction_profiles/oculus/touch_controller"}, nullptr, With({
+        {R::inventory, "/user/hand/left/input/x/click"}, {R::secondary, "/user/hand/left/input/x/click"},
+        {R::weaponWheel, "/user/hand/left/input/y/click"}, {R::tertiary, "/user/hand/left/input/y/click"},
+        {R::sprint, "/user/hand/left/input/thumbstick/click"},
+        {R::pause, "/user/hand/left/input/menu/click"},
+        // The thumb's resting places, for the finger shape.
+        {R::thumbTouch, "/user/hand/left/input/x/touch"}, {R::thumbTouch, "/user/hand/left/input/y/touch"},
+        {R::thumbTouch, "/user/hand/left/input/thumbstick/touch"}, {R::thumbTouch, "/user/hand/left/input/thumbrest/touch"},
+        {R::thumbTouch, "/user/hand/right/input/a/touch"}, {R::thumbTouch, "/user/hand/right/input/b/touch"},
+        {R::thumbTouch, "/user/hand/right/input/thumbstick/touch"}, {R::thumbTouch, "/user/hand/right/input/thumbrest/touch"},
+    })};
 }
 
 ControllerProfile Index()
 {
     // Index has A/B on both hands: the left pair stands in for Touch's X/Y.
     // Its system button belongs to the runtime, so the left stick's click
-    // opens pause.
-    return {"index", "/interaction_profiles/valve/index_controller", nullptr,
-            {{"all", With(Shared(), {
-                {R::accept, "/user/hand/right/input/a/click"}, {R::cancel, "/user/hand/right/input/b/click"},
-                {R::accept, "/user/hand/left/input/a/click"}, {R::cancel, "/user/hand/left/input/b/click"},
-                {R::start, "/user/hand/left/input/thumbstick/click"},
-            })}}};
+    // opens pause, and sprint is left for SteamVR's binding UI.
+    return {"index", {"/interaction_profiles/valve/index_controller"}, nullptr, With({
+        {R::inventory, "/user/hand/left/input/a/click"}, {R::secondary, "/user/hand/left/input/a/click"},
+        {R::weaponWheel, "/user/hand/left/input/b/click"}, {R::tertiary, "/user/hand/left/input/b/click"},
+        {R::pause, "/user/hand/left/input/thumbstick/click"},
+        {R::thumbTouch, "/user/hand/left/input/a/touch"}, {R::thumbTouch, "/user/hand/left/input/b/touch"},
+        {R::thumbTouch, "/user/hand/left/input/thumbstick/touch"}, {R::thumbTouch, "/user/hand/left/input/trackpad/touch"},
+        {R::thumbTouch, "/user/hand/right/input/a/touch"}, {R::thumbTouch, "/user/hand/right/input/b/touch"},
+        {R::thumbTouch, "/user/hand/right/input/thumbstick/touch"}, {R::thumbTouch, "/user/hand/right/input/trackpad/touch"},
+    })};
 }
 
 ControllerProfile Frame()
 {
     // **The Steam Frame controllers' own profile** (XR_VALVE_frame_controller_
-    // interaction). Without it SteamVR presents them as Touch and folds the
-    // left D-pad into X/Y -- down as X, left/right/up as Y -- so its left and
-    // right cannot be told apart. These keep exactly what that emulation gave
-    // every role (SteamVR's own Frame-to-Touch remapping), so the game behaves
-    // as before, and add the D-pad as itself: the mod's panels navigate with it.
-    const auto core = With(Shared(), {
-        {R::accept, "/user/hand/right/input/a/click"}, {R::cancel, "/user/hand/right/input/b/click"},
-        // Touch's left X and Y, where the emulation put them on the D-pad.
-        {R::accept, "/user/hand/left/input/dpad_down/click"}, {R::cancel, "/user/hand/left/input/dpad_up/click"},
-        {R::cancel, "/user/hand/left/input/dpad_left/click"}, {R::cancel, "/user/hand/left/input/dpad_right/click"},
-        {R::navigateUp, "/user/hand/left/input/dpad_up/click"},
+    // interaction): a gamepad split in two, so each button does what the
+    // gamepad's does in Prey and the game's own prompts name the right one.
+    // Right: A, B, X, Y and Menu (pause). Left: the D-pad -- Prey's quick slots
+    // and torch in play, navigation in menus -- and View, the TranScribe in
+    // play and closing the menu in menus. The left stick's click sprints, as
+    // on Prey's gamepad. Without this
+    // profile SteamVR presents them as Touch and folds three buttons onto one:
+    // right X/Y onto B, and the D-pad onto left X (down) and Y (the rest). The
+    // bumpers are left unbound.
+    //
+    // Valve renamed the profile in SteamVR 2.15.1; later runtimes still accept
+    // the first name (vrclient_x64.dll knows both), so both are suggested.
+    return {"frame", {"/interaction_profiles/valve/frame_controller_valve", "/interaction_profiles/valve/frame_controller"},
+            "XR_VALVE_frame_controller_interaction", With({
+        {R::secondary, "/user/hand/right/input/x/click"},
+        {R::weaponWheel, "/user/hand/right/input/y/click"}, {R::tertiary, "/user/hand/right/input/y/click"},
+        {R::pause, "/user/hand/right/input/menu/click"},
+        {R::inventory, "/user/hand/left/input/view/click"}, {R::exit, "/user/hand/left/input/view/click"},
+        {R::sprint, "/user/hand/left/input/thumbstick/click"},
+        {R::torch, "/user/hand/left/input/dpad_up/click"}, {R::navigateUp, "/user/hand/left/input/dpad_up/click"},
+        {R::quickSlotDown, "/user/hand/left/input/dpad_down/click"},
         {R::navigateDown, "/user/hand/left/input/dpad_down/click"},
+        {R::quickSlotLeft, "/user/hand/left/input/dpad_left/click"},
         {R::navigateLeft, "/user/hand/left/input/dpad_left/click"},
+        {R::quickSlotRight, "/user/hand/left/input/dpad_right/click"},
         {R::navigateRight, "/user/hand/left/input/dpad_right/click"},
-    });
-    // The less certain parts, tried in order of fidelity: which button is Menu,
-    // and X/Y on the right acting as B, as the emulation does.
-    const std::pair<const char*, std::vector<Binding>> starts[] = {
-        {"view_and_menu", {{R::start, "/user/hand/left/input/view/click"}, {R::start, "/user/hand/right/input/menu/click"}}},
-        {"menu", {{R::start, "/user/hand/right/input/menu/click"}}},
-        {"view", {{R::start, "/user/hand/left/input/view/click"}}},
-        {"left_menu", {{R::start, "/user/hand/left/input/menu/click"}}},
-    };
-    ControllerProfile profile{"frame", "/interaction_profiles/valve/frame_controller",
-                              "XR_VALVE_frame_controller_interaction", {}};
-    for (const bool rightXy : {true, false}) {
-        for (const auto& [menu, start] : starts) {
-            auto bindings = core;
-            if (rightXy) {
-                bindings.push_back({R::cancel, "/user/hand/right/input/x/click"});
-                bindings.push_back({R::cancel, "/user/hand/right/input/y/click"});
-            }
-            bindings.insert(bindings.end(), start.begin(), start.end());
-            profile.attempts.push_back({std::string("menu=") + menu + (rightXy ? ",right_xy_as_b" : ""),
-                                        std::move(bindings)});
-        }
-    }
-    return profile;
+        {R::thumbTouch, "/user/hand/right/input/a/touch"}, {R::thumbTouch, "/user/hand/right/input/b/touch"},
+        {R::thumbTouch, "/user/hand/right/input/x/touch"}, {R::thumbTouch, "/user/hand/right/input/y/touch"},
+        {R::thumbTouch, "/user/hand/right/input/menu/touch"}, {R::thumbTouch, "/user/hand/right/input/thumbstick/touch"},
+        {R::thumbTouch, "/user/hand/left/input/dpad_up/touch"}, {R::thumbTouch, "/user/hand/left/input/dpad_down/touch"},
+        {R::thumbTouch, "/user/hand/left/input/dpad_left/touch"}, {R::thumbTouch, "/user/hand/left/input/dpad_right/touch"},
+        {R::thumbTouch, "/user/hand/left/input/view/touch"}, {R::thumbTouch, "/user/hand/left/input/thumbstick/touch"},
+    })};
 }
 } // namespace
+
+const std::array<Action, kRoleCount>& Actions() { return kActions; }
+const Action& ActionOf(Role role) { return kActions[static_cast<std::size_t>(role)]; }
+const ActionSetInfo& SetInfo(ActionSet set) { return kSets[static_cast<std::size_t>(set)]; }
 
 const std::vector<ControllerProfile>& ControllerProfiles()
 {

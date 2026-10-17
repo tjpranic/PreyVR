@@ -110,6 +110,7 @@ add_library(preyvr_core STATIC
     src/common/ConsolePolicy.cpp
     src/common/DebugRegisters.cpp
     src/common/ControllerProfiles.cpp
+    src/common/ActionMapWalk.cpp
     src/common/EngineMap.cpp
     src/common/FrameDump.cpp
     src/common/FrameObserver.cpp
@@ -182,6 +183,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/Bootstrap.cpp
         src/dll/VrMode.cpp
         src/dll/UiGuide.cpp
+        src/dll/BindingDump.cpp
         src/dll/VrOptionsLayer.cpp
         src/dll/VrOptionsUi.cpp
         src/dll/VrOptionsRuntime.cpp
@@ -424,6 +426,14 @@ if(PREYVR_BUILD_TESTS)
     target_link_libraries(preyvr_controller_profiles_tests PRIVATE preyvr_core)
     preyvr_enable_warnings(preyvr_controller_profiles_tests)
     add_test(NAME controller_profiles COMMAND preyvr_controller_profiles_tests)
+    add_executable(preyvr_action_map_walk_tests tests/ActionMapWalkTests.cpp)
+    target_link_libraries(preyvr_action_map_walk_tests PRIVATE preyvr_core)
+    preyvr_enable_warnings(preyvr_action_map_walk_tests)
+    add_test(NAME action_map_walk COMMAND preyvr_action_map_walk_tests)
+    add_executable(preyvr_tap_hold_tests tests/TapHoldTests.cpp)
+    target_link_libraries(preyvr_tap_hold_tests PRIVATE preyvr_core)
+    preyvr_enable_warnings(preyvr_tap_hold_tests)
+    add_test(NAME tap_hold COMMAND preyvr_tap_hold_tests)
     add_executable(preyvr_body_equipment_tests tests/BodyEquipmentTests.cpp)
     target_link_libraries(preyvr_body_equipment_tests PRIVATE preyvr_core)
     preyvr_enable_warnings(preyvr_body_equipment_tests)

@@ -191,7 +191,7 @@ DWORD SetInputPostEnabled(unsigned int enabled)
 
 DWORD PostMenuAction(unsigned int action, unsigned long long menuEpoch)
 {
-    if (action > static_cast<unsigned int>(input::MenuAction::NextPage)) {
+    if (action > static_cast<unsigned int>(input::MenuAction::Exit)) {
         return 2;
     }
     std::array<std::uint8_t, input::kEventSize * 2> buffer{};

@@ -158,6 +158,10 @@ unsigned long long AnimIkNoOwner();
 // rig is driven as well (open hands; the carrying hand closes).
 DWORD SetAnimIkFreeArms(unsigned enabled);
 unsigned AnimIkFreeArms();
+// hands.fingers: a free hand's fingers follow the player's on the controller
+// (trigger, grip, thumb and index touch); off, they keep one relaxed pose.
+DWORD SetAnimIkFingerCurl(unsigned enabled);
+unsigned AnimIkFingerCurl();
 // The IK is driving the no-weapon arms right now.
 bool AnimIkFreeArmsBound();
 std::string AnimIkFreeArmsReport();

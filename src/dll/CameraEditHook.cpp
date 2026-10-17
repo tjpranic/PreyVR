@@ -8,6 +8,7 @@
 #include "UiPointer.h"
 #include "AimTakeover.h"
 #include "MoveLane.h"
+#include "BindingDump.h"
 #include "BodyFollow.h"
 
 #include "HeadTrackingHook.h"
@@ -1030,6 +1031,7 @@ void __fastcall RenderWithCameraEdit(void* system)
     // else would race the queue it feeds.
     UpdateMoveLane();
     UpdateTurnAndFireLanes();
+    ServiceBindingDump();
 
     if ((!gArmed.load(std::memory_order_acquire) && !stereoArmed &&
          !gHeadRotationArmed.load(std::memory_order_acquire)) || system == nullptr) {

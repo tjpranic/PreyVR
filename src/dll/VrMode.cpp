@@ -232,7 +232,7 @@ void TickVrMode() {
         if(XrSubmittedFrameCount()<firstFrame+3 || XrResolutionChain(14)!=0)return;
         phase=Phase::active;
         nextStatusReport=GetTickCount64()+kStatusReportMs;
-        Log("state=active panel=automatic recenter=F12_or_grips_and_left_Y");
+        Log("state=active panel=automatic recenter=F12_or_menu_and_both_grips");
     }
     if(phase==Phase::active) {
         if(XrSessionStatusValue()!=1) {Fail("openxr_session_ended");return;}

@@ -159,8 +159,8 @@ int main()
                 "opening a menu with a held gameplay stick/button must not select");
         s = {}; router.Update(s, true, .016f, out, 8);
         s.accept = true; s.previousTab = true; s.tertiary = true;
-        Require(router.Update(s, true, .016f, out, 8) == 2,
-                "confirm and secondary act on press; tab waits for release to distinguish recenter");
+        Require(router.Update(s, true, .016f, out, 8) == 2 && out[0] == MenuAction::Accept && out[1] == MenuAction::Tertiary,
+                "confirm and Y act on press; a tab waits for release to tell a two-grip hold apart");
         Require(router.Update(s, true, .016f, out, 8) == 0, "held buttons do not repeat");
         s.previousTab=false;
         Require(router.Update(s,true,.016f,out,8)==1 && out[0]==MenuAction::PreviousTab,"single grip release changes tab");
@@ -176,6 +176,40 @@ int main()
         s.stickX = 1;
         Require(router.Update(s, false, .016f, out, 8) == 0, "closing stops modal input");
         Require(router.Update(s, true, .016f, out, 8) == 0, "reopening requires neutral");
+    }
+    {
+        // **X and Y, Prey's own actions, on press**, once each.
+        ModalMenuRouter router;
+        ModalMenuState s{};
+        MenuAction out[8]{};
+        router.Update(s, true, .016f, out, 8);
+        router.Update(s, true, .016f, out, 8);
+        s.secondary = true;
+        Require(router.Update(s, true, .016f, out, 8) == 1 && out[0] == MenuAction::Secondary, "X acts on press");
+        s.secondary = false; router.Update(s, true, .016f, out, 8);
+        s.tertiary = true;
+        Require(router.Update(s, true, .016f, out, 8) == 1 && out[0] == MenuAction::Tertiary, "Y acts on press");
+        Require(router.Update(s, true, .016f, out, 8) == 0, "once");
+        s.tertiary = false; router.Update(s, true, .016f, out, 8);
+        s.tertiary = true;
+        Require(router.Update(s, false, .016f, out, 8) == 0, "Y held as a menu closes");
+        Require(router.Update(s, true, .016f, out, 8) == 0, "is no Y in the next menu until let go");
+    }
+    {
+        // **Exit, the Steam Frame's View**: the gamepad's Back, on press. The
+        // View that opened the TranScribe in play is still down as it opens,
+        // so that press cannot close it again.
+        ModalMenuRouter router;
+        ModalMenuState s{};
+        MenuAction out[8]{};
+        s.exit = true;
+        router.Update(s, false, .016f, out, 8);
+        Require(router.Update(s, true, .016f, out, 8) == 0, "the View that opened the menu does not close it");
+        s.exit = false; router.Update(s, true, .016f, out, 8);
+        s.exit = true;
+        Require(router.Update(s, true, .016f, out, 8) == 1 && out[0] == MenuAction::Exit, "a fresh View closes it");
+        Require(router.Update(s, true, .016f, out, 8) == 0, "once");
+        Require(MenuActionKeyId(MenuAction::Exit) == kBack, "as the gamepad's Back, Prey's menu_exit");
     }
     TestOneFlickIsOneAction();
     TestHoldingRepeatsAfterTheDelay();

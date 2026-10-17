@@ -94,8 +94,9 @@ void ApplyStyle(float scale)
 class Builder {
 public:
     Builder(VrOptionsUiResult& out, unsigned& page, std::map<int, int>& dragging, const options::Values& values,
-            bool forcedPage, float scale)
-        : out_(out), page_(page), dragging_(dragging), values_(values), forced_(forcedPage), scale_(scale) {}
+            bool forcedPage, float scale, const std::vector<VrOptionsControlRow>& controls)
+        : out_(out), page_(page), dragging_(dragging), values_(values), forced_(forcedPage), scale_(scale),
+          controls_(controls) {}
 
     // `adjust`: a left/right step this frame (-1, 0, 1). `adjustKey`: the
     // control the held stick is adjusting, kept until it is let go.
@@ -169,6 +170,10 @@ private:
 
     void Settings()
     {
+        if (page_ == options::ControlsPage()) {
+            Controls();
+            return;
+        }
         constexpr ImGuiTableFlags flags = ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerH |
             ImGuiTableFlags_PadOuterX;
         if (!ImGui::BeginTable("##rows", 2, flags)) { return; }
@@ -192,6 +197,38 @@ private:
             if (action) { Action(key); }
             else { Setting(static_cast<unsigned>(key)); }
             ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+
+    // **The Controls tab**: each action and what it is bound to now. Read
+    // only -- nothing here is a control, so the trigger anywhere grabs the
+    // panel and A has nothing to act on; rebinding is SteamVR's.
+    void Controls()
+    {
+        if (controls_.empty()) {
+            ImGui::TextWrapped("%s", "Waiting for the controllers: what each button does appears once the runtime "
+                                     "reports them.");
+            return;
+        }
+        constexpr ImGuiTableFlags flags = ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerH |
+            ImGuiTableFlags_PadOuterX;
+        if (!ImGui::BeginTable("##controls", 2, flags)) { return; }
+        ImGui::TableSetupColumn("action", ImGuiTableColumnFlags_WidthStretch, 0.5f);
+        ImGui::TableSetupColumn("buttons", ImGuiTableColumnFlags_WidthStretch, 0.5f);
+        for (const auto& row : controls_) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            if (row.heading) {
+                ImGui::TextColored(ImVec4(0.56f, 0.85f, 0.97f, 1.0f), "%s", row.action.c_str());
+                continue;
+            }
+            ImGui::TextWrapped("%s", row.action.c_str());
+            ImGui::TableSetColumnIndex(1);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(row.buttons.empty() ? ImGuiCol_TextDisabled
+                                                                                               : ImGuiCol_Text));
+            ImGui::TextWrapped("%s", row.buttons.empty() ? "Not bound" : row.buttons.c_str());
+            ImGui::PopStyleColor();
         }
         ImGui::EndTable();
     }
@@ -356,6 +393,7 @@ private:
     const options::Values& values_;
     bool forced_;
     float scale_;
+    const std::vector<VrOptionsControlRow>& controls_;
     std::vector<Adjustable> adjustables_;
     int hovered_ = kNoKey, focused_ = kNoKey;
 };
@@ -489,7 +527,7 @@ VrOptionsUiResult VrOptionsUi::Render(ID3D11Device* device, ID3D11DeviceContext*
 
     ImGui_ImplDX11_NewFrame();
     ImGui::NewFrame();
-    Builder(out, page_, dragging_, values, forced, scale_)
+    Builder(out, page_, dragging_, values, forced, scale_, controls_)
         .Frame(scroll, dt, adjust, adjustKey_, saveFailed, setupMessage, input.held, blank_);
     controlHovered_ = out.controlHovered; // routes the next A press
     // **A press on nothing ImGui answers grabs the panel.** Read from ImGui's own

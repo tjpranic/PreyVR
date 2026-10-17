@@ -41,14 +41,14 @@ void TestLeftUse()
     auto in = Base();
     in.target = true;
     Require(!b.Update(in).down, "idle");
-    in.leftGrip = true;
+    in.leftPress = true;
     auto out = b.Update(in);
     Require(out.down && out.pressed && out.owner == Owner::Use, "left press on a target holds use");
     Require(!out.suppressTarget, "use never suppresses the selection");
     // The target goes away (an item picked up, a carry started): still held.
     in.target = false;
     for (int i = 0; i < 30; ++i) { Require(b.Update(in).down, "held while the grip is"); }
-    in.leftGrip = false;
+    in.leftPress = false;
     out = b.Update(in);
     Require(!out.down && out.released && out.owner == Owner::None, "released with the grip");
 }
@@ -57,15 +57,15 @@ void TestLeftNoTarget()
 {
     UseButton b = Ready();
     auto in = Base();
-    in.leftGrip = true;
+    in.leftPress = true;
     auto out = b.Update(in);
     Require(!out.down && out.noTarget, "left press on nothing sends nothing (it would reload)");
     // A target appearing under a grip that is already down does not act.
     in.target = true;
     Require(!b.Update(in).down, "no act without a fresh press");
-    in.leftGrip = false;
+    in.leftPress = false;
     b.Update(in);
-    in.leftGrip = true;
+    in.leftPress = true;
     Require(b.Update(in).down, "a fresh press acts");
 }
 
@@ -75,19 +75,116 @@ void TestLeftBusy()
     auto in = Base();
     in.target = true;
     in.leftBusy = true;
-    in.leftGrip = true;
+    in.leftPress = true;
     auto out = b.Update(in);
     Require(!out.down && out.busy, "a medkit or foregrip squeeze is not a use");
     in.leftBusy = false;
     Require(!b.Update(in).down, "still the same squeeze");
     // Busy arriving mid-hold (the foregrip latched) releases.
-    in.leftGrip = false;
+    in.leftPress = false;
     b.Update(in);
-    in.leftGrip = true;
+    in.leftPress = true;
     Require(b.Update(in).down, "fresh press");
     in.leftBusy = true;
     out = b.Update(in);
     Require(!out.down && out.released, "busy mid-hold releases");
+}
+
+// Y held, then the grips: the recentre chord, which neither uses nor reloads,
+// and which lets nothing go that a hand already holds.
+void TestChord()
+{
+    UseButton b = Ready();
+    auto in = Base();
+    in.target = true;
+    in.chord = true;
+    in.leftPress = true;
+    auto out = b.Update(in);
+    Require(!out.down && out.busy, "a left squeeze with Y held is the chord's, not a use");
+    in.rightPress = true;
+    out = b.Update(in);
+    Require(!out.down && out.owner == Owner::None, "nor is the right one a reload");
+    in = Base();
+    b.Update(in);
+    in.rightPress = true;
+    in.chord = true;
+    for (int i = 0; i < 10; ++i) { Require(!b.Update(in).down, "a right squeeze with Y held never reloads"); }
+    in = Base();
+    b.Update(in);
+    in.carrying = true;
+    in.leftPress = true;
+    in.chord = true;
+    Require(!b.Update(in).releaseCarry, "a squeeze with Y held does not drop what is carried");
+    // A hold already under way stays held when Y goes down.
+    in = Base();
+    b.Update(in);
+    in.target = true;
+    in.leftPress = true;
+    Require(b.Update(in).down, "a fresh press uses");
+    in.chord = true;
+    Require(b.Update(in).down, "Y does not let a held use go");
+    in = Base();
+    b.Update(in);
+    in.leftHand = false;
+    in.rightPress = true;
+    in.chord = true;
+    Require(!b.Update(in).down, "nor does the original layout's right grip press with Y held");
+}
+
+// Psychic targeting shares the left press: with something to grab it grabs,
+// with nothing it aims the psi power, for as long as it is held.
+void TestPsiShare()
+{
+    UseButton b = Ready();
+    auto in = Base();
+    in.psi = true;
+    in.leftPress = true;
+    auto out = b.Update(in);
+    Require(out.psi && !out.down && !out.noTarget && out.owner == Owner::Psi, "nothing to grab: the press is psi's");
+    in.target = true;
+    out = b.Update(in);
+    Require(out.psi && !out.down, "a target coming under the hand meanwhile does not take it");
+    in.leftPress = false;
+    out = b.Update(in);
+    Require(!out.psi && !out.down && out.owner == Owner::None, "let go: the cast is psi's to make");
+    in.leftPress = true;
+    out = b.Update(in);
+    Require(out.down && !out.psi && out.owner == Owner::Use, "with a target, the press grabs");
+    in = Base();
+    b.Update(in);
+    in.psi = true;
+    in.leftPress = true;
+    Require(b.Update(in).psi, "psi again");
+    in.leftBusy = true;
+    out = b.Update(in);
+    Require(!out.psi && out.owner == Owner::None, "the two-hand hold taking the hand ends it");
+    in = Base();
+    b.Update(in);
+    in.leftPress = true;
+    out = b.Update(in);
+    Require(!out.psi && out.noTarget, "psychic targeting off: nothing, as before");
+    in = Base();
+    b.Update(in);
+    in.psi = true;
+    in.carrying = true;
+    in.target = true;
+    in.leftPress = true;
+    out = b.Update(in);
+    Require(!out.psi && out.releaseCarry, "carrying: the press lets go, never psi");
+    // Just after a reload the selection is held empty for a few frames; a
+    // press on a target then is neither a use nor psi's.
+    b = Ready();
+    in = Base();
+    in.psi = true;
+    in.rightPress = true;
+    for (int i = 0; i <= UseButton::kClearFrames; ++i) { out = b.Update(in); }
+    Require(out.down && out.owner == Owner::Reload, "a reload");
+    in.rightPress = false;
+    b.Update(in);
+    in.target = true;
+    in.leftPress = true;
+    out = b.Update(in);
+    Require(!out.psi && !out.down && out.noTarget, "a target under the reload's guard is not psi's");
 }
 
 void TestRightReload()
@@ -95,7 +192,7 @@ void TestRightReload()
     UseButton b = Ready();
     auto in = Base();
     in.target = true;   // the left hand points at a can
-    in.rightGrip = true;
+    in.rightPress = true;
     auto out = b.Update(in);
     Require(!out.down && out.suppressTarget && out.owner == Owner::Reload, "reload first clears the selection");
     // The selector still reports the old pick this frame.
@@ -107,7 +204,7 @@ void TestRightReload()
     out = b.Update(in);
     Require(out.down && out.pressed && out.suppressTarget, "X goes down only on a clear selection");
     for (int i = 0; i < 10; ++i) { Require(b.Update(in).down, "held"); }
-    in.rightGrip = false;
+    in.rightPress = false;
     out = b.Update(in);
     Require(!out.down && out.released, "released");
     // The guard keeps the selection empty while the release lands.
@@ -121,7 +218,7 @@ void TestRightDrawsWhenHolstered()
     UseButton b = Ready();
     ButtonInput in = Base();
     in.holstered = true;
-    in.rightGrip = true;
+    in.rightPress = true;
     ButtonOutput out = b.Update(in);
     Require(out.drawWeapon && !out.down && out.owner == Owner::Draw, "holstered: the right grip draws");
     Require(!out.suppressTarget, "a draw leaves the selection alone");
@@ -130,9 +227,9 @@ void TestRightDrawsWhenHolstered()
         out = b.Update(in);
         Require(!out.down && !out.drawWeapon, "held on after the draw: no X (it would holster again)");
     }
-    in.rightGrip = false;
+    in.rightPress = false;
     Require(b.Update(in).owner == Owner::None, "the grip opened");
-    in.rightGrip = true;
+    in.rightPress = true;
     out = b.Update(in);
     Require(out.owner == Owner::Reload && !out.drawWeapon, "drawn: the next press reloads");
     // Carrying wins: the grip is not a draw while something is held.
@@ -140,7 +237,7 @@ void TestRightDrawsWhenHolstered()
     ButtonInput carry = Base();
     carry.holstered = true;
     carry.carrying = true;
-    carry.rightGrip = true;
+    carry.rightPress = true;
     out = c.Update(carry);
     Require(!out.drawWeapon, "no draw while carrying");
 }
@@ -150,7 +247,7 @@ void TestReloadGiveUp()
     UseButton b = Ready();
     auto in = Base();
     in.target = true;
-    in.rightGrip = true;
+    in.rightPress = true;
     bool gaveUp = false, down = false;
     for (int i = 0; i < 40; ++i) {
         const auto out = b.Update(in);
@@ -165,14 +262,14 @@ void TestRightBusyAndPairs()
     UseButton b = Ready();
     auto in = Base();
     in.rightBusy = true;
-    in.rightGrip = true;
+    in.rightPress = true;
     Require(b.Update(in).busy, "holster squeeze is not a reload");
-    in.rightGrip = false;
+    in.rightPress = false;
     in.rightBusy = false;
     b.Update(in);
     // Both grips at once (recentre, two-hand): neither acts.
     in.target = true;
-    in.leftGrip = in.rightGrip = true;
+    in.leftPress = in.rightPress = true;
     auto out = b.Update(in);
     Require(!out.down && out.owner == Owner::None, "paired squeeze does nothing");
 }
@@ -182,11 +279,11 @@ void TestOtherHandIgnored()
     UseButton b = Ready();
     auto in = Base();
     in.target = true;
-    in.leftGrip = true;
+    in.leftPress = true;
     b.Update(in);
-    in.rightGrip = true;
+    in.rightPress = true;
     Require(b.Update(in).owner == Owner::Use, "right grip during a use is ignored");
-    in.leftGrip = false;
+    in.leftPress = false;
     auto out = b.Update(in);
     Require(out.released && !out.down, "use ends");
     Require(b.Update(in).owner == Owner::None, "the right grip is not re-armed until released");
@@ -197,7 +294,7 @@ void TestMenuReleases()
     UseButton b = Ready();
     auto in = Base();
     in.target = true;
-    in.leftGrip = true;
+    in.leftPress = true;
     Require(b.Update(in).down, "held");
     in.gameplay = false;
     auto out = b.Update(in);
@@ -211,11 +308,11 @@ void TestLegacy()
     UseButton b = Ready();
     auto in = Base();
     in.leftHand = false;
-    in.leftGrip = true;
+    in.leftPress = true;
     in.target = true;
     Require(!b.Update(in).down, "legacy: the left grip does nothing");
-    in.leftGrip = false;
-    in.rightGrip = true;
+    in.leftPress = false;
+    in.rightPress = true;
     auto out = b.Update(in);
     Require(out.down && out.owner == Owner::Legacy && !out.suppressTarget, "legacy: right grip is X");
     in.rightBusy = true;
@@ -227,7 +324,7 @@ void TestStartsDisarmed()
     UseButton b;
     auto in = Base();
     in.target = true;
-    in.leftGrip = true;
+    in.leftPress = true;
     Require(!b.Update(in).down, "a grip already held when the lane starts does not act");
 }
 
@@ -315,6 +412,8 @@ int main()
     TestLeftUse();
     TestLeftNoTarget();
     TestLeftBusy();
+    TestChord();
+    TestPsiShare();
     TestRightReload();
     TestRightDrawsWhenHolstered();
     TestReloadGiveUp();

@@ -41,6 +41,7 @@
 #include "FrameCaptureWin32.h"
 #include "InputPost.h"
 #include "MoveLane.h"
+#include "BindingDump.h"
 #include "WeaponAttachment.h"
 #include "XrInput.h"
 #include "XrSessionHost.h"
@@ -1068,7 +1069,9 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         out << "move.act result=" << (Valued(args) ? SetInteractionEnabled(arg(1, 1)) : 0)
             << InteractionReport();
     } else if (verb == "move.bind" && args.size() >= 3) {
-        // move.bind <slot 0-3> <keyId>  -- 0 interact, 1 inventory, 2 jump, 3 crouch
+        // move.bind <slot 0-12> <keyId> -- 0 interact, 1 inventory, 2 jump, 3 crouch,
+        // 4 wheel, 5 swap, 6 sprint, 7 psychoscope, 8-10 quick slots left/right/down,
+        // 11 torch, 12 psi (MoveLane's ActionSlot)
         const unsigned int slot = static_cast<unsigned int>(arg(1, 0));
         const int keyId = static_cast<int>(arg(2, 0));
         out << "move.bind result=" << SetInteractionBinding(slot, keyId)
@@ -1208,7 +1211,8 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
             << NoValue(args);
     } else if (verb == "menu") {
         // Menu navigation through the engine's own input layer. `arg(1)` is the
-        // MenuAction index; 0=up 1=down 2=left 3=right 4=accept 5=cancel 6=start.
+        // MenuAction index; 0=up 1=down 2=left 3=right 4=accept 5=cancel 6=start,
+        // 7/8 tabs, 9 secondary, 10 tertiary, 11/12 pages, 13 exit.
         // A non-zero result means refused -- it can never mean "the menu did not
         // move", because PostInputEvent returns void and the binding that would
         // consume it is a candidate rather than a proven active bind (R-089).
@@ -1222,6 +1226,11 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
             << " refused=" << InputPostRefusedCount()
             << " dropped=" << InputQueueDroppedCount()
             << " drainThread=" << InputDrainThreadId();
+    } else if (verb == "input.binds") {
+        // Prey's live gamepad bindings into PreyVR.log (BindingDump); `all`
+        // logs the keyboard's and mouse's too. Read on the next frame.
+        RequestBindingDump(args.size() >= 2 && args[1] == "all");
+        out << "input.binds result=0 (next frame; see PreyVR.log: preyvr_bindings)";
     } else if (verb == "input.key") {
         const DWORD result = PostRawInput(arg(1, 0), static_cast<unsigned int>(arg(2, 1)),
                                           arg(3, 1000));

@@ -37,6 +37,17 @@ void MenuChecks(){
  Check(m.Open()&&!m.OverMenu(),"a request (F10, vr.options 1) opens it over the game too");
  m={};i=Base();i.modal=false;Ready(m,i);i.start=true;m.Update(i);i.start=false;m.Update(i);
  Check(m.PauseTap()&&!m.Open(),"a short tap in play is still the game's pause");
+ // **Menu with both grips is the recenter chord**, in either order: no pause
+ // tap on its release and no VR Options however long it is held.
+ m={};i=Base();i.modal=false;Ready(m,i);i.chord=true;i.start=true;
+ for(int n=0;n<70;++n){m.Update(i);Check(!m.PauseTap()&&!m.Open(),"grips then Menu: the chord neither pauses nor opens");}
+ i.start=false;m.Update(i);Check(!m.PauseTap(),"nor does its release pause");
+ i.chord=false;m.Update(i);i.start=true;m.Update(i);i.chord=true;m.Update(i);i.chord=false;
+ for(int n=0;n<70;++n)m.Update(i);
+ Check(!m.Open(),"Menu then both grips: the chord, so the hold never opens it");
+ i.start=false;m.Update(i);Check(!m.PauseTap(),"and its release is no pause");
+ i.start=true;m.Update(i);i.start=false;m.Update(i);
+ Check(m.PauseTap(),"the next tap alone is the game's pause again");
  m={};i=Base();Open(m,i);Check(m.OverMenu(),"opened in a game menu, it is over that menu");
  m={};i=Base();Open(m,i);i.modal=false;m.Update(i);Check(!m.Open(),"native modal ends closes overlay");
  m={};i=Base();Open(m,i);i.valid=false;m.Update(i);Check(!m.Open(),"tracking loss closes");
@@ -119,7 +130,9 @@ void KindChecks(){
 void LayoutChecks(){
  // The panel's tabs (MenuEntries): any number of rows, every setting on
  // exactly one tab, each button once, the last tab EXPERIMENTAL.
- Check(MenuPages()==8&&std::wstring(MenuPageName(7))==L"EXPERIMENTAL","eight tabs, the last experimental");
+ Check(MenuPages()==9&&std::wstring(MenuPageName(8))==L"EXPERIMENTAL","nine tabs, the last experimental");
+ Check(std::wstring(MenuPageName(ControlsPage()))==L"CONTROLS"&&MenuEntries(ControlsPage()).empty(),
+       "the Controls tab holds no setting: the panel lists the bindings there");
  std::array<int,Count> seen{};int recenter=0,clear=0,calibrate=0;
  for(unsigned p=0;p<MenuPages();++p)for(const int e:MenuEntries(p)){
   if(e==RecenterView)++recenter;else if(e==ClearHolsterSlots)++clear;else if(e==CalibratePosture)++calibrate;
@@ -130,7 +143,7 @@ void LayoutChecks(){
  Check(MenuEntries(MenuPages()).empty(),"past the last tab there is nothing");
  for(const int e:{CarryHand,GrenadeDeploy,LongReach,MuzzleAim,PhysicalMelee,SwingSpeed,PhysicalContacts,
                   ContactStrength,InventoryLayer,InventoryStereo,InventoryDepth})
-  Check(Has(MenuEntries(7),e),"features still being proven, and their tuning, on the experimental tab");
+  Check(Has(MenuEntries(MenuPages()-1),e),"features still being proven, and their tuning, on the experimental tab");
  Check(MenuEntries(0)[0]==Turn&&Has(MenuEntries(0),BodyFollow)&&Has(MenuEntries(0),BodyGlide),"comfort: turning first, body following");
  for(const int e:{UiDistance,UiOffsetRight,UiOffsetUp,UiText,PointerHand,HudLayer,ReticleWorld,ReticleSize,ReticleFallback})
   Check(Has(MenuEntries(2),e),"menu placement, the HUD and the reticle on the interface tab");

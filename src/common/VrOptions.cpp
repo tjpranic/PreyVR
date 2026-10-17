@@ -16,7 +16,7 @@ constexpr const wchar_t* bodyFollowNames[]={L"OFF",L"TURN ONLY",L"TURN AND MOVE"
 constexpr const wchar_t* pointerNames[]={L"LEFT",L"RIGHT",L"BUTTONS ONLY"};
 constexpr const wchar_t* hudNames[]={L"IN THE WORLD",L"FLOATING PANEL"};
 constexpr const wchar_t* reticleNames[]={L"ON THE HUD",L"IN THE WORLD"};
-constexpr const wchar_t* carryHoldNames[]={L"PRESS TO TOGGLE",L"HOLD THE GRIP"};
+constexpr const wchar_t* carryHoldNames[]={L"PRESS TO TOGGLE",L"HOLD TO CARRY"};
 constexpr const wchar_t* grenadeNames[]={L"GAME THROW",L"HAND THROW"};
 using U=Unit;
 constexpr Spec specs[]={
@@ -43,7 +43,7 @@ constexpr Spec specs[]={
  {"physical_contacts",L"OBJECT NUDGES",L"Tap movable objects with weapon bounds. Does not stop your weapon at walls.",0,0,1,1},
  {"swing_speed",L"MINIMUM SWING SPEED",L"Higher values require faster swings. Rest briefly between strikes.",120,80,250,10,U::cmPerSecond},
  {"contact_strength",L"OBJECT NUDGE STRENGTH",L"Scales gentle object impulses. Wrench damage uses the game's rules.",50,0,100,10,U::percent},
- {"psi_target",L"PSYCHIC TARGETING",L"Head or left controller: hold left trigger to aim the equipped power; release to cast. Original keeps native controls.",0,0,2,1,U::none,psiNames},
+ {"psi_target",L"PSYCHIC TARGETING",L"With nothing to grab, the left trigger casts the equipped power. Original aims it as Prey does; Head or Left Controller aim it with your head or left hand.",0,0,2,1,U::none,psiNames},
  {"medkit_slot",L"LEFT-HIP MEDKIT SLOT",L"Squeeze left grip at left hip, then press left trigger while holding grip. One medkit per grab; native use rules apply.",0,0,1,1},
  {"belt_hints",L"BODY SLOT FEEDBACK",L"Brief feedback for holster requests and medkit selection/use. Requires the corresponding body slot feature.",1,0,1,1},
  {"debug_overlay",L"DEBUG OVERLAY (TESTING)",L"Draws each hand's ray and target, body slots, the wrist test and the foregrip region in the world.",0,0,1,1},
@@ -63,7 +63,7 @@ constexpr Spec specs[]={
  {"body_step",L"BODY STEP DISTANCE",L"How far your head moves before your body steps under you. Needs Body Follows You: Turn and Move.",30,10,300,5,U::mm},
  {"body_glide",L"BODY GLIDE",L"How long your body takes to catch up when it steps under you. Zero is instant.",50,0,1000,10,U::ms},
  {"arms_free",L"HANDS WITHOUT A WEAPON",L"Keep both hands at the controllers with no weapon drawn: holstered or carrying.",1,0,1,1},
- {"carry_hold",L"CARRY GRIP",L"Hold the grip to keep holding, or press once to pick up and again to drop.",1,0,1,1,U::none,carryHoldNames},
+ {"carry_hold",L"CARRY",L"Hold the left trigger to keep holding, or press once to pick up and again to drop.",1,0,1,1,U::none,carryHoldNames},
  {"grenade_hand",L"GRENADE THROW",L"Throw grenades with your hand's motion, or with the game's charged throw along your view.",1,0,1,1,U::none,grenadeNames},
  {"carry_throw_strength",L"OBJECT THROW STRENGTH",L"How hard carried objects fly when you throw them.",140,50,300,10,U::percent},
  {"grenade_throw_strength",L"GRENADE THROW STRENGTH",L"How hard grenades fly when you throw them.",130,50,400,10,U::percent},
@@ -77,7 +77,8 @@ constexpr Spec specs[]={
  {"long_reach",L"LONG-WEAPON HOLD-BACK",L"Long weapons are held back toward the body, with a wider foregrip region and torso twist.",1,0,1,1},
  {"inventory_layer",L"INVENTORY LAYER",L"The inventory on a see-through layer of its own instead of the whole flat screen.",0,0,1,1},
  {"inventory_stereo",L"STEREO INVENTORY",L"Gives the inventory's layers depth. Needs Inventory Layer.",0,0,1,1},
- {"inventory_depth",L"INVENTORY DEPTH",L"How much depth Stereo Inventory gives.",25,0,100,5,U::percent}
+ {"inventory_depth",L"INVENTORY DEPTH",L"How much depth Stereo Inventory gives.",25,0,100,5,U::percent},
+ {"finger_curl",L"FINGERS FOLLOW THE CONTROLLER",L"A free hand's fingers follow yours: the thumb on a button, the index on the trigger, the rest with the grip.",1,0,1,1}
 };
 static_assert(std::size(specs)==Count,"one Spec per Setting, in order");
 // Each default, name and choice belongs to its setting's range, one name per value.
@@ -94,7 +95,7 @@ static_assert(Consistent(),"every Spec describes its own range");
 // The panel's tabs. Each setting appears once, each button once.
 constexpr int comfort[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,StrafeSpeed,BackwardSpeed,
     BodyFollow,BodyTurnDeadzone,BodyStep,BodyGlide};
-constexpr int hands[]={TwoHand,GripToggle,SupportSnap,Psychoscope,ArmsFree,CarryHold,GrenadeHand,
+constexpr int hands[]={TwoHand,GripToggle,SupportSnap,Psychoscope,ArmsFree,FingerCurl,CarryHold,GrenadeHand,
     CarryThrowStrength,GrenadeThrowStrength};
 constexpr int interface_[]={UiScale,UiMargin,UiCurve,UiGuide,UiDistance,UiOffsetRight,UiOffsetUp,UiText,
     PointerHand,HudLayer,ReticleWorld,ReticleSize,ReticleFallback};
@@ -106,12 +107,17 @@ constexpr int setup[]={CalibratePosture,RecenterView,DebugOverlay};
 // Features still being proven, together with the settings that tune them.
 constexpr int experimental[]={CarryHand,GrenadeDeploy,LongReach,MuzzleAim,PhysicalMelee,SwingSpeed,
     PhysicalContacts,ContactStrength,InventoryLayer,InventoryStereo,InventoryDepth};
-constexpr std::span<const int> menuPages[]={comfort,hands,interface_,equipment,feedback,abilities,setup,experimental};
+// CONTROLS holds no setting: the panel draws what each action is bound to there.
+constexpr unsigned kControlsPage=7;
+constexpr std::span<const int> menuPages[]={comfort,hands,interface_,equipment,feedback,abilities,setup,
+    std::span<const int>{},experimental};
 constexpr const wchar_t* menuNames[]={L"COMFORT",L"HANDS",L"INTERFACE",L"EQUIPMENT",L"FEEDBACK",L"ABILITIES",
-    L"SETUP",L"EXPERIMENTAL"};
+    L"SETUP",L"CONTROLS",L"EXPERIMENTAL"};
+static_assert(kControlsPage<std::size(menuPages)&&menuPages[kControlsPage].empty());
 static_assert(std::size(menuPages)==std::size(menuNames));
 }
 unsigned MenuPages(){return static_cast<unsigned>(std::size(menuPages));}
+unsigned ControlsPage(){return kControlsPage;}
 const wchar_t* MenuPageName(unsigned page){return menuNames[page%MenuPages()];}
 std::span<const int> MenuEntries(unsigned page){return page<MenuPages()?menuPages[page]:std::span<const int>{};}
 const Spec& Describe(unsigned id){return specs[id<Count?id:0];}
@@ -193,6 +199,8 @@ void Menu::Update(const Input& i){
  if(!valid||i.epoch!=epoch_){
   epoch_=i.epoch;Close();startArmed_=false;startUsed_=false;startWas_=false;hold_=0;return;
  }
+ // Menu with both grips held is the recenter chord: this press is spent.
+ if(i.start&&i.chord)startUsed_=true;
  if(!i.start){
   if(startWas_&&startArmed_&&!startUsed_&&!open_&&!quarantine_)pauseTap_=true;
   hold_=0;startArmed_=true;startUsed_=false;

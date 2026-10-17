@@ -13,6 +13,10 @@ void SetVrOptionsSurface(const ui::Surface* surface,std::uint64_t reference);
 // XR frame thread: this frame's controls for the panel (VrOptionsUi), captured
 // by ProcessVrOptionsInput, and what the drawn frame did with them.
 VrOptionsUiInput VrOptionsUiFrameInput();
+// **The Controls tab's rows** (VrOptionsUi::SetControls) from what each action
+// is bound to now (XrInputBoundControls): play, menus and any time, each action
+// beside its buttons, with the gestures that are not one button.
+std::vector<VrOptionsControlRow> VrOptionsControlRows(const std::vector<XrBoundControl>& bound);
 void ApplyVrOptionsUi(const VrOptionsUiResult& result);
 // XR frame thread: **the panel held by the laser** -- a trigger press on no
 // control (VrOptionsUiResult::grabStarted), until the trigger is let go or the

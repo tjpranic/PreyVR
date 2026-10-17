@@ -52,6 +52,24 @@ Quaternion RelaxedRelative(Side side, int joint, float curl);
 // hand around a held object). ShapeRelative(s, j, c, 0) == RelaxedRelative(s, j, c).
 Quaternion ShapeRelative(Side side, int joint, float curl, float fist);
 
+// **The player's fingers on the controller, as a hand shape.** A finger is a
+// relaxed flexion scale (`curl`, as RelaxedRelative) and a closure (`fist`, as
+// ShapeRelative), from what the controller reports:
+//  * thumb: resting on a button or stick (capacitive touch) curls it down onto
+//    the controller; lifted, it stands up;
+//  * index: off the trigger it points; on it, it rests curled and closes with
+//    the trigger's travel;
+//  * middle, ring, pinky: close with the grip's travel.
+// `relaxed` is the hand's relaxed flexion scale (pose.curl). Non-finite or
+// out-of-range values read as nothing pressed.
+enum Finger : int { kFingerThumb, kFingerIndex, kFingerMiddle, kFingerRing, kFingerPinky, kFingerCount };
+int FingerOf(int joint);
+struct FingerShape {
+    float curl[kFingerCount]{};
+    float fist[kFingerCount]{};
+};
+FingerShape ShapeFromController(float trigger, bool indexTouch, float squeeze, bool thumbTouch, float relaxed);
+
 // An orthonormal anatomical frame. `palm` points out of the palm.
 struct Frame {
     Vec3 length{1, 0, 0};

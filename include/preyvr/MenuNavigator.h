@@ -75,6 +75,29 @@ private:
 struct ModalMenuState : ControllerMenuState {
     bool previousTab = false, nextTab = false, secondary = false, tertiary = false;
     bool previousPage = false, nextPage = false;
+    bool exit = false;   // the gamepad's Back: closes the menu (the Steam Frame's View)
+};
+
+// **A button that acts when let go**, and not at all if it was spoiled while
+// held: the grips (tabs), which both grips together spoil -- a two-handed hold,
+// or with Menu the recenter chord, in either order. A spoiled press stays
+// spoiled until the button is let go.
+class ReleaseTap {
+public:
+    bool Update(bool down, bool spoiled)
+    {
+        if (down) {
+            spoiled_ = spoiled_ || spoiled;
+            held_ = true;
+            return false;
+        }
+        const bool tap = held_ && !spoiled_;
+        Reset();
+        return tap;
+    }
+    void Reset() { held_ = spoiled_ = false; }
+private:
+    bool held_ = false, spoiled_ = false;
 };
 
 // Start can open a menu from gameplay. Navigation and inventory actions belong
@@ -88,8 +111,8 @@ public:
 private:
     MenuNavigator navigator_;
     bool modal_ = false, startWas_ = false, blockStick_ = false;
-    bool blocked_[8]{}, was_[6]{};
-    bool tabPending_[2]{}, tabChord_=false;
+    bool blocked_[9]{}, was_[9]{};
+    ReleaseTap previousTab_, nextTab_;
 };
 
 } // namespace preyvr::input

@@ -37,15 +37,19 @@ void Jump(std::uintptr_t rva,const void* fn){
     unsigned char code[12]{0x48,0xb8};std::memcpy(code+2,&fn,8);code[10]=0xff;code[11]=0xe0;
     std::memcpy(reinterpret_cast<void*>(moduleBase+rva),code,sizeof(code));
 }
+// The left trigger: the medkit slot reads it as such, psi through the use
+// button's decision that the press found nothing to grab (PsiOwnsGrab).
+bool psiPress=false;
 void Tick(bool fire=false,bool grip=false,bool valid=true,float dt=.01f){
     published.tracking.displayTime+=static_cast<long long>(dt*1e9f);++published.tracking.sequence;
     published.tracking.publishedNs=MonotonicNanoseconds();published.tracking.hands[0].triggerPressed=fire;
-    published.tracking.hands[0].gripPressed=grip;UpdatePsiMedkit(published,valid);
+    psiPress=fire;published.tracking.hands[0].gripPressed=grip;UpdatePsiMedkit(published,valid);
 }
 }
 HMODULE TestModule(const wchar_t*){return reinterpret_cast<HMODULE>(moduleBase);}
 namespace preyvr::dll {
 void PublishSlotFeedback(equipment::SlotNotice,const GameplayPoseFrame&){}
+bool PsiOwnsGrab(){return psiPress;}
 void DebugOverlayMedkit(bool,Vec3,Vec3,bool,bool,bool,bool){}
 bool EnsureMinHook(){return false;}
 bool EnsureGameplayPoseObservation(){return true;}

@@ -1,8 +1,6 @@
 # TODO
 
 VR Options Menu:
-- Menu spawns in the same place the game menus do causing Z-fighting
-    - Tangentially related, the laser won't go past the plane the VR options menu is on. Not necessarily a bug or anything wrong, but would be nice to have.
 - Reorganize the options on the menu under each tab into sections
 - Audit every option and rework and/or remove and/or consolidate as many as needed
 
@@ -11,16 +9,15 @@ Rendering:
 - Arm IK tends to bend the arms inward. Not enough space between shoulder and wrist, maybe?
 
 Controls:
-- Rebind controls to be nicer on Steam Frame controllers
-- Fix duplicated bindings
 - Individual finger control support
+- Pressing B to exit the inventory results in the player crouching. Technically correct behavior given B is the crouch button but should still be looked at. Maybe not have B leave menus?
 
 Interactibility:
 - Make melee truly physical
 - Allow for hand-based interactions with objects in game (nicer grabbing, smacking things around)
 
 UI:
-Wrist stats bar shows Psi energy before you install a neuromod
+- Wrist stats bar shows Psi energy before you install a neuromod
 
 UX:
 - Game freezes a bit when first loading before showing the main menu in VR

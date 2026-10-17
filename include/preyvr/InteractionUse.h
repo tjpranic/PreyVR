@@ -6,8 +6,9 @@
 #include <cstdint>
 #include <optional>
 
-// World interaction, phase 1: the LEFT hand points at what to use and its grip
-// uses it; the right grip only reloads. Everything after the press is the
+// World interaction, phase 1: the LEFT hand points at what to use and its grab
+// (the left trigger, by default: input::Role::grab) uses it; the right grip
+// only reloads. Everything after the press is the
 // game's own (pick up, carry, open, loot): the mod only chooses the ray the
 // native selector looks along and when the native use button is held.
 //
@@ -30,12 +31,21 @@ namespace preyvr::use {
 // --- the use button ---------------------------------------------------------
 struct ButtonInput {
     bool gameplay = false;   // gameplay input allowed and the action lane on
-    bool leftHand = true;    // use.hand: true = left grip uses, right grip reloads
-    bool leftGrip = false, rightGrip = false;
-    // Another lane owns that grip this frame, or would take it on this press:
-    // left = medkit slot, two-hand foregrip, recentre chord; right = holster,
+    bool leftHand = true;    // use.hand: true = left grab uses, right grip reloads
+    // The left hand's grab and the right hand's reload (its grip), pressed.
+    bool leftPress = false, rightPress = false;
+    // Another lane owns that press this frame, or would take it on this press:
+    // left = medkit slot, two-hand hold, recentre chord; right = holster,
     // two-hand hold, recentre chord, paired squeeze.
     bool leftBusy = false, rightBusy = false;
+    // Y is held, so a grip squeezed now starts the recentre chord: neither press
+    // starts anything. Unlike busy, it lets nothing go -- Y does not drop what
+    // the hand holds.
+    bool chord = false;
+    // Psi shares the left press: one with nothing to grab is psi's instead
+    // (Owner::Psi) -- Prey's own psi button, or the mod's psychic targeting --
+    // as Prey's X is use with something selected and reload without.
+    bool psi = false;
     // The game has a usable entity right now (the selector's committed pick).
     bool target = false;
     // Phase 2 (HandCarry.h): something is carried right now, and whether it is
@@ -60,9 +70,10 @@ struct ButtonInput {
     bool holstered = false;
 };
 
-// Hold: the left grip is holding what it picked up; opening it lets go.
+// Hold: the left press is holding what it picked up; letting go lets go.
 // Draw: the right grip drew the weapon; nothing more until it opens.
-enum class Owner : std::uint8_t { None, Use, Reload, Legacy, Hold, Draw };
+// Psi: the left press, with nothing to grab, is aiming a psi power.
+enum class Owner : std::uint8_t { None, Use, Reload, Legacy, Hold, Draw, Psi };
 const char* OwnerName(Owner owner);
 
 struct ButtonOutput {
@@ -71,7 +82,8 @@ struct ButtonOutput {
     Owner owner = Owner::None;
     // One-frame events, for counters and the trace.
     bool pressed = false, released = false;
-    bool noTarget = false;        // left grip pressed with nothing selected: nothing sent
+    bool noTarget = false;        // left press with nothing selected: nothing sent
+    bool psi = false;             // the left press is psi's (Owner::Psi), held this frame
     bool gaveUp = false;          // reload: the selection never cleared, nothing sent
     bool busy = false;            // a press another lane owned
     // Let go of what is carried, now (the carry lane chooses drop or throw from

@@ -8,6 +8,7 @@
 #include "SlotFeedback.h"
 #include "DebugOverlay.h"
 #include "MinHookInit.h"
+#include "MoveLane.h"
 #include "preyvr/PsiTargeting.h"
 #include "preyvr/MedkitSlot.h"
 #include "preyvr/PsiMedkitNative.h"
@@ -300,7 +301,7 @@ void UpdatePsiMedkit(const GameplayPoseFrame& frame,bool valid){
         Error(StopOwned());trigger.Reset();slot.Reset();medkitGrip=false;preview={};return;
     }
     const auto& left=f.hands[0];
-    const bool slotAllowed=valid&&medkit.load()&&!left.menuAccept&&!left.menuCancel&&!f.hands[1].gripPressed;
+    const bool slotAllowed=valid&&medkit.load()&&!FaceButtonHeld(left)&&!f.hands[1].gripPressed;
     const bool wasOwned=slot.OwnsGrip();
     float torso=0;const bool shared=BodyTorsoYaw(torso);
     const bool use=slot.Update(f.head,left.gripPose.position,left.gripPressed,left.triggerPressed,slotAllowed,dt,
@@ -326,8 +327,11 @@ void UpdatePsiMedkit(const GameplayPoseFrame& frame,bool valid){
         PublishSlotFeedback(!error&&result==2?equipment::SlotNotice::MedkitUsed:
             !error&&result==0?equipment::SlotNotice::MedkitEmpty:equipment::SlotNotice::MedkitDenied,frame);
     }
-    const auto event=trigger.Update(left.triggerPressed,valid&&mode.load()&&!slot.OwnsGrip()&&!left.gripPressed&&
-        !left.menuAccept&&!left.menuCancel&&!f.hands[1].gripPressed);
+    // Psi shares grab (the left trigger): its press is psi's only when it found
+    // nothing to grab (MoveLane's use button, PsiOwnsGrab). The medkit slot
+    // above reads the trigger itself: there it is the slot's.
+    const auto event=trigger.Update(PsiOwnsGrab(),valid&&mode.load()&&!slot.OwnsGrip()&&!left.gripPressed&&
+        !FaceButtonHeld(left)&&!f.hands[1].gripPressed);
     if(event==psi::TriggerEvent::Begin)Error(Begin(frame));
     else if(event==psi::TriggerEvent::Cast){Error(Cast(frame));Error(StopOwned());}
     else if(event==psi::TriggerEvent::Cancel)Error(StopOwned());

@@ -39,6 +39,9 @@ unsigned int MoveLaneMode();
 void UpdateMoveLane();
 // Turn and fire, driven from the right controller. Same thread and frame.
 void UpdateTurnAndFireLanes();
+// The left hand's grab press is psi's this frame: psychic targeting is on and
+// it found nothing to grab (use::Owner::Psi). PsiMedkit's trigger reads it.
+bool PsiOwnsGrab();
 
 // Radial deadzone in hundredths (default 15). The playbook's reason for radial
 // rather than per-axis: a per-axis deadzone leaves diagonals live while the

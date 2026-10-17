@@ -8,27 +8,32 @@ Press **A** at the title screen. Point the right controller at **Continue** or *
 
 Menus and inventory appear on a screen about **2 metres away**, anchored where you opened them. A cyan beam and dot show where you are pointing. Squeeze the beam hand's trigger to click; hold it while moving to drag, then release. Moving outside the screen cancels an inventory drag and stops hovering. Release the trigger before trying again. **B** backs out one screen at a time.
 
-The screen has a gentle curve when the runtime supports OpenXR cylinder layers and uses a flat panel otherwise. The menu and its control card fit inside both runtime eye frusta with room around the edges. **Both grips + left Y**, or **F12**, reset the VR view and bring the screen back in front of you.
+The screen has a gentle curve when the runtime supports OpenXR cylinder layers and uses a flat panel otherwise. The menu and its control card fit inside both runtime eye frusta with room around the edges. **Menu + both grips**, or **F12**, reset the VR view and bring the screen back in front of you.
+
+Where Touch and the Steam Frame differ, both are named. Index follows Touch, with its left A/B as X/Y.
 
 | Control | Gameplay | Menu / inventory |
 | --- | --- | --- |
 | Left stick | Locomotion | — |
 | Right stick | Turning | Navigate |
-| Right stick click | Open Favorites / weapon wheel | — |
+| Steam Frame: left D-pad | Quick slots; up: torch | Navigate |
+| Right stick click | Psychoscope | — |
+| Left stick click | Sprint (Touch, Steam Frame) | — |
 | Right A / B | Jump / crouch | Select / back |
-| Left X | Open inventory | Prey's X action, including Equip |
-| Left Y | — | Prey's Y action |
-| Right grip | Use / reload | Next tab, on release |
+| X (Touch: left; Steam Frame: right) | Touch: open inventory | Prey's X action, including Equip |
+| Y (Touch: left; Steam Frame: right) | Tap: swap weapon. Hold: weapon wheel | Prey's Y action |
+| Steam Frame: View (left) | Open inventory | Close the menu |
+| Right grip | Reload; hold to holster | Next tab, on release |
 | Left grip | Hold a long weapon's support grip | Previous tab, on release |
-| Beam-hand trigger | Right hand: fire | Click / hold to drag |
-| Other trigger | Existing gameplay mapping | Its native LT / RT page action |
-| Left menu button | Pause | Pause / resume |
-| Hold left menu button | VR Options, over the game (not paused) | VR Options, over the menu |
-| Both grips + left Y | Reset view | Reset view and screen position |
+| Left trigger | Grab: use or pick up what the left hand points at; hold to carry, let go to drop or throw | Previous page, or click when the beam is on the left |
+| Right trigger | Fire | Click / hold to drag (the default beam hand) |
+| Menu button (Touch: left; Steam Frame: right) | Pause | Pause / resume |
+| Hold menu button | VR Options, over the game (not paused) | VR Options, over the menu |
+| Menu + both grips | Reset view | Reset view and screen position |
 | F11 | Enable VR or retry startup | Enable VR or retry startup |
 | F12 | Reset view | Reset view and screen position |
 
-Open inventory with **X**. You can point at an item, or navigate with the right stick. For the native button route, highlight a weapon, press **X** to equip, then **B** to return to gameplay. The control card shows the VR bindings even when Prey changes its own prompts between mouse and gamepad icons.
+Open inventory with **X** (Steam Frame: **View**). You can point at an item, or navigate with the right stick. For the native button route, highlight a weapon, press **X** to equip, then **B** to return to gameplay. The control card shows the VR bindings even when Prey changes its own prompts between mouse and gamepad icons.
 
 Right-stick click sends Prey’s native middle-mouse Favorites Wheel shortcut. The wheel is part of the gameplay HUD; beam selection for this particular wheel has not been established. The new opening binding still needs a live check.
 
@@ -48,7 +53,7 @@ Restart Prey after changing these settings. The F10-F12 keys only work while the
 window has focus.
 
 Interface size, panel curvature, the controls guide, the laser hand and the HUD
-style are **VR Options** settings: hold the left menu button, then the
+style are **VR Options** settings: hold the menu button, then the
 Interface tab. They are saved in `%LOCALAPPDATA%\PreyVR\vr-options.ini`, the one
 place VR Options settings are kept. A `PreyVR.json` from an earlier version
 that still lists `UiScalePercent`, `UiCurveDegrees`, `UiGuide`, `PointerHand`,
@@ -81,8 +86,8 @@ gives back about a sixth of the panel.
 
 The useful one for fit is `ui.scale` (20-200);
 once you find your number, set VR Options' Interface Size to it, and every
-later launch starts there. `vr.recenter` re-centres, and so do F12 and squeezing
-both grips + left Y -- the grips are the ones that work with the headset on, since F12
+later launch starts there. `vr.recenter` re-centres, and so do F12 and pressing
+Menu with both grips squeezed -- the grips are the ones that work with the headset on, since F12
 needs the Prey desktop window focused.
 
 You can also pass a command straight in: `Tune Prey VR.cmd ui.scale 130`.

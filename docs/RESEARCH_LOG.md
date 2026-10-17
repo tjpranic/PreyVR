@@ -3936,3 +3936,103 @@ The window is now wherever Prey puts it. That is centred at the render size plus
 frame, so on a screen shorter than the eye its top runs off the screen. The
 backbuffer never followed the window, so the headset image is unchanged.
 `window.hold` stays.
+
+## 2026-10-17 — Controls: the Steam Frame's own layout, and duplicated bindings
+
+The Frame profile (10-13) copied SteamVR's Touch emulation, which puts three Frame
+buttons on B (right X, Y, B) and the D-pad on Touch's left X/Y. That was the TODO's
+"duplicated bindings": Prey's "X: Equip" prompt backed out on the Frame's X. Its paths
+had been guessed (SDK 1.1.60's `xr.xml` has no Frame profile); Valve's list now settles
+them, and the profile's current name, `frame_controller_valve` (SteamVR 2.15.1), is
+suggested beside the old one.
+
+Phase 0, offline-tested (74/74), not yet worn:
+- New roles `secondary`, `tertiary`, `inventory`. On the Frame each button now does what
+  a gamepad's does in Prey: right X/Y are Prey's X/Y, View is the TranScribe, Menu
+  pauses, and the D-pad navigates the game's menus too. Bumpers are unbound.
+- Recenter is Y + both grips, either order. Y first no longer uses or reloads.
+- Y and the tabs in game menus, and the tabs in VR Options, act on release, and not when
+  both grips were held.
+- Trigger and grip have hysteresis.
+
+Touch and Index are unchanged. Details, headset checklist and the rest of the plan are
+in [CONTROLS-2026-10-17.md](CONTROLS-2026-10-17.md).
+
+## 2026-10-17 — Controls phase 1: named actions in three sets, grab on the left trigger
+
+Phase 0 (PreyVR-5) was worn and worked as expected. The user then asked for the left
+hand's grab on the left trigger rather than its grip, and chose that psychic targeting
+(opt-in) shares that trigger.
+
+Changes, offline-tested (74/74), not yet worn:
+- **Named actions in three sets.** Every action is named for what it does, in
+  `common` (Hands and System), `gameplay` and `menus`: one page each of SteamVR's
+  binding UI, the rebinding route.
+- **All three are synced every frame.** Syncing only the current context's set would
+  hide a button held across a menu from MoveLane's `blocked[]` release rule, so a held
+  A would jump as a menu closed.
+- **Grab is the left trigger on every controller.** A grab press with nothing to grab
+  is psi's while psychic targeting is on (`Owner::Psi`, `PsiOwnsGrab`). The medkit slot
+  keeps the raw trigger.
+- **The Frame's View now also closes menus** (`MenuAction::Exit`, the gamepad's Back,
+  Prey's `menu_exit`).
+- **One action per button per set, enforced** by `controller_profiles`.
+
+Details and the phase 1 headset checklist are in
+[CONTROLS-2026-10-17.md](CONTROLS-2026-10-17.md).
+
+## 2026-10-17 — Controls phase 2: Prey's own gamepad buttons, and a live binding dump
+
+Phase 1 (PreyVR-6) was worn and verified. Phase 2 adds what Prey's gamepad has and VR
+lacked, with the layout the user chose:
+- **Sprint** on the left stick click.
+- **Psychoscope** on the right stick click, Prey's own button.
+- **Y**: a tap swaps weapon; a hold opens the weapon wheel, still the PC wheel (`mouse3`).
+- **The Frame's D-pad**: Prey's quick slots, and up for the torch.
+- **Prey's psi power** on the shared left trigger, with nothing to grab and Original
+  targeting.
+
+Recenter moves to **Menu + both grips**: Menu's own actions wait for its release or a
+long hold, so the chord can claim it, and Y now acts on press.
+
+**Proven from bytes:** `xi_thumbl` 0x206 and `xi_thumbr` 0x207, which were inferred,
+read from FUN_1809D9EF0 on the installed `7d6e322f...`. The rest of the pad's ids were
+read the same way.
+
+**Not yet proven:** which action each key drives. That is in the encrypted `player` map.
+So a read-only `BindingDump` (`ActionMapWalk`, the C++ twin of
+`decode_h018_bind_snapshot.py`) logs the live gamepad bindings once per session in play,
+and on `input.binds [all]`. `verify_h018_static_gaps.py` passes 50/50 on the installed
+DLL.
+
+Offline 76/76 (new `action_map_walk`, `tap_hold`); not yet worn. Details and checklist:
+[CONTROLS-2026-10-17.md](CONTROLS-2026-10-17.md).
+
+## 2026-10-17 — Controls phase 3: fingers follow the controller, a Controls tab; the bindings proven
+
+**Phase 2 (PreyVR-7) was worn and verified.** Its binding dump read 894 live
+bindings, 205 on gamepad keys, and proved each key the mod posts in the `player` map:
+- `xi_thumbl` `sprint`, `xi_thumbr` `toggle_scope`;
+- `xi_y` `equip_last_weapon` / `enter_focusmode`;
+- `xi_dpad_up` `toggle_flashlight`, the other three `quickselect_*`;
+- `xi_triggerl_btn` `select_equipped_power`.
+
+The rows are in `docs/evidence/bindings-20261017/`. They read `enabled=0` because
+the dump ran on the main menu's first frame; it now waits for two seconds of play.
+
+**Phase 3, offline-tested (76/76), not yet worn:**
+- **Fingers follow the controller.** Each free hand's fingers come from its
+  controller (`handpose::ShapeFromController`), through the existing
+  `ApplyRelaxedFingers` seam:
+  - thumb from capacitive touch on any button or stick;
+  - index from trigger touch and travel;
+  - the other three from the grip.
+
+  Two new touch actions (`thumb_touch`, `index_touch`) carry it. VR Options >
+  Hands has "Fingers follow the controller" (default on).
+- **A Controls tab in VR Options.** It lists every action beside the runtime's own
+  name for its button (`xrEnumerateBoundSourcesForAction` +
+  `xrGetInputSourceLocalizedName`, read on each interaction-profile event and logged
+  as `detail=bound`), so it follows SteamVR rebinding.
+
+Details and checklist: [CONTROLS-2026-10-17.md](CONTROLS-2026-10-17.md).

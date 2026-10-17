@@ -9,19 +9,27 @@ The launcher starts Prey, loads the mod, waits for the requested render size, an
 
 ## Controls
 
+Where Touch and the Steam Frame differ, both are named. Index follows Touch, with its left A/B as X/Y; its
+left stick click is pause, so it has no sprint (bind one in SteamVR). The buttons follow Prey's own gamepad
+layout wherever VR leaves one free.
+
 | Control | Gameplay | Menu / inventory |
 | --- | --- | --- |
 | Left stick | Head-relative locomotion | — |
+| Left stick click | Sprint (Touch, Steam Frame) | — |
 | Right stick | 45-degree snap turn (default) | Navigate |
-| Right stick click | Quick weapon wheel | — |
+| Right stick click | Psychoscope | — |
+| Steam Frame: left D-pad | Prey's quick slots (left, right, down); up: torch | Navigate |
 | Right A / B | Jump / crouch | Select / back |
-| Left X | Open inventory | X action shown by Prey |
-| Left Y | — | Y action shown by Prey |
+| X (Touch: left; Steam Frame: right) | Touch: open inventory | X action shown by Prey |
+| Y (Touch: left; Steam Frame: right) | Tap: swap weapon. Hold: weapon wheel | Y action shown by Prey |
+| Steam Frame: View (left) | Open inventory | Close the menu |
 | Right grip | Tap: reload (never uses what the left hand points at). Hold: holster the weapon. With the weapon holstered: draw it again | Next tab, on release |
-| Left grip | Use what the left hand points at (tap or hold, as Prey's prompt says); keep it closed to hold what you picked up, open it to drop or throw; hold a long weapon's support grip | Previous tab, on release |
-| Triggers | Right: fire (hold for automatic fire and to charge the Disruptor); with a grenade: hold it, let go during a throwing motion to throw it | Previous / next page (LT / RT) |
-| Left menu button | Tap: pause. Hold: VR options | Tap: pause / resume. Hold: VR options |
-| Both grips + left Y | Reset VR view | Reset and bring the panel in front of you |
+| Left trigger | **Grab**: use what the left hand points at (tap or hold, as Prey's prompt says); keep it held to hold what you picked up, let go to drop or throw. With nothing to grab: Prey's psi power (hold to use), or with psychic targeting on, aim it and let go to cast | Previous page (LT); clicks instead when the laser is on the left |
+| Right trigger | Fire (hold for automatic fire and to charge the Disruptor); with a grenade: hold it, let go during a throwing motion to throw it | Clicks with the laser (default); next page (RT) when the laser is on the left |
+| Left grip | Hold a long weapon's support grip; the left-hip medkit slot and the psychoscope gesture, when enabled | Previous tab, on release |
+| Menu button (Touch: left; Steam Frame: right) | Tap: pause. Hold: VR options | Tap: pause / resume. Hold: VR options |
+| Menu + both grips | Reset VR view | Reset and bring the panel in front of you |
 | F11 | Enable VR or retry setup | Enable VR or retry setup |
 | F12 | Reset VR view | Reset and reposition the panel |
 | F10 | — | Open / close VR options |
@@ -32,16 +40,18 @@ For two-handed aiming, bring your left hand to the weapon's foregrip and squeeze
 the left grip. Keep it squeezed while aiming with both hands; release to return
 smoothly to one hand. A squeeze away from the weapon does nothing. Changing
 weapons, opening a menu or losing tracking requires releasing and grabbing again.
-To recenter, hold both grips, then press left Y; F12 also works.
+To recenter, squeeze both grips and press **Menu** (or Menu, then both grips): it neither pauses nor opens VR
+Options. F12 also works. With Menu held first, the right grip does not reload either.
 
 To use something, point at it with the left hand: the cyan ray ends on what Prey selected (it bends to it when
-Prey picked it from near the line) and Prey shows its usual prompt. Squeeze the left grip briefly for the
-prompt's tap action (take, carry, search, take the highlighted item of a locker) or keep it squeezed for the
-hold action (drag a body, carry a heavy object). What you pick up stays in the left hand for as long as the grip
-is closed: a light object flies to the hand and is held by the side you pointed at, a heavy one floats ahead and
-follows the hand, a body is dragged from it. Open the hand to drop it, or open it during a throwing motion to
+Prey picked it from near the line) and Prey shows its usual prompt. Pull the left trigger briefly for the
+prompt's tap action (take, carry, search, take the highlighted item of a locker) or keep it held for the
+hold action (drag a body, carry a heavy object). What you pick up stays in the left hand for as long as the
+trigger is held: a light object flies to the hand and is held by the side you pointed at, a heavy one floats ahead and
+follows the hand, a body is dragged from it. Let go to drop it, or let go during a throwing motion to
 throw it with the hand's speed; the right trigger still throws it the game's way. `carry.hold 0` restores
-"squeeze again to drop".
+"press again to drop". Grab is the **left trigger** on every controller; to move it (back to the grip, say),
+rebind **Grab and Use** in SteamVR's controller bindings for Prey.
 
 **Grenades** (EMP, Recycler, Nullwave, Lure) sit in the right hand. Hold the right trigger, throw with your
 arm and let go of the trigger: the grenade leaves at that instant with your hand's speed and direction, and comes
@@ -51,19 +61,19 @@ charged throw along the view.
 
 With no weapon drawn -- holstered, or while carrying something -- both hands stay visible at the controllers
 (open; the left one closes around what it carries). Hold the right grip to holster the weapon, squeeze it again
-to draw it. `arms.free 0` lets the game lower the arms out of view again. A squeeze on the foregrip, at the left-hip medkit slot or in the recenter chord never uses
-anything. `use.hand 0` restores the previous layout (right grip uses and reloads along the weapon's aim).
+to draw it. `arms.free 0` lets the game lower the arms out of view again. Grab does nothing while the left hand holds the foregrip, at the left-hip medkit slot (whose trigger is the
+medkit's) or with Menu held for the recenter chord. `use.hand 0` restores the previous layout (right grip uses and reloads along the weapon's aim).
 `aim.twohand 0` disables support aiming; `aim.twohand 1` enables it (default).
 
-To equip a weapon, open inventory with **X**, highlight it with the right stick, press **X** for Prey's Equip action, then **B** to return to the game. Follow the native button prompts for other items. B backs out one level at a time in nested screens.
+To equip a weapon, open inventory with **X** (Steam Frame: **View**), highlight it with the right stick, press **X** for Prey's Equip action, then **B** to return to the game. Follow the native button prompts for other items. B backs out one level at a time in nested screens.
 
-The Touch profile has been tested in the injected game through xr-sim; physical controller acceptance remains. Index bindings are included: left A/B correspond to X/Y, and **left stick click** opens pause. **Steam Frame** controllers get their own profile when SteamVR offers it (`xr_input_extension name=XR_VALVE_frame_controller_interaction enabled=1`, `detail=bindings profile=frame`, and `interaction_profile ... valve/frame_controller` in the log): the buttons do what they did before, and the left **D-pad** also works in VR Options -- left/right adjust, up/down move. Without it SteamVR presents them as Touch, and the D-pad arrives only as left X/Y. Other controller profiles do not yet have dedicated mappings. Headset rendering uses OpenXR; the panel fits both runtime eye frusta, including their asymmetry.
+The Touch profile has been tested in the injected game through xr-sim; physical controller acceptance remains. Index bindings are included: left A/B correspond to X/Y, and **left stick click** opens pause. **Steam Frame** controllers get their own profile when SteamVR offers it (`xr_input_extension name=XR_VALVE_frame_controller_interaction enabled=1`, `detail=bindings profile=frame path=...`, and `interaction_profile ... valve/frame_controller` in the log). Each button then does what a gamepad's does in Prey, so the game's prompts name the button to press: right **X** and **Y** are Prey's X and Y (Y: tap to swap weapon, hold for the wheel), **View** opens the inventory and closes menus, **Menu** pauses, the stick clicks sprint (left) and toggle the psychoscope (right), and the left **D-pad** is Prey's quick slots in play (up: torch) and navigates the game's menus and VR Options (left/right adjust there, up/down move). The bumpers do nothing yet. Without the profile SteamVR presents them as Touch: right X and Y act as B, the D-pad arrives as left X (down) and Y (the rest), and View is the menu button. To rebind any action, use SteamVR's controller bindings for Prey. Other controller profiles do not yet have dedicated mappings. Headset rendering uses OpenXR; the panel fits both runtime eye frusta, including their asymmetry.
 
 ## Comfort settings
 
 ### In-headset VR options (integration build)
 
-Hold the **left menu button for about 0.65 seconds**. VR Options opens over
+Hold the **menu button** (Touch: left; Steam Frame: right) **for about 0.65 seconds**. VR Options opens over
 whatever you are looking at: the game itself, or a game menu such as the pause
 menu. **The game is not paused** -- in play it keeps running behind the panel,
 with the HUD hidden and your movement, turning, firing and use held until you
@@ -73,7 +83,7 @@ menu you opened it from), VR Options closes.
 F10 is a desktop shortcut; `vr.options 1` is the diagnostic equivalent. Both
 work in play and in menus.
 
-Each setting is a checkbox, a choice list or a slider, on eight tabs (listed
+Each setting is a checkbox, a choice list or a slider, on nine tabs (listed
 below). The panel opens 2 metres straight ahead of where you faced, over the
 game menu if one is up. **To move it, hold the trigger with the laser on any blank part of it** --
 a setting's name or help text, empty space, not a control (the hint line says
@@ -86,7 +96,7 @@ offset settings do not move it. Point and pull the trigger or press **A**, or mo
 with the **right stick** up/down (or a Steam Frame's left **D-pad**) and press
 **A**; **right stick left/right** steps the slider or list under the laser (or
 the one last selected), and repeats while held; the **left stick** scrolls a
-long list; **grips** change tabs and **B** closes it, back to the game or the
+long list; a **grip** changes tab when let go (both together change nothing) and **B** closes it, back to the game or the
 game menu. Releasing the controls is required before they can operate what is
 behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
 
@@ -107,9 +117,11 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
 
   Reset VR view is on the Setup page.
 - **Hands:** two-hand aim on/off, hold/toggle foregrip, snapped/free support hand,
-  the optional psychoscope gesture, the hands without a weapon, the carry grip
-  (hold, or press to toggle), hand or game grenade throwing, and how hard thrown
-  objects and grenades fly.
+  the optional psychoscope gesture, the hands without a weapon, **fingers follow
+  the controller** (on by default: a free hand's thumb rests on a button or
+  lifts, the index points or curls on the trigger, the other three close with
+  the grip), the carry grip (hold, or press to toggle), hand or game grenade
+  throwing, and how hard thrown objects and grenades fly.
 - **Interface:** size, visible-area limit, panel curvature, controls guide, where
   the game's menus float (distance, left/right, up/down), the text panel's
   distance, which hand's laser points at menus, the HUD style (floating
@@ -127,6 +139,10 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   which draws each hand's ray and target, the body slots, the wrist test and the
   foregrip region in the world. Off by default; see
   [the overlay note](DEBUG-OVERLAY-2026-10-06.md).
+- **Controls:** what every button does on the controller you hold, by the names
+  SteamVR gives them: play, menus and any time. It follows SteamVR: rebind an
+  action there (Settings > Controllers > Manage Controller Bindings > Prey) and the
+  tab shows the new button. Read only.
 - **Experimental**, features still being proven: physical carrying in the left
   hand (on by default; off restores the game's carry in front of you), sticking
   charges to the surface you look at, long weapons held back toward the body,
@@ -140,9 +156,11 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   `aim.shot 1` in **Tune Prey VR.cmd** turns it on for a session. See
   [the shot note](SHOT-RAY-2026-10-06.md).
 
-**Psychic targeting:** equip a power using Prey's normal quick wheel. Choose Head
-or Left Controller on the Abilities tab, then hold **left trigger** to target and
-release it to cast. Head follows where you look; Left Controller follows the
+**Psi powers:** equip a power using Prey's normal quick wheel. With nothing to grab, the **left trigger** is
+Prey's own psi button (Original targeting): hold it to use the power, aimed as Prey aims it. The trigger is
+shared with grab, as Prey's own X is use or reload: when the left hand points at something usable, or carries
+something, the trigger grabs instead. **Psychic targeting:** choose Head or Left Controller on the Abilities
+tab, then, with nothing to grab, hold the left trigger to target and release it to cast. Head follows where you look; Left Controller follows the
 left controller's aim axis. Release the support grip before targeting. The game
 keeps its native power costs, cooldowns, target filters and unlock restrictions.
 Menus, recentering, tracking loss and long frame gaps cancel a pending cast;
@@ -208,7 +226,7 @@ them all. `PreyVR.json` keeps only the launch settings below. Every tuning
 command, and what the menu saves, is in [the tuning reference](TUNING-COMMANDS.md).
 
 The panel has been worn in a headset (2026-10-13 and 2026-10-14); this build's
-tidy-up -- one panel, the eight tabs above, each controller's own bindings --
+tidy-up -- one panel, the nine tabs above, each controller's own bindings --
 has offline tests only. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md)
 and, for the original card, [its validation](VR-OPTIONS-2026-09-27.md).
 

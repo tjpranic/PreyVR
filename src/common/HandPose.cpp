@@ -121,6 +121,37 @@ int ParentRole(int joint)
     }
 }
 
+int FingerOf(int joint)
+{
+    if (joint <= kThumb3) { return kFingerThumb; }
+    if (joint <= kIndex3) { return kFingerIndex; }
+    if (joint <= kMiddle3) { return kFingerMiddle; }
+    if (joint <= kRing3) { return kFingerRing; }
+    return kFingerPinky;
+}
+
+FingerShape ShapeFromController(float trigger, bool indexTouch, float squeeze, bool thumbTouch, float relaxed)
+{
+    const auto unit = [](float value) { return std::isfinite(value) ? std::clamp(value, 0.0f, 1.0f) : 0.0f; };
+    trigger = unit(trigger);
+    squeeze = unit(squeeze);
+    relaxed = std::isfinite(relaxed) ? std::max(relaxed, 0.0f) : 1.0f;
+    // Tuned by eye against the rig: a lifted thumb and a pointing index keep a
+    // little flexion, as a real one does; a thumb on a button is half closed.
+    constexpr float kLifted = 0.3f, kPointing = 0.25f, kThumbDown = 0.5f, kIndexResting = 0.2f;
+    FingerShape shape{};
+    shape.curl[kFingerThumb] = relaxed * (thumbTouch ? 1.0f : kLifted);
+    shape.fist[kFingerThumb] = thumbTouch ? kThumbDown : 0.0f;
+    const bool onTrigger = indexTouch || trigger > 0.0f;
+    shape.curl[kFingerIndex] = relaxed * (onTrigger ? 1.0f : kPointing);
+    shape.fist[kFingerIndex] = onTrigger ? kIndexResting + (1.0f - kIndexResting) * trigger : 0.0f;
+    for (const int finger : {kFingerMiddle, kFingerRing, kFingerPinky}) {
+        shape.curl[finger] = relaxed;
+        shape.fist[finger] = squeeze;
+    }
+    return shape;
+}
+
 Quaternion RelaxedRelative(Side side, int joint, float curl)
 {
     if (joint < 0 || joint >= kJointCount) { return {}; }

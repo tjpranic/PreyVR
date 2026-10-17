@@ -38,6 +38,13 @@ struct VrOptionsUiInput {
     bool held = false;             // the panel is held by the laser: the hint says how to place it
 };
 
+// **One row of the Controls tab**: an action and the buttons it is bound to
+// now, by the runtime's own names (XrInputBoundControls), or a heading.
+struct VrOptionsControlRow {
+    std::string action, buttons;
+    bool heading = false;
+};
+
 // A control drawn this frame, in panel pixels: what it is and which setting.
 struct VrOptionsUiTarget {
     enum class Kind { tab, toggle, choice, choiceItem, range, action, close, scrollbar };
@@ -93,6 +100,8 @@ public:
                              bool saveFailed, std::wstring_view setupMessage);
     // Releases the ImGui context and every D3D object; the next Render starts afresh.
     void Reset();
+    // What the Controls tab lists (options::ControlsPage), until set again.
+    void SetControls(std::vector<VrOptionsControlRow> rows) { controls_ = std::move(rows); }
     const std::string& LastError() const { return error_; }
 
 private:
@@ -107,6 +116,7 @@ private:
     DXGI_FORMAT family_ = DXGI_FORMAT_UNKNOWN;
     float scale_ = 1.0f;
     unsigned page_ = 0;
+    std::vector<VrOptionsControlRow> controls_;
     std::map<int, int> dragging_; // a slider's value while it is held, by key
     // Left/right adjustment: the direction held, for how long (repeat), and the
     // control it is adjusting, kept until the stick is let go.

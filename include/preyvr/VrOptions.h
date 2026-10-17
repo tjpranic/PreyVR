@@ -18,6 +18,7 @@ enum Setting : unsigned { Turn, HeadRelative, TurnSpeed, TwoHand, GripToggle,
     ArmsFree, CarryHold, GrenadeHand, CarryThrowStrength, GrenadeThrowStrength,
     WristOnHud, WristTick, WristAlong, WristHover, WristTilt,
     CarryHand, GrenadeDeploy, LongReach, InventoryLayer, InventoryStereo, InventoryDepth,
+    FingerCurl,
     Count };
 // What a value counts, for Display. `metresInMm` shows millimetres as metres;
 // the two directional units name the side instead of a sign.
@@ -67,12 +68,16 @@ enum Button : int { RecenterView = -1, ClearHolsterSlots = -2, CalibratePosture 
 unsigned MenuPages();
 const wchar_t* MenuPageName(unsigned page);
 std::span<const int> MenuEntries(unsigned page);
+// The tab with no settings, where the panel lists what each action is bound to.
+unsigned ControlsPage();
 // The controls, as the state machine needs them: the opening hold, B, and
 // whether everything else is at rest -- no press may carry into or out of the
-// panel. `x`/`y` are the panel's navigation (TrackingFrame::navigate).
+// panel. `x`/`y` are the panel's navigation (MenuInput::navigate). `chord`:
+// both grips are held, so Menu is the recenter chord -- neither a pause tap nor
+// the opening hold.
 struct Input {
     bool valid = false, modal = false, start = false, accept = false, cancel = false;
-    bool previous = false, next = false, trigger = false;
+    bool previous = false, next = false, trigger = false, chord = false;
     float x = 0, y = 0, dt = 0;
     std::uint64_t epoch = 0;
 };

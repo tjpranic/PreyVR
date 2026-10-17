@@ -47,6 +47,7 @@ private:
     DXGI_FORMAT format_ = DXGI_FORMAT_UNKNOWN;
     std::unique_ptr<InventorySwapchain> swapchain_;
     std::unique_ptr<VrOptionsUi> ui_;
+    unsigned controlsGeneration_ = 0;   // the bindings the Controls tab shows (XrInputBoundControls)
     std::optional<ui::Panel> panel_;
     std::uint64_t reference_ = 0;
     float menuDistance_ = 0; // the ui.distance it was placed in front of

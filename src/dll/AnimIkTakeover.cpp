@@ -109,6 +109,13 @@ std::atomic<unsigned long long> gFreeFrames{0}, gFreeGateZero{0};
 std::atomic<int> gFreeFistMilli[2]{0, 0};
 float gFreeFist[2]{};               // eased, under gIkMutex
 std::uint64_t gFreeFistNs = 0;
+// **The fingers follow the player's** (hands.fingers, VR Options "Fingers
+// follow the controller"): each free hand's shape from its controller's trigger,
+// grip and touch (handpose::ShapeFromController), eased, per side (1 = left).
+// Off, every finger takes the one relaxed pose, as before. Under gIkMutex.
+std::atomic<unsigned> gFingerCurl{1};
+handpose::FingerShape gFingerShape[2]{};
+bool gFingerShapeValid[2]{};
 std::uint64_t gFreeSinceNs = 0;     // when the free owner bound (fingers ease in), under gIkMutex
 constexpr std::uint64_t kFreeGenerationBit = 1ull << 62;
 constexpr std::size_t kPlayerAnimatedCharacter = 0x1808;
@@ -1359,11 +1366,12 @@ bool WriteFloatsGuarded(std::uint8_t* at, const float* values, unsigned count)
     __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
 
-// Before the native pass: the left hand's finger joints take the relaxed pose,
-// blended with the animation's by `weight` (1 = relaxed). Relative rotations
-// only; their offsets (bone lengths) are the rig's.
-bool ApplyRelaxedFingers(std::uint8_t* relative, unsigned count, float weight, float curl, int side = 1,
-                         float fist = 0.0f)
+// Before the native pass: a free hand's finger joints take `shape` -- each
+// finger its own flexion and closure -- closed at least by `carryFist` around a
+// carried object, blended with the animation's by `weight` (1 = the shape).
+// Relative rotations only; their offsets (bone lengths) are the rig's.
+bool ApplyRelaxedFingers(std::uint8_t* relative, unsigned count, float weight, const handpose::FingerShape& shape,
+                         int side, float carryFist)
 {
     if (weight <= 0.0f) { return false; }
     const auto hand = side == 0 ? handpose::Side::right : handpose::Side::left;
@@ -1372,7 +1380,10 @@ bool ApplyRelaxedFingers(std::uint8_t* relative, unsigned count, float weight, f
         QuatT rel{};
         if (!ReadQuatT(relative, count, index, rel)) { return false; }
         const Quaternion native{rel.q[0], rel.q[1], rel.q[2], rel.q[3]};
-        const Quaternion target = handpose::Slerp(native, handpose::ShapeRelative(hand, j, curl, fist), weight);
+        const int finger = handpose::FingerOf(j);
+        const Quaternion shaped =
+            handpose::ShapeRelative(hand, j, shape.curl[finger], std::max(shape.fist[finger], carryFist));
+        const Quaternion target = handpose::Slerp(native, shaped, weight);
         const float q[4] = {target.x, target.y, target.z, target.w};
         if (!WriteFloatsGuarded(relative + static_cast<std::size_t>(index) * kQuatTStride, q, 4)) { return false; }
     }
@@ -1804,6 +1815,25 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
                             gFreeFist[s] += (want - gFreeFist[s]) * (1.0f - std::exp(-dt * 14.0f));
                             gFreeFistMilli[s].store(static_cast<int>(gFreeFist[s] * 1000.0f), std::memory_order_relaxed);
                         }
+                        // Each free hand's fingers from its controller, eased
+                        // over ~55 ms so a touch sensor's edge is a movement.
+                        const bool follow = gFingerCurl.load(std::memory_order_relaxed) != 0;
+                        for (int s = 0; s < 2; ++s) {
+                            const auto& held = frame.tracking.hands[s == 1 ? 0 : 1];
+                            handpose::FingerShape want{};
+                            if (follow) {
+                                want = handpose::ShapeFromController(held.triggerValue, held.indexTouch,
+                                                                     held.squeezeValue, held.thumbTouch, poseSettings.curl);
+                            } else {
+                                for (float& curl : want.curl) { curl = poseSettings.curl; }
+                            }
+                            const float k = gFingerShapeValid[s] ? 1.0f - std::exp(-dt * 18.0f) : 1.0f;
+                            for (int f = 0; f < handpose::kFingerCount; ++f) {
+                                gFingerShape[s].curl[f] += (want.curl[f] - gFingerShape[s].curl[f]) * k;
+                                gFingerShape[s].fist[f] += (want.fist[f] - gFingerShape[s].fist[f]) * k;
+                            }
+                            gFingerShapeValid[s] = true;
+                        }
                     }
                     Vec3 primaryGoal{};
                     Quaternion primaryRotation{};
@@ -1832,11 +1862,11 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
                     }
                     if (fingerPlan.apply && gHandRig.valid[1]) {
                         fingerPlan.apply = ApplyRelaxedFingers(static_cast<std::uint8_t*>(relative),
-                            static_cast<unsigned>(poseCount), fingerPlan.weight, poseSettings.curl, 1, gFreeFist[1]);
+                            static_cast<unsigned>(poseCount), fingerPlan.weight, gFingerShape[1], 1, gFreeFist[1]);
                     }
                     if (rightFingers.apply && gHandRig.valid[0]) {
                         rightFingers.apply = ApplyRelaxedFingers(static_cast<std::uint8_t*>(relative),
-                            static_cast<unsigned>(poseCount), rightFingers.weight, poseSettings.curl, 0, gFreeFist[0]);
+                            static_cast<unsigned>(poseCount), rightFingers.weight, gFingerShape[0], 0, gFreeFist[0]);
                     }
                     ownedRelative = static_cast<std::uint8_t*>(relative);
                     ownedAbsolute = static_cast<std::uint8_t*>(absolute);
@@ -2573,6 +2603,14 @@ DWORD SetAnimIkFreeArms(unsigned enabled)
     return 0;
 }
 unsigned AnimIkFreeArms() { return gFreeArms.load(); }
+
+DWORD SetAnimIkFingerCurl(unsigned enabled)
+{
+    gFingerCurl.store(enabled != 0 ? 1u : 0u, std::memory_order_release);
+    Log(std::string("result=0 detail=finger_curl value=") + (enabled != 0 ? "1" : "0"));
+    return 0;
+}
+unsigned AnimIkFingerCurl() { return gFingerCurl.load(); }
 bool AnimIkFreeArmsBound() { return gFreeArms.load() != 0 && gFreeBound.load(); }
 
 std::string AnimIkFreeArmsReport()

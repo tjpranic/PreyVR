@@ -62,7 +62,13 @@ VrOptionsLayer::Frame VrOptionsLayer::Update(XrSession session, XrSpace space, I
     ID3D11DeviceContext* context = nullptr;
     device->GetImmediateContext(&context);
     if (context != nullptr && format_ != DXGI_FORMAT_UNKNOWN) {
-        if (!ui_) { ui_ = std::make_unique<VrOptionsUi>(); }
+        if (!ui_) { ui_ = std::make_unique<VrOptionsUi>(); controlsGeneration_ = 0; }
+        std::vector<XrBoundControl> bound;
+        unsigned generation = 0;
+        if (XrInputBoundControls(bound, generation) && generation != controlsGeneration_) {
+            ui_->SetControls(VrOptionsControlRows(bound));
+            controlsGeneration_ = generation;
+        }
         const auto frame = ui_->Render(device, context, format_, VrOptionsUiFrameInput(), VrOptionsValues(),
                                        VrOptionsSaveFailed(), VrSetupMessage());
         if (frame.texture != nullptr) {

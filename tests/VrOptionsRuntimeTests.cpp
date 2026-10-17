@@ -71,6 +71,7 @@ PREYVR_STUB(SetMoveLaneDeadzone,MoveLaneDeadzone,MoveDeadzone,unsigned)
 PREYVR_STUB(SetTurnLaneDeadzone,TurnLaneDeadzone,TurnDeadzone,unsigned)
 PREYVR_STUB(SetTorsoDeadzone,TorsoDeadzoneDegrees,BodyTurnDeadzone,int)
 PREYVR_STUB(SetAnimIkFreeArms,AnimIkFreeArms,ArmsFree,unsigned)
+PREYVR_STUB(SetAnimIkFingerCurl,AnimIkFingerCurl,FingerCurl,unsigned)
 PREYVR_STUB(SetCarryHoldToHold,CarryHoldPreference,CarryHold,unsigned)
 PREYVR_STUB(SetGrenadeHand,GrenadeHandEnabled,GrenadeHand,unsigned)
 PREYVR_STUB(SetCarryThrowGainPercent,CarryThrowGainPercent,CarryThrowStrength,unsigned)
@@ -142,13 +143,20 @@ int main(){
  tick();tick();RequestVrOptions(true);tick();tick();
  Check(VrOptionsOpen()&&VrOptionsInputOwned(),"adapter claims input");
  auto& r=currentFrame.hands[1];
- r.menuAccept=true;tick();Check(VrOptionsUiFrameInput().accept,"armed: A reaches the panel");
+ currentFrame.menu.confirm=true;tick();Check(VrOptionsUiFrameInput().accept,"armed: A reaches the panel");
  const auto before=VrOptionsValues();
- r.menuAccept=false;tick();ServiceVrOptions();
+ currentFrame.menu.confirm=false;tick();ServiceVrOptions();
  Check(VrOptionsValues()==before,"the state machine itself changes nothing");
- r.gripPressed=true;tick();Check(VrOptionsUiFrameInput().nextPage,"a grip goes to the panel");
+ r.gripPressed=true;tick();Check(!VrOptionsUiFrameInput().nextPage,"a grip steps the tab when let go");
+ r.gripPressed=false;tick();Check(VrOptionsUiFrameInput().nextPage,"a grip goes to the panel");
  tick();Check(!VrOptionsUiFrameInput().nextPage,"one page step per press");
- r.gripPressed=false;tick();
+ {auto& l=currentFrame.hands[0];
+  // Both grips, in either order -- a two-handed hold or the recenter chord --
+  // step no tab, as in the game's menus.
+  l.gripPressed=true;tick();r.gripPressed=true;tick();l.gripPressed=false;tick();
+  Check(!VrOptionsUiFrameInput().previousPage,"a grip let go from both steps no tab");
+  r.gripPressed=false;tick();
+  Check(!VrOptionsUiFrameInput().previousPage&&!VrOptionsUiFrameInput().nextPage,"nor does the other");}
  set(options::GripToggle,1);
  Check(applied[options::GripToggle]==1,"menu applies toggle preference");
  {const auto data=readFile();
@@ -193,8 +201,8 @@ int main(){
  {std::lock_guard lock(viewMutex);viewPending->deadline=0;}
  ServiceVrOptions();Check(recenters==3,"expired request never reaches native backend");
  // Native menu changes behind us: held confirm cannot leak to the game.
- r.menuAccept=true;nativeModal=false;Check(tick()&&!VrOptionsOpen(),"native menu closes options");
- Check(tick(),"held input quarantined");r.menuAccept=false;tick();Check(!tick(),"neutral releases ownership");
+ currentFrame.menu.confirm=true;nativeModal=false;Check(tick()&&!VrOptionsOpen(),"native menu closes options");
+ Check(tick(),"held input quarantined");currentFrame.menu.confirm=false;tick();Check(!tick(),"neutral releases ownership");
  ResetVrOptionsSession();Check(!VrOptionsInputOwned(),"teardown clears ownership");
  Check(pauseTaps==0,"opening from native menu posts no redundant pause");
  nativeModal=true;
@@ -219,7 +227,7 @@ int main(){
    {options::GrenadeThrowStrength,150},{options::WristOnHud,1},{options::WristTick,0},{options::WristAlong,100},
    {options::WristHover,50},{options::WristTilt,30},{options::CarryHand,0},{options::GrenadeDeploy,1},
    {options::LongReach,0},{options::InventoryLayer,1},{options::InventoryStereo,1},{options::InventoryDepth,50},
-   {options::UiCurve,50},{options::DebugOverlay,1}};
+   {options::UiCurve,50},{options::DebugOverlay,1},{options::FingerCurl,0}};
   VrOptionsUiResult result;
   for(const auto& [id,v]:chosen){options::Change change;change.setting=static_cast<int>(id);change.value=v;
    result.changes.push_back(change);}
@@ -239,14 +247,14 @@ int main(){
   Check(CarryHandEnabled()==0,"physical carrying is not armed without the left hand's use");
   useLeft=1;ApplyVrOptionsUi(result);ServiceVrOptions();
   Check(CarryHandEnabled()==1,"and is with it");}
- r.thumbstickY=0;currentFrame.hands[0].thumbstickY=.8f;tick();
+ r.thumbstickY=0;currentFrame.menu.scroll.y=.8f;tick();
  Check(VrOptionsUiFrameInput().scroll>.7f,"the left stick scrolls the panel");
- currentFrame.hands[0].thumbstickY=.1f;tick();Check(VrOptionsUiFrameInput().scroll==0,"a resting left stick does not");
- currentFrame.hands[0].thumbstickY=0;tick();
+ currentFrame.menu.scroll.y=.1f;tick();Check(VrOptionsUiFrameInput().scroll==0,"a resting left stick does not");
+ currentFrame.menu.scroll.y=0;tick();
  // **Navigation is device-neutral** (TrackingFrame::navigate: XrInput composes
  // it from the right stick and any controller's own navigation buttons). It is
  // pressed past .6 and let go below .35.
- auto& nav=currentFrame.navigate;
+ auto& nav=currentFrame.menu.navigate;
  nav.x=1;tick();Check(VrOptionsUiFrameInput().right&&!VrOptionsUiFrameInput().left,"navigating right adjusts up");
  nav.x=-1;tick();Check(VrOptionsUiFrameInput().left&&!VrOptionsUiFrameInput().right,"left adjusts down");
  nav.x=0;nav.y=-1;tick();Check(VrOptionsUiFrameInput().down,"down moves down");
@@ -275,11 +283,11 @@ int main(){
   Check(VrOptionsOpen()&&VrOptionsInputOwned()&&pauseTaps==taps,"a request opens it over the game, posting no pause");
   nativeModal=true;tick();Check(!VrOptionsOpen(),"a game menu opening under it closes it");
   nativeModal=false;tick();tick();Check(!VrOptionsInputOwned(),"input goes back once the controls are neutral");
-  auto& left=currentFrame.hands[0];left.menuStart=true;
+  currentFrame.system.pause=true;
   for(int n=0;n<70;++n)tick();
   Check(VrOptionsOpen()&&pauseTaps==taps,"the long hold opens it over the game too, without pausing");
-  left.menuStart=false;tick();Check(pauseTaps==taps&&VrOptionsOpen(),"and letting go is no pause tap");
-  r.menuCancel=true;tick();r.menuCancel=false;tick();tick();
+  currentFrame.system.pause=false;tick();Check(pauseTaps==taps&&VrOptionsOpen(),"and letting go is no pause tap");
+  currentFrame.menu.back=true;tick();currentFrame.menu.back=false;tick();tick();
   Check(!VrOptionsOpen()&&!VrOptionsInputOwned(),"B closes it over the game as over a menu");
   nativeModal=true;tick();tick();}
  {// **Held by the laser** (a press on no control): the trigger holds it and
@@ -335,5 +343,32 @@ int main(){
  ResetVrOptionsSession();
  std::filesystem::remove(sandbox/L"PreyVR"/L"vr-options.ini");
  std::filesystem::remove(sandbox/L"PreyVR");std::filesystem::remove(sandbox);
+ {// **The Controls tab's rows**: each action beside the runtime's names for
+  // its buttons, by section; an optional action nothing binds left out, a
+  // required one shown unbound; the recenter chord on whatever pauses.
+  std::vector<XrBoundControl> bound;
+  for(const auto& action:input::Actions())bound.push_back({action.role,{}});
+  const auto at=[&](input::Role role)->std::vector<std::string>&{return bound[static_cast<std::size_t>(role)].sources;};
+  at(input::Role::jump)={"Right Hand A Button"};
+  at(input::Role::pause)={"Right Hand Menu Button"};
+  at(input::Role::secondary)={"Left Hand X Button","Right Hand X Button"};
+  at(input::Role::trigger)={"Left Hand Trigger"};
+  const auto rows=VrOptionsControlRows(bound);
+  const auto find=[&](const std::string& action){
+   for(const auto& row:rows)if(row.action==action)return &row;
+   return static_cast<const VrOptionsControlRow*>(nullptr);};
+  Check(find("PLAY")&&find("PLAY")->heading&&find("MENUS")&&find("ANY TIME"),"three sections");
+  Check(find("Jump")&&find("Jump")->buttons=="Right Hand A Button","an action beside its button");
+  Check(find("Crouch")&&find("Crouch")->buttons.empty(),"a required action nothing binds shows unbound");
+  Check(!find("Sprint")&&!find("Navigate Up")&&!find("Close Menu"),"an optional one nothing binds is left out");
+  Check(find(input::ActionOf(input::Role::secondary).label)->buttons=="Left Hand X Button / Right Hand X Button",
+        "several buttons, all named");
+  Check(!find(input::ActionOf(input::Role::trigger).label)&&!find(input::ActionOf(input::Role::gripPose).label),
+        "the hands' own trigger, grip and poses are not buttons to list");
+  Check(find("Recenter")&&find("Recenter")->buttons=="Right Hand Menu Button + both grips","recenter on what pauses");
+  std::size_t play=0,menus=0;
+  for(std::size_t i=0;i<rows.size();++i){if(rows[i].action=="PLAY")play=i;if(rows[i].action=="MENUS")menus=i;}
+  std::size_t jump=0;for(std::size_t i=0;i<rows.size();++i)if(rows[i].action=="Jump")jump=i;
+  Check(play<jump&&jump<menus,"play's actions under PLAY");}
  std::cout<<"Runtime menu, native-input ownership, settings application and disk roundtrip passed\n";
 }

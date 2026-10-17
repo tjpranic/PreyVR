@@ -31,6 +31,8 @@ constexpr NamedKey kNames[] = {
     {kDPadRight, "xi_dpad_right"},
     {kStart, "xi_start"},
     {kBack, "xi_back"},
+    {kThumbL, "xi_thumbl"},
+    {kThumbR, "xi_thumbr"},
     {kShoulderL, "xi_shoulderl"},
     {kShoulderR, "xi_shoulderr"},
     {kButtonA, "xi_a"},
@@ -162,6 +164,7 @@ int MenuActionKeyId(MenuAction action)
         case MenuAction::Tertiary: return kButtonY;
         case MenuAction::PreviousPage: return kTriggerLButton;
         case MenuAction::NextPage: return kTriggerRButton;
+        case MenuAction::Exit: return kBack;
     }
     return -1;
 }

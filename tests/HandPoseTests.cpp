@@ -265,9 +265,35 @@ void TestHandShape()
     Require(NearVec(l, r, 1e-5f), "both fists close the same way in their own frames");
 }
 
+// The fingers from the controller (ShapeFromController): each finger its own.
+void TestFingerShape()
+{
+    Require(FingerOf(kThumb1) == kFingerThumb && FingerOf(kThumb3) == kFingerThumb && FingerOf(kIndexBase) == kFingerIndex &&
+            FingerOf(kIndex3) == kFingerIndex && FingerOf(kMiddle2) == kFingerMiddle && FingerOf(kRingBase) == kFingerRing &&
+            FingerOf(kPinky3) == kFingerPinky, "every joint belongs to its finger");
+    const FingerShape open = ShapeFromController(0.0f, false, 0.0f, false, 1.0f);
+    Require(open.curl[kFingerIndex] < 0.5f && open.fist[kFingerIndex] == 0.0f, "off the trigger, the index points");
+    Require(open.curl[kFingerThumb] < 0.5f && open.fist[kFingerThumb] == 0.0f, "a lifted thumb stands up");
+    Require(open.curl[kFingerMiddle] == 1.0f && open.fist[kFingerMiddle] == 0.0f, "the rest relaxed, open");
+    const FingerShape resting = ShapeFromController(0.0f, true, 0.0f, true, 1.0f);
+    Require(resting.curl[kFingerIndex] == 1.0f && resting.fist[kFingerIndex] > 0.0f && resting.fist[kFingerIndex] < 0.5f,
+            "on the trigger, the index rests curled");
+    Require(resting.fist[kFingerThumb] > 0.0f, "a thumb on a button curls down");
+    const FingerShape pulled = ShapeFromController(1.0f, true, 1.0f, true, 1.0f);
+    Require(pulled.fist[kFingerIndex] == 1.0f && pulled.fist[kFingerMiddle] == 1.0f && pulled.fist[kFingerRing] == 1.0f &&
+            pulled.fist[kFingerPinky] == 1.0f, "the trigger closes the index, the grip the other three");
+    const FingerShape half = ShapeFromController(0.5f, true, 0.5f, false, 1.0f);
+    Require(half.fist[kFingerIndex] > resting.fist[kFingerIndex] && half.fist[kFingerIndex] < 1.0f &&
+            half.fist[kFingerPinky] == 0.5f, "each with its own travel");
+    const FingerShape bad = ShapeFromController(std::nanf(""), false, 7.0f, false, 1.0f);
+    Require(bad.fist[kFingerIndex] == 0.0f && bad.fist[kFingerMiddle] == 1.0f, "non-finite is nothing, past full is full");
+    Require(ShapeFromController(0, false, 0, false, 0.5f).curl[kFingerMiddle] == 0.5f, "the relaxed scale carries through");
+}
+
 int main()
 {
     TestNames();
+    TestFingerShape();
     TestGripHandFrame();
     TestMeasuredHandFrame();
     TestAnatomicalMapping();

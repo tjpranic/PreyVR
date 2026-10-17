@@ -64,6 +64,9 @@ inline constexpr int kDPadLeft = 0x202;
 inline constexpr int kDPadRight = 0x203;
 inline constexpr int kStart = 0x204;
 inline constexpr int kBack = 0x205;
+// The stick clicks: read from this build (FUN_1809D9EF0, the R-115 pattern), 2026-10-17.
+inline constexpr int kThumbL = 0x206;
+inline constexpr int kThumbR = 0x207;
 inline constexpr int kShoulderL = 0x208;
 inline constexpr int kShoulderR = 0x209;
 inline constexpr int kButtonA = 0x20A;
@@ -189,6 +192,8 @@ enum class MenuAction {
     Tertiary,
     PreviousPage,
     NextPage,
+    // The gamepad's Back, which Prey binds to menu_exit: the Steam Frame's View.
+    Exit,
 };
 
 // A digital tap is two events: pressed, then released. Emitting only the press

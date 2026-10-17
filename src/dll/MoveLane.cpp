@@ -17,6 +17,7 @@
 #include "XrInput.h"
 #include "preyvr/InputEvent.h"
 #include "preyvr/InteractionUse.h"
+#include "preyvr/TapHold.h"
 #include "preyvr/Locomotion.h"
 #include "preyvr/ComfortControls.h"
 #include "preyvr/StereoCamera.h"
@@ -91,7 +92,15 @@ enum ActionSlot {
     kActionJump = 2,
     kActionCrouch = 3,
     kActionWeaponWheel = 4,
-    kActionCount = 5,
+    kActionSwapWeapon = 5,
+    kActionSprint = 6,
+    kActionPsychoscope = 7,
+    kActionQuickSlotLeft = 8,
+    kActionQuickSlotRight = 9,
+    kActionQuickSlotDown = 10,
+    kActionTorch = 11,
+    kActionPsi = 12,
+    kActionCount = 13,
 };
 
 struct ActionBinding {
@@ -103,13 +112,24 @@ struct ActionBinding {
 };
 
 ActionBinding gActions[kActionCount] = {
-    {{input::kButtonX}, {0}, {0}, {0}, false},   // use/reload <- grips (preyvr/InteractionUse.h)
-    {{input::kBack}, {0}, {0}, {0}, false},      // inventory <- left X
+    {{input::kButtonX}, {0}, {0}, {0}, false},   // use/reload <- grab, reload (preyvr/InteractionUse.h)
+    {{input::kBack}, {0}, {0}, {0}, false},      // inventory <- Touch X, Frame View
     {{input::kButtonA}, {0}, {0}, {0}, false},   // jump      <- right A
     {{input::kButtonB}, {0}, {0}, {0}, false},   // crouch    <- right B
     // Native PC Favorites Wheel shortcut (Bethesda manual); Steam CMouse::Init
-    // proves mouse3/0x102. Avoid gamepad Y's tap-swap/hold-wheel ambiguity.
-    {{input::kMouse3}, {0}, {0}, {0}, false},    // wheel     <- right stick click
+    // proves mouse3/0x102. Opened by holding Y (TapHold), so it is the wheel the
+    // mod has always opened, and a tap is free to be the pad's swap.
+    {{input::kMouse3}, {0}, {0}, {0}, false},    // wheel     <- Y, held
+    // Prey's own gamepad buttons (the key ids read from this build; which
+    // action each drives is logged by BindingDump in play).
+    {{input::kButtonY}, {0}, {0}, {0}, false},   // swap weapon <- Y, tapped
+    {{input::kThumbL}, {0}, {0}, {0}, false},    // sprint    <- left stick click
+    {{input::kThumbR}, {0}, {0}, {0}, false},    // psychoscope <- right stick click
+    {{input::kDPadLeft}, {0}, {0}, {0}, false},  // quick slot <- Frame D-pad left
+    {{input::kDPadRight}, {0}, {0}, {0}, false}, // quick slot <- Frame D-pad right
+    {{input::kDPadDown}, {0}, {0}, {0}, false},  // quick slot <- Frame D-pad down
+    {{input::kDPadUp}, {0}, {0}, {0}, false},    // torch     <- Frame D-pad up
+    {{input::kTriggerLButton}, {0}, {0}, {0}, false}, // psi power <- grab with nothing to grab
 };
 std::atomic<bool> gActionsEnabled{false};
 std::atomic<bool> gActionsNeutralize{false};
@@ -117,6 +137,8 @@ std::atomic<bool> gActionsNeutralize{false};
 // is cleared first. Owned by the frame thread.
 use::UseButton gUseButton;
 std::atomic<unsigned long long> gUseHoldPosted{0};
+// The grab press given to psi (PsiOwnsGrab), from the use button's last frame.
+std::atomic<bool> gPsiOwnsGrab{false};
 
 std::atomic<unsigned int> gMode{0};
 std::atomic<unsigned int> gDeadzoneHundredths{15};
@@ -304,32 +326,33 @@ DWORD SetMoveLaneDeadzone(unsigned int hundredths)
     return 0;
 }
 unsigned MoveLaneDeadzone() { return gDeadzoneHundredths.load(std::memory_order_relaxed); }
+bool PsiOwnsGrab() { return gPsiOwnsGrab.load(std::memory_order_acquire); }
 
 void UpdateMoveLane()
 {
-    // The LEFT stick moves, matching `xi_thumblx`/`xi_thumbly` and every mod in
-    // the fleet survey.
-    ControllerState state{};
+    // The move action (the LEFT stick by default) moves, matching
+    // `xi_thumblx`/`xi_thumbly` and every mod in the fleet survey.
+    Navigation state{};
     const bool active = gMode.load(std::memory_order_acquire) == 2u;
     const bool neutralize = gMoveNeutralize.exchange(false, std::memory_order_acq_rel);
     const auto movementReference=HeadTrackingReferenceGeneration();
     TrackingFrame movementFrame{};
     bool haveInput = active && !neutralize && HudGameplayInputAllowed() &&
         TryGetTrackingFrame(movementFrame) && FreshSample(MonotonicNanoseconds(),movementFrame.publishedNs);
-    if(haveInput) state=movementFrame.hands[0];
+    if(haveInput) state=movementFrame.play.move;
     static bool awaitNeutral=false;
     if (!HudGameplayInputAllowed()) { awaitNeutral=true; }
     if (haveInput && awaitNeutral) {
-        if (std::fabs(state.thumbstickX)<=.15f && std::fabs(state.thumbstickY)<=.15f) awaitNeutral=false;
+        if (std::fabs(state.x)<=.15f && std::fabs(state.y)<=.15f) awaitNeutral=false;
         else haveInput=false;
     }
     if(haveInput && gHeadRelative.load()) {
         const auto yaw=stereo::RecenterYawFromHeadPose(movementFrame.head);
         if(!yaw || !IsPoseUsable(movementFrame.head,movementFrame.headValidity,200000000ull)) haveInput=false;
         else {
-            const auto v=comfort::HeadRelativeStick({state.thumbstickX,state.thumbstickY},
+            const auto v=comfort::HeadRelativeStick({state.x,state.y},
                 *yaw-HeadTrackingReferenceYaw(),gStrafeScale.load(),gBackwardScale.load());
-            state.thumbstickX=v.x;state.thumbstickY=v.y;
+            state.x=v.x;state.y=v.y;
         }
     }
     if(movementReference%2 || movementReference!=HeadTrackingReferenceGeneration()) haveInput=false;
@@ -362,7 +385,7 @@ void UpdateMoveLane()
     }
     locomotion::AxisEvent events[2]{};
     auto candidate = gStick;
-    const unsigned int count = candidate.Update(state.thumbstickX, state.thumbstickY, events);
+    const unsigned int count = candidate.Update(state.x, state.y, events);
     bool delivered = true;
     for (unsigned int i = 0; i < count; ++i) {
         const int valueMilli = static_cast<int>(events[i].value * 1000.0f);
@@ -395,15 +418,22 @@ void UpdateTurnAndFireLanes()
     const bool haveInput = TryGetTrackingFrame(inputFrame);
     const ControllerState right = haveInput ? inputFrame.hands[1] : ControllerState{};
     const ControllerState leftHand = haveInput ? inputFrame.hands[0] : ControllerState{};
+    // Play's named actions, whichever buttons they are bound to (ControllerProfiles).
+    const GameplayInput play = haveInput ? inputFrame.play : GameplayInput{};
+    // The recenter chord's button: Menu (pause), whose own actions wait for its
+    // release or a long hold, so the chord can claim it (VrOptions' Menu).
+    const bool menuHeld = haveInput && inputFrame.system.pause;
     UpdateHolsterInput(inputFrame,haveInput&&gActionsEnabled.load());
 
-    // Both grips + left Y: both grips alone are a natural two-handed hold.
-    // Requiring Y keeps recenter deliberate and independent of grab timing.
+    // Both grips + Menu: both grips alone are a natural two-handed hold.
+    // Requiring Menu keeps recenter deliberate and independent of grab timing.
+    // Either order recentres; Menu first never reloads (the use button's chord
+    // input, below), and the chord neither pauses nor opens VR Options.
     //
     // Edge-triggered: held grips must recentre ONCE, not every frame, or the
     // reference would be rebuilt continuously and the view would never settle.
     {
-        const bool both = haveInput && leftHand.gripPressed && right.gripPressed && leftHand.menuCancel;
+        const bool both = haveInput && leftHand.gripPressed && right.gripPressed && menuHeld;
         if (both && !gRecenterHeld) {
             // This bumps the head-tracking reference generation, which
             // deliberately invalidates the IK calibration -- the hands were
@@ -418,14 +448,14 @@ void UpdateTurnAndFireLanes()
 
     static bool turnBlocked=false;
     if (!HudGameplayInputAllowed()) turnBlocked=true;
-    else if (haveInput && std::fabs(right.thumbstickX)<=.15f && std::fabs(right.thumbstickY)<=.15f) turnBlocked=false;
+    else if (haveInput && std::fabs(play.turn.x)<=.15f && std::fabs(play.turn.y)<=.15f) turnBlocked=false;
     const bool turnOn = gTurnEnabled.load(std::memory_order_acquire) && HudGameplayInputAllowed() && !turnBlocked;
     const bool releaseTurn = gTurnNeutralize.exchange(false, std::memory_order_acq_rel);
     static comfort::SnapLatch snap;
     static unsigned previousMode=~0u;
     const unsigned snapDegrees=gSnapDegrees.load();
     const bool modeChanged=snapDegrees!=previousMode;previousMode=snapDegrees;
-    const int steps=snap.Update(right.thumbstickX,right.thumbstickY,
+    const int steps=snap.Update(play.turn.x,play.turn.y,
         turnOn && haveInput && !releaseTurn && !modeChanged && snapDegrees!=0);
     if(steps) {
         // Queued, not applied: this frame's view was built before this hook,
@@ -435,7 +465,7 @@ void UpdateTurnAndFireLanes()
     if (turnOn || (gTurnPrimed && gLastTurnSent != 0)) {
         const float dead = gTurnDeadzoneHundredths.load(std::memory_order_relaxed) / 100.0f;
         const float scale = gTurnScalePercent.load(std::memory_order_relaxed) / 100.0f;
-        float value = (turnOn && haveInput && !releaseTurn && snapDegrees==0) ? right.thumbstickX : 0.0f;
+        float value = (turnOn && haveInput && !releaseTurn && snapDegrees==0) ? play.turn.x : 0.0f;
         if (!std::isfinite(value)) { value = 0.0f; }
         // Rescaled past the deadzone rather than clipped, so leaving the dead
         // area is gentle instead of a step to full rate.
@@ -466,7 +496,7 @@ void UpdateTurnAndFireLanes()
     // A head through a wall is blacked out (BodyFollow.h): no shots from the
     // far side, and a held trigger waits for release after it comes back.
     if (!HudGameplayInputAllowed() || BodyHeadOut()) { awaitTriggerRelease=true; }
-    if (haveInput && right.triggerValue<=.05f) { awaitTriggerRelease=false; }
+    if (haveInput && play.fire<=.05f) { awaitTriggerRelease=false; }
     const bool fireOn = gFireEnabled.load(std::memory_order_acquire) &&
                        HudGameplayInputAllowed() && !awaitTriggerRelease;
     const bool releaseFire = gFireNeutralize.exchange(false, std::memory_order_acq_rel);
@@ -474,10 +504,10 @@ void UpdateTurnAndFireLanes()
         // **The real travel is posted, not a quantised press.** `xi_triggerr` is
         // an analog axis, and sending only 0 or 1000 threw away everything
         // between -- which matters for a weapon whose native binding may ramp.
-        float value = (fireOn && !releaseFire) ? right.triggerValue : 0.0f;
+        float value = (fireOn && !releaseFire) ? play.fire : 0.0f;
         if (!std::isfinite(value)) { value = 0.0f; }
         value = value < 0.0f ? 0.0f : (value > 1.0f ? 1.0f : value);
-        const bool pressed = fireOn && !releaseFire && right.triggerPressed;
+        const bool pressed = fireOn && !releaseFire && play.firePressed;
         // Emit on a meaningful change OR on a press-state crossing, so the
         // counters still name a discrete pull while the value stays continuous.
         if (!gFirePrimed ||
@@ -549,16 +579,25 @@ void UpdateTurnAndFireLanes()
     {
         const bool haveLeftHand = haveInput;
         // **Use and reload share the native button (X).** With use.hand left
-        // (the default) the left grip uses what the left hand points at and
-        // the right grip only reloads, clearing the selection first; with
-        // use.hand 0 the right grip is the button, as before.
+        // (the default) the left hand's grab (its trigger) uses what it points
+        // at and the right grip only reloads, clearing the selection first;
+        // with use.hand 0 the right grip is the button, as before.
         use::ButtonInput useIn{};
         useIn.gameplay = actionsOn && !releaseActions && haveInput && !BodyHeadOut();
         useIn.leftHand = UseHandLeft() != 0;
-        useIn.leftGrip = haveLeftHand && leftHand.gripPressed;
-        useIn.rightGrip = haveInput && right.gripPressed;
-        useIn.leftBusy = gRecenterHeld || MedkitZoneHasLeftHand() || SupportGripNear() || TwoHandedAimHeld() ||
-                         PsychoscopeZoneHasLeftHand();
+        useIn.leftPress = play.grabPressed;
+        useIn.rightPress = play.reloadPressed;
+        useIn.chord = menuHeld;
+        // Psi shares grab: with nothing to grab the press is psi's -- Prey's own
+        // psi button with Original targeting (slot kActionPsi, below), or the
+        // mod's targeting (PsiOwnsGrab, read by PsiMedkit).
+        useIn.psi = true;
+        // The hip slot's trigger is the medkit's, and a hand holding the
+        // foregrip is not free to grab. The foregrip region and the psychoscope
+        // gesture are the grip's: they stop a grab only while the grip is
+        // squeezed too -- grab rebound to the grip, or both at once.
+        useIn.leftBusy = gRecenterHeld || MedkitZoneHasLeftHand() || TwoHandedAimHeld() ||
+                         (leftHand.gripPressed && (SupportGripNear() || PsychoscopeZoneHasLeftHand()));
         // A paired squeeze is a hold, not use/reload.
         // While something is carried the button drops it: the left grip lets
         // go, and the right one (reload) has nothing to do.
@@ -574,17 +613,35 @@ void UpdateTurnAndFireLanes()
         useIn.tapOnly = UseTargetTapOnly();
         useIn.holstered = ArmsHolstered();
         const use::ButtonOutput useOut = gUseButton.Update(useIn);
+        gPsiOwnsGrab.store(useOut.psi, std::memory_order_release);
         if (useOut.releaseCarry) { RequestCarryRelease(); }
         if (useOut.drawWeapon) { RequestDrawWeapon(); }
         RequestUseTargetSuppression(useOut.suppressTarget);
         NoteUseButton(useOut.down, static_cast<unsigned>(useOut.owner), useOut.pressed, useOut.released,
                       (useOut.noTarget ? 1u : 0u) | (useOut.gaveUp ? 2u : 0u) | (useOut.busy ? 4u : 0u));
+        // Prey's own Y: a tap swaps weapon, a hold opens the weapon wheel
+        // (TapHold). Reset outside play, so a Y held through a menu does nothing.
+        static input::TapHold weapons;
+        static std::uint64_t weaponsNs = 0;
+        const std::uint64_t nowNs = MonotonicNanoseconds();
+        const float seconds = weaponsNs != 0 && nowNs > weaponsNs ? static_cast<float>(nowNs - weaponsNs) * 1e-9f : 0.0f;
+        weaponsNs = nowNs;
+        if (!actionsOn || !haveInput) { weapons.Reset(); }
+        const input::TapHold::Out weaponButton = weapons.Update(play.weaponWheel, seconds);
         const bool sources[kActionCount] = {
             useOut.down,                              // use/reload, decided above
-            haveLeftHand && leftHand.menuAccept,      // inventory <- left X
-            right.menuAccept,                         // jump      <- right A
-            right.menuCancel,                         // crouch    <- right B
-            right.weaponWheelPressed,                 // wheel     <- right stick click
+            play.inventory,                           // inventory <- Touch X, Frame View
+            play.jump,                                // jump      <- right A
+            play.crouch,                              // crouch    <- right B
+            weaponButton.hold,                        // wheel     <- Y, held
+            weaponButton.tap,                         // swap      <- Y, tapped (one frame)
+            play.sprint,                              // sprint    <- left stick click
+            play.psychoscope,                         // psychoscope <- right stick click
+            play.quickSlotLeft,                       // quick slots <- the Frame's D-pad
+            play.quickSlotRight,
+            play.quickSlotDown,
+            play.torch,                               // torch     <- D-pad up
+            useOut.psi && PsiTargetMode() == 0,       // psi power <- grab, nothing to grab, Original
         };
         static bool blocked[kActionCount]{};
         for (int slot = 0; slot < kActionCount; ++slot) {
@@ -600,7 +657,7 @@ void UpdateTurnAndFireLanes()
             if (PostRawInputImmediate(keyId, state, wanted ? 1000 : 0) == 0) {
                 binding.held = wanted;
                 if(slot==kActionWeaponWheel)Log(std::string("result=0 detail=wheel_input pressed=")+
-                    (wanted?"1":"0")+" key="+std::to_string(keyId)+" source=right_stick_click");
+                    (wanted?"1":"0")+" key="+std::to_string(keyId)+" source=y_hold");
                 (wanted ? binding.pressed : binding.released)
                     .fetch_add(1, std::memory_order_relaxed);
             } else {
@@ -621,6 +678,13 @@ void UpdateTurnAndFireLanes()
             gUseHoldPosted.fetch_add(1, std::memory_order_relaxed);
         }
         useHeldLastFrame = useBinding.held;
+        // Prey's psi button the same way: held to aim, let go to use.
+        static bool psiHeldLastFrame = false;
+        ActionBinding& psiBinding = gActions[kActionPsi];
+        if (psiBinding.held && psiHeldLastFrame) {
+            PostRawInputImmediate(psiBinding.keyId.load(std::memory_order_acquire), input::kStateDown, 1000);
+        }
+        psiHeldLastFrame = psiBinding.held;
     }
 
 }
@@ -706,7 +770,8 @@ DWORD SetInteractionBinding(unsigned int slot, int keyId)
 std::string InteractionReport()
 {
     static const char* const kSlotNames[kActionCount] = {
-        "interact", "inventory", "jump", "crouch", "wheel"};
+        "interact", "inventory", "jump", "crouch", "wheel", "swap", "sprint", "psychoscope",
+        "quickLeft", "quickRight", "quickDown", "torch", "psi"};
     std::ostringstream out;
     out << " actions=" << (gActionsEnabled.load(std::memory_order_relaxed) ? 1 : 0)
         << " useHoldPosted=" << gUseHoldPosted.load(std::memory_order_relaxed);

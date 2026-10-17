@@ -439,10 +439,17 @@ int main()
         VrOptionsUiInput empty;
         empty.dt = 1.0f / 90.0f;
         empty.pointer = true;
-        empty.u = 0.5f;
+        // In the names-and-help column, which holds no control whatever the
+        // rows are (the value column, right of the middle, holds them all).
+        empty.u = 0.2f;
         empty.v = 0.7f;
         frame = press.Frame(empty);
-        Check(Find(frame, Kind::toggle, options::TwoHand)->y1 < 0.7f * options::Height, "premise: nothing is under the laser");
+        Check(Find(frame, Kind::toggle, options::TwoHand)->y1 < 0.7f * options::Height, "premise: the checkbox is above");
+        for (const auto& target : frame.targets) {
+            const float x = empty.u * options::Width, y = empty.v * options::Height;
+            Check(target.kind == Kind::tab || target.kind == Kind::scrollbar || !(x >= target.x0 && x <= target.x1 &&
+                  y >= target.y0 && y <= target.y1), "premise: no control is under the laser");
+        }
         empty.accept = true;
         std::vector<options::Change> sent;
         for (int n = 0; n < 2; ++n) { frame = press.Frame(empty); sent.insert(sent.end(), frame.changes.begin(), frame.changes.end()); }
@@ -567,13 +574,36 @@ int main()
     Check(recenter.has_value(), "recenter is offered");
     frame = panel.Click(*recenter);
     Check(frame.changes.size() == 1 && frame.changes[0].recenter && !frame.changes[0].calibrate, "recenter sends its action");
+    // Controls: what each action is bound to, read only -- nothing on it is a
+    // control but the tabs and Back, so the trigger anywhere on it grabs.
     frame = panel.Grip(true);
-    Check(frame.page == 7 && Find(frame, Kind::toggle, options::CarryHand) && Find(frame, Kind::toggle, options::MuzzleAim) &&
-          Find(frame, Kind::range, options::InventoryDepth), "right grip: the experimental tab, last");
+    Check(frame.page == options::ControlsPage(), "right grip: the Controls tab");
+    for (const auto& target : frame.targets) {
+        Check(target.kind == Kind::tab || target.kind == Kind::close || target.kind == Kind::scrollbar,
+              "the Controls tab, waiting for the controllers, has no control");
+    }
+    {
+        std::vector<VrOptionsControlRow> rows{{"PLAY", "", true}, {"Jump", "Right Hand A Button", false},
+                                              {"Sprint", "", false}};
+        for (int n = 0; n < 40; ++n) { rows.push_back({"Row", "Left Hand X Button / Right Hand Y Button", false}); }
+        panel.ui.SetControls(rows);
+        panel.Idle();   // ImGui sizes the scroll range from the frame before
+        frame = panel.Idle();
+        Check(frame.texture != nullptr && frame.page == options::ControlsPage() && frame.scrollMaxY > 0,
+              "the bindings drawn, a long list scrolling");
+        for (const auto& target : frame.targets) {
+            Check(target.kind == Kind::tab || target.kind == Kind::close || target.kind == Kind::scrollbar,
+                  "and still no control but the tabs, Back and the scrollbar");
+        }
+    }
+    frame = panel.Grip(true);
+    Check(frame.page == options::MenuPages() - 1 && Find(frame, Kind::toggle, options::CarryHand) &&
+          Find(frame, Kind::toggle, options::MuzzleAim) && Find(frame, Kind::range, options::InventoryDepth),
+          "right grip: the experimental tab, last");
     frame = panel.Grip(true);
     Check(frame.page == 0, "right grip wraps to the first tab");
     frame = panel.Grip(false);
-    Check(frame.page == 7, "left grip wraps to the last");
+    Check(frame.page == options::MenuPages() - 1, "left grip wraps to the last");
 
     // Back to the game menu.
     frame = panel.Click(*Find(frame, Kind::close));
