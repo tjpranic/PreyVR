@@ -109,6 +109,8 @@ std::mutex gRecenterMutex;
 std::atomic<unsigned long long> gReferenceGeneration{0};
 std::atomic<unsigned long long> gRecenterEpoch{0};
 std::atomic<unsigned long long> gRoomReadFallbacks{0};
+comfort::PendingSnap gPendingSnap;
+std::atomic<unsigned long long> gSnapsApplied{0}, gSnapsLate{0}, gSnapsDropped{0};
 
 std::int64_t QpcNow()
 {
@@ -320,9 +322,10 @@ bool ApplyHeadRotation(std::uint8_t* camera, std::size_t size)
     return cameraedit::RotationIsSafeToWrite(span);
 }
 
-struct HeadRenderPose { Pose pose{}, world{}; long long time=0; unsigned long long reference=0; bool valid=false; };
+struct HeadRenderPose { Pose pose{}, world{}; long long time=0; unsigned long long reference=0, space=0; bool valid=false; };
 thread_local HeadRenderPose tRenderedHead;
-bool ConsumeHeadRenderPose(const unsigned char* camera, Pose& pose, long long& displayTime, unsigned long long& reference) {
+bool ConsumeHeadRenderPose(const unsigned char* camera, Pose& pose, long long& displayTime, unsigned long long& reference,
+                           unsigned long long& spaceEpoch) {
     const auto record=tRenderedHead; tRenderedHead.valid=false;
     if(!record.valid || record.reference!=HeadTrackingReferenceGeneration()) {
         static unsigned refused=0;
@@ -344,7 +347,7 @@ bool ConsumeHeadRenderPose(const unsigned char* camera, Pose& pose, long long& d
             return false;
         }
     }
-    pose=record.pose;displayTime=record.time;reference=record.reference;return true;
+    pose=record.pose;displayTime=record.time;reference=record.reference;spaceEpoch=record.space;return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -395,6 +398,9 @@ float ReadFloat(const std::uint8_t* base, std::size_t offset)
 
 void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
 {
+    // The fallback seam for a queued snap, when ArkPlayer::Update's took none
+    // (body following unavailable): still before this view samples the reference.
+    ApplyQueuedSnapTurn(false);
     tRenderedHead.valid=false;
     const auto renderReference=HeadTrackingReferenceGeneration();
     const UpdateViewFn original = gOriginal.load(std::memory_order_acquire);
@@ -514,7 +520,7 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     // rotation-only and non-unit-scale research modes have no world contract.
     if (gPositionScale.load()==1.f && renderReference%2==0 &&
         renderReference==HeadTrackingReferenceGeneration())
-        tRenderedHead={headPose,world,tHeadLastGood.displayTime,renderReference,true};
+        tRenderedHead={headPose,world,tHeadLastGood.displayTime,renderReference,tHeadLastGood.spaceEpoch,true};
     gPositionApplied.fetch_add(1, std::memory_order_relaxed);
     gLastOffsetMillimetres.store(
         static_cast<unsigned int>(std::sqrt(offsetSquared) * 1000.0f + 0.5f),
@@ -714,8 +720,27 @@ DWORD SnapTurnHeadTracking(int steps,unsigned degrees) {
     Log("result=0 detail=snap_turn degrees="+std::to_string(steps*static_cast<int>(degrees)));
     return 0;
 }
+DWORD QueueSnapTurn(int steps,unsigned degrees) {
+    if((steps!=-1 && steps!=1) || degrees<15 || degrees>90) return 1;
+    return gPendingSnap.Queue(steps,degrees) ? 0 : 4;
+}
+void ApplyQueuedSnapTurn(bool late) {
+    const int degrees=gPendingSnap.Take();
+    if(degrees==0) return;
+    const DWORD result=SnapTurnHeadTracking(comfort::PendingSnap::Steps(degrees),comfort::PendingSnap::Degrees(degrees));
+    if(result==0) {(late?gSnapsLate:gSnapsApplied).fetch_add(1,std::memory_order_relaxed);return;}
+    // Busy is the lock or a reference change in flight: the next seam retries.
+    if(result==3 && !late) {gPendingSnap.Restore(degrees);return;}
+    gSnapsDropped.fetch_add(1,std::memory_order_relaxed);
+    Log("result=refused detail=snap_turn_dropped code="+std::to_string(result)+" late="+std::to_string(late));
+}
+std::string SnapTurnReport() {
+    return " snapApplied="+std::to_string(gSnapsApplied.load())+" snapLate="+std::to_string(gSnapsLate.load())+
+           " snapDropped="+std::to_string(gSnapsDropped.load());
+}
 void ResetHeadTrackingReference() {
     std::lock_guard lock(gRecenterMutex);
+    gPendingSnap.Take(); // queued against the reference being dropped
     gReferenceGeneration.fetch_add(1);gHaveReference=false;gRecenterEpoch.fetch_add(1);
     gPoseSlot.Clear();gHeadSpaceEpoch.fetch_add(1);gReferenceGeneration.fetch_add(1);
 }
@@ -772,6 +797,7 @@ int MoveHeadTrackingOriginWithNative(const Pose& head, float playSpaceYaw,
     return 0;
 }
 unsigned long long HeadTrackingRecenterEpoch() { return gRecenterEpoch.load(); }
+unsigned long long HeadTrackingSpaceEpoch() { return gHeadSpaceEpoch.load(); }
 unsigned long long HeadTrackingRoomReadFallbacks() { return gRoomReadFallbacks.load(std::memory_order_relaxed); }
 std::string HeadHeightReport() {
     RoomReference room{};TrackingFrame frame{};

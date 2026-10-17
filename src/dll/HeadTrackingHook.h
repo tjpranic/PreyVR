@@ -165,6 +165,21 @@ DWORD SetHeadTrackingEnabled(unsigned int enabled);
 DWORD RecenterHeadTracking(bool recalibrateHeight = false);
 DWORD SnapTurnHeadTracking(int steps, unsigned degrees);
 
+// **A snap turn is queued where it is decided and applied at the start of the
+// next frame**, before that frame's view and arm IK (comfort::PendingSnap). The
+// turn lane decides at the CSystem::Render hook, after the frame's view was
+// built; applying it there refused that frame and the one in flight.
+// 0 queued, 1 out of range, 4 one already queued.
+DWORD QueueSnapTurn(int steps, unsigned degrees);
+// Applies a queued snap. The frame-start seams -- ArkPlayer::Update's entry
+// (BodyFollow) and, failing that, the UpdateView hook -- pass `late` false and
+// requeue a busy one. The turn lane passes `late` true for one neither seam took
+// in a whole frame: applied there, a frame late and with the old frame drops,
+// and dropped if busy. Main thread.
+void ApplyQueuedSnapTurn(bool late);
+// " snapApplied= snapLate= snapDropped=" for the report.
+std::string SnapTurnReport();
+
 // Turns the reference yaw with a native turn of the player (BodyFollow), so the
 // play space P = G - R does not move. `turnNative` runs under the recenter lock,
 // is given the reference yaw, and returns the angle it actually turned the
@@ -191,6 +206,11 @@ int MoveHeadTrackingOriginWithNative(const Pose& head, float playSpaceYaw,
 // way the tracking space faces, after which a torso estimate is stale. Not by a
 // snap turn, which turns the world and leaves the player's torso where it was.
 unsigned long long HeadTrackingRecenterEpoch();
+
+// The tracking space head poses are published in: bumped by a runtime rebase
+// and a reset, never by a snap or a recenter. A render contract carries the one
+// its poses came from (SubmittableRenderContract).
+unsigned long long HeadTrackingSpaceEpoch();
 
 // View frames that reused the last reference because its publisher held the
 // lock. Non-zero is fine; the alternative is a frame without head tracking.
@@ -222,5 +242,6 @@ DWORD HeadTrackingHasReference();
 
 namespace preyvr::dll {
 // Consumes only the pose whose world transform matches this camera.
-bool ConsumeHeadRenderPose(const unsigned char* camera, Pose& pose, long long& displayTime, unsigned long long& reference);
+bool ConsumeHeadRenderPose(const unsigned char* camera, Pose& pose, long long& displayTime, unsigned long long& reference,
+                           unsigned long long& spaceEpoch);
 }

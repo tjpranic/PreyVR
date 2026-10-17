@@ -17,6 +17,8 @@ struct RenderContract {
     std::array<float,4> tangents{}; // left, right, up, down
     long long displayTime = 0;
     unsigned long long reference = 0;
+    // The tracking space the poses are in (HeadTrackingSpaceEpoch); 0 is none.
+    unsigned long long spaceEpoch = 0;
     bool valid = false;
 };
 inline bool ValidContractPose(const Pose& pose) {
@@ -32,6 +34,16 @@ inline bool ValidRenderContract(const RenderContract& c) {
         (!ValidContractPose(c.eyePoses[0]) || !ValidContractPose(c.eyePoses[1]))) return false;
     for(float t:c.tangents) if(!std::isfinite(t)) return false;
     return c.tangents[0]<0 && c.tangents[1]>0 && c.tangents[2]>0 && c.tangents[3]<0;
+}
+// Whether a frame can still be submitted once it reaches the XR thread, a frame
+// after it was built. Its eye poses are in tracking space, so only a change of
+// that space -- a runtime rebase or a reset -- strands it. A snap turn or a
+// recenter changes how the world maps onto the space, not the space: the pixels
+// and their poses still agree, and the frame in flight is shown, not dropped.
+// It is NOT compared with the live reference generation: that dropped the frame
+// in flight on every snap. An odd reference was never a settled one.
+inline bool SubmittableRenderContract(const RenderContract& c, unsigned long long spaceEpoch) {
+    return ValidRenderContract(c) && c.spaceEpoch != 0 && c.spaceEpoch == spaceEpoch && c.reference % 2 == 0;
 }
 // Do not skip records independently of pixels. Overflow poisons the
 // handoff until explicitly reset; it must never turn into a plausible wrong eye.

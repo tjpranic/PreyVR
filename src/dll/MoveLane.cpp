@@ -385,6 +385,10 @@ void UpdateMoveLane()
 
 void UpdateTurnAndFireLanes()
 {
+    // A snap queued here last frame that no frame-start seam took -- no player
+    // update and no view ran -- is applied now, a frame late, as it used to be.
+    ApplyQueuedSnapTurn(true);
+
     // Read both hands from one publication: separate latest reads can invent a
     // recenter/support chord that was never held at the same instant.
     TrackingFrame inputFrame{};
@@ -424,7 +428,9 @@ void UpdateTurnAndFireLanes()
     const int steps=snap.Update(right.thumbstickX,right.thumbstickY,
         turnOn && haveInput && !releaseTurn && !modeChanged && snapDegrees!=0);
     if(steps) {
-        if(SnapTurnHeadTracking(steps,snapDegrees)==0) ++gTurnPosted; else ++gTurnRefused;
+        // Queued, not applied: this frame's view was built before this hook,
+        // against the reference the snap changes (QueueSnapTurn).
+        if(QueueSnapTurn(steps,snapDegrees)==0) ++gTurnPosted; else ++gTurnRefused;
     }
     if (turnOn || (gTurnPrimed && gLastTurnSent != 0)) {
         const float dead = gTurnDeadzoneHundredths.load(std::memory_order_relaxed) / 100.0f;

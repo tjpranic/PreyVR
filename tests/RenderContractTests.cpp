@@ -38,6 +38,14 @@ int main() {
     queue.Reset();Require(queue.Push(pair)&&queue.Pop(out),"both-eyes publish");
     Require(out.eye==kRenderContractBothEyes&&out.eyePoses[0].position.x==-.032f&&
             out.eyePoses[1].position.x==.032f&&out.displayTime==pair.displayTime,"both-eyes record altered");
+    // Submission a frame later: refused by a change of tracking space, never by
+    // a snap or a recenter, which leave the eye poses where they were.
+    RenderContract built=pair;built.reference=4;built.spaceEpoch=1;
+    Require(SubmittableRenderContract(built,1),"a frame built before a snap was dropped");
+    Require(!SubmittableRenderContract(built,2),"a frame from the previous tracking space submitted");
+    b=built;b.spaceEpoch=0;Require(!SubmittableRenderContract(b,0),"a frame with no tracking space submitted");
+    b=built;b.reference=5;Require(!SubmittableRenderContract(b,1),"an unsettled reference submitted");
+    b=built;b.valid=false;Require(!SubmittableRenderContract(b,1),"a refused frame submitted");
     SettingReadback readback{1,1000};
     Require(readback.Observe(false,1,1)==ReadbackResult::pending,"unread value accepted");
     Require(readback.Observe(true,3,999)==ReadbackResult::pending,"queue acknowledgement accepted");

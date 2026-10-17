@@ -3846,3 +3846,34 @@ established.
 the game menu's surface, at the Options panel's (u, v). That is the menu plane over
 a menu, and near the tracking origin over the running game. It now goes on the
 surface that was hit, in Prey's frames and hold frames. Offline only.
+
+## 2026-10-17 — Snap turn: two dropped frames a turn
+
+Reported in a headset: a snap turn rendered a frame late. Measured with `report` over 10
+snaps (`turnPosted` 1 → 11): `fovDiverged` rose 9 → 31, about two refused frames a snap.
+Each refused frame ends with zero layers, and SteamVR shows the last good one again: the
+pre-turn view.
+
+The turn lane decides at the `CSystem::Render` hook, after the frame's `UpdateView`. A
+snap applied there bumped the reference generation under a frame already built against
+the old one:
+- `ConsumeHeadRenderPose` refused that frame;
+- the XR thread compared each contract with the *live* generation, so the frame already
+  in flight was refused too.
+
+Fixed both ways:
+- **The snap is queued** (`comfort::PendingSnap`) and applied at the next frame's start,
+  at `ArkPlayer::Update`'s entry before the body follower. `UpdateView` is the fallback
+  seam. One that neither took within a frame is applied by the lane, as before
+  (`snapLate`).
+- **The XR thread checks the tracking space, not the generation**
+  (`SubmittableRenderContract`). A contract carries the space epoch of its head pose.
+  Its poses are in tracking space, which a snap or a recenter does not change. A runtime
+  rebase or a reset still refuses it.
+
+`report` adds `snapApplied`, `snapLate` and `snapDropped`. A recenter still refuses one
+frame: it is applied at the hook, as before.
+
+Offline only: CTests cover the queue and the submit rule, and the full suite passes
+(75 tests). Expected in a headset: `fovDiverged` flat across snaps, `snapApplied`
+counting them, `snapLate` 0.

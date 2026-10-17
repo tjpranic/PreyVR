@@ -1299,11 +1299,16 @@ bool SubmitStereoPair(
     // -1 means the game thread has not published yet -- starting up, or the
     // render thread ran ahead. Hold the existing pair for a frame rather than
     // copying a backbuffer whose eye is unknown, which would be a coin flip.
-    if(!ValidRenderContract(contract) || contract.reference!=dll::HeadTrackingReferenceGeneration()) {
+    //
+    // A frame built before a snap or a recenter and arriving after it is still
+    // submitted: its poses are in tracking space, which neither changes. Only a
+    // change of the space itself strands it (SubmittableRenderContract).
+    if(!SubmittableRenderContract(contract,dll::HeadTrackingSpaceEpoch())) {
         gFovDiverge.fetch_add(1);
         static unsigned refused=0;
         if(++refused%300==1) Log("result=refused detail=render_contract eye="+std::to_string(contract.eye)+
             " valid="+std::to_string(contract.valid)+" time="+std::to_string(contract.displayTime)+
+            " space="+std::to_string(contract.spaceEpoch)+"/"+std::to_string(dll::HeadTrackingSpaceEpoch())+
             " lag="+std::to_string(dll::EyeHandoffLag())+" dropped="+std::to_string(dll::EyeHandoffDroppedCount()));
         gHost.eyeImageValid[0]=gHost.eyeImageValid[1]=false;
         return false;

@@ -3,8 +3,30 @@
 #include "preyvr/StereoCamera.h"
 #include "preyvr/MotionController.h"
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <cstdlib>
 namespace preyvr::comfort {
+// A snap turn decided at the CSystem::Render hook, held for the start of the
+// next frame. The hook runs after the frame's view was built, so a snap applied
+// there changed the reference under a finished frame: that frame and the one in
+// flight were refused, two dropped frames a snap that read as the view lagging
+// (fovDiverged +22 over 10 snaps, 2026-10-17). One at a time, signed degrees;
+// the latch needs a release between steps anyway.
+class PendingSnap {
+    std::atomic<int> degrees_{0};
+public:
+    bool Queue(int steps,unsigned degrees) {
+        if((steps!=-1 && steps!=1) || degrees==0 || degrees>180) return false;
+        int none=0;
+        return degrees_.compare_exchange_strong(none,steps*static_cast<int>(degrees));
+    }
+    int Take() {return degrees_.exchange(0);}
+    // A busy apply goes back for the next seam, unless another was queued since.
+    void Restore(int degrees) {int none=0;degrees_.compare_exchange_strong(none,degrees);}
+    static int Steps(int degrees) {return degrees>0 ? 1 : (degrees<0 ? -1 : 0);}
+    static unsigned Degrees(int degrees) {return static_cast<unsigned>(std::abs(degrees));}
+};
 class SnapLatch {
     bool ready_=false;
 public:

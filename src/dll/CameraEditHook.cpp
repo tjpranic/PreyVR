@@ -1149,7 +1149,7 @@ void __fastcall RenderWithCameraEdit(void* system)
     // broken one.
     Pose renderHead{};
     const bool haveRenderHead=ConsumeHeadRenderPose(edited.data(),renderHead,
-        renderContract.displayTime,renderContract.reference);
+        renderContract.displayTime,renderContract.reference,renderContract.spaceEpoch);
     bool headRotationApplied = false;
     if (gHeadRotationArmed.load(std::memory_order_acquire)) {
         headRotationApplied = ApplyHeadRotation(edited.data(), edited.size());

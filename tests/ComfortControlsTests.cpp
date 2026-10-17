@@ -62,5 +62,18 @@ int main(){
     Require(!RebaseReference(origin,yaw,invalid),"invalid event refused");
     invalid={};invalid.orientation={.5f,0,0,.8660254f};
     Require(!RebaseReference(origin,yaw,invalid),"tilted space cannot fit yaw-only mapping");
+    // A snap decided at the render hook waits for the next frame's start.
+    PendingSnap pending;
+    Require(pending.Take()==0,"nothing queued takes nothing");
+    Require(pending.Queue(1,45),"a step queues");
+    Require(!pending.Queue(-1,45),"a second waits for the first to land");
+    const int queued=pending.Take();
+    Require(queued==45&&PendingSnap::Steps(queued)==1&&PendingSnap::Degrees(queued)==45,"queued step and size kept");
+    Require(pending.Take()==0,"taken once");
+    Require(pending.Queue(-1,30)&&pending.Take()==-30,"left is negative");
+    Require(!pending.Queue(2,45)&&!pending.Queue(0,45)&&!pending.Queue(1,0),"only one step of a real size");
+    pending.Restore(-30);Require(pending.Take()==-30,"a busy snap goes back for the next seam");
+    pending.Queue(1,45);pending.Restore(-30);
+    Require(pending.Take()==45,"a restore never replaces a newer snap");
     std::cout<<"Comfort controls passed\n";
 }

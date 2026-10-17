@@ -635,6 +635,11 @@ void __fastcall PlayerUpdateDetour(void* player, void* context, int slot)
 {
     // Before the engine's own update: the frame's view, and if the order holds
     // its arm IK, see the turned body.
+    //
+    // A snap queued by last frame's render hook lands first, so the follower
+    // below turns the body by it in this same frame, and the view and the IK
+    // after it see one reference (HeadTrackingHook.h QueueSnapTurn).
+    ApplyQueuedSnapTurn(false);
     Tick(player);
     const PlayerUpdateFn original = gOriginal.load(std::memory_order_acquire);
     if (original != nullptr) { original(player, context, slot); }
