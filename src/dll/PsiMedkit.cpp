@@ -1,4 +1,5 @@
 #include "PsiMedkit.h"
+#include "HookInstall.h"
 #include "EngineAccess.h"
 #include "AimTakeover.h"
 #include "BodyFollow.h"
@@ -174,22 +175,12 @@ DWORD Install(){
     EnsureMinHook();
     if(!EnsureReticleRayHook())return ERROR_INVALID_FUNCTION;
     const auto base=PreyBase();
-    struct Hook {std::uintptr_t rva;void* detour;void** original;};
-    const Hook hooks[]={{native::Update,reinterpret_cast<void*>(&UpdateHook),reinterpret_cast<void**>(&originalUpdate)},
-      {native::Activate,reinterpret_cast<void*>(&ActivateHook),reinterpret_cast<void**>(&originalActivate)},
-      {native::Select,reinterpret_cast<void*>(&SelectHook),reinterpret_cast<void**>(&originalSelect)},
-      {native::Candidate,reinterpret_cast<void*>(&CandidateHook),reinterpret_cast<void**>(&originalCandidate)}};
-    unsigned made=0;bool queued=true;
-    for(const auto& h:hooks){
-        auto* target=reinterpret_cast<void*>(base+h.rva);
-        if(MH_CreateHook(target,h.detour,h.original)!=MH_OK)break;
-        ++made;
-        if(MH_QueueEnableHook(target)!=MH_OK){queued=false;break;}
-    }
-    if(made!=std::size(hooks)||!queued||MH_ApplyQueued()!=MH_OK){
-        for(unsigned i=0;i<made;++i){auto* target=reinterpret_cast<void*>(base+hooks[i].rva);MH_DisableHook(target);MH_RemoveHook(target);}
-        return ERROR_INVALID_FUNCTION;
-    }
+    const hook::Spec hooks[]={
+      {reinterpret_cast<void*>(base+native::Update),reinterpret_cast<void*>(&UpdateHook),reinterpret_cast<void**>(&originalUpdate)},
+      {reinterpret_cast<void*>(base+native::Activate),reinterpret_cast<void*>(&ActivateHook),reinterpret_cast<void**>(&originalActivate)},
+      {reinterpret_cast<void*>(base+native::Select),reinterpret_cast<void*>(&SelectHook),reinterpret_cast<void**>(&originalSelect)},
+      {reinterpret_cast<void*>(base+native::Candidate),reinterpret_cast<void*>(&CandidateHook),reinterpret_cast<void**>(&originalCandidate)}};
+    if(!hook::InstallAll(hooks))return ERROR_INVALID_FUNCTION;
     SetReticleRayFilter(ReticleRayClient::psi,&RayFilter);
     installed=true;return 0;
 }

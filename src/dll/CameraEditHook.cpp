@@ -1,4 +1,6 @@
 #include "CameraEditHook.h"
+#include "SafeMemory.h"
+#include "HookInstall.h"
 #include "EngineAccess.h"
 
 #include "XrSessionHost.h"
@@ -247,15 +249,8 @@ bool gHookCreated = false;
 
 bool PrologueMatches(std::uintptr_t address, const std::uint8_t* expected, std::size_t length)
 {
-    MEMORY_BASIC_INFORMATION memory{};
-    if (VirtualQuery(reinterpret_cast<const void*>(address), &memory, sizeof(memory)) !=
-            sizeof(memory) ||
-        memory.State != MEM_COMMIT ||
-        (memory.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE |
-                           PAGE_EXECUTE_WRITECOPY)) == 0) {
-        return false;
-    }
-    return std::memcmp(reinterpret_cast<const void*>(address), expected, length) == 0;
+    return IsExecutableAddress(reinterpret_cast<const void*>(address)) &&
+           std::memcmp(reinterpret_cast<const void*>(address), expected, length) == 0;
 }
 
 // Produces the edited camera for a synthetic stereo eye, composed onto whatever
@@ -1388,33 +1383,10 @@ bool EnsureHook()
                          std::memory_order_release);
 
     gTarget = reinterpret_cast<void*>(renderAddress);
-    SystemRenderFn original = nullptr;
-    // Shared and idempotent: without it MH_CreateHook returns
-    // MH_ERROR_NOT_INITIALIZED and the feature reports "unavailable" for a
-    // reason unrelated to itself. See MinHookInit.h.
-    EnsureMinHook();
-    MH_STATUS status = MH_CreateHook(
-        gTarget, reinterpret_cast<void*>(&RenderWithCameraEdit),
-        reinterpret_cast<void**>(&original));
-    if (status != MH_OK) {
-        std::ostringstream line;
-        line << "preyvr_camera_edit result=failed detail=create_hook minhook="
-             << MH_StatusToString(status);
-        lifecycle::Log(line.str());
-        return false;
-    }
-    gOriginal.store(original, std::memory_order_release);
-
-    status = MH_EnableHook(gTarget);
-    if (status != MH_OK) {
-        // Removed so a retry can create it again rather than failing for ever
-        // with MH_ERROR_ALREADY_CREATED.
-        MH_RemoveHook(gTarget);
-        gOriginal.store(nullptr, std::memory_order_release);
-        std::ostringstream line;
-        line << "preyvr_camera_edit result=failed detail=enable_hook minhook="
-             << MH_StatusToString(status);
-        lifecycle::Log(line.str());
+    const auto installed = hook::Install(gTarget, reinterpret_cast<void*>(&RenderWithCameraEdit), gOriginal);
+    if (!installed) {
+        lifecycle::Log(std::string("preyvr_camera_edit result=failed detail=") + hook::StepName(installed.step) +
+                       " minhook=" + MH_StatusToString(installed.status));
         return false;
     }
 
@@ -1747,30 +1719,11 @@ bool EnsureRenderWorldHook()
     }
 
     gRenderWorldTarget = reinterpret_cast<void*>(address);
-    RenderWorldFn original = nullptr;
-    // Shared and idempotent: without it MH_CreateHook returns
-    // MH_ERROR_NOT_INITIALIZED and the feature reports "unavailable" for a
-    // reason unrelated to itself. See MinHookInit.h.
-    EnsureMinHook();
-    MH_STATUS status = MH_CreateHook(gRenderWorldTarget,
-                                     reinterpret_cast<void*>(&RenderWorldInterpose),
-                                     reinterpret_cast<void**>(&original));
-    if (status != MH_OK) {
-        std::ostringstream line;
-        line << "preyvr_interpose result=failed detail=create_hook minhook="
-             << MH_StatusToString(status);
-        lifecycle::Log(line.str());
-        return false;
-    }
-    gRenderWorldOriginal.store(original, std::memory_order_release);
-    status = MH_EnableHook(gRenderWorldTarget);
-    if (status != MH_OK) {
-        MH_RemoveHook(gRenderWorldTarget);
-        gRenderWorldOriginal.store(nullptr, std::memory_order_release);
-        std::ostringstream line;
-        line << "preyvr_interpose result=failed detail=enable_hook minhook="
-             << MH_StatusToString(status);
-        lifecycle::Log(line.str());
+    const auto installed =
+        hook::Install(gRenderWorldTarget, reinterpret_cast<void*>(&RenderWorldInterpose), gRenderWorldOriginal);
+    if (!installed) {
+        lifecycle::Log(std::string("preyvr_interpose result=failed detail=") + hook::StepName(installed.step) +
+                       " minhook=" + MH_StatusToString(installed.status));
         return false;
     }
     gRenderWorldHookCreated = true;

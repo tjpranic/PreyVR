@@ -1,4 +1,5 @@
 #include "InventoryPointerCapture.h"
+#include "HookInstall.h"
 #include "Bootstrap.h"
 #include "HudBridge.h"
 #include "Logger.h"
@@ -79,9 +80,8 @@ DWORD EnsureInventoryPointerCapture() {
     if(!EnsureMinHook())return ERROR_NOT_READY;
     auto* target=reinterpret_cast<void*>(base+kPick);
     if(!gCreated) {
-        void* original=nullptr;
-        if(MH_CreateHook(target,reinterpret_cast<void*>(&PickWithCapture),&original)!=MH_OK)return ERROR_INVALID_FUNCTION;
-        gPickOriginal.store(reinterpret_cast<PickFn>(original));gCreated=true;
+        if(!hook::Create(target,reinterpret_cast<void*>(&PickWithCapture),gPickOriginal))return ERROR_INVALID_FUNCTION;
+        gCreated=true;
     }
     const auto result=MH_EnableHook(target);
     if(result!=MH_OK&&result!=MH_ERROR_ENABLED)return ERROR_INVALID_FUNCTION;

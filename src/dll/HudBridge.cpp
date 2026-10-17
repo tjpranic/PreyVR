@@ -1,4 +1,5 @@
 #include "HudBridge.h"
+#include "SafeMemory.h"
 #include "EngineAccess.h"
 #include "VrOptionsRuntime.h"
 #include "CameraEditHook.h"
@@ -169,11 +170,7 @@ std::deque<PendingHudCall> gQueue;
 // that three times.
 bool BytesMatch(const std::uint8_t* at, const std::uint8_t* expected, std::size_t size)
 {
-    __try {
-        return std::memcmp(at, expected, size) == 0;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeEqual(at, expected, size);
 }
 
 void* CallGetHudElement(std::uintptr_t address)
@@ -241,15 +238,7 @@ void* ResolveElement(std::uintptr_t& base, DWORD& code)
 // vtable -- which are the ways this actually goes wrong.
 bool PointerIsExecutable(std::uintptr_t address)
 {
-    if (address == 0) { return false; }
-    MEMORY_BASIC_INFORMATION info{};
-    if (VirtualQuery(reinterpret_cast<LPCVOID>(address), &info, sizeof(info)) != sizeof(info)) {
-        return false;
-    }
-    if (info.State != MEM_COMMIT) { return false; }
-    constexpr DWORD kExecutable = PAGE_EXECUTE | PAGE_EXECUTE_READ |
-                                  PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
-    return (info.Protect & kExecutable) != 0;
+    return address != 0 && IsExecutableAddress(reinterpret_cast<const void*>(address));
 }
 
 std::uintptr_t ReadVtableSlot(void* element, std::size_t byteOffset)
@@ -327,11 +316,8 @@ std::int32_t ReadRelativeDisplacement(const std::uint8_t* at)
 
 std::uintptr_t ReadPointer(std::uintptr_t at)
 {
-    __try {
-        return *reinterpret_cast<const std::uintptr_t*>(at);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return 0;
-    }
+    std::uintptr_t value = 0;
+    return SafeRead(at, value) ? value : 0;
 }
 
 void* CallGetElementByName(std::uintptr_t address, void* singleton, const char* name)

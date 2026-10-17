@@ -1,4 +1,6 @@
 #include "CullCameraWatch.h"
+#include "SafeMemory.h"
+#include "HookInstall.h"
 #include "Bootstrap.h"
 #include "Logger.h"
 #include "MinHookInit.h"
@@ -175,17 +177,12 @@ void Raise(std::atomic<unsigned>& peak, unsigned value)
 
 bool SpanMatches(const void* at, const std::uint8_t* bytes, std::size_t size)
 {
-    __try {
-        return at != nullptr && std::memcmp(at, bytes, size) == 0;
-    } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+    return at != nullptr && SafeEqual(at, bytes, size);
 }
 
 bool ReadWord(std::uintptr_t at, std::uintptr_t& out)
 {
-    __try {
-        out = *reinterpret_cast<const std::uintptr_t*>(at);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+    return SafeRead(at, out);
 }
 
 // The gate, plus the proof that the hooked function is the C3DEngine slot --
@@ -507,14 +504,11 @@ DWORD Install()
             return 5;
         }
         gTarget = reinterpret_cast<void*>(base + kResetRva);
-        ResetPassCamerasFn original = nullptr;
-        const MH_STATUS status = MH_CreateHook(gTarget, reinterpret_cast<void*>(&ObserveCameraReset),
-                                               reinterpret_cast<void**>(&original));
-        if (status != MH_OK) {
-            Log(std::string("result=failed detail=create_hook minhook=") + MH_StatusToString(status));
+        const auto created = hook::Create(gTarget, reinterpret_cast<void*>(&ObserveCameraReset), gOriginal);
+        if (!created) {
+            Log(std::string("result=failed detail=create_hook minhook=") + MH_StatusToString(created.status));
             return 5;
         }
-        gOriginal.store(original, std::memory_order_release);
         gHookCreated = true;
     }
     // Published before the hook can run.

@@ -1,4 +1,6 @@
 #include "BodyFollow.h"
+#include "SafeMemory.h"
+#include "HookInstall.h"
 #include "EngineAccess.h"
 
 #include "AimTakeover.h"
@@ -186,12 +188,7 @@ void StoreMax(std::atomic<int>& slot, int value)
 
 bool ReadMemory(const void* at, void* out, std::size_t size)
 {
-    __try {
-        std::memcpy(out, at, size);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeCopy(out, at, size);
 }
 
 template<class T> bool ReadAt(void* base, std::size_t offset, T& out)
@@ -687,17 +684,9 @@ DWORD Install()
     gGet.store(reinterpret_cast<GetViewRotationFn>(base + kGetViewRotationRva), std::memory_order_release);
     gVtable.store(base + kPlayerVtableRva, std::memory_order_release);
     void* const target = reinterpret_cast<void*>(base + kPlayerUpdateRva);
-    PlayerUpdateFn original = nullptr;
-    EnsureMinHook();
-    if (MH_CreateHook(target, reinterpret_cast<void*>(&PlayerUpdateDetour), reinterpret_cast<void**>(&original)) !=
-        MH_OK) {
-        Log("result=failed detail=create_hook target=ArkPlayer::Update");
-        return 3;
-    }
-    gOriginal.store(original, std::memory_order_release);
-    if (MH_EnableHook(target) != MH_OK) {
-        MH_RemoveHook(target);
-        Log("result=failed detail=enable_hook target=ArkPlayer::Update");
+    const auto installed = hook::Install(target, reinterpret_cast<void*>(&PlayerUpdateDetour), gOriginal);
+    if (!installed) {
+        Log(std::string("result=failed detail=") + hook::StepName(installed.step) + " target=ArkPlayer::Update");
         return 3;
     }
     gInstalled.store(true, std::memory_order_release);

@@ -1,4 +1,5 @@
 #include "ArmsLane.h"
+#include "SafeMemory.h"
 #include "EngineAccess.h"
 
 #include "AimTakeover.h"
@@ -113,12 +114,7 @@ bool ParseHex(const std::string& text, std::uint64_t& value)
 
 bool Copy(std::uint64_t address, void* out, std::size_t size)
 {
-    __try {
-        std::memcpy(out, reinterpret_cast<const void*>(address), size);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeCopy(out, reinterpret_cast<const void*>(address), size);
 }
 
 std::string ReadText(std::uint64_t address)

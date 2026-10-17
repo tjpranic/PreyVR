@@ -1,4 +1,7 @@
 #include "MoveLane.h"
+#include "SafeMemory.h"
+#include "EngineAccess.h"
+#include "HookInstall.h"
 #include "ArmsLane.h"
 #include "AimTakeover.h"
 #include "BodyEquipment.h"
@@ -182,22 +185,12 @@ std::atomic<unsigned long long> gRecenters{0};
 
 bool ReadFloat(const void* at, float* out)
 {
-    __try {
-        *out = *reinterpret_cast<const float*>(at);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeRead(at, *out);
 }
 
 bool ReadInt(const void* at, int* out)
 {
-    __try {
-        *out = *reinterpret_cast<const int*>(at);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeRead(at, *out);
 }
 
 // Runs inside the engine's own input walk, on whichever thread posted. Reads
@@ -254,27 +247,12 @@ bool InstallOne(std::uintptr_t rva, const std::uint8_t* prologue, std::size_t si
                 void* detour, std::atomic<AnalogHandlerFn>& original, void*& target,
                 const char* name)
 {
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) { return false; }
-    const auto address = reinterpret_cast<std::uintptr_t>(preyDll) + rva;
-    if (std::memcmp(reinterpret_cast<const void*>(address), prologue, size) != 0) {
-        Log(std::string("result=unavailable detail=prologue_mismatch target=") + name);
-        return false;
-    }
-    target = reinterpret_cast<void*>(address);
-    AnalogHandlerFn originalFn = nullptr;
-    EnsureMinHook();
-    if (MH_CreateHook(target, detour, reinterpret_cast<void**>(&originalFn)) != MH_OK) {
-        Log(std::string("result=failed detail=create_hook target=") + name);
-        return false;
-    }
-    original.store(originalFn, std::memory_order_release);
-    if (MH_EnableHook(target) != MH_OK) {
-        MH_RemoveHook(target);
-        Log(std::string("result=failed detail=enable_hook target=") + name);
-        return false;
-    }
-    return true;
+    // Already in place from an attempt whose other hook failed.
+    if (original.load(std::memory_order_acquire) != nullptr) { return true; }
+    const auto base = PreyBase();
+    if (base == 0) { return false; }
+    target = reinterpret_cast<void*>(base + rva);
+    return hook::HookAt(target, {prologue, size}, detour, original, name, &Log);
 }
 
 bool Install()

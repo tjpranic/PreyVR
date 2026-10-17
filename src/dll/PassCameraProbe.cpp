@@ -1,4 +1,5 @@
 #include "PassCameraProbe.h"
+#include "HookInstall.h"
 #include "MinHookInit.h"
 
 #include "CameraEditHook.h"
@@ -117,28 +118,10 @@ bool EnsureHook()
     }
 
     gTarget = reinterpret_cast<void*>(target);
-    CreateGeneralPassFn original = nullptr;
-    // Shared and idempotent: without it MH_CreateHook returns
-    // MH_ERROR_NOT_INITIALIZED and the feature reports "unavailable" for a
-    // reason unrelated to itself. See MinHookInit.h.
-    EnsureMinHook();
-    MH_STATUS status = MH_CreateHook(
-        gTarget, reinterpret_cast<void*>(&CreateGeneralPassObserved),
-        reinterpret_cast<void**>(&original));
-    if (status != MH_OK) {
-        std::ostringstream line;
-        line << "result=failed detail=create_hook minhook=" << MH_StatusToString(status);
-        Log(line.str());
-        return false;
-    }
-    gOriginal.store(original, std::memory_order_release);
-
-    status = MH_EnableHook(gTarget);
-    if (status != MH_OK) {
-        std::ostringstream line;
-        line << "result=failed detail=enable_hook minhook=" << MH_StatusToString(status);
-        Log(line.str());
-        MH_RemoveHook(gTarget);
+    const auto installed = hook::Install(gTarget, reinterpret_cast<void*>(&CreateGeneralPassObserved), gOriginal);
+    if (!installed) {
+        Log(std::string("result=failed detail=") + hook::StepName(installed.step) + " minhook=" +
+            MH_StatusToString(installed.status));
         return false;
     }
     gHookCreated = true;

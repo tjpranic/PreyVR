@@ -1,4 +1,6 @@
 #include "NearViewStereo.h"
+#include "SafeMemory.h"
+#include "HookInstall.h"
 #include "EngineAccess.h"
 #include "MinHookInit.h"
 
@@ -231,22 +233,12 @@ bool CameraRightAxis(Vec3& out)
 // has now been hit three times in this project.
 bool ReadViewInfoCamera(const std::uint8_t* viewInfo, void** out)
 {
-    __try {
-        *out = *reinterpret_cast<void* const*>(viewInfo + kViewInfoCamera);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeRead(viewInfo + kViewInfoCamera, *out);
 }
 
 bool ReadCameraBytes(const void* camera, std::uint8_t* out, std::size_t size)
 {
-    __try {
-        std::memcpy(out, camera, size);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeCopy(out, camera, size);
 }
 
 bool LooksLikeProjection(const float* m)
@@ -396,20 +388,9 @@ bool Install()
         return false;
     }
     gTarget = reinterpret_cast<void*>(target);
-    PackViewInfoFn original = nullptr;
-    // Shared and idempotent: without it MH_CreateHook returns
-    // MH_ERROR_NOT_INITIALIZED and the feature reports "unavailable" for a
-    // reason unrelated to itself. See MinHookInit.h.
-    EnsureMinHook();
-    if (MH_CreateHook(gTarget, reinterpret_cast<void*>(&PackViewInfoWithEyeOffset),
-                      reinterpret_cast<void**>(&original)) != MH_OK) {
-        Log("result=failed detail=create_hook");
-        return false;
-    }
-    gOriginal.store(original, std::memory_order_release);
-    if (MH_EnableHook(gTarget) != MH_OK) {
-        Log("result=failed detail=enable_hook");
-        MH_RemoveHook(gTarget);
+    const auto installed = hook::Install(gTarget, reinterpret_cast<void*>(&PackViewInfoWithEyeOffset), gOriginal);
+    if (!installed) {
+        Log(std::string("result=failed detail=") + hook::StepName(installed.step));
         return false;
     }
     gInstalled = true;

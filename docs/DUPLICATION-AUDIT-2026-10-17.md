@@ -16,7 +16,10 @@ Line numbers are as of commit 8c07a51, before the section A fixes. Files those f
 - **2026-10-18:** B1, D1 and D2 were done, for about 800 lines net; see their status notes.
   - The user tested PreyVR-13 (the section A fixes) in the headset: everything worked.
   - Committed as `b5fc093` (fixes) and `8380154` (B1/D1/D2).
-- **2026-10-18, later:** B4, B5 and E6 were done, uncommitted; see their status notes.
+- **2026-10-18, later:** B4, B5 and E6 were done; see their status notes. PreyVR-14 worked in the headset, and they are committed as `c370eff`.
+- **2026-10-18, latest:** B2 and B3 were done, uncommitted; see their status notes.
+  - Build passes, 77/77 ctest pass (one new test, `hook_install`), no new warnings.
+  - Not yet run in the headset.
   - Build passes, 76/76 ctest pass, no new warnings.
   - The engine-map probe and the six native-table verifiers pass against PreyDll.dll.
 - **Not started:** the rest of B–E.
@@ -138,6 +141,29 @@ The compiler found the copies: with a shared `preyvr::Add` in scope, any leftove
   Share one implementation that returns `optional`, and let each caller keep its own sentinel.
 
 ### B2. MinHook install boilerplate (high value, low risk, about 300 LOC; A3–A5 are already fixed in place)
+
+**Status 2026-10-18: done.** `src/dll/HookInstall.h` is header-only, with no `preyvr/` includes:
+- `hook::Install`: create, publish the trampoline, enable, remove on failure.
+- `hook::Create`, for installers that keep the trampoline and enable it later.
+- `hook::InstallVerified` and `hook::HookAt`, which add the prologue gate and the lanes' log lines. An empty prologue never matches.
+- `hook::InstallAll`: create all, publish, one `MH_ApplyQueued`, and on failure disable and remove everything.
+
+What changed:
+- **Every `MH_CreateHook` in the DLL now goes through it.**
+  - Lanes: the 5 `HookAt` templates became wrappers, and MoveLane's `InstallOne` uses `hook::HookAt`.
+  - Single-target installers (14): Aim, AnimIk, HandRig, NearView, RenderFrame, WeaponAttachment ×2, HeadTracking ×2, PassCamera, BodyFollow, DualOverlay, FocusHold and ReticleRayHook.
+  - CameraEditHook ×2.
+  - Create-once installers: FrameObserver, NearFovOverride, CullCameraWatch and InventoryPointerCapture.
+  - `InstallAll` sets: DualSceneStereo, PsiMedkit, PhysicalInteractions and HudLayer, plus HudLayer's three single hooks.
+- **Logging and docs:** each caller keeps its own log text, and all 12 pasted "Shared and idempotent" comments are gone.
+- **ShotRay's query hook and InteractionLane's candidates and interact hooks** are now gated on their landmarks through `LandmarkBytes(id, rva)` in EngineAccess.h; the B4 deferral is closed.
+- **Bugs fixed on the way:**
+  - FocusHold's audio hook was never removed when enabling failed.
+  - HudLayer left its three hooks created, and possibly part-enabled, when `MH_ApplyQueued` failed.
+  - MoveLane re-created hook X on a retry after hook Y failed.
+
+  Each of these made every retry fail.
+- **New `tests/HookInstallTests.cpp`** hooks real functions in the test process with real MinHook. It is the first offline check of install, refusal and cleanup; every other test stubs `EnsureMinHook` to fail.
 - **[V]** `template HookAt<Fn,N>` is byte-identical in CarryLane.cpp:895, GrenadeLane.cpp:793, InteractionLane.cpp:391 and ShotRay.cpp:602. NearParticleStereo.cpp:217 has the same function with a `uint32_t` rva.
 - **About 20 hand-written single-target installers:**
   - CameraEditHook :1366/:1729
@@ -154,6 +180,20 @@ The compiler found the copies: with a shared `preyvr::Add` in scope, any leftove
 - Keep each caller's `detail=` text.
 
 ### B3. SEH safe-memory primitives (medium-high value, none to low risk, about 190 LOC)
+
+**Status 2026-10-18: done.** `src/dll/SafeMemory.h` is header-only, with no `preyvr/` includes: `SafeCopy`, `SafeEqual`, `SafeRead<T>` (pointer or `uintptr_t`), and `IsExecutableAddress(addr, module)`.
+
+What changed:
+- **31 single-copy, compare or load `__try` primitives** in 18 files are now one-line adapters. They keep their names, because their signatures differ and tests call `SpanMatches`/`MatchesCode`.
+- **Removed:** DualSceneStereo's template `SafeRead`, which is now SafeMemory's, and CarryLane's unused `WriteBytes`.
+- **The seven executable-page checks** use `IsExecutableAddress`. ConsoleBridge still requires the page to be in PreyDll, and refuses when PreyDll is not loaded.
+
+Left as they are:
+- **Composite `__try` blocks** that read several fields all-or-nothing.
+- **Guarded engine calls (`CallX`):** they wait for the policy decision noted in F, and belong with B6.
+- **`PageIsReadable`:** it must not touch the page.
+- **The vtable-slot checks:** already one line each, and they mix slot-index and byte-offset conventions.
+- **NativeHudValue.h:** pinned.
 - **About 35 `__try{memcpy/memcmp/deref}__except` primitives:**
   - DualSceneStereo:153 `SafeRead<T>`
   - IkTargetProbe:40/67
@@ -521,7 +561,7 @@ Left:
 2. Header-only, zero-behaviour work:
    - ~~Land these together: B1 (VrMath) + D1 (TestSupport.h).~~ Done on 2026-10-18.
    - ~~B4 NativeContract.h + FindLandmark + layout aliases, and B5 EngineAccess.h.~~ Done on 2026-10-18.
-   - B3 SafeMemory.h together with B2 HookInstall.h, now that PreyVR-13 is headset-verified.
+   - ~~B3 SafeMemory.h together with B2 HookInstall.h.~~ Done on 2026-10-18; awaiting a headset run.
 3. ~~Build: D2 `preyvr_add_test`.~~ Done on 2026-10-18.
    - Note: `tools/re/vr_scheme_review` (D5) already fails to link on its own: about 65 unresolved DLL-lane symbols, none of them B1's. It needs folding into the root build, or an updated source list.
 4. Prune dead code (C). Keep the CameraEditHook experiments (user, 2026-10-18); the rest still needs sign-off.

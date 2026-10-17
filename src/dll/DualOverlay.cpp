@@ -1,4 +1,6 @@
 #include "DualOverlay.h"
+#include "SafeMemory.h"
+#include "HookInstall.h"
 
 #include "HudLayer.h"
 #include "Logger.h"
@@ -156,10 +158,7 @@ DWORD EnsureImageHook()
         return 3;
     }
     const auto address = reinterpret_cast<std::uintptr_t>(preyDll) + landmark->rva;
-    MEMORY_BASIC_INFORMATION memory{};
-    if (VirtualQuery(reinterpret_cast<const void*>(address), &memory, sizeof(memory)) != sizeof(memory) ||
-        memory.State != MEM_COMMIT ||
-        (memory.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)) == 0 ||
+    if (!IsExecutableAddress(reinterpret_cast<const void*>(address)) ||
         std::memcmp(reinterpret_cast<const void*>(address), landmark->expected.data(), landmark->expected.size()) != 0) {
         Log("result=unavailable detail=prologue_mismatch id=renderer.draw2d_images");
         return 4;
@@ -167,16 +166,10 @@ DWORD EnsureImageHook()
     if (!EnsureMinHook()) {
         return 5;
     }
-    void* original = nullptr;
-    MH_STATUS status = MH_CreateHook(reinterpret_cast<void*>(address), reinterpret_cast<void*>(&Draw2dImagesDetour),
-                                     &original);
-    if (status == MH_OK) {
-        gDraw2dImages.store(reinterpret_cast<Draw2dImagesFn>(original), std::memory_order_release);
-        status = MH_EnableHook(reinterpret_cast<void*>(address));
-        if (status != MH_OK) MH_RemoveHook(reinterpret_cast<void*>(address));
-    }
-    if (status != MH_OK) {
-        Log(std::string("result=failed detail=create_hook minhook=") + MH_StatusToString(status));
+    const auto installed =
+        hook::Install(reinterpret_cast<void*>(address), reinterpret_cast<void*>(&Draw2dImagesDetour), gDraw2dImages);
+    if (!installed) {
+        Log(std::string("result=failed detail=create_hook minhook=") + MH_StatusToString(installed.status));
         return 5;
     }
     gInstalled = true;

@@ -1,4 +1,5 @@
 #include "BindingDump.h"
+#include "SafeMemory.h"
 
 #include "HudBridge.h"
 #include "Logger.h"
@@ -18,12 +19,7 @@ namespace {
 // No C++ objects here: __try cannot share a frame with unwinding.
 bool GuardedCopy(void* out, std::uintptr_t address, std::size_t size)
 {
-    __try {
-        std::memcpy(out, reinterpret_cast<const void*>(address), size);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeCopy(out, reinterpret_cast<const void*>(address), size);
 }
 
 class GuardedMemory final : public input::MemoryView {

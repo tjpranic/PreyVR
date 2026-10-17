@@ -1,4 +1,5 @@
 #include "NearParticleStereo.h"
+#include "HookInstall.h"
 #include "EngineAccess.h"
 
 #include "AimTakeover.h"
@@ -214,27 +215,11 @@ void* __fastcall RenderMatrixHook(void* particle, float* vX, float* vY, float* v
     return result;
 }
 
-template <class Fn, std::size_t N>
-bool HookAt(std::uint32_t rva, const std::array<std::uint8_t, N>& prologue, void* detour, std::atomic<Fn>& original,
+template <class Fn>
+bool HookAt(std::uint32_t rva, std::span<const std::uint8_t> prologue, void* detour, std::atomic<Fn>& original,
             const char* name)
 {
-    auto* const target = reinterpret_cast<void*>(gBase + rva);
-    if (std::memcmp(target, prologue.data(), prologue.size()) != 0) {
-        Log(std::string("result=unavailable detail=prologue_mismatch target=") + name);
-        return false;
-    }
-    Fn trampoline = nullptr;
-    if (MH_CreateHook(target, detour, reinterpret_cast<void**>(&trampoline)) != MH_OK) {
-        Log(std::string("result=failed detail=create_hook target=") + name);
-        return false;
-    }
-    original.store(trampoline, std::memory_order_release);
-    if (MH_EnableHook(target) != MH_OK) {
-        MH_RemoveHook(target);
-        Log(std::string("result=failed detail=enable_hook target=") + name);
-        return false;
-    }
-    return true;
+    return hook::HookAt(reinterpret_cast<void*>(gBase + rva), prologue, detour, original, name, &Log);
 }
 
 bool Install()

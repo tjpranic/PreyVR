@@ -1,4 +1,6 @@
 #include "FocusHold.h"
+#include "SafeMemory.h"
+#include "HookInstall.h"
 #include "Bootstrap.h"
 #include "ConsoleBridgeWin32.h"
 #include "FrameObserverHook.h"
@@ -188,17 +190,12 @@ void __fastcall AnswerAudioRequest(void* atl, void* request)
 
 bool SpanMatches(std::uintptr_t at, const std::uint8_t* bytes, std::size_t size)
 {
-    __try {
-        return std::memcmp(reinterpret_cast<const void*>(at), bytes, size) == 0;
-    } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+    return SafeEqual(reinterpret_cast<const void*>(at), bytes, size);
 }
 
 bool ReadDword(std::uintptr_t at, std::uint32_t& out)
 {
-    __try {
-        out = *reinterpret_cast<const std::uint32_t*>(at);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+    return SafeRead(at, out);
 }
 
 bool AudioCodeMatches(std::uintptr_t base)
@@ -224,22 +221,14 @@ DWORD InstallAudio(std::uintptr_t base, bool foreground)
     gAudioApplied.store(foreground ? 1 : 0, std::memory_order_release);
     gAudioManager.store(reinterpret_cast<AudioManagerFn>(base + kAudioManagerRva), std::memory_order_release);
     void* const target = reinterpret_cast<void*>(base + kAudioDispatchRva);
-    AudioDispatchFn original = nullptr;
-    if (MH_CreateHook(target, reinterpret_cast<void*>(&AnswerAudioRequest), reinterpret_cast<void**>(&original)) != MH_OK) {
-        return kHookFailed;
-    }
-    gAudioOriginal.store(original, std::memory_order_release);
-    if (MH_EnableHook(target) != MH_OK) { return kHookFailed; }
+    if (!hook::Install(target, reinterpret_cast<void*>(&AnswerAudioRequest), gAudioOriginal)) { return kHookFailed; }
     gAudioHooked = true;
     return kOk;
 }
 
 bool ReadWord(std::uintptr_t at, std::uintptr_t& out)
 {
-    __try {
-        out = *reinterpret_cast<const std::uintptr_t*>(at);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+    return SafeRead(at, out);
 }
 
 // Once per process. The slot keeps pointing here after a release: unpinned

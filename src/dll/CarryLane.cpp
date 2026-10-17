@@ -1,4 +1,6 @@
 #include "CarryLane.h"
+#include "SafeMemory.h"
+#include "HookInstall.h"
 #include "EngineAccess.h"
 
 #include "AimTakeover.h"
@@ -232,24 +234,9 @@ std::atomic<unsigned long long> gUpdates{0}, gStarts{0}, gStops{0}, gReleasesAsk
 
 bool ReadBytes(void* destination, std::uintptr_t source, std::size_t size)
 {
-    __try {
-        std::memcpy(destination, reinterpret_cast<const void*>(source), size);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeCopy(destination, reinterpret_cast<const void*>(source), size);
 }
 template <class T> bool Read(std::uintptr_t at, T& out) { return ReadBytes(&out, at, sizeof(T)); }
-bool WriteBytes(std::uintptr_t destination, const void* source, std::size_t size)
-{
-    __try {
-        std::memcpy(reinterpret_cast<void*>(destination), source, size);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
-
 template <class R, class... A> R VCall(std::uintptr_t object, std::size_t slot, A... args)
 {
     const auto vtable = *reinterpret_cast<const std::uintptr_t*>(object);
@@ -892,27 +879,11 @@ bool __fastcall StartHook(std::uintptr_t carry, std::uintptr_t entity, std::uint
     return ok;
 }
 
-template <class Fn, std::size_t N>
-bool HookAt(std::uintptr_t rva, const std::array<std::uint8_t, N>& prologue, void* detour, std::atomic<Fn>& original,
+template <class Fn>
+bool HookAt(std::uintptr_t rva, std::span<const std::uint8_t> prologue, void* detour, std::atomic<Fn>& original,
             const char* name)
 {
-    auto* const target = reinterpret_cast<void*>(gBase + rva);
-    if (std::memcmp(target, prologue.data(), prologue.size()) != 0) {
-        Log(std::string("result=unavailable detail=prologue_mismatch target=") + name);
-        return false;
-    }
-    Fn trampoline = nullptr;
-    if (MH_CreateHook(target, detour, reinterpret_cast<void**>(&trampoline)) != MH_OK) {
-        Log(std::string("result=failed detail=create_hook target=") + name);
-        return false;
-    }
-    original.store(trampoline, std::memory_order_release);
-    if (MH_EnableHook(target) != MH_OK) {
-        MH_RemoveHook(target);
-        Log(std::string("result=failed detail=enable_hook target=") + name);
-        return false;
-    }
-    return true;
+    return hook::HookAt(reinterpret_cast<void*>(gBase + rva), prologue, detour, original, name, &Log);
 }
 
 std::string GrabLine(const Grab& g)

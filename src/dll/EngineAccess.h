@@ -10,8 +10,19 @@
 
 #include <atomic>
 #include <cstdint>
+#include <span>
+#include <string_view>
 
 namespace preyvr::dll {
+
+// The gated bytes of landmark `id`, or an empty span when it is missing or its
+// RVA is not `rva`. hook::InstallVerified refuses an empty prologue, so a hook
+// gated on this fails closed.
+inline std::span<const std::uint8_t> LandmarkBytes(std::string_view id, std::uintptr_t rva)
+{
+    const engine::Landmark* landmark = engine::FindLandmark(id);
+    return landmark != nullptr && landmark->rva == rva ? landmark->expected : std::span<const std::uint8_t>{};
+}
 
 // PreyDll.dll's base address, or 0 before it is loaded. Cached once non-zero:
 // the game's own module stays loaded for the life of the process, so this

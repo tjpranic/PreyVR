@@ -1,4 +1,5 @@
 #include "HudLayer.h"
+#include "HookInstall.h"
 #include "EngineAccess.h"
 #include "DualOverlay.h"
 #include "Bootstrap.h"
@@ -944,14 +945,12 @@ bool Install() {
     auto device=*reinterpret_cast<ID3D11Device**>(renderer+engine::RendererLayout::device);if(!device)return false;
     ComPtr<ID3D11DeviceContext> context;device->GetImmediateContext(&context);if(!context)return false;
     auto om=(*reinterpret_cast<void***>(context.Get()))[33];
-    const auto hook=[&](void* at,void* detour,void** out) {return MH_CreateHook(at,detour,out)==MH_OK;};
-    // Install as one transaction; remove disabled hooks if any creation fails.
-    void* a=reinterpret_cast<void*>(base+0x2FEBC0);void* b=reinterpret_cast<void*>(base+0xE8C5E0);
-    if(!hook(a,reinterpret_cast<void*>(ObserveElement),reinterpret_cast<void**>(&originalElement)))return false;
-    if(!hook(b,reinterpret_cast<void*>(CaptureFlash),reinterpret_cast<void**>(&originalFlash))) {MH_RemoveHook(a);return false;}
-    if(!hook(om,reinterpret_cast<void*>(RedirectTargets),reinterpret_cast<void**>(&originalTargets))) {MH_RemoveHook(a);MH_RemoveHook(b);return false;}
-    MH_QueueEnableHook(om);MH_QueueEnableHook(a);MH_QueueEnableHook(b);
-    if(MH_ApplyQueued()!=MH_OK)return false;
+    // One transaction: all three live or none.
+    const hook::Spec hooks[]={
+        {om,reinterpret_cast<void*>(RedirectTargets),reinterpret_cast<void**>(&originalTargets)},
+        {reinterpret_cast<void*>(base+0x2FEBC0),reinterpret_cast<void*>(ObserveElement),reinterpret_cast<void**>(&originalElement)},
+        {reinterpret_cast<void*>(base+0xE8C5E0),reinterpret_cast<void*>(CaptureFlash),reinterpret_cast<void**>(&originalFlash)}};
+    if(!hook::InstallAll(hooks))return false;
     installed=true;return true;
 }
 bool InstallDisplay() {
@@ -962,8 +961,7 @@ bool InstallDisplay() {
     constexpr unsigned char displayBytes[]={0x40,0x55,0x56,0x48,0x81,0xEC,0x68,0x03,0,0};
     const auto display=reinterpret_cast<void*>(base+0x18AB710);
     if(std::memcmp(display,displayBytes,sizeof(displayBytes)))return false;
-    if(MH_CreateHook(display,reinterpret_cast<void*>(StereoDisplay),reinterpret_cast<void**>(&originalDisplay))!=MH_OK)return false;
-    if(MH_EnableHook(display)!=MH_OK){MH_RemoveHook(display);return false;}
+    if(!hook::Install(display,reinterpret_cast<void*>(StereoDisplay),originalDisplay))return false;
     displayInstalled=true;return true;
 }
 bool InstallStereo() {
@@ -973,8 +971,7 @@ bool InstallStereo() {
     constexpr unsigned char calcBytes[]={0x48,0x8B,0xC4,0x55,0x53,0x56,0x57,0x48,0x8D,0xA8,0x48,0xFF,0xFF,0xFF};
     const auto calc=reinterpret_cast<void*>(base+0xDB9620);
     if(std::memcmp(calc,calcBytes,sizeof(calcBytes)))return false;
-    if(MH_CreateHook(calc,reinterpret_cast<void*>(StereoMatrix),reinterpret_cast<void**>(&originalCalc))!=MH_OK)return false;
-    if(MH_EnableHook(calc)!=MH_OK){MH_RemoveHook(calc);return false;}
+    if(!hook::Install(calc,reinterpret_cast<void*>(StereoMatrix),originalCalc))return false;
     stereoInstalled=true;return true;
 }
 bool InstallStatus(){
@@ -984,8 +981,7 @@ bool InstallStatus(){
     if(!VerifyNativeWrist(base))return false;
     if(*reinterpret_cast<std::uintptr_t*>(base+0x1EB57E8)!=base+0x18BABA0)return false;
     auto at=reinterpret_cast<void*>(base+0x18BABA0);
-    if(MH_CreateHook(at,reinterpret_cast<void*>(FilterStatusSprite),reinterpret_cast<void**>(&originalSpriteDisplay))!=MH_OK)return false;
-    if(MH_EnableHook(at)!=MH_OK){MH_RemoveHook(at);return false;}
+    if(!hook::Install(at,reinterpret_cast<void*>(FilterStatusSprite),originalSpriteDisplay))return false;
     spriteInstalled=true;return true;
 }
 ID3D11Texture2D* BorrowTexture(Movie movie) {

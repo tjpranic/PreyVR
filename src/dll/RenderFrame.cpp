@@ -1,4 +1,5 @@
 #include "RenderFrame.h"
+#include "HookInstall.h"
 #include "MinHookInit.h"
 
 #include "Logger.h"
@@ -175,20 +176,9 @@ bool Install()
         return false;
     }
     gTarget = reinterpret_cast<void*>(target);
-    RenderCharacterFn original = nullptr;
-    // Shared and idempotent: without it MH_CreateHook returns
-    // MH_ERROR_NOT_INITIALIZED and the feature reports "unavailable" for a
-    // reason unrelated to itself. See MinHookInit.h.
-    EnsureMinHook();
-    if (MH_CreateHook(gTarget, reinterpret_cast<void*>(&RenderCharacterObserved),
-                      reinterpret_cast<void**>(&original)) != MH_OK) {
-        Log("result=failed detail=create_hook");
-        return false;
-    }
-    gOriginal.store(original, std::memory_order_release);
-    if (MH_EnableHook(gTarget) != MH_OK) {
-        Log("result=failed detail=enable_hook");
-        MH_RemoveHook(gTarget);
+    const auto installed = hook::Install(gTarget, reinterpret_cast<void*>(&RenderCharacterObserved), gOriginal);
+    if (!installed) {
+        Log(std::string("result=failed detail=") + hook::StepName(installed.step));
         return false;
     }
     gInstalled = true;

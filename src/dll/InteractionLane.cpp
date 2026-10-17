@@ -1,4 +1,6 @@
 #include "InteractionLane.h"
+#include "SafeMemory.h"
+#include "HookInstall.h"
 #include "EngineAccess.h"
 
 #include "AimTakeover.h"
@@ -34,14 +36,11 @@ void Log(const std::string& line) { lifecycle::Log("preyvr_use " + line); }
 // ArkPlayerTargetSelector::UpdateCandidates (R-022): RCX = selector, which is
 // ArkPlayerInteraction+0x190, which is ArkPlayer+0xAC8. Reads the cached ray
 // once, through IArkPlayer::GetReticleViewPositionAndDir (call at 0x159A708).
+// Gated on the `interaction.select_candidates` landmark.
 constexpr std::uintptr_t kUpdateCandidatesRva = 0x159A660;
-constexpr std::array<std::uint8_t, 22> kUpdateCandidatesPrologue{
-    0x40, 0x55, 0x41, 0x54, 0x41, 0x57, 0x48, 0x8D, 0x6C, 0x24, 0x80,
-    0x48, 0x81, 0xEC, 0x80, 0x01, 0x00, 0x00, 0x48, 0x8B, 0x51, 0x28};
-// ArkPlayerInteraction::Interact (R-023): (interaction, mode) -> bool.
+// ArkPlayerInteraction::Interact (R-023): (interaction, mode) -> bool. Gated on
+// the `interaction.interact` landmark.
 constexpr std::uintptr_t kInteractRva = 0x1593690;
-constexpr std::array<std::uint8_t, 16> kInteractPrologue{
-    0x40, 0x53, 0x55, 0x56, 0x41, 0x56, 0x48, 0x83, 0xEC, 0x68, 0x48, 0x8B, 0xE9, 0x48, 0x63, 0xF2};
 // ArkPlayerInteraction::PerformInteraction: (interaction, type, mode, IEntity*,
 // float delay). The native action dispatcher (PHYSICAL-GRAB-SEAMS-2026-10-04).
 constexpr std::uintptr_t kPerformRva = 0x1593980;
@@ -137,12 +136,7 @@ void Remember(const std::string& text)
 
 bool ReadBytes(void* destination, std::uintptr_t source, std::size_t size)
 {
-    __try {
-        std::memcpy(destination, reinterpret_cast<const void*>(source), size);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeCopy(destination, reinterpret_cast<const void*>(source), size);
 }
 template <class T> bool Read(std::uintptr_t at, T& out) { return ReadBytes(&out, at, sizeof(T)); }
 
@@ -383,27 +377,11 @@ void __fastcall PerformHook(std::uintptr_t interaction, int type, int mode, std:
     Remember("perform t" + std::to_string(type) + " m" + std::to_string(mode) + " " + name);
 }
 
-template <class Fn, std::size_t N>
-bool HookAt(std::uintptr_t rva, const std::array<std::uint8_t, N>& prologue, void* detour, std::atomic<Fn>& original,
+template <class Fn>
+bool HookAt(std::uintptr_t rva, std::span<const std::uint8_t> prologue, void* detour, std::atomic<Fn>& original,
             const char* name)
 {
-    auto* const target = reinterpret_cast<void*>(gBase + rva);
-    if (std::memcmp(target, prologue.data(), prologue.size()) != 0) {
-        Log(std::string("result=unavailable detail=prologue_mismatch target=") + name);
-        return false;
-    }
-    Fn trampoline = nullptr;
-    if (MH_CreateHook(target, detour, reinterpret_cast<void**>(&trampoline)) != MH_OK) {
-        Log(std::string("result=failed detail=create_hook target=") + name);
-        return false;
-    }
-    original.store(trampoline, std::memory_order_release);
-    if (MH_EnableHook(target) != MH_OK) {
-        MH_RemoveHook(target);
-        Log(std::string("result=failed detail=enable_hook target=") + name);
-        return false;
-    }
-    return true;
+    return hook::HookAt(reinterpret_cast<void*>(gBase + rva), prologue, detour, original, name, &Log);
 }
 
 // --- per-frame state ---------------------------------------------------------
@@ -576,10 +554,10 @@ bool EnsureInteractionLane()
     gBase = PreyBase();
     if (!gBase) { gInstallTried = false; return false; }
     EnsureMinHook();
-    gInstalled = HookAt(kUpdateCandidatesRva, kUpdateCandidatesPrologue, reinterpret_cast<void*>(&UpdateCandidatesHook),
+    gInstalled = HookAt(kUpdateCandidatesRva, LandmarkBytes("interaction.select_candidates", kUpdateCandidatesRva), reinterpret_cast<void*>(&UpdateCandidatesHook),
                         gUpdateCandidates, "update_candidates");
     // Observers: the lane works without them, it only reports less.
-    gObserversInstalled = HookAt(kInteractRva, kInteractPrologue, reinterpret_cast<void*>(&InteractHook), gInteract, "interact") &&
+    gObserversInstalled = HookAt(kInteractRva, LandmarkBytes("interaction.interact", kInteractRva), reinterpret_cast<void*>(&InteractHook), gInteract, "interact") &&
                           HookAt(kPerformRva, kPerformPrologue, reinterpret_cast<void*>(&PerformHook), gPerform, "perform");
     Log(std::string("result=") + (gInstalled ? "0" : "unavailable") + " selector=" + std::to_string(gInstalled) +
         " observers=" + std::to_string(gObserversInstalled));

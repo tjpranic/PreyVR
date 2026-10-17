@@ -1,4 +1,5 @@
 #include "ConsoleBridgeWin32.h"
+#include "SafeMemory.h"
 #include "EngineAccess.h"
 
 #include "Logger.h"
@@ -75,12 +76,7 @@ ExecuteStringFn ResolveExecuteString()
     }
     const auto target = base + kExecuteStringRva;
 
-    MEMORY_BASIC_INFORMATION memory{};
-    if (VirtualQuery(reinterpret_cast<const void*>(target), &memory, sizeof(memory)) !=
-            sizeof(memory) ||
-        memory.State != MEM_COMMIT ||
-        (memory.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE |
-                           PAGE_EXECUTE_WRITECOPY)) == 0) {
+    if (!IsExecutableAddress(reinterpret_cast<const void*>(target))) {
         return nullptr;
     }
     if (std::memcmp(reinterpret_cast<const void*>(target), kExecuteStringPrologue.data(),
@@ -109,17 +105,13 @@ bool ReadRendererSetting(const char* name,int& value) {
         auto* console=ResolveConsole();
         if(!console) return false;
         auto get=(*reinterpret_cast<void***>(console))[0xB8/sizeof(void*)];
-        MEMORY_BASIC_INFORMATION m{};
-        const auto executable=[](void* address,MEMORY_BASIC_INFORMATION& info) {
-            return VirtualQuery(address,&info,sizeof(info))==sizeof(info) &&
-                info.State==MEM_COMMIT && info.AllocationBase==GetModuleHandleW(L"PreyDll.dll") &&
-                (info.Protect&(PAGE_EXECUTE|PAGE_EXECUTE_READ|PAGE_EXECUTE_READWRITE|PAGE_EXECUTE_WRITECOPY));
-        };
-        if(!executable(get,m)) return false;
+        // Both callees must lie in PreyDll itself; no module, no match.
+        const auto prey=reinterpret_cast<HMODULE>(PreyBase());
+        if(!prey||!IsExecutableAddress(get,prey)) return false;
         auto* variable=reinterpret_cast<void*(__fastcall*)(void*,const char*)>(get)(console,name);
         if(!variable) return false;
         auto read=(*reinterpret_cast<void***>(variable))[0x10/sizeof(void*)];
-        if(!executable(read,m)) return false;
+        if(!IsExecutableAddress(read,prey)) return false;
         value=reinterpret_cast<int(__fastcall*)(void*)>(read)(variable);
         return true;
     } __except(EXCEPTION_EXECUTE_HANDLER) {return false;}

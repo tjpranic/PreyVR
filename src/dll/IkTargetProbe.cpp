@@ -1,4 +1,5 @@
 #include "IkTargetProbe.h"
+#include "SafeMemory.h"
 #include "EngineAccess.h"
 
 #include "DebugWatch.h"
@@ -40,11 +41,7 @@ constexpr std::uint8_t kIkLogLeaBytes[] = {0x48, 0x8D, 0x05, 0x75, 0xE8, 0x4A, 0
 
 bool LeaBytesMatch(const std::uint8_t* base)
 {
-    __try {
-        return std::memcmp(base + kIkLogLeaRva, kIkLogLeaBytes, sizeof(kIkLogLeaBytes)) == 0;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeEqual(base + kIkLogLeaRva, kIkLogLeaBytes, sizeof(kIkLogLeaBytes));
 }
 
 // R-078: QuatT = Quat(16) then Vec3(12). pos.x is the first float of the position.
@@ -67,12 +64,7 @@ std::uint8_t* PreyDllBase()
 
 bool ReadableFloats(const void* address, float* out, std::size_t count)
 {
-    __try {
-        std::memcpy(out, address, count * sizeof(float));
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeCopy(out, address, count * sizeof(float));
 }
 
 bool WriteGate(std::uint8_t value, std::uint8_t& previous)

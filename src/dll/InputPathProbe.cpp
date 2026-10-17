@@ -1,4 +1,5 @@
 #include "InputPathProbe.h"
+#include "SafeMemory.h"
 #include "EngineAccess.h"
 
 #include "Logger.h"
@@ -54,22 +55,12 @@ std::atomic<unsigned long long> gSlots[kSlotsToDump];
 
 bool ReadPointer(std::uintptr_t address, std::uintptr_t& out)
 {
-    __try {
-        out = *reinterpret_cast<const std::uintptr_t*>(address);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeRead(address, out);
 }
 
 bool ReadBytes(std::uintptr_t address, std::uint8_t* out, std::size_t count)
 {
-    __try {
-        std::memcpy(out, reinterpret_cast<const void*>(address), count);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeCopy(out, reinterpret_cast<const void*>(address), count);
 }
 
 std::string Hex(unsigned long long value)

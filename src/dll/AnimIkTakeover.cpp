@@ -1,4 +1,6 @@
 #include "AnimIkTakeover.h"
+#include "SafeMemory.h"
+#include "HookInstall.h"
 #include "EngineAccess.h"
 
 #include "preyvr/FrameTiming.h"
@@ -206,32 +208,17 @@ unsigned int DynArrayCount(const void* data)
 
 bool ReadPointer(const void* at, void** out)
 {
-    __try {
-        *out = *reinterpret_cast<void* const*>(at);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeRead(at, *out);
 }
 
 bool ReadInt(const void* at, int* out)
 {
-    __try {
-        *out = *reinterpret_cast<const int*>(at);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeRead(at, *out);
 }
 
 bool ReadFloats(const void* at, float* out, unsigned int count)
 {
-    __try {
-        std::memcpy(out, at, count * sizeof(float));
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeCopy(out, at, count * sizeof(float));
 }
 
 // Bounded string compare against engine memory.
@@ -433,8 +420,7 @@ bool WriteGoal(std::uint8_t* target, float* weight, const Vec3& position,
 
 bool ReadAlignmentMemory(void*, std::uintptr_t address, void* output, std::size_t size)
 {
-    __try { std::memcpy(output, reinterpret_cast<const void*>(address), size); return true; }
-    __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+    return SafeCopy(output, reinterpret_cast<const void*>(address), size);
 }
 
 // --- VR hand pose (pose.*) ------------------------------------------------------
@@ -1350,8 +1336,7 @@ void DriveHand(unsigned int hand, std::uint8_t* relative, std::uint8_t* absolute
 
 bool WriteFloatsGuarded(std::uint8_t* at, const float* values, unsigned count)
 {
-    __try { std::memcpy(at, values, count * sizeof(float)); return true; }
-    __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+    return SafeCopy(at, values, count * sizeof(float));
 }
 
 // Before the native pass: a free hand's finger joints take `shape` -- each
@@ -1921,17 +1906,9 @@ bool Install()
         return false;
     }
     gTarget = reinterpret_cast<void*>(target);
-    ProcessAdikFn original = nullptr;
-    EnsureMinHook();
-    if (MH_CreateHook(gTarget, reinterpret_cast<void*>(&ProcessAdikWithTakeover),
-                      reinterpret_cast<void**>(&original)) != MH_OK) {
-        Log("result=failed detail=create_hook");
-        return false;
-    }
-    gOriginal.store(original, std::memory_order_release);
-    if (MH_EnableHook(gTarget) != MH_OK) {
-        Log("result=failed detail=enable_hook");
-        MH_RemoveHook(gTarget);
+    const auto installed = hook::Install(gTarget, reinterpret_cast<void*>(&ProcessAdikWithTakeover), gOriginal);
+    if (!installed) {
+        Log(std::string("result=failed detail=") + hook::StepName(installed.step));
         return false;
     }
     gInstalled.store(true, std::memory_order_release);

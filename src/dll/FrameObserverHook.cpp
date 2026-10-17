@@ -1,4 +1,6 @@
 #include "FrameObserverHook.h"
+#include "SafeMemory.h"
+#include "HookInstall.h"
 #include "MinHookInit.h"
 
 #include "AimRayProbe.h"
@@ -99,14 +101,7 @@ bool ConfigureFrameObserver(
         return false;
     }
 
-    MEMORY_BASIC_INFORMATION memory{};
-    if (VirtualQuery(
-            reinterpret_cast<const void*>(plan->targetAddress),
-            &memory,
-            sizeof(memory)) != sizeof(memory) ||
-        memory.State != MEM_COMMIT ||
-        (memory.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ |
-                           PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)) == 0) {
+    if (!IsExecutableAddress(reinterpret_cast<const void*>(plan->targetAddress))) {
         lifecycle::Log("preyvr_frame_observer_plan status=unavailable reason=target_not_executable");
         return false;
     }
@@ -187,18 +182,11 @@ DWORD SetFrameObserverEnabled(bool enabled)
             SetFailed("initialize", MH_ERROR_NOT_INITIALIZED);
             return static_cast<DWORD>(FrameObserverRuntimeStatus::failed);
         }
-        EndRendererSceneFn original = nullptr;
-        status = MH_CreateHook(
-            gTarget,
-            reinterpret_cast<void*>(&ObserveEndRendererScene),
-            reinterpret_cast<void**>(&original));
-        // A failure here never uninitializes MinHook: that would remove every
-        // other feature's hooks while EnsureMinHook still reports ready.
-        if (status != MH_OK) {
-            SetFailed("create", status);
+        const auto created = hook::Create(gTarget, reinterpret_cast<void*>(&ObserveEndRendererScene), gOriginal);
+        if (!created) {
+            SetFailed("create", created.status);
             return static_cast<DWORD>(FrameObserverRuntimeStatus::failed);
         }
-        gOriginal.store(original, std::memory_order_release);
         gHookCreated = true;
     }
 

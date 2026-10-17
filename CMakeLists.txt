@@ -473,6 +473,9 @@ if(PREYVR_BUILD_TESTS)
         preyvr_add_test(focus_hold tests/FocusHoldTests.cpp
             INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
             LIBS preyvr_headers minhook user32)
+        preyvr_add_test(hook_install tests/HookInstallTests.cpp
+            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            LIBS minhook)
 
         # Links nothing and loads the built DLL, so it stays outside preyvr_add_test.
         add_executable(preyvr_dll_smoke_host tests/DllSmokeHost.cpp)

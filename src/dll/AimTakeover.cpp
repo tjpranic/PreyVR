@@ -1,4 +1,5 @@
 #include "AimTakeover.h"
+#include "HookInstall.h"
 #include "EngineAccess.h"
 #include "ArmsLane.h"
 #include "WristLane.h"
@@ -443,20 +444,9 @@ bool Install()
         return false;
     }
     gTarget = reinterpret_cast<void*>(target);
-    UpdateCachedRayFn original = nullptr;
-    // Shared and idempotent: without it MH_CreateHook returns
-    // MH_ERROR_NOT_INITIALIZED and the feature reports "unavailable" for a
-    // reason unrelated to itself. See MinHookInit.h.
-    EnsureMinHook();
-    if (MH_CreateHook(gTarget, reinterpret_cast<void*>(&UpdateCachedRayWithTakeover),
-                      reinterpret_cast<void**>(&original)) != MH_OK) {
-        Log("result=failed detail=create_hook");
-        return false;
-    }
-    gOriginal.store(original, std::memory_order_release);
-    if (MH_EnableHook(gTarget) != MH_OK) {
-        Log("result=failed detail=enable_hook");
-        MH_RemoveHook(gTarget);
+    const auto installed = hook::Install(gTarget, reinterpret_cast<void*>(&UpdateCachedRayWithTakeover), gOriginal);
+    if (!installed) {
+        Log(std::string("result=failed detail=") + hook::StepName(installed.step));
         return false;
     }
     gInstalled = true;

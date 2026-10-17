@@ -1,4 +1,5 @@
 #include "preyvr/LatestSnapshot.h"
+#include "HookInstall.h"
 #include "EngineAccess.h"
 #include "HeadTrackingHook.h"
 #include "XrInput.h"
@@ -204,28 +205,10 @@ bool EnsureHook()
                          std::memory_order_release);
 
     gTarget = reinterpret_cast<void*>(target);
-    SetCameraFn original = nullptr;
-    // Shared and idempotent: without it MH_CreateHook returns
-    // MH_ERROR_NOT_INITIALIZED and the feature reports "unavailable" for a
-    // reason unrelated to itself. See MinHookInit.h.
-    EnsureMinHook();
-    MH_STATUS status = MH_CreateHook(
-        gTarget, reinterpret_cast<void*>(&SetCameraWithHeadTracking),
-        reinterpret_cast<void**>(&original));
-    if (status != MH_OK) {
-        std::ostringstream line;
-        line << "result=failed detail=create_hook minhook=" << MH_StatusToString(status);
-        Log(line.str());
-        return false;
-    }
-    gOriginal.store(original, std::memory_order_release);
-
-    status = MH_EnableHook(gTarget);
-    if (status != MH_OK) {
-        std::ostringstream line;
-        line << "result=failed detail=enable_hook minhook=" << MH_StatusToString(status);
-        Log(line.str());
-        MH_RemoveHook(gTarget);
+    const auto installed = hook::Install(gTarget, reinterpret_cast<void*>(&SetCameraWithHeadTracking), gOriginal);
+    if (!installed) {
+        Log(std::string("result=failed detail=") + hook::StepName(installed.step) + " minhook=" +
+            MH_StatusToString(installed.status));
         return false;
     }
     gHookCreated = true;
@@ -542,20 +525,9 @@ bool Install()
         return false;
     }
     gTarget = reinterpret_cast<void*>(target);
-    UpdateViewFn original = nullptr;
-    // Shared and idempotent: without it MH_CreateHook returns
-    // MH_ERROR_NOT_INITIALIZED and the feature reports "unavailable" for a
-    // reason unrelated to itself. See MinHookInit.h.
-    EnsureMinHook();
-    if (MH_CreateHook(gTarget, reinterpret_cast<void*>(&UpdateViewObserved),
-                      reinterpret_cast<void**>(&original)) != MH_OK) {
-        Log("result=failed detail=view_create_hook");
-        return false;
-    }
-    gOriginal.store(original, std::memory_order_release);
-    if (MH_EnableHook(gTarget) != MH_OK) {
-        Log("result=failed detail=view_enable_hook");
-        MH_RemoveHook(gTarget);
+    const auto installed = hook::Install(gTarget, reinterpret_cast<void*>(&UpdateViewObserved), gOriginal);
+    if (!installed) {
+        Log(std::string("result=failed detail=view_") + hook::StepName(installed.step));
         return false;
     }
     gInstalled = true;

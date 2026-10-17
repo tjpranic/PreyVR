@@ -1,4 +1,5 @@
 #include "PhysicalInteractions.h"
+#include "HookInstall.h"
 #include "EngineAccess.h"
 #include "AimTakeover.h"
 #include "BodyFollow.h"
@@ -91,21 +92,17 @@ bool Gate(){
 bool Install(){
     if(installed.load())return true;
     if(!EnsureMinHook())return false;
-    void* targets[]={reinterpret_cast<void*>(module+native::Attack),reinterpret_cast<void*>(module+native::WeaponHit),
-        reinterpret_cast<void*>(module+native::GetHits),reinterpret_cast<void*>(module+native::WeaponImpulse)};
-    void* hooks[]={reinterpret_cast<void*>(AttackHook),reinterpret_cast<void*>(HitHook),reinterpret_cast<void*>(GetHitsHook),reinterpret_cast<void*>(ImpulseHook)};
-    void* originals[4]{};unsigned made=0,enabled=0;
-    for(;made<4;++made)if(MH_CreateHook(targets[made],hooks[made],&originals[made])!=MH_OK)break;
-    if(made==4){
+    void* originals[4]{};
+    const hook::Spec hooks[]={
+        {reinterpret_cast<void*>(module+native::Attack),reinterpret_cast<void*>(AttackHook),&originals[0]},
+        {reinterpret_cast<void*>(module+native::WeaponHit),reinterpret_cast<void*>(HitHook),&originals[1]},
+        {reinterpret_cast<void*>(module+native::GetHits),reinterpret_cast<void*>(GetHitsHook),&originals[2]},
+        {reinterpret_cast<void*>(module+native::WeaponImpulse),reinterpret_cast<void*>(ImpulseHook),&originals[3]}};
+    const auto hooked=hook::InstallAll(hooks,[&]{
         originalAttack=reinterpret_cast<Attack>(originals[0]);originalHit=reinterpret_cast<Hit>(originals[1]);
         originalGetHits=reinterpret_cast<GetHits>(originals[2]);originalImpulse=reinterpret_cast<WeaponImpulse>(originals[3]);
-        for(;enabled<4;++enabled)if(MH_EnableHook(targets[enabled])!=MH_OK)break;
-    }
-    if(enabled!=4){
-        for(unsigned i=0;i<enabled;++i)MH_DisableHook(targets[i]);
-        for(unsigned i=0;i<made;++i)MH_RemoveHook(targets[i]);
-        error=ERROR_INVALID_FUNCTION;fault=true;return false;
-    }
+    });
+    if(!hooked){error=ERROR_INVALID_FUNCTION;fault=true;return false;}
     installed=true;return true;
 }
 bool Strike(std::uintptr_t weapon,const Contact& c){

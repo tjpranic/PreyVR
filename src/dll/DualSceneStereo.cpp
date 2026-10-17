@@ -1,4 +1,6 @@
 #include "DualSceneStereo.h"
+#include "SafeMemory.h"
+#include "HookInstall.h"
 #include "EngineAccess.h"
 
 #include "CameraEditHook.h"
@@ -155,16 +157,6 @@ unsigned long long QpcMicros()
     return static_cast<unsigned long long>(now.QuadPart * 1000000LL / frequency);
 }
 
-template <typename T>
-bool SafeRead(const void* address, T& out)
-{
-    __try {
-        std::memcpy(&out, address, sizeof(T));
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
 
 int ViewType(const void* view)
 {
@@ -581,15 +573,8 @@ using engine::FindLandmark;
 
 bool PrologueMatches(std::uintptr_t address, const engine::Landmark& landmark)
 {
-    MEMORY_BASIC_INFORMATION memory{};
-    if (VirtualQuery(reinterpret_cast<const void*>(address), &memory, sizeof(memory)) !=
-            sizeof(memory) ||
-        memory.State != MEM_COMMIT ||
-        (memory.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE |
-                           PAGE_EXECUTE_WRITECOPY)) == 0) {
-        return false;
-    }
-    return std::memcmp(reinterpret_cast<const void*>(address), landmark.expected.data(),
+    return IsExecutableAddress(reinterpret_cast<const void*>(address)) &&
+           std::memcmp(reinterpret_cast<const void*>(address), landmark.expected.data(),
                        landmark.expected.size()) == 0;
 }
 
@@ -669,48 +654,26 @@ DWORD EnsureHooks()
     if (!EnsureMinHook()) {
         return 3;
     }
-    // Create all three before enabling any, so a failure leaves nothing live.
-    for (auto& target : targets) {
-        const MH_STATUS status = MH_CreateHook(reinterpret_cast<void*>(target.address),
-                                               target.detour, target.original);
-        if (status != MH_OK) {
-            Log(std::string("result=failed detail=create_hook id=") + target.id +
-                " minhook=" + MH_StatusToString(status));
-            for (auto& created : targets) {
-                MH_RemoveHook(reinterpret_cast<void*>(created.address));
-            }
-            return 3;
-        }
+    // All three or none: created first, the originals published while nothing
+    // is live, then enabled in one MH_ApplyQueued.
+    hook::Spec hooks[std::size(targets)]{};
+    for (std::size_t i = 0; i < std::size(targets); ++i) {
+        hooks[i] = {reinterpret_cast<void*>(targets[i].address), targets[i].detour, targets[i].original};
     }
-    gBase = base;
-    gRenderScene.store(reinterpret_cast<RenderSceneFn>(renderScene), std::memory_order_release);
-    gSwitchUsageMode.store(reinterpret_cast<SwitchUsageModeFn>(switchUsageMode),
-                           std::memory_order_release);
-    gClear.store(reinterpret_cast<ClearFn>(clear), std::memory_order_release);
-    // Queued and applied together: enabling one at a time left the earlier hooks
-    // live when a later one failed, against "all three or none".
-    const char* failedStep = nullptr;
-    const char* failedId = "all";
-    MH_STATUS status = MH_OK;
-    for (auto& target : targets) {
-        status = MH_QueueEnableHook(reinterpret_cast<void*>(target.address));
-        if (status != MH_OK) {
-            failedStep = "queue_enable_hook";
-            failedId = target.id;
-            break;
-        }
-    }
-    if (failedStep == nullptr) {
-        status = MH_ApplyQueued();
-        if (status != MH_OK) { failedStep = "apply_queued"; }
-    }
-    if (failedStep != nullptr) {
-        Log(std::string("result=failed detail=") + failedStep + " id=" + failedId +
-            " minhook=" + MH_StatusToString(status));
-        for (auto& target : targets) {
-            MH_DisableHook(reinterpret_cast<void*>(target.address));
-            MH_RemoveHook(reinterpret_cast<void*>(target.address));
-        }
+    const auto installed = hook::InstallAll(hooks, [&] {
+        gBase = base;
+        gRenderScene.store(reinterpret_cast<RenderSceneFn>(renderScene), std::memory_order_release);
+        gSwitchUsageMode.store(reinterpret_cast<SwitchUsageModeFn>(switchUsageMode),
+                               std::memory_order_release);
+        gClear.store(reinterpret_cast<ClearFn>(clear), std::memory_order_release);
+    });
+    if (!installed) {
+        const bool applying = installed.index == std::size(targets);
+        const char* step = installed.step == hook::Step::create ? "create_hook"
+                           : applying                           ? "apply_queued"
+                                                                : "queue_enable_hook";
+        Log(std::string("result=failed detail=") + step + " id=" + (applying ? "all" : targets[installed.index].id) +
+            " minhook=" + MH_StatusToString(installed.status));
         return 3;
     }
     gInstalled = true;

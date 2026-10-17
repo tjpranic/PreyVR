@@ -1,4 +1,6 @@
 #include "NearFovOverride.h"
+#include "SafeMemory.h"
+#include "HookInstall.h"
 #include "Bootstrap.h"
 #include "Logger.h"
 #include "MinHookInit.h"
@@ -39,10 +41,8 @@ bool gHookCreated = false, gInstalled = false;
 
 bool MatchesCode(const void* entry, const void* latch)
 {
-    __try {
-        return std::memcmp(entry, kBeginFramePrologue.data(), kBeginFramePrologue.size()) == 0 &&
-               std::memcmp(latch, kLatchInstructions.data(), kLatchInstructions.size()) == 0;
-    } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+    return SafeEqual(entry, kBeginFramePrologue.data(), kBeginFramePrologue.size()) &&
+           SafeEqual(latch, kLatchInstructions.data(), kLatchInstructions.size());
 }
 
 // Guard only mod memory access, never exceptions from the engine's original.
@@ -106,10 +106,7 @@ bool Install()
         }
         if (!EnsureMinHook()) { return false; }
         gTarget = reinterpret_cast<void*>(base + kBeginFrameRva);
-        BeginFrameFn original = nullptr;
-        if (MH_CreateHook(gTarget, reinterpret_cast<void*>(&BeginFrameWithNearFov),
-                          reinterpret_cast<void**>(&original)) != MH_OK) { return false; }
-        gOriginal.store(original, std::memory_order_release);
+        if (!hook::Create(gTarget, reinterpret_cast<void*>(&BeginFrameWithNearFov), gOriginal)) { return false; }
         gHookCreated = true;
     }
     if (MH_EnableHook(gTarget) != MH_OK) { return false; }

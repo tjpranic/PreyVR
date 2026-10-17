@@ -1,4 +1,6 @@
 #include "ShotRay.h"
+#include "SafeMemory.h"
+#include "HookInstall.h"
 #include "EngineAccess.h"
 
 #include "AimTakeover.h"
@@ -35,10 +37,8 @@ void Log(const std::string& line) { lifecycle::Log("preyvr_shot " + line); }
 // GetReticleInfoForFiring 0x1694890 (R-014): RCX weapon, RDX caller-owned
 // ReticleInfo {IEntity* +0, Vec3 target +8}; reads the cached ray through the
 // player's getter at call time, raycasts origin + direction * weapon+0x344.
+// Gated on the `aim.weapon_firing_query` landmark.
 constexpr std::uintptr_t kQueryRva = 0x1694890;
-constexpr std::array<std::uint8_t, 24> kQueryPrologue{
-    0x48, 0x89, 0x74, 0x24, 0x18, 0x55, 0x57, 0x41, 0x56, 0x48, 0x8D, 0x6C,
-    0x24, 0xB0, 0x48, 0x81, 0xEC, 0x50, 0x01, 0x00, 0x00, 0x45, 0x33, 0xF6};
 // GetFiringPosition 0x1694BC0: (weapon, out16, flags, overrideEntity). Called
 // through its hooked entry so the VR spawn test applies to our call too.
 constexpr std::uintptr_t kFiringPositionRva = 0x1694BC0;
@@ -181,12 +181,7 @@ bool ReadMuzzle(std::uintptr_t weapon, Vec3& position, Vec3& axis)
 
 bool CopyBytes(void* destination, const void* source, std::size_t size)
 {
-    __try {
-        std::memcpy(destination, source, size);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeCopy(destination, source, size);
 }
 
 bool FiringPositionNow(void* weapon, std::uint32_t flags, FiringPosition& out)
@@ -586,27 +581,11 @@ void* __fastcall UpdateLaserHook(void* beam, const Vec3* position, const Vec3* d
     return result;
 }
 
-template <class Fn, std::size_t N>
-bool HookAt(std::uintptr_t rva, const std::array<std::uint8_t, N>& prologue, void* detour, std::atomic<Fn>& original,
+template <class Fn>
+bool HookAt(std::uintptr_t rva, std::span<const std::uint8_t> prologue, void* detour, std::atomic<Fn>& original,
             const char* name)
 {
-    auto* const target = reinterpret_cast<void*>(gBase + rva);
-    if (std::memcmp(target, prologue.data(), prologue.size()) != 0) {
-        Log(std::string("result=unavailable detail=prologue_mismatch target=") + name);
-        return false;
-    }
-    Fn trampoline = nullptr;
-    if (MH_CreateHook(target, detour, reinterpret_cast<void**>(&trampoline)) != MH_OK) {
-        Log(std::string("result=failed detail=create_hook target=") + name);
-        return false;
-    }
-    original.store(trampoline, std::memory_order_release);
-    if (MH_EnableHook(target) != MH_OK) {
-        MH_RemoveHook(target);
-        Log(std::string("result=failed detail=enable_hook target=") + name);
-        return false;
-    }
-    return true;
+    return hook::HookAt(reinterpret_cast<void*>(gBase + rva), prologue, detour, original, name, &Log);
 }
 
 bool Install()
@@ -623,7 +602,7 @@ bool Install()
     // The firing-position hook carries the VR spawn test; without it shots are
     // still steered, only the camera fallback stays the engine's.
     const bool firing = EnsureFiringPositionHook();
-    gQueryHooked = HookAt(kQueryRva, kQueryPrologue, reinterpret_cast<void*>(&QueryHook), gQueryOriginal, "query");
+    gQueryHooked = HookAt(kQueryRva, LandmarkBytes("aim.weapon_firing_query", kQueryRva), reinterpret_cast<void*>(&QueryHook), gQueryOriginal, "query");
     gProjectileHooked = HookAt(kProjectileSpawnRva, kProjectileSpawnPrologue, reinterpret_cast<void*>(&ProjectileSpawnHook), gProjectileOriginal,
                          "projectile_spawn");
     gPelletsHooked = HookAt(kPelletsRva, kPelletsPrologue, reinterpret_cast<void*>(&PelletsHook), gPelletsOriginal,

@@ -1,4 +1,6 @@
 #include "ReticleRayHook.h"
+#include "SafeMemory.h"
+#include "HookInstall.h"
 #include "EngineAccess.h"
 
 #include "Logger.h"
@@ -29,12 +31,7 @@ std::array<std::atomic<ReticleRayFilter>, 2> gFilters{};
 
 bool BodyMatches(std::uintptr_t address, const engine::Landmark& landmark)
 {
-    __try {
-        return std::memcmp(reinterpret_cast<const void*>(address), landmark.expected.data(),
-                           landmark.expected.size()) == 0;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SafeEqual(reinterpret_cast<const void*>(address), landmark.expected.data(), landmark.expected.size());
 }
 
 void* __fastcall Detour(std::uintptr_t receiver, void* out)
@@ -66,19 +63,10 @@ bool EnsureReticleRayHook()
     }
     if (!EnsureMinHook()) { return false; }
     auto* const target = reinterpret_cast<void*>(base + landmark->rva);
-    GetterFn trampoline = nullptr;
-    MH_STATUS status = MH_CreateHook(target, reinterpret_cast<void*>(&Detour), reinterpret_cast<void**>(&trampoline));
-    if (status != MH_OK) {
-        Log(std::string("result=failed detail=create_hook minhook=") + MH_StatusToString(status));
-        return false;
-    }
-    // Published before enabling: the detour can run the moment it is live.
-    gOriginal.store(trampoline, std::memory_order_release);
-    status = MH_EnableHook(target);
-    if (status != MH_OK) {
-        MH_RemoveHook(target);
-        gOriginal.store(nullptr, std::memory_order_release);
-        Log(std::string("result=failed detail=enable_hook minhook=") + MH_StatusToString(status));
+    const auto installed = hook::Install(target, reinterpret_cast<void*>(&Detour), gOriginal);
+    if (!installed) {
+        Log(std::string("result=failed detail=") + hook::StepName(installed.step) + " minhook=" +
+            MH_StatusToString(installed.status));
         return false;
     }
     gInstalled.store(true, std::memory_order_release);
