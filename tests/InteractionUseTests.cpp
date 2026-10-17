@@ -55,18 +55,19 @@ void TestLeftUse()
 
 void TestLeftNoTarget()
 {
+    // Prey's own X: with nothing selected the press still goes to the game,
+    // which reloads.
     UseButton b = Ready();
     auto in = Base();
     in.leftPress = true;
     auto out = b.Update(in);
-    Require(!out.down && out.noTarget, "left press on nothing sends nothing (it would reload)");
-    // A target appearing under a grip that is already down does not act.
-    in.target = true;
-    Require(!b.Update(in).down, "no act without a fresh press");
+    Require(out.down && out.pressed && !out.noTarget && out.owner == Owner::Use,
+            "left press on nothing is Prey's X (a reload)");
+    Require(!out.suppressTarget, "and leaves the selection alone");
+    for (int i = 0; i < 10; ++i) { Require(b.Update(in).down, "held while the button is"); }
     in.leftPress = false;
-    b.Update(in);
-    in.leftPress = true;
-    Require(b.Update(in).down, "a fresh press acts");
+    out = b.Update(in);
+    Require(!out.down && out.released && out.owner == Owner::None, "let go with the button");
 }
 
 void TestLeftBusy()
@@ -131,52 +132,14 @@ void TestChord()
     Require(!b.Update(in).down, "nor does the original layout's right grip press with Y held");
 }
 
-// Psychic targeting shares the left press: with something to grab it grabs,
-// with nothing it aims the psi power, for as long as it is held.
-void TestPsiShare()
+// Just after a reload the selection is held empty for a few frames; a left
+// press then sends nothing, so it cannot land on whatever comes back.
+void TestReloadGuard()
 {
     UseButton b = Ready();
     auto in = Base();
-    in.psi = true;
-    in.leftPress = true;
-    auto out = b.Update(in);
-    Require(out.psi && !out.down && !out.noTarget && out.owner == Owner::Psi, "nothing to grab: the press is psi's");
-    in.target = true;
-    out = b.Update(in);
-    Require(out.psi && !out.down, "a target coming under the hand meanwhile does not take it");
-    in.leftPress = false;
-    out = b.Update(in);
-    Require(!out.psi && !out.down && out.owner == Owner::None, "let go: the cast is psi's to make");
-    in.leftPress = true;
-    out = b.Update(in);
-    Require(out.down && !out.psi && out.owner == Owner::Use, "with a target, the press grabs");
-    in = Base();
-    b.Update(in);
-    in.psi = true;
-    in.leftPress = true;
-    Require(b.Update(in).psi, "psi again");
-    in.leftBusy = true;
-    out = b.Update(in);
-    Require(!out.psi && out.owner == Owner::None, "the two-hand hold taking the hand ends it");
-    in = Base();
-    b.Update(in);
-    in.leftPress = true;
-    out = b.Update(in);
-    Require(!out.psi && out.noTarget, "psychic targeting off: nothing, as before");
-    in = Base();
-    b.Update(in);
-    in.psi = true;
-    in.carrying = true;
-    in.target = true;
-    in.leftPress = true;
-    out = b.Update(in);
-    Require(!out.psi && out.releaseCarry, "carrying: the press lets go, never psi");
-    // Just after a reload the selection is held empty for a few frames; a
-    // press on a target then is neither a use nor psi's.
-    b = Ready();
-    in = Base();
-    in.psi = true;
     in.rightPress = true;
+    ButtonOutput out{};
     for (int i = 0; i <= UseButton::kClearFrames; ++i) { out = b.Update(in); }
     Require(out.down && out.owner == Owner::Reload, "a reload");
     in.rightPress = false;
@@ -184,7 +147,7 @@ void TestPsiShare()
     in.target = true;
     in.leftPress = true;
     out = b.Update(in);
-    Require(!out.psi && !out.down && out.noTarget, "a target under the reload's guard is not psi's");
+    Require(!out.down && out.noTarget, "a press under the reload's guard sends nothing");
 }
 
 void TestRightReload()
@@ -413,7 +376,7 @@ int main()
     TestLeftNoTarget();
     TestLeftBusy();
     TestChord();
-    TestPsiShare();
+    TestReloadGuard();
     TestRightReload();
     TestRightDrawsWhenHolstered();
     TestReloadGiveUp();

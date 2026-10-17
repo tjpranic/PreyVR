@@ -76,7 +76,7 @@ void ServiceBindingDump()
         if (request == 1 && row.key.rfind("xi_", 0) != 0) { continue; }
         std::ostringstream line;
         line << "result=0 detail=binding map=" << row.map << " action=" << row.action << " key=" << row.key
-             << " enabled=" << (row.enabled ? 1 : 0);
+             << " enabled=" << (row.enabled ? 1 : 0) << " activation=" << row.activation;
         Log(line.str());
         ++logged;
     }

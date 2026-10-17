@@ -39,14 +39,19 @@ enum class Role : unsigned char {
     // gameplay
     move, turn,
     fire,
-    // The left hand's use: what it points at, picked up, carried, dragged,
-    // thrown on letting go. With nothing to grab it is Prey's psi button, or
-    // aims the equipped power with psychic targeting on.
+    // Prey's X: use what the left hand points at, pick it up, carry it (press
+    // again to drop), and with nothing to use, reload -- as Prey's X does.
     grab,
+    // Prey's psi button (its left trigger): hold to aim, let go to use; with
+    // psychic targeting on, the mod aims it.
+    psi,
     reload,    // tap: reload; hold: holster; holstered: draw
     jump, crouch,
     inventory, // the TranScribe
-    weaponWheel,  // Prey's own Y: tap swaps weapon, hold opens the wheel
+    // Prey's Y, passed straight through: special use, search, the scanner's
+    // lock; a tap swaps weapon and a hold opens Prey's own wheel.
+    special,
+    weaponWheel,  // the PC weapon wheel (Prey's middle mouse), while held
     // Prey's own gamepad buttons: the left and right stick clicks, and the
     // D-pad (quick slots, and up for the torch) on a controller that has one.
     sprint, psychoscope,

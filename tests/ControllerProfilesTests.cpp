@@ -59,18 +59,19 @@ bool ValidName(const char* name)
 constexpr Role kHands[] = {Role::gripPose, Role::aimPose, Role::trigger, Role::squeeze, Role::haptic,
                            Role::thumbTouch, Role::indexTouch};
 // Bound by every controller, once each.
-constexpr Role kEveryController[] = {Role::pause, Role::move, Role::turn, Role::fire, Role::grab, Role::reload,
-                                     Role::jump, Role::crouch, Role::inventory, Role::weaponWheel,
+constexpr Role kEveryController[] = {Role::pause, Role::move, Role::turn, Role::fire, Role::grab, Role::psi,
+                                     Role::reload, Role::jump, Role::crouch, Role::inventory, Role::special,
                                      Role::psychoscope, Role::navigate, Role::scroll, Role::confirm, Role::back,
                                      Role::secondary, Role::tertiary};
-// Only a controller with the buttons for them: the Steam Frame's D-pad and
-// View; sprint, which Index's left stick click (its pause) cannot also be.
+// Only a controller with the buttons for them: the Steam Frame's D-pad, View
+// and bumper; sprint, which Touch and Index give their left stick click to
+// (the TranScribe, pause).
 constexpr Role kDpadAndView[] = {Role::navigateUp, Role::navigateDown, Role::navigateLeft, Role::navigateRight,
                                  Role::exit, Role::quickSlotLeft, Role::quickSlotRight, Role::quickSlotDown,
                                  Role::torch};
 constexpr Role kOptional[] = {Role::navigateUp, Role::navigateDown, Role::navigateLeft, Role::navigateRight,
                               Role::exit, Role::quickSlotLeft, Role::quickSlotRight, Role::quickSlotDown,
-                              Role::torch, Role::sprint};
+                              Role::torch, Role::sprint, Role::weaponWheel};
 
 // **The components each controller has**, per hand, without the system
 // button, which belongs to the runtime. Touch and Index from the bundled
@@ -130,7 +131,9 @@ bool KindFits(Kind kind, const std::string& path)
     case Kind::pose: return EndsWith(path, "/pose");
     case Kind::analog: return EndsWith(path, "/value");
     case Kind::stick: return EndsWith(path, "/thumbstick");
-    case Kind::button: return EndsWith(path, "/click");
+    // A click, or a float input pressed (Index's trackpad): the runtime
+    // thresholds a boolean action bound to a float.
+    case Kind::button: return EndsWith(path, "/click") || EndsWith(path, "/force");
     case Kind::haptic: return EndsWith(path, "/output/haptic");
     case Kind::touch: return EndsWith(path, "/touch");
     }
@@ -158,8 +161,8 @@ int main()
     }
     for (const Role role : kHands) { Check(ActionOf(role).set == ActionSet::common, "the hands themselves are always read"); }
     Check(ActionOf(Role::pause).set == ActionSet::common, "pause, and the recenter chord, work in play and in menus");
-    for (const Role role : {Role::move, Role::turn, Role::fire, Role::grab, Role::reload, Role::jump, Role::crouch,
-                            Role::inventory, Role::weaponWheel, Role::sprint, Role::psychoscope, Role::quickSlotLeft,
+    for (const Role role : {Role::move, Role::turn, Role::fire, Role::grab, Role::psi, Role::reload, Role::jump,
+                            Role::crouch, Role::inventory, Role::special, Role::weaponWheel, Role::sprint, Role::psychoscope, Role::quickSlotLeft,
                             Role::quickSlotRight, Role::quickSlotDown, Role::torch}) {
         Check(ActionOf(role).set == ActionSet::gameplay, "play's actions in the gameplay set");
     }
@@ -216,9 +219,18 @@ int main()
         }
         // What every controller does alike.
         Check(Has(profile, Role::fire, "/user/hand/right/input/trigger/value") &&
-              Has(profile, Role::grab, "/user/hand/left/input/trigger/value") &&
+              Has(profile, Role::psi, "/user/hand/left/input/trigger/value") &&
               Has(profile, Role::reload, "/user/hand/right/input/squeeze/value"),
-              "fire on the right trigger, grab on the left one, reload on the right grip");
+              "fire on the right trigger, psi on the left one (Prey's RT and LT), reload on the right grip");
+        // Grab is Prey's X and sits where X is, so Prey's X prompts name it.
+        for (const auto& binding : profile.bindings) {
+            if (binding.role == Role::grab) {
+                Check(Has(profile, Role::secondary, binding.path), "grab is on the button that is Prey's X in menus");
+            }
+            if (binding.role == Role::special) {
+                Check(Has(profile, Role::tertiary, binding.path), "Prey's Y in play is Prey's Y in menus");
+            }
+        }
         Check(Has(profile, Role::move, "/user/hand/left/input/thumbstick") &&
               Has(profile, Role::turn, "/user/hand/right/input/thumbstick") &&
               Has(profile, Role::navigate, "/user/hand/right/input/thumbstick") &&
@@ -236,26 +248,29 @@ int main()
     const auto& touch = Profile("touch");
     Check(touch.paths.size() == 1 && std::strcmp(touch.paths[0], "/interaction_profiles/oculus/touch_controller") == 0 &&
           touch.extension == nullptr, "Touch: a core profile");
-    Check(Has(touch, Role::inventory, "/user/hand/left/input/x/click") &&
+    Check(Has(touch, Role::grab, "/user/hand/left/input/x/click") &&
           Has(touch, Role::secondary, "/user/hand/left/input/x/click") &&
-          Has(touch, Role::weaponWheel, "/user/hand/left/input/y/click") &&
+          Has(touch, Role::special, "/user/hand/left/input/y/click") &&
           Has(touch, Role::tertiary, "/user/hand/left/input/y/click") &&
-          Has(touch, Role::sprint, "/user/hand/left/input/thumbstick/click") &&
+          Has(touch, Role::inventory, "/user/hand/left/input/thumbstick/click") && Count(touch, Role::sprint) == 0 &&
           Has(touch, Role::pause, "/user/hand/left/input/menu/click"),
-          "Touch: X opens the TranScribe and is Prey's X in menus; Y is Prey's Y; the left stick sprints; Menu on the left");
+          "Touch: X and Y are Prey's; the left stick's click opens the TranScribe, so it does not sprint; Menu on the left");
 
     const auto& index = Profile("index");
     Check(index.paths.size() == 1 && std::strcmp(index.paths[0], "/interaction_profiles/valve/index_controller") == 0 &&
           index.extension == nullptr, "Index: a core profile");
-    Check(Has(index, Role::inventory, "/user/hand/left/input/a/click") &&
+    Check(Has(index, Role::grab, "/user/hand/left/input/a/click") &&
           Has(index, Role::secondary, "/user/hand/left/input/a/click") &&
-          Has(index, Role::weaponWheel, "/user/hand/left/input/b/click") &&
+          Has(index, Role::special, "/user/hand/left/input/b/click") &&
           Has(index, Role::tertiary, "/user/hand/left/input/b/click") &&
+          Has(index, Role::inventory, "/user/hand/left/input/trackpad/force") &&
           Has(index, Role::pause, "/user/hand/left/input/thumbstick/click") && Count(index, Role::sprint) == 0,
-          "Index: the left A/B stand in for X/Y, and the left stick's click opens pause, so it does not sprint");
+          "Index: the left A/B stand in for X/Y, the left trackpad opens the TranScribe, and the left stick's click "
+          "opens pause, so it does not sprint");
 
     for (const auto* profile : {&touch, &index}) {
         for (const Role role : kDpadAndView) { Check(Count(*profile, role) == 0, "no D-pad or View to bind"); }
+        Check(Count(*profile, Role::weaponWheel) == 0, "no bumper: Prey's own Y-hold is the wheel");
     }
 
     const auto& frame = Profile("frame");
@@ -264,8 +279,9 @@ int main()
           "the Steam Frame under its current name, then the one SteamVR used before 2.15.1");
     Check(frame.extension != nullptr && std::strcmp(frame.extension, "XR_VALVE_frame_controller_interaction") == 0,
           "the Steam Frame's profile needs its extension");
-    Check(Has(frame, Role::secondary, "/user/hand/right/input/x/click") &&
-          Has(frame, Role::weaponWheel, "/user/hand/right/input/y/click") &&
+    Check(Has(frame, Role::grab, "/user/hand/right/input/x/click") &&
+          Has(frame, Role::secondary, "/user/hand/right/input/x/click") &&
+          Has(frame, Role::special, "/user/hand/right/input/y/click") &&
           Has(frame, Role::tertiary, "/user/hand/right/input/y/click") &&
           Has(frame, Role::sprint, "/user/hand/left/input/thumbstick/click"),
           "the Frame's own X and Y are Prey's X and Y; its left stick sprints");
@@ -283,8 +299,11 @@ int main()
           Has(frame, Role::navigateLeft, "/user/hand/left/input/dpad_left/click") &&
           Has(frame, Role::navigateRight, "/user/hand/left/input/dpad_right/click"),
           "the Frame's left D-pad navigates");
+    Check(Has(frame, Role::weaponWheel, "/user/hand/right/input/bumper/click"), "the right bumper holds the PC wheel");
     for (const auto& binding : frame.bindings) {
-        Check(std::strstr(binding.path, "bumper") == nullptr, "the bumpers are left unbound");
+        Check(std::strstr(binding.path, "bumper") == nullptr ||
+                  (binding.role == Role::weaponWheel && std::strstr(binding.path, "/right/") != nullptr),
+              "and the bumpers are otherwise left unbound");
     }
 
     // Hysteresis: down at the press point, up only below the release point.

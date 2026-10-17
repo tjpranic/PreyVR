@@ -78,7 +78,7 @@ XrActionType TypeOf(input::Kind kind)
     return XR_ACTION_TYPE_BOOLEAN_INPUT;
 }
 // The buttons under a thumb, whichever hand has them (ControllerState::thumbButton).
-constexpr Role kThumbButtons[] = {Role::jump, Role::crouch, Role::inventory, Role::weaponWheel, Role::confirm,
+constexpr Role kThumbButtons[] = {Role::jump, Role::crouch, Role::inventory, Role::special, Role::confirm,
                                   Role::back, Role::secondary, Role::tertiary, Role::exit};
 // The sticks, for each hand's own (ControllerState::thumbstickX/Y).
 constexpr Role kSticks[] = {Role::move, Role::turn, Role::navigate, Role::scroll};
@@ -118,7 +118,7 @@ std::array<std::atomic<unsigned long long>, 2> gLocated{};
 // (input::Pressed), for their hysteresis. Touched only by UpdateXrInput's
 // frame service.
 std::array<bool, 2> gTriggerDown{}, gGripDown{};
-bool gFireDown = false, gGrabDown = false, gReloadDown = false;
+bool gFireDown = false, gPsiDown = false, gReloadDown = false;
 // What each action is bound to, by the runtime's names (XrInputBoundControls).
 std::mutex gBoundMutex;
 std::vector<XrBoundControl> gBound;
@@ -512,16 +512,18 @@ void UpdateXrInput(void* sessionHandle, void* spaceHandle, long long predictedDi
         play.turn = stick(Role::turn, XR_NULL_PATH, active);
         play.fire = analog(Role::fire, XR_NULL_PATH, active);
         play.firePressed = active && input::Pressed(gFireDown, play.fire, input::kTriggerPress);
-        play.grab = analog(Role::grab, XR_NULL_PATH, active);
-        play.grabPressed = active && input::Pressed(gGrabDown, play.grab, input::kTriggerPress);
+        play.psi = analog(Role::psi, XR_NULL_PATH, active);
+        play.psiPressed = active && input::Pressed(gPsiDown, play.psi, input::kTriggerPress);
         play.reload = analog(Role::reload, XR_NULL_PATH, active);
         play.reloadPressed = active && input::Pressed(gReloadDown, play.reload, input::kGripPress);
         gFireDown = play.firePressed;
-        gGrabDown = play.grabPressed;
+        gPsiDown = play.psiPressed;
         gReloadDown = play.reloadPressed;
+        play.grabPressed = button(Role::grab, XR_NULL_PATH);
         play.jump = button(Role::jump, XR_NULL_PATH);
         play.crouch = button(Role::crouch, XR_NULL_PATH);
         play.inventory = button(Role::inventory, XR_NULL_PATH);
+        play.special = button(Role::special, XR_NULL_PATH);
         play.weaponWheel = button(Role::weaponWheel, XR_NULL_PATH);
         play.sprint = button(Role::sprint, XR_NULL_PATH);
         play.psychoscope = button(Role::psychoscope, XR_NULL_PATH);
@@ -709,7 +711,7 @@ void DestroyXrInput()
     }
     gTriggerDown = {};
     gGripDown = {};
-    gFireDown = gGrabDown = gReloadDown = false;
+    gFireDown = gPsiDown = gReloadDown = false;
     gTrackingEpoch.fetch_add(1);
     gTrackingFrame.Clear();
 }

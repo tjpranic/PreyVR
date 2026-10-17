@@ -6,9 +6,9 @@
 #include <cstdint>
 #include <optional>
 
-// World interaction, phase 1: the LEFT hand points at what to use and its grab
-// (the left trigger, by default: input::Role::grab) uses it; the right grip
-// only reloads. Everything after the press is the
+// World interaction, phase 1: the LEFT hand points at what to use and grab
+// (Prey's own X, by default: input::Role::grab) uses it -- or, with nothing to
+// use, reloads, as Prey's X does; the right grip only reloads. Everything after the press is the
 // game's own (pick up, carry, open, loot): the mod only chooses the ray the
 // native selector looks along and when the native use button is held.
 //
@@ -42,10 +42,6 @@ struct ButtonInput {
     // starts anything. Unlike busy, it lets nothing go -- Y does not drop what
     // the hand holds.
     bool chord = false;
-    // Psi shares the left press: one with nothing to grab is psi's instead
-    // (Owner::Psi) -- Prey's own psi button, or the mod's psychic targeting --
-    // as Prey's X is use with something selected and reload without.
-    bool psi = false;
     // The game has a usable entity right now (the selector's committed pick).
     bool target = false;
     // Phase 2 (HandCarry.h): something is carried right now, and whether it is
@@ -72,8 +68,7 @@ struct ButtonInput {
 
 // Hold: the left press is holding what it picked up; letting go lets go.
 // Draw: the right grip drew the weapon; nothing more until it opens.
-// Psi: the left press, with nothing to grab, is aiming a psi power.
-enum class Owner : std::uint8_t { None, Use, Reload, Legacy, Hold, Draw, Psi };
+enum class Owner : std::uint8_t { None, Use, Reload, Legacy, Hold, Draw };
 const char* OwnerName(Owner owner);
 
 struct ButtonOutput {
@@ -82,9 +77,8 @@ struct ButtonOutput {
     Owner owner = Owner::None;
     // One-frame events, for counters and the trace.
     bool pressed = false, released = false;
-    bool noTarget = false;        // left press with nothing selected: nothing sent
-    bool psi = false;             // the left press is psi's (Owner::Psi), held this frame
-    bool gaveUp = false;          // reload: the selection never cleared, nothing sent
+    bool noTarget = false;        // left press under the reload's guard: nothing sent
+    bool gaveUp = false;         // reload: the selection never cleared, nothing sent
     bool busy = false;            // a press another lane owned
     // Let go of what is carried, now (the carry lane chooses drop or throw from
     // the hand's motion). Raised when the grip that picked it up opens, or --

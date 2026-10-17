@@ -31,7 +31,6 @@ const char* OwnerName(Owner owner)
     case Owner::Legacy: return "legacy";
     case Owner::Hold: return "hold";
     case Owner::Draw: return "draw";
-    case Owner::Psi: return "psi";
     default: return "none";
     }
 }
@@ -109,14 +108,15 @@ ButtonOutput UseButton::Update(const ButtonInput& in)
         } else if (leftEdge) {
             leftArmed_ = false;
             if (in.leftBusy || in.chord || in.rightPress) { out.busy = true; }
-            else if (in.target && guard_ == 0) {
+            else if (guard_ == 0) {
+                // Prey's own X: with something selected it uses it, with
+                // nothing it reloads.
                 owner_ = Owner::Use;
                 down_ = true;
                 out.pressed = true;
-                pressedTarget_ = in.targetId;
-                tap_ = in.holdToHold && in.tapOnly ? kTapFrames : 0;
+                pressedTarget_ = in.target ? in.targetId : 0;
+                tap_ = in.target && in.holdToHold && in.tapOnly ? kTapFrames : 0;
             }
-            else if (in.psi && !in.target) { owner_ = Owner::Psi; out.psi = true; }
             else { out.noTarget = true; }
         } else if (rightEdge) {
             rightArmed_ = false;
@@ -191,17 +191,6 @@ ButtonOutput UseButton::Update(const ButtonInput& in)
         // The X button never goes down: holding on would holster again.
         if (!in.rightPress) { owner_ = Owner::None; }
         if (in.leftPress) { leftArmed_ = false; }
-        break;
-    case Owner::Psi:
-        // Psi's for as long as the press is held, whatever comes under the
-        // hand meanwhile; a lane taking the hand (the two-hand hold) ends it.
-        if (!in.leftPress || in.leftBusy) {
-            owner_ = Owner::None;
-            if (in.leftPress) { leftArmed_ = false; }
-        } else {
-            out.psi = true;
-        }
-        if (in.rightPress) { rightArmed_ = false; }
         break;
     case Owner::Hold:
         if (!in.carrying) {

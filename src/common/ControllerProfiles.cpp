@@ -22,12 +22,14 @@ constexpr std::array<Action, kRoleCount> kActions{{
     {R::move, S::gameplay, K::stick, "move", "Move", true},
     {R::turn, S::gameplay, K::stick, "turn", "Turn", true},
     {R::fire, S::gameplay, K::analog, "fire", "Fire", true},
-    {R::grab, S::gameplay, K::analog, "grab", "Grab and Use (With Nothing to Grab: Psi Power)", true},
+    {R::grab, S::gameplay, K::button, "grab", "Grab and Use (Prey's X)", true},
+    {R::psi, S::gameplay, K::analog, "psi", "Psi Power", true},
     {R::reload, S::gameplay, K::analog, "reload", "Reload (Hold: Holster)", true},
     {R::jump, S::gameplay, K::button, "jump", "Jump", true},
     {R::crouch, S::gameplay, K::button, "crouch", "Crouch", true},
     {R::inventory, S::gameplay, K::button, "inventory", "TranScribe", true},
-    {R::weaponWheel, S::gameplay, K::button, "weapon_wheel", "Swap Weapon (Hold: Weapon Wheel)", true},
+    {R::special, S::gameplay, K::button, "special", "Prey's Y (Search, Special Use; Tap: Swap Weapon)", true},
+    {R::weaponWheel, S::gameplay, K::button, "weapon_wheel", "Weapon Wheel (Hold)", false},
     {R::sprint, S::gameplay, K::button, "sprint", "Sprint", false},
     {R::psychoscope, S::gameplay, K::button, "psychoscope", "Psychoscope", true},
     {R::quickSlotLeft, S::gameplay, K::button, "quick_slot_left", "Quick Slot Left", false},
@@ -51,9 +53,9 @@ constexpr std::array<ActionSetInfo, static_cast<std::size_t>(S::count)> kSets{{
 
 // What every profile binds alike: both hands' poses, triggers, grips and
 // haptics; the sticks (move and scroll on the left, turn and navigate on the
-// right); fire on the right trigger and grab on the left one; reload on the
-// right grip; A and B on the right; the right stick's click for the
-// psychoscope, as on Prey's gamepad. Core profiles' component paths are checked against the bundled
+// right); fire on the right trigger and psi on the left one, as on Prey's
+// gamepad; reload on the right grip; A and B on the right; the right stick's
+// click for the psychoscope, as on Prey's gamepad. Core profiles' component paths are checked against the bundled
 // Khronos xr.xml registry, the Steam Frame's against Valve's list
 // (ControllerProfilesTests); runtime acceptance is logged separately (XrInput).
 std::vector<Binding> Shared()
@@ -66,7 +68,7 @@ std::vector<Binding> Shared()
         {R::haptic, "/user/hand/left/output/haptic"}, {R::haptic, "/user/hand/right/output/haptic"},
         {R::indexTouch, "/user/hand/left/input/trigger/touch"}, {R::indexTouch, "/user/hand/right/input/trigger/touch"},
         {R::move, "/user/hand/left/input/thumbstick"}, {R::turn, "/user/hand/right/input/thumbstick"},
-        {R::fire, "/user/hand/right/input/trigger/value"}, {R::grab, "/user/hand/left/input/trigger/value"},
+        {R::fire, "/user/hand/right/input/trigger/value"}, {R::psi, "/user/hand/left/input/trigger/value"},
         {R::reload, "/user/hand/right/input/squeeze/value"},
         {R::jump, "/user/hand/right/input/a/click"}, {R::crouch, "/user/hand/right/input/b/click"},
         {R::psychoscope, "/user/hand/right/input/thumbstick/click"},
@@ -84,14 +86,15 @@ std::vector<Binding> With(std::initializer_list<Binding> more)
 
 ControllerProfile Touch()
 {
-    // X and Y are on the left: X opens the TranScribe in play and is Prey's X
-    // in its menus; Y is Prey's Y in both. The left stick's click sprints. The
-    // menu button is the left one; its right-hand counterpart is reserved by
-    // the runtime.
+    // X and Y are on the left, and are Prey's X and Y in play and in menus.
+    // With no View button, the left stick's click opens the TranScribe, so
+    // sprint is left for SteamVR's binding UI; Prey's own Y-hold is the wheel.
+    // The menu button is the left one; its right-hand counterpart is reserved
+    // by the runtime.
     return {"touch", {"/interaction_profiles/oculus/touch_controller"}, nullptr, With({
-        {R::inventory, "/user/hand/left/input/x/click"}, {R::secondary, "/user/hand/left/input/x/click"},
-        {R::weaponWheel, "/user/hand/left/input/y/click"}, {R::tertiary, "/user/hand/left/input/y/click"},
-        {R::sprint, "/user/hand/left/input/thumbstick/click"},
+        {R::grab, "/user/hand/left/input/x/click"}, {R::secondary, "/user/hand/left/input/x/click"},
+        {R::special, "/user/hand/left/input/y/click"}, {R::tertiary, "/user/hand/left/input/y/click"},
+        {R::inventory, "/user/hand/left/input/thumbstick/click"},
         {R::pause, "/user/hand/left/input/menu/click"},
         // The thumb's resting places, for the finger shape.
         {R::thumbTouch, "/user/hand/left/input/x/touch"}, {R::thumbTouch, "/user/hand/left/input/y/touch"},
@@ -105,10 +108,13 @@ ControllerProfile Index()
 {
     // Index has A/B on both hands: the left pair stands in for Touch's X/Y.
     // Its system button belongs to the runtime, so the left stick's click
-    // opens pause, and sprint is left for SteamVR's binding UI.
+    // opens pause, pressing the left trackpad opens the TranScribe (a boolean
+    // on a float input: the runtime applies the threshold), and sprint is left
+    // for SteamVR's binding UI.
     return {"index", {"/interaction_profiles/valve/index_controller"}, nullptr, With({
-        {R::inventory, "/user/hand/left/input/a/click"}, {R::secondary, "/user/hand/left/input/a/click"},
-        {R::weaponWheel, "/user/hand/left/input/b/click"}, {R::tertiary, "/user/hand/left/input/b/click"},
+        {R::grab, "/user/hand/left/input/a/click"}, {R::secondary, "/user/hand/left/input/a/click"},
+        {R::special, "/user/hand/left/input/b/click"}, {R::tertiary, "/user/hand/left/input/b/click"},
+        {R::inventory, "/user/hand/left/input/trackpad/force"},
         {R::pause, "/user/hand/left/input/thumbstick/click"},
         {R::thumbTouch, "/user/hand/left/input/a/touch"}, {R::thumbTouch, "/user/hand/left/input/b/touch"},
         {R::thumbTouch, "/user/hand/left/input/thumbstick/touch"}, {R::thumbTouch, "/user/hand/left/input/trackpad/touch"},
@@ -128,14 +134,16 @@ ControllerProfile Frame()
     // on Prey's gamepad. Without this
     // profile SteamVR presents them as Touch and folds three buttons onto one:
     // right X/Y onto B, and the D-pad onto left X (down) and Y (the rest). The
-    // bumpers are left unbound.
+    // right bumper holds the PC weapon wheel (Prey's bumpers lean, which VR
+    // does by itself); the left one is unbound.
     //
     // Valve renamed the profile in SteamVR 2.15.1; later runtimes still accept
     // the first name (vrclient_x64.dll knows both), so both are suggested.
     return {"frame", {"/interaction_profiles/valve/frame_controller_valve", "/interaction_profiles/valve/frame_controller"},
             "XR_VALVE_frame_controller_interaction", With({
-        {R::secondary, "/user/hand/right/input/x/click"},
-        {R::weaponWheel, "/user/hand/right/input/y/click"}, {R::tertiary, "/user/hand/right/input/y/click"},
+        {R::grab, "/user/hand/right/input/x/click"}, {R::secondary, "/user/hand/right/input/x/click"},
+        {R::special, "/user/hand/right/input/y/click"}, {R::tertiary, "/user/hand/right/input/y/click"},
+        {R::weaponWheel, "/user/hand/right/input/bumper/click"},
         {R::pause, "/user/hand/right/input/menu/click"},
         {R::inventory, "/user/hand/left/input/view/click"}, {R::exit, "/user/hand/left/input/view/click"},
         {R::sprint, "/user/hand/left/input/thumbstick/click"},

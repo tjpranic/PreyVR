@@ -66,9 +66,11 @@ struct Navigation { float x = 0, y = 0; };
 // its own context gate, as before.
 struct GameplayInput {
     Navigation move{}, turn{};
-    float fire = 0.0f, grab = 0.0f, reload = 0.0f;   // analog, with their presses
-    bool firePressed = false, grabPressed = false, reloadPressed = false;
-    bool jump = false, crouch = false, inventory = false, weaponWheel = false;
+    float fire = 0.0f, psi = 0.0f, reload = 0.0f;   // analog, with their presses
+    bool firePressed = false, psiPressed = false, reloadPressed = false;
+    bool grabPressed = false;   // Prey's X
+    bool jump = false, crouch = false, inventory = false;
+    bool special = false, weaponWheel = false;   // Prey's Y; the PC wheel
     bool sprint = false, psychoscope = false;
     bool quickSlotLeft = false, quickSlotRight = false, quickSlotDown = false, torch = false;
 };

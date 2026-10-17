@@ -8,9 +8,6 @@ Rendering:
 - Foveated rendering. Figure out if this is possible?
 - Arm IK tends to bend the arms inward. Not enough space between shoulder and wrist, maybe?
 
-Controls:
-- Pressing B to exit the inventory results in the player crouching. Technically correct behavior given B is the crouch button but should still be looked at. Maybe not have B leave menus?
-
 Interactibility:
 - Make melee truly physical
 - Allow for hand-based interactions with objects in game (nicer grabbing, smacking things around)
@@ -21,7 +18,6 @@ UI:
 
 UX:
 - Game freezes a bit when first loading before showing the main menu in VR
-- It's hard to tell what I'm aiming at with just hands. Need to display the lasers without the debug menu.
 
 Bugs:
 - Access violation that causes a crash. Seems to be due to a use-after-free camera related bug. Have got instrumentation in place to catch it.

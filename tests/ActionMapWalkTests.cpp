@@ -80,7 +80,7 @@ struct Fixture {
             m.Q(node + 0x28, input[i]); m.Q(node + 0x30, action[i]); m.Q(node + 0x38, map); m.U(node + 0x20, crc);
             m.Q(action[i], kBase + layout.actionVtable); m.Q(action[i] + 0x40, name); m.Q(action[i] + 0x60, map);
             m.S(name, names[i]);
-            m.Q(input[i] + 0x18, 0x24100); m.U(input[i] + 0x98, crc);
+            m.Q(input[i] + 0x18, 0x24100); m.U(input[i] + 0x98, crc); m.U(input[i] + 0xC4, i == 0 ? 1u : 5u);
         }
     }
     bool Run(std::vector<BoundAction>& out, std::string& why) const
@@ -106,6 +106,7 @@ int main()
         Check(f.Run(out, why), "a well-formed manager reads");
         Check(out.size() == 2 && out[0].map == "player" && out[0].action == "sprint" && out[0].key == "xi_thumbl" &&
               out[1].action == "fixture_other" && out[0].enabled, "both bindings of one key, in order, enabled");
+        Check(out[0].activation == 1 && out[1].activation == 5, "each binding's activation mode: on press; on press or hold");
         f.image.B(f.map + 8, 0);
         Check(f.Run(out, why) && !out[0].enabled, "a disabled map reads as disabled");
         f.image.B(f.map + 8, 1);

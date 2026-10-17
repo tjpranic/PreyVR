@@ -10,7 +10,9 @@ Menus and inventory appear on a screen about **2 metres away**, anchored where y
 
 The screen has a gentle curve when the runtime supports OpenXR cylinder layers and uses a flat panel otherwise. The menu and its control card fit inside both runtime eye frusta with room around the edges. **Menu + both grips**, or **F12**, reset the VR view and bring the screen back in front of you.
 
-Where Touch and the Steam Frame differ, both are named. Index follows Touch, with its left A/B as X/Y.
+Where Touch and the Steam Frame differ, both are named. Index follows Touch, with its left A/B as X/Y and
+its left trackpad (pressed) for the inventory. X and Y are Prey's own X and Y, so the game's prompts name the
+button to press.
 
 | Control | Gameplay | Menu / inventory |
 | --- | --- | --- |
@@ -18,14 +20,15 @@ Where Touch and the Steam Frame differ, both are named. Index follows Touch, wit
 | Right stick | Turning | Navigate |
 | Steam Frame: left D-pad | Quick slots; up: torch | Navigate |
 | Right stick click | Psychoscope | — |
-| Left stick click | Sprint (Touch, Steam Frame) | — |
+| Left stick click | Steam Frame: sprint. Touch: open inventory | — |
 | Right A / B | Jump / crouch | Select / back |
-| X (Touch: left; Steam Frame: right) | Touch: open inventory | Prey's X action, including Equip |
-| Y (Touch: left; Steam Frame: right) | Tap: swap weapon. Hold: weapon wheel | Prey's Y action |
+| X (Touch: left; Steam Frame: right) | Grab: use or pick up what the left hand points at; press again to drop. With nothing to use: reload | Prey's X action, including Equip |
+| Y (Touch: left; Steam Frame: right) | Prey's Y: search, special use; tap to swap weapon, hold for Prey's wheel | Prey's Y action |
+| Steam Frame: right bumper | Hold: weapon wheel | — |
 | Steam Frame: View (left) | Open inventory | Close the menu |
 | Right grip | Reload; hold to holster | Next tab, on release |
 | Left grip | Hold a long weapon's support grip | Previous tab, on release |
-| Left trigger | Grab: use or pick up what the left hand points at; hold to carry, let go to drop or throw | Previous page, or click when the beam is on the left |
+| Left trigger | Psi power (hold to use) | Previous page, or click when the beam is on the left |
 | Right trigger | Fire | Click / hold to drag (the default beam hand) |
 | Menu button (Touch: left; Steam Frame: right) | Pause | Pause / resume |
 | Hold menu button | VR Options, over the game (not paused) | VR Options, over the menu |
@@ -33,13 +36,13 @@ Where Touch and the Steam Frame differ, both are named. Index follows Touch, wit
 | F11 | Enable VR or retry startup | Enable VR or retry startup |
 | F12 | Reset view | Reset view and screen position |
 
-Open inventory with **X** (Steam Frame: **View**). You can point at an item, or navigate with the right stick. For the native button route, highlight a weapon, press **X** to equip, then **B** to return to gameplay. The control card shows the VR bindings even when Prey changes its own prompts between mouse and gamepad icons.
+Open inventory with **View** (Touch: **left stick click**). You can point at an item, or navigate with the right stick. For the native button route, highlight a weapon, press **X** to equip, then **B** to return to gameplay. The control card shows the VR bindings even when Prey changes its own prompts between mouse and gamepad icons.
 
-Right-stick click sends Prey’s native middle-mouse Favorites Wheel shortcut. The wheel is part of the gameplay HUD; beam selection for this particular wheel has not been established. The new opening binding still needs a live check.
+The Steam Frame's right bumper holds Prey's middle-mouse Favorites Wheel open; let go to close it. Holding Y opens Prey's own gamepad wheel instead, as on a gamepad.
 
 Release held controls after closing a menu before using them in gameplay. The mod waits for this neutral state to prevent an inventory input from immediately firing or moving. A trigger already held when a menu opens must also be released before it can click.
 
-Touch controllers are the primary mapping. Index bindings are included: left A/B correspond to X/Y and left stick click opens pause. Other controller profiles do not yet have dedicated bindings.
+The Steam Frame is the tested mapping. Touch and Index bindings are included: on Index, left A/B correspond to X/Y, pressing the left trackpad opens inventory, and left stick click opens pause. Other controller profiles do not yet have dedicated bindings.
 
 ## Display settings
 

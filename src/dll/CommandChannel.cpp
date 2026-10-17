@@ -1075,7 +1075,7 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
             << InteractionReport();
     } else if (verb == "move.bind" && args.size() >= 3) {
         // move.bind <slot 0-12> <keyId> -- 0 interact, 1 inventory, 2 jump, 3 crouch,
-        // 4 wheel, 5 swap, 6 sprint, 7 psychoscope, 8-10 quick slots left/right/down,
+        // 4 wheel, 5 Prey's Y, 6 sprint, 7 psychoscope, 8-10 quick slots left/right/down,
         // 11 torch, 12 psi (MoveLane's ActionSlot)
         const unsigned int slot = static_cast<unsigned int>(arg(1, 0));
         const int keyId = static_cast<int>(arg(2, 0));

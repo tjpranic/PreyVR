@@ -132,6 +132,7 @@ bool ReadBindings(const MemoryView& memory, std::uintptr_t base, const ActionMap
         if (!rows.empty() && crc < previous) { r.Fail("binding tree out of CRC order"); break; }
         previous = crc;
         row.enabled = managerEnabled && r.B(map + 8) != 0;
+        row.activation = r.U(input + 0xC4);
         if (!r.Ok()) { break; }
         rows.push_back(std::move(row));
     }

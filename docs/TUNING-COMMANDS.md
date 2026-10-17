@@ -104,7 +104,7 @@ this session. "Menu only" means no command reaches it.
 | Hands | Psychoscope gesture (`psychoscope`) | on/off | off | menu only |
 | Hands | Hands without a weapon (`arms_free`) | on/off | on | `arms.free <0\|1>` |
 | Hands | Fingers follow the controller (`finger_curl`) | on/off | on | menu only |
-| Hands | Carry (`carry_hold`) | press to toggle (0), hold to carry (1) | hold | `carry.hold <0\|1>` |
+| Hands | Carry (`carry_hold`) | press to toggle (0), hold to carry (1) | press to toggle | `carry.hold <0\|1>` |
 | Hands | Grenade throw (`grenade_hand`) | game throw (0), hand throw (1) | hand | `grenade.hand <0\|1>` |
 | Hands | Object throw strength (`carry_throw_strength`) | 50–300 % | 140 | `carry.throw <gain> ...` (first value) |
 | Hands | Grenade throw strength (`grenade_throw_strength`) | 50–400 % | 130 | `grenade.throw <vrFactor> ...` (first value) |
@@ -247,7 +247,7 @@ value report, as described above.
 | `move.turn` / `move.fire` / `move.act` | 0/1 | 0 → VR 1 | Right-stick turning; right trigger fires; grip and face-button bindings. |
 | `move.all` | 0/1 | | Turns move, turn, fire and act on or off together. |
 | `move.firehold` | 0/1 | 1 | Holds the fire key while the trigger is held (GLOO, Disruptor). |
-| `move.bind <slot> <keyId>` | slot 0–12 | | Remaps a controller action's key: 0 interact, 1 inventory, 2 jump, 3 crouch, 4 wheel (Y held), 5 swap (Y tapped), 6 sprint, 7 psychoscope, 8–10 quick slots left/right/down, 11 torch, 12 psi. |
+| `move.bind <slot> <keyId>` | slot 0–12 | | Remaps a controller action's key: 0 interact, 1 inventory, 2 jump, 3 crouch, 4 wheel (Frame right bumper), 5 Prey's Y, 6 sprint, 7 psychoscope, 8–10 quick slots left/right/down, 11 torch, 12 psi. |
 | `input.post` | 0/1 | 0 → VR 1 | Lets the mod post input to the engine; every controller lane needs it. |
 | `input.force` | 0/1 | 0 | Bypasses the engine's posting check. Diagnostic. |
 | `input.key <keyId> [state] [valueMilli]` | | | Posts one raw input event. Diagnostic. |
@@ -309,13 +309,13 @@ value report, as described above.
 
 | Command | Values | Default | What it does |
 |---|---|---|---|
-| `use.hand` | 0/1 | 0 → VR 1 | 1: the left hand points and its grab (the left trigger) uses, the right grip reloads. 0: right grip uses the eye ray. |
+| `use.hand` | 0/1 | 0 → VR 1 | 1: the left hand points and grab (Prey's X) uses, or reloads with nothing to use; the right grip reloads. 0: right grip uses the eye ray. |
 | `use.hold` / `use.trace` | 0/1 | 1 / 0 | Use held every frame while down; log selection changes. |
 | `use.back` | 0–400 mm | 100 | How far behind the controller the use ray starts. |
 | `use.filter <on> [minCutoff] [beta] [backlash]` | centi-Hz, ×100, centi-degrees | 1 100 200 75 | Smoothing on the use pointer. |
 | `use.find <entityId>` / `use.report` | | | Test harness; lane state. |
 | `carry.hand` | 0/1 | 0 → VR 1 | Carried objects in the left hand, thrown with it. **Menu (Experimental).** |
-| `carry.hold` | 0/1 | 1 | Hold grab (the left trigger) to keep holding, or press to pick up and press to drop. **Menu.** |
+| `carry.hold` | 0/1 | 0 | 0: press grab (X) to pick up and again to drop, as Prey does. 1: hold it to keep holding. **Menu.** |
 | `carry.throw <gain> <throwCm/s> <maxCm/s> <heavyMaxCm/s>` | 50–300, 20–1000, 100–5000, 50–3000 | 140 160 1600 500 | Throw strength, drop/throw threshold, speed caps. **Menu** (gain). |
 | `carry.heavy <kg> <diagCm> <holdMs> <shiftCm> <tauMs>` | | 25 120 500 60 100 | What counts as heavy and how a heavy prop follows. |
 | `carry.corpse <minCm> <maxFromNativeCm> <tauMs>` | | 75 110 120 | Where a dragged body is held. |

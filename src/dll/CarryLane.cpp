@@ -110,7 +110,7 @@ std::mutex gInstallMutex;
 bool gInstallTried = false, gInstalled = false, gVelocityQueueOk = false;
 
 // Off until VR mode switches it on with the hooks installed.
-std::atomic<bool> gHand{false}, gHoldToHold{true}, gTrace{false};
+std::atomic<bool> gHand{false}, gHoldToHold{false}, gTrace{false};
 std::atomic<bool> gHolding{false};
 
 // Tunables (carry.throw / carry.hold*), read on the game thread.

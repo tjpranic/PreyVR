@@ -30,6 +30,10 @@ struct ActionMapLayout {
 struct BoundAction {
     std::string map, action, key;
     bool enabled = false;   // the manager and the map are enabled (filters not judged)
+    // When the binding fires (SActionInput+0xC4, ADDRESS_REGISTRY): CryEngine's
+    // EActionActivationMode bits -- 1 on press, 2 on release, 4 on hold,
+    // 8 always, 16 retriggerable.
+    std::uint32_t activation = 0;
 };
 
 class MemoryView {

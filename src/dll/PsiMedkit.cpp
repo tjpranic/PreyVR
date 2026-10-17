@@ -327,10 +327,9 @@ void UpdatePsiMedkit(const GameplayPoseFrame& frame,bool valid){
         PublishSlotFeedback(!error&&result==2?equipment::SlotNotice::MedkitUsed:
             !error&&result==0?equipment::SlotNotice::MedkitEmpty:equipment::SlotNotice::MedkitDenied,frame);
     }
-    // Psi shares grab (the left trigger): its press is psi's only when it found
-    // nothing to grab (MoveLane's use button, PsiOwnsGrab). The medkit slot
-    // above reads the trigger itself: there it is the slot's.
-    const auto event=trigger.Update(PsiOwnsGrab(),valid&&mode.load()&&!slot.OwnsGrip()&&!left.gripPressed&&
+    // The psi button (the left trigger, MoveLane's PsiButtonHeld). The medkit
+    // slot above reads the trigger itself: there it is the slot's.
+    const auto event=trigger.Update(PsiButtonHeld(),valid&&mode.load()&&!slot.OwnsGrip()&&!left.gripPressed&&
         !FaceButtonHeld(left)&&!f.hands[1].gripPressed);
     if(event==psi::TriggerEvent::Begin)Error(Begin(frame));
     else if(event==psi::TriggerEvent::Cast){Error(Cast(frame));Error(StopOwned());}
