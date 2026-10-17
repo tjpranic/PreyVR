@@ -210,7 +210,8 @@ DWORD TextPanelDistanceCm();
 // this moves it nearer or further without making it bigger or smaller; ui.scale
 // is the size. The VR Options menu saves it; the command alone is session only.
 // Applying it refits an open menu about where that menu opened (ui::MenuAnchor).
-// Not the VR Options panel itself, which the laser places (VrOptionsLayer).
+// The VR Options panel follows it, staying in front, until the laser moves it
+// (VrOptionsLayer).
 DWORD SetUiDistanceCm(unsigned int centimetres);
 DWORD UiDistanceCm();
 // The native menu panel's offset from straight ahead, in whole degrees around

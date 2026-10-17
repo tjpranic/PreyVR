@@ -3877,3 +3877,62 @@ frame: it is applied at the hook, as before.
 Offline only: CTests cover the queue and the submit rule, and the full suite passes
 (75 tests). Expected in a headset: `fovDiverged` flat across snaps, `snapApplied`
 counting them, `snapLate` 0.
+
+## 2026-10-17 — StartMinimized, WindowWidth and WindowHeight removed
+
+Removed at the user's request, because they are no longer needed. The launcher no
+longer takes, saves or acts on them. Gone:
+- the three parameters and `Resolve-PreyVRWindowSettings`;
+- `Set-PreyVRWindowMinimized`, and the wait for `preyvr_focus state=held` that
+  triggered it;
+- the box parameters of `Get-PreyVRWindowFit` and `Set-PreyVRWindowFit`;
+- their launcher tests, and their rows in both player guides.
+
+Kept:
+- **The fit to the screen**, restored to its 2026-10-15 form. The launcher still
+  refits the window at the eye's aspect, inside the work area, once the mod has
+  started.
+- **`window.hold`.** It is still sent at startup, so a click elsewhere neither
+  pauses nor mutes the game.
+
+A `PreyVR.json` that still has the three keys is not an error: the launcher ignores
+them, and they stay in the file. The launcher tests pass (window, settings,
+resolution, stereo).
+
+**What the investigation before the removal found (offline, not built).** The
+off-screen spawn comes from Prey itself:
+- `SetWindow` (`0xF540B0`) creates the window visible, at the render size plus
+  frame, centred on the monitor. It then calls `ShowWindow(SW_SHOWNORMAL)`,
+  `SetFocus` and `SetForegroundWindow`.
+- Renderer init re-centres it at that size: `AdjustWindowForChange` (`0xF4E1A0`), the
+  windowed `SetWindowPos` at `0xF4E4F0`. `ChangeResolution` (`0xF4E570`) repeats this
+  when a display cvar changes; the per-frame check is `0xF7BC20`.
+- The swap chain takes explicit sizes (`0xF50576`), so the window never sets the
+  render size.
+
+A copy of that call sequence was measured outside the game:
+- A minimised `STARTUPINFO` is spent on the visible creation, and Prey's own
+  `ShowWindow(SW_SHOWNORMAL)` then restores the window at the off-screen rect.
+- A fit applied from outside straight after creation is undone by the re-centring.
+
+So from the launcher, the off-screen position can be shortened but not avoided.
+Nothing was built. The desktop window notes keep the removed feature's record.
+
+**Then the fit to the screen was removed too, at the user's request.** The launcher
+no longer touches Prey's window at all. Gone:
+- `Get-PreyVRWindowFit` and `Set-PreyVRWindowFit`, and the call after
+  `preyvr_channel result=0 detail=started`;
+- `tests/LauncherWindow.Tests.ps1` and its CTest, `launcher_window`.
+
+For the record, the fit (2026-10-15) did the following:
+- It measured the window's frame and the work area of the window's monitor, in
+  per-monitor-v2 physical pixels.
+- It sized the client to the eye's aspect, filling the limiting side of the work
+  area and never larger than the render size.
+- It centred the window and moved it with `SetWindowPos(SWP_NOZORDER |
+  SWP_NOACTIVATE)`.
+
+The window is now wherever Prey puts it. That is centred at the render size plus
+frame, so on a screen shorter than the eye its top runs off the screen. The
+backbuffer never followed the window, so the headset image is unchanged.
+`window.hold` stays.

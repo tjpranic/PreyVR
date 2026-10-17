@@ -18,16 +18,6 @@ param(
     # specific to the both-eyes path (STEREO-DUAL-SUBMISSION-2026-10-10.md).
     # Read once when VR starts, as PREYVR_DUAL_STEREO.
     [int]$DualStereo=1,
-    # **The desktop window, never the headset image.** Width/Height above are
-    # the render size the headset gets; these size only the window on the
-    # desktop: the largest eye-shaped picture inside WindowWidth x WindowHeight,
-    # kept on the screen. 0 x 0 fits the screen. StartMinimized 1 minimises the
-    # window once the mod holds focus for Prey (window.hold), so the game neither
-    # pauses nor slows down while it is minimised. Off by default: the window
-    # stays open, and the hold applies either way.
-    [int]$WindowWidth=0,
-    [int]$WindowHeight=0,
-    [int]$StartMinimized=0,
     [switch]$DryRun
 )
 Set-StrictMode -Version Latest
@@ -70,28 +60,6 @@ function Resolve-PreyVRStereoSettings {
     $DualStereo
 }
 
-function Resolve-PreyVRWindowSettings {
-    param($Saved, $Overrides, [int]$WindowWidth, [int]$WindowHeight, [int]$StartMinimized)
-    if ($Overrides.ContainsKey('WindowWidth') -ne $Overrides.ContainsKey('WindowHeight')) {
-        throw 'Set both -WindowWidth and -WindowHeight together (0 0 fits the screen).'
-    }
-    if ($Saved -and !$Overrides.ContainsKey('WindowWidth')) {
-        if ($Saved.PSObject.Properties['WindowWidth']) {$WindowWidth=[int]$Saved.WindowWidth}
-        if ($Saved.PSObject.Properties['WindowHeight']) {$WindowHeight=[int]$Saved.WindowHeight}
-    }
-    if ($Saved -and !$Overrides.ContainsKey('StartMinimized') -and $Saved.PSObject.Properties['StartMinimized']) {
-        $StartMinimized=[int]$Saved.StartMinimized
-    }
-    if (($WindowWidth -eq 0) -ne ($WindowHeight -eq 0)) {
-        throw 'WindowWidth and WindowHeight must both be set, or both be 0 to fit the screen.'
-    }
-    if ($WindowWidth -ne 0 -and ($WindowWidth -lt 160 -or $WindowWidth -gt 16384 -or $WindowHeight -lt 120 -or $WindowHeight -gt 16384)) {
-        throw 'Window size must be 160..16384 by 120..16384, or 0 0 to fit the screen.'
-    }
-    if ($StartMinimized -notin @(0,1)) {throw 'StartMinimized must be 1 (minimise the desktop window) or 0 (leave it open).'}
-    [pscustomobject]@{WindowWidth=$WindowWidth;WindowHeight=$WindowHeight;StartMinimized=$StartMinimized}
-}
-
 function Get-PreyVRStereoStatus {
     param([string]$LogText)
     # VrMode logs one dual_stereo line per VR start, before state=active: on,
@@ -107,7 +75,7 @@ function Get-PreyVRStartupCommands {
     # guessed sleep can overwrite commands while the channel is busy. Nothing
     # the VR Options menu owns is sent: VR start applies vr-options.ini.
     # window.hold keeps Prey running as though focused (FocusHold.h): in a
-    # headset nobody is at the desktop, minimised or not.
+    # headset nobody is at the desktop.
     'input.hotkeys 1'
     'window.hold 1'
     'vr.enable'
@@ -126,110 +94,6 @@ function Save-PreyVRConfiguration {
         $Saved | Add-Member -NotePropertyName 'ResolutionDefaultsVersion' -NotePropertyValue 1
     }
     $Saved | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $Path -Encoding UTF8
-}
-
-function Get-PreyVRWindowFit {
-    param([int]$AreaLeft, [int]$AreaTop, [int]$AreaWidth, [int]$AreaHeight,
-        [int]$FrameWidth, [int]$FrameHeight, [int]$RenderWidth, [int]$RenderHeight,
-        [int]$BoxWidth=0, [int]$BoxHeight=0)
-    # **The desktop window is the eye size, which no desktop is.** Windowed,
-    # Prey sizes its window from r_Width x r_Height and centres it on the
-    # screen. At 2688 x 2880 on a 1440-high desktop that centre is -739, and
-    # Windows then clamps the height to the screen: the window ended halfway
-    # down with its title bar and top half above the screen.
-    #
-    # The backbuffer -- what the headset gets -- does not follow the window.
-    # Measured 2026-10-15: after resizing the window to 1263 x 1353 the frame
-    # capture still read 2688 x 2880, and DXGI scales into the smaller client.
-    # So this fits the window inside the work area at the eye's aspect ratio,
-    # and centres it. The picture also stays inside a box: the render size by
-    # default, so the window is never scaled up, or WindowWidth x WindowHeight
-    # from PreyVR.json, which may be larger or smaller.
-    # Integer arithmetic, so the limiting side fills the area exactly rather
-    # than a pixel short of it.
-    $roomWidth=[long]($AreaWidth-$FrameWidth);$roomHeight=[long]($AreaHeight-$FrameHeight)
-    if ($BoxWidth -le 0 -or $BoxHeight -le 0) {$BoxWidth=$RenderWidth;$BoxHeight=$RenderHeight}
-    $limitWidth=[math]::Min($roomWidth,[long]$BoxWidth);$limitHeight=[math]::Min($roomHeight,[long]$BoxHeight)
-    if ($RenderWidth*$limitHeight -le $RenderHeight*$limitWidth) {
-        $clientHeight=$limitHeight;$clientWidth=[math]::Floor($RenderWidth*$limitHeight/$RenderHeight)
-    } else {
-        $clientWidth=$limitWidth;$clientHeight=[math]::Floor($RenderHeight*$limitWidth/$RenderWidth)
-    }
-    $clientWidth=[int][math]::Max(1,$clientWidth);$clientHeight=[int][math]::Max(1,$clientHeight)
-    $width=$clientWidth+$FrameWidth;$height=$clientHeight+$FrameHeight
-    [pscustomobject]@{
-        X=$AreaLeft+[int][math]::Floor(($AreaWidth-$width)/2)
-        Y=$AreaTop+[int][math]::Floor(($AreaHeight-$height)/2)
-        Width=$width;Height=$height;ClientWidth=$clientWidth;ClientHeight=$clientHeight
-    }
-}
-
-function Set-PreyVRWindowFit {
-    param([IntPtr]$Window, [int]$RenderWidth, [int]$RenderHeight, [int]$BoxWidth=0, [int]$BoxHeight=0)
-    if (!('PreyVRWindow' -as [type])) {
-        Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public static class PreyVRWindow {
-    [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
-    [StructLayout(LayoutKind.Sequential)] public struct MonitorInfo { public int Size; public Rect Monitor, Work; public uint Flags; }
-    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out Rect rect);
-    [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr window, out Rect rect);
-    [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr window, uint flags);
-    [DllImport("user32.dll")] public static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
-    [DllImport("user32.dll", SetLastError = true)]
-    public static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
-    [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
-}
-'@
-    }
-    # Physical pixels on both sides: a DPI-unaware launcher at 125% would read
-    # a scaled work area and place the window by it. Per-monitor v2 is -4.
-    $previous=[IntPtr]::Zero
-    try {$previous=[PreyVRWindow]::SetThreadDpiAwarenessContext([IntPtr](-4))} catch {}
-    try {
-        $outer=New-Object PreyVRWindow+Rect;$client=New-Object PreyVRWindow+Rect
-        if (![PreyVRWindow]::GetWindowRect($Window,[ref]$outer) -or ![PreyVRWindow]::GetClientRect($Window,[ref]$client)) {
-            return 'Desktop window: not found, left where Prey put it.'
-        }
-        $info=New-Object PreyVRWindow+MonitorInfo;$info.Size=[Runtime.InteropServices.Marshal]::SizeOf($info)
-        if (![PreyVRWindow]::GetMonitorInfo([PreyVRWindow]::MonitorFromWindow($Window,2),[ref]$info)) {
-            return 'Desktop window: no monitor information, left where Prey put it.'
-        }
-        # The frame is measured, not computed from the style: whatever borders
-        # this window has now are the ones it keeps.
-        $fit=Get-PreyVRWindowFit $info.Work.Left $info.Work.Top ($info.Work.Right-$info.Work.Left) ($info.Work.Bottom-$info.Work.Top) `
-            (($outer.Right-$outer.Left)-$client.Right) (($outer.Bottom-$outer.Top)-$client.Bottom) $RenderWidth $RenderHeight `
-            $BoxWidth $BoxHeight
-        # SWP_NOZORDER | SWP_NOACTIVATE: move and size only.
-        if (![PreyVRWindow]::SetWindowPos($Window,[IntPtr]::Zero,$fit.X,$fit.Y,$fit.Width,$fit.Height,0x14)) {
-            return "Desktop window: could not be moved (error $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
-        }
-        $source=if ($BoxWidth -gt 0) {"within $BoxWidth x $BoxHeight (PreyVR.json)"} else {'fitted to the screen'}
-        "Desktop window: $($fit.ClientWidth) x $($fit.ClientHeight), $source. The headset still gets $RenderWidth x $RenderHeight."
-    } finally {
-        if ($previous -ne [IntPtr]::Zero) {[void][PreyVRWindow]::SetThreadDpiAwarenessContext($previous)}
-    }
-}
-
-function Set-PreyVRWindowMinimized {
-    param([IntPtr]$Window)
-    # **Only after the mod logs state=held.** Minimised, Prey's window loses
-    # activation, and without the hold CryEngine then sleeps up to 25 ms a
-    # frame and the game pauses (docs/DESKTOP-WINDOW-2026-10-17.md).
-    if (!('PreyVRWindowShow' -as [type])) {
-        Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public static class PreyVRWindowShow {
-    [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr window, int command);
-}
-'@
-    }
-    # SW_MINIMIZE, as the title bar's button does. Async, so a busy game thread
-    # cannot stall the launcher.
-    if (![PreyVRWindowShow]::ShowWindowAsync($Window,6)) {return 'Desktop window: could not be minimised, left open.'}
-    'Desktop window: minimised; restore it from the taskbar. The game keeps running while it is down.'
 }
 
 # **`$PSScriptRoot` must not be a param default here.** Under Windows PowerShell
@@ -257,7 +121,6 @@ try {
     $Width=$renderSize.Width;$Height=$renderSize.Height
     $ReferenceSpace=Resolve-PreyVRReferenceSpace $saved $PSBoundParameters $ReferenceSpace
     $DualStereo=Resolve-PreyVRStereoSettings $saved $PSBoundParameters $DualStereo
-    $desktop=Resolve-PreyVRWindowSettings $saved $PSBoundParameters $WindowWidth $WindowHeight $StartMinimized
     if (!$GameExe) {
         $candidates=@()
         foreach ($key in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 480490',
@@ -311,8 +174,6 @@ try {
     $running=@(Get-Process -Name $fleetNames -ErrorAction SilentlyContinue)
     if ($running.Count) {throw ('Close the running game first: '+(($running | Select-Object -ExpandProperty ProcessName) -join ', '))}
     Write-Host "Prey VR: $Width x $Height per eye; reference $ReferenceSpace; stereo $(if($DualStereo){'both eyes per frame'}else{'alternate eyes'}); runtime: $(if($Runtime){$Runtime}else{'system OpenXR runtime'})"
-    Write-Host ("Desktop window: {0}; {1}." -f $(if($desktop.WindowWidth){"within $($desktop.WindowWidth) x $($desktop.WindowHeight)"}else{'fits the screen'}),
-        $(if($desktop.StartMinimized){'minimised once VR holds focus'}else{'left open'}))
     if ($renderSize.MigrateLegacy) {Write-Host 'Replacing the v0.5.0 widescreen default with 2016 x 2160 for greater vertical view coverage.'}
     Write-Host "Mod binaries: $BinDir"
     # The in-game settings are the VR Options menu's: say so once.
@@ -323,8 +184,7 @@ try {
     Write-Host 'Tilde (the key below Esc) opens Prey''s own console, when focused.'
     if ($DryRun) {Write-Host 'Preflight passed. Nothing launched.';exit 0}
     Save-PreyVRConfiguration -Path $config -Saved $saved -MigrateLegacy $renderSize.MigrateLegacy -Settings `
-        @{GameExe=$GameExe;Width=$Width;Height=$Height;ReferenceSpace=$ReferenceSpace;DualStereo=$DualStereo
-          WindowWidth=$desktop.WindowWidth;WindowHeight=$desktop.WindowHeight;StartMinimized=$desktop.StartMinimized}
+        @{GameExe=$GameExe;Width=$Width;Height=$Height;ReferenceSpace=$ReferenceSpace;DualStereo=$DualStereo}
     $run=Join-Path $RunRoot ('player-{0:yyyyMMdd-HHmmss}' -f (Get-Date))
     [void](New-Item -ItemType Directory -Path $run -Force)
     $info=New-Object System.Diagnostics.ProcessStartInfo
@@ -368,34 +228,18 @@ try {
         if ((Get-Date) -gt $deadline) {throw "Mod startup did not finish. See $log"}
         Start-Sleep -Milliseconds 200
     } while ($true)
-    # The renderer has settled by now, so Prey will not place the window again.
-    # A failure here costs the desktop view only, never the launch.
-    try {Write-Host (Set-PreyVRWindowFit $process.MainWindowHandle $Width $Height $desktop.WindowWidth $desktop.WindowHeight)}
-    catch {Write-Host "Desktop window: left where Prey put it ($($_.Exception.Message))." -ForegroundColor Yellow}
     Get-PreyVRStartupCommands |
         Set-Content -LiteralPath (Join-Path $run 'commands.txt') -Encoding ASCII
     $deadline=(Get-Date).AddSeconds(150)
     Write-Host 'Put on the headset. Enabling VR...'
-    $minimize=$desktop.StartMinimized -eq 1
     do {
         $text=Get-Content -LiteralPath $log -Raw
-        # The window goes down as soon as Prey no longer depends on its focus,
-        # usually well before VR is active. Never on a refusal.
-        if ($minimize -and $text -match 'preyvr_focus state=held') {
-            $minimize=$false
-            try {Write-Host (Set-PreyVRWindowMinimized $process.MainWindowHandle)}
-            catch {Write-Host "Desktop window: left open ($($_.Exception.Message))." -ForegroundColor Yellow}
-        } elseif ($minimize -and $text -match 'preyvr_focus state=refused code=(\d+)') {
-            $minimize=$false
-            Write-Host "Desktop window: left open; the mod cannot keep Prey running unfocused (code $($Matches[1])). See $log" -ForegroundColor Yellow
-        }
         if ($text -match 'preyvr_vr state=failed step=([^\s]+)') {throw "VR setup failed at $($Matches[1]). See $log (F11 retries)."}
         if ($text -match 'preyvr_vr state=active') {break}
         if ($process.HasExited) {throw 'Prey closed during VR setup.'}
         if ((Get-Date) -gt $deadline) {throw "Waiting for VR timed out. See $log"}
         Start-Sleep -Milliseconds 250
     } while ($true)
-    if ($minimize) {Write-Host 'Desktop window: left open; the mod did not report holding focus. See the log.' -ForegroundColor Yellow}
     Write-Host "VR is ready. Diagnostics: $run"
     switch (Get-PreyVRStereoStatus $text) {
         'on' {Write-Host 'Stereo: both eyes from each frame.'}

@@ -502,6 +502,14 @@ bool EnsureLoaderPresent()
     return LoadLibraryW(kLoader) != nullptr;
 }
 
+// **The laser's texture**: the cursor's dot in the first 32x32; then, past a
+// transparent gap that keeps filtering from bleeding one into the other, the
+// fading beam's strip (ui::LaserFade), opaque at the bottom row -- the
+// controller's end -- to clear at the top, the tip: a quad's top edge is its
+// +Y, the beam's forward. A solid beam is the dot's centre texel.
+constexpr int kPointerWidth=48,kPointerHeight=32;
+constexpr XrRect2Di kCursorRect{{0,0},{32,32}},kSolidBeamRect{{15,15},{1,1}},kFadingBeamRect{{42,0},{4,32}};
+
 void EnsurePointerTexture()
 {
     if(gHost.pointerAttempted)return;
@@ -513,18 +521,20 @@ void EnsurePointerTexture()
     auto format=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     if(std::find(formats.begin(),formats.end(),format)==formats.end())format=DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
     if(std::find(formats.begin(),formats.end(),format)==formats.end())return;
-    std::array<std::uint8_t,32*32*4> pixels{};
-    for(int y=0;y<32;++y)for(int x=0;x<32;++x) {
+    std::array<std::uint8_t,kPointerWidth*kPointerHeight*4> pixels{};
+    for(int y=0;y<kPointerHeight;++y)for(int x=0;x<kPointerWidth;++x) {
         const float dx=static_cast<float>(x)-15.5f,dy=static_cast<float>(y)-15.5f;
-        const auto alpha=static_cast<std::uint8_t>(std::clamp(14.5f-std::sqrt(dx*dx+dy*dy),0.f,1.f)*255);
-        const auto offset=static_cast<std::size_t>((y*32+x)*4);
+        const float opacity=x<32?std::clamp(14.5f-std::sqrt(dx*dx+dy*dy),0.f,1.f):
+            x>=40?ui::LaserFade(1-(static_cast<float>(y)+.5f)/kPointerHeight):0.f;
+        const auto alpha=static_cast<std::uint8_t>(opacity*255);
+        const auto offset=static_cast<std::size_t>((y*kPointerWidth+x)*4);
         pixels[offset]=format==DXGI_FORMAT_R8G8B8A8_UNORM_SRGB?90:255;
         pixels[offset+1]=235;pixels[offset+2]=format==DXGI_FORMAT_R8G8B8A8_UNORM_SRGB?255:90;pixels[offset+3]=alpha;
     }
     XrSwapchainCreateInfo create{XR_TYPE_SWAPCHAIN_CREATE_INFO};
     create.createFlags=XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT;
     create.usageFlags=XR_SWAPCHAIN_USAGE_SAMPLED_BIT|XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
-    create.format=format;create.sampleCount=1;create.width=32;create.height=32;
+    create.format=format;create.sampleCount=1;create.width=kPointerWidth;create.height=kPointerHeight;
     create.faceCount=1;create.arraySize=1;create.mipCount=1;
     if(XR_FAILED(xrCreateSwapchain(gHost.session,&create,&gHost.pointerSwapchain)))return;
     if(XR_FAILED(xrEnumerateSwapchainImages(gHost.pointerSwapchain,0,&count,nullptr)))return;
@@ -538,7 +548,7 @@ void EnsurePointerTexture()
     if(XR_FAILED(xrWaitSwapchainImage(gHost.pointerSwapchain,&wait))){gStopRequested.store(true);return;}
     if(index<images.size()) {
         ID3D11DeviceContext* context=nullptr;gHost.device->GetImmediateContext(&context);
-        if(context){context->UpdateSubresource(images[index].texture,0,nullptr,pixels.data(),32*4,0);context->Release();gHost.pointerReady=true;}
+        if(context){context->UpdateSubresource(images[index].texture,0,nullptr,pixels.data(),kPointerWidth*4,0);context->Release();gHost.pointerReady=true;}
     }
     XrSwapchainImageReleaseInfo release{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
     if(XR_FAILED(xrReleaseSwapchainImage(gHost.pointerSwapchain,&release)))gHost.pointerReady=false;
@@ -970,29 +980,25 @@ void FillPanelLayer(XrCompositionLayerQuad& layer, const ui::Panel& p, XrSwapcha
     layer.subImage.imageRect={{0,0},{static_cast<int>(desc.Width),static_cast<int>(desc.Height)}};
 }
 
-// The laser (ui::PointerQuadsFor) as two layers on the pointer texture: all of
-// it for the cursor, its centre texel for the beam. Prey's frames and hold
-// frames both draw it here.
+// The laser (ui::PointerQuadsFor) as two layers on the pointer texture: the dot
+// for the cursor; for the beam, the dot's centre texel, or the fading strip when
+// it hits nothing. Prey's frames and hold frames both draw it here.
 void FillPointerLayers(const UiPointerVisual& pointer, const ui::Surface& surface, const Vec3& head,
                        XrCompositionLayerQuad& cursor, XrCompositionLayerQuad& beam, bool& cursorActive, bool& beamActive)
 {
     cursorActive=beamActive=false;
     if(!pointer.active)return;
-    const auto fill=[](XrCompositionLayerQuad& target,const ui::Panel& p) {
+    const auto fill=[](XrCompositionLayerQuad& target,const ui::Panel& p,const XrRect2Di& rect) {
         target.space=gHost.space;target.eyeVisibility=XR_EYE_VISIBILITY_BOTH;
         target.layerFlags=XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT|XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
         target.pose={{p.pose.orientation.x,p.pose.orientation.y,p.pose.orientation.z,p.pose.orientation.w},
             {p.pose.position.x,p.pose.position.y,p.pose.position.z}};
         target.size={p.width,p.height};target.subImage.swapchain=gHost.pointerSwapchain;
-        target.subImage.imageRect={{0,0},{32,32}};
+        target.subImage.imageRect=rect;
     };
     const auto quads=ui::PointerQuadsFor(pointer.aim,pointer.hit,pointer.pressed,surface,head);
-    if(quads.cursor){fill(cursor,*quads.cursor);cursorActive=true;}
-    if(quads.beam) {
-        fill(beam,*quads.beam);
-        beam.subImage.imageRect={{15,15},{1,1}};
-        beamActive=true;
-    }
+    if(quads.cursor){fill(cursor,*quads.cursor,kCursorRect);cursorActive=true;}
+    if(quads.beam){fill(beam,*quads.beam,quads.fades?kFadingBeamRect:kSolidBeamRect);beamActive=true;}
 }
 
 Pose PoseOf(const XrPosef& p)
@@ -2337,11 +2343,12 @@ void ServiceXrFrame(void* renderer)
     // over the running game a frame can miss its eye pair, and dropping the
     // placement then would re-anchor the panel wherever the wearer looks next.
     // Such a frame submits nothing. Over a game menu it takes that menu's
-    // anchor; over the running game, an anchor afresh.
+    // anchor, and sits in front of it; over the running game, an anchor afresh.
     VrOptionsLayer::Frame options;
     if(VrOptionsOpen()&&haveViews) {
         if(!gHost.optionsLayer.Placed()&&!wantPanel)gHost.menuAnchor.reset();
         options=gHost.optionsLayer.Update(gHost.session,gHost.space,gHost.device,MenuAnchorFor(inputHead,views,reference),
+            static_cast<float>(gUiDistanceCm.load(std::memory_order_relaxed))*.01f,
             reference,inputHead,frameState.predictedDisplayTime);
         if(options.sessionFault)gStopRequested.store(true);
         if(options.active) {SetVrOptionsSurface(&options.surface,reference);EnsurePointerTexture();}

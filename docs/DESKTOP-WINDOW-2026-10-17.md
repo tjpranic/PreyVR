@@ -9,6 +9,12 @@ Status, 2026-10-17:
   answered, and two lose-focus requests were held off when the window went down.
 - **Then the default changed, at the user's request:** `StartMinimized` is 0. The
   window stays open unless PreyVR.json asks, and the hold applies either way.
+- **Later the same day, removed at the user's request, as no longer needed:**
+  `StartMinimized`, `WindowWidth` and `WindowHeight` are gone from the launcher, with
+  their code and tests. The launcher's fit to the screen (`Set-PreyVRWindowFit`,
+  2026-10-15) was then removed too: the window is left where Prey puts it.
+  `window.hold` stays. The rest of this note is the record of the removed features.
+  See the research log.
 
 Steam PreyDll SHA-256 `7d6e322f…05311a7`.
 

@@ -9,7 +9,6 @@
 
 namespace preyvr::dll {
 namespace {
-constexpr float kDistanceMetres = 2.0f;
 constexpr float kPushMetresPerSecond = 1.5f;
 
 // The panel's own sRGB format, of the two the runtime may list.
@@ -31,15 +30,26 @@ DXGI_FORMAT PanelFormat(XrSession session)
 } // namespace
 
 VrOptionsLayer::Frame VrOptionsLayer::Update(XrSession session, XrSpace space, ID3D11Device* device,
-                                             const ui::MenuAnchor& anchor, std::uint64_t reference,
-                                             const Pose& head, XrTime displayTime)
+                                             const ui::MenuAnchor& anchor, float menuDistance,
+                                             std::uint64_t reference, const Pose& head, XrTime displayTime)
 {
     Frame out;
-    if (!panel_ || reference_ != reference) {
-        panel_ = ui::PlaceMenu(anchor, static_cast<float>(options::Width) / options::Height, kDistanceMetres,
+    // In front of the game menu (ui::kOptionsDepthRatio), so re-placed when the
+    // menu's distance changes -- by a slider on this panel, applied on release,
+    // so it moves once and not under the laser. Not once dragged: then where it
+    // is, and its size, are the wearer's.
+    const bool menuMoved = menuDistance != menuDistance_ && !placement_ && !grab_;
+    if (!panel_ || reference_ != reference || menuMoved) {
+        panel_ = ui::PlaceMenu(anchor, static_cast<float>(options::Width) / options::Height, menuDistance,
                                1.0f, 0.68f, 0, 0);
-        if (panel_ && placement_) { panel_->pose = ui::PlacedPose(anchor, *placement_); }
+        if (panel_) { panel_ = ui::ScaleAbout(*panel_, anchor.upright.position, ui::kOptionsDepthRatio); }
+        if (panel_ && placement_) {
+            panel_->pose = ui::PlacedPose(anchor, *placement_);
+            panel_->width = placedWidth_;
+            panel_->height = placedHeight_;
+        }
         reference_ = reference;
+        menuDistance_ = menuDistance;
         grab_.reset();
     }
     Drag(anchor, head, displayTime);
@@ -113,14 +123,21 @@ void VrOptionsLayer::Drag(const ui::MenuAnchor& anchor, const Pose& head, XrTime
             if (const auto moved = ui::DragPanel(*grab_, laser.aim, head.position)) { panel_ = moved; }
         }
     } else if (grab_) {
-        if (panel_) { placement_ = ui::PlacementOf(anchor, *panel_); }
+        if (panel_) { Keep(anchor); }
         grab_.reset();
     }
 }
 
+void VrOptionsLayer::Keep(const ui::MenuAnchor& anchor)
+{
+    placement_ = ui::PlacementOf(anchor, *panel_);
+    placedWidth_ = panel_->width;
+    placedHeight_ = panel_->height;
+}
+
 void VrOptionsLayer::Close(const ui::MenuAnchor* anchor)
 {
-    if (grab_ && panel_ && anchor != nullptr) { placement_ = ui::PlacementOf(*anchor, *panel_); }
+    if (grab_ && panel_ && anchor != nullptr) { Keep(*anchor); }
     grab_.reset();
     panel_.reset();
 }

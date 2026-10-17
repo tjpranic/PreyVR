@@ -69,6 +69,19 @@ MenuAnchor AnchorMenu(const Pose& head, const std::array<Eye,2>& eyes);
 // (AroundHead). Nothing when the fit refuses.
 std::optional<Panel> PlaceMenu(const MenuAnchor& anchor, float aspect, float distance, float scale,
                                float margin, float right, float up);
+// **`panel` scaled about `eye` by `ratio`**: its centre `ratio` times as far
+// along the line from the eye, its width and height `ratio` times as big, facing
+// the same way. From `eye` it covers the same angle, so it looks the same size.
+// Unchanged for a non-finite or non-positive ratio.
+Panel ScaleAbout(const Panel& panel, const Vec3& eye, float ratio);
+// **VR Options sits in front of the game menu** (VrOptionsLayer): fitted where
+// the menu is (ui.distance), then scaled about the anchor to this fraction of
+// that distance. At the menu's own depth the two clashed: the curve brings a
+// menu's sides nearer than a flat panel there, so it stood in front of the panel
+// drawn over it. Every menu is fitted to an angle, so that bulge grows with its
+// distance, and one fraction clears it at every ui.distance, curve and size
+// (UiPanelTests).
+inline constexpr float kOptionsDepthRatio=.85f;
 // The head without roll, its pitch held within +-`maxPitch` radians: where a
 // popup opens, in front of the gaze. Looking down at a note on a desk puts its
 // panel down there, tilted back to face the eyes, where a menu would go to eye
@@ -162,15 +175,24 @@ std::optional<Panel> FacingQuad(const Vec3& center, const Vec3& eye, float width
 float AngularWidth(float distance, float panelWidth, float panelDistance, float scale);
 
 // **The laser's two quads**, from the controller's aim and what it hit. The beam
-// is 2 mm wide, from the aim along its forward (-Z) to the hit -- or 0.65 m --
-// turned about its own axis to face `head`. The cursor is 13 mm square (20 mm
+// is 2 mm wide, from the aim along its forward (-Z) to the hit, solid -- or,
+// hitting nothing, kLaserFadeLength long and `fades` (LaserFade) -- turned
+// about its own axis to face `head`. The cursor is 13 mm square (20 mm
 // while `pressed`), 2 mm in front of `surface` -- the one `hit` lies on -- at
 // the hit's (u, v), only when it is inside. Drawn the same in Prey's frames and in hold frames
 // (XrSessionHost), so a laser during a load looks like the live one. No beam
 // when the head is on its axis.
-struct PointerQuads { std::optional<Panel> beam, cursor; };
+struct PointerQuads { std::optional<Panel> beam, cursor; bool fades=false; };
 PointerQuads PointerQuadsFor(const Pose& aim, const std::optional<RayHit>& hit, bool pressed,
                              const Surface& surface, const Vec3& head);
+// **A beam that hits nothing fades out along its length**, as the headset's own
+// laser does outside the game, rather than stopping short: its opacity at
+// `along`, 0 at the controller to 1 at the tip -- solid for the first tenth, then
+// easing to nothing. Without depth testing between layers, a longer solid beam
+// would be drawn over a menu it passes behind; faded, its far end is too faint
+// to matter.
+inline constexpr float kLaserFadeLength=1.f;
+float LaserFade(float along);
 
 // **What one XR frame submits, bottom to top** (XrSessionHost). The game's menu
 // panel and the world are exclusive. VR Options goes over either -- the running

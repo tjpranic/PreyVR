@@ -223,17 +223,12 @@ parameter to `Start-PreyVR.ps1`. Explicit parameters override saved values.
 | `Width`, `Height` | `2016`, `2160` | Per-eye render size (see Display below) |
 | `ReferenceSpace` | `"auto"` | `"auto"` prefers LOCAL_FLOOR, then STAGE, then LOCAL; `"local"` forces LOCAL |
 | `DualStereo` | `1` | `1` both eyes from one frame; `0` alternate eyes (see Display below) |
-| `StartMinimized` | `0` | `1` minimises the desktop window once VR holds focus; `0` leaves it open |
-| `WindowWidth`, `WindowHeight` | `0`, `0` | Desktop window size in pixels (160..16384 by 120..16384); `0`, `0` fits the screen |
 
 **The desktop window is not what the headset sees.** `Width` and `Height` set the
-headset's image. `WindowWidth` and `WindowHeight` only size the window on the
-desktop: it gets the largest picture of the eye's shape that fits inside them, so it
-is never stretched, and it always stays on the screen. Minimised, the game keeps
-running at full rate, does not pause and keeps its sound. The mod holds focus for Prey while it runs,
-which also stops a notification or a click elsewhere from pausing the game. Restore
-the window from the taskbar to watch on the monitor. The keyboard shortcuts (F10,
-F11, F12) only work while the window has focus. See
+headset's image. Prey places the desktop window itself, at that size, so on a smaller
+screen part of it is off the screen. The mod holds focus for Prey while it runs, so a
+notification or a click elsewhere does not pause the game or mute it. The keyboard
+shortcuts (F10, F11, F12) only work while the window has focus. See
 [the desktop window notes](DESKTOP-WINDOW-2026-10-17.md).
 
 Everything else is a VR Options setting. An older `PreyVR.json` may still hold

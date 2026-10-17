@@ -8,28 +8,23 @@ VR Options Menu:
 
 Rendering:
 - Foveated rendering. Figure out if this is possible?
+- Arm IK tends to bend the arms inward. Not enough space between shoulder and wrist, maybe?
 
 Controls:
-- Redo controls to be nicer
-- Individual finger control support
+- Rebind controls to be nicer on Steam Frame controllers
 - Fix duplicated bindings
+- Individual finger control support
 
 Interactibility:
 - Make melee truly physical
 - Allow for hand-based interactions with objects in game (nicer grabbing, smacking things around)
 
+UI:
+Wrist stats bar shows Psi energy before you install a neuromod
+
 UX:
 - Game freezes a bit when first loading before showing the main menu in VR
 
 Bugs:
-- Snap turn causes a rendering artifact for a split second. It looks like the view is lagging by a frame.
 - Access violation that causes a crash. Seems to be due to a use-after-free camera related bug. Have got instrumentation in place to catch it.
 - Hands don't move with the controller when no weapon is out.
-
-Issues mitigated but still kind of existing:
-- Desktop game window spawns halfway off-desktop
-- Make it run minimized on the desktop
-
-Issues mitigated but still kind of existing:
-- Desktop game window spawns halfway off-desktop
-- Make it run minimized on the desktop

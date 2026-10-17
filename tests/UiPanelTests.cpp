@@ -1,4 +1,5 @@
 #include "preyvr/UiPanel.h"
+#include <algorithm>
 #include <cstdlib>
 #include <cmath>
 #include <initializer_list>
@@ -500,6 +501,50 @@ int main() {
             "and from a new anchor it is the same place relative to the wearer");
     }
 
+    // **VR Options in front of the game menu** (ui::ScaleAbout, ui::kOptionsDepthRatio).
+    {
+        const ui::Panel distant{Pose{about(0,1,0,.3f),{1,2,-3}},1.2f,.8f};
+        const Vec3 eye{.5f,1.5f,-.5f};
+        const auto halved=ui::ScaleAbout(distant,eye,.5f);
+        Require(near(halved.pose.position.x,.75f)&&near(halved.pose.position.y,1.75f)&&near(halved.pose.position.z,-1.75f),
+            "scaled by a half: halfway along the line from the eye");
+        Require(near(halved.width,.6f)&&near(halved.height,.4f),"and half the size, so it covers the same angle");
+        Require(near(halved.pose.orientation.y,distant.pose.orientation.y)&&near(halved.pose.orientation.w,distant.pose.orientation.w),
+            "facing the same way");
+        for(float bad:{0.f,-1.f,std::nanf("")}) {
+            const auto untouched=ui::ScaleAbout(distant,eye,bad);
+            Require(near(untouched.pose.position.z,-3)&&near(untouched.width,1.2f),"a non-positive or non-finite ratio changes nothing");
+        }
+        // Along every ray from the anchor through the VR Options panel that meets
+        // the game menu, the menu is further: the smallest (menu / panel) depth.
+        const Pose head{about(0,1,0,yaw),{.3f,1.6f,-.2f}};
+        const auto seen=ui::AnchorMenu(head,eyesOf(head,plain));
+        const auto from=seen.upright.position;
+        const auto clearance=[&](float distance,float curve,float scale,float ratio){
+            const auto menu=ui::PlaceMenu(seen,16.f/9,distance,scale,ui::kDefaultFitMargin,0,0);
+            const auto fitted=ui::PlaceMenu(seen,1400.f/1100,distance,1,.68f,0,0);
+            Require(menu&&fitted,"both panels are placed");
+            const ui::Surface options{ui::ScaleAbout(*fitted,from,ratio),0},game{*menu,curve};
+            float least=1e9f;
+            for(int i=0;i<=24;++i)for(int j=0;j<=24;++j) {
+                const auto p=ui::SurfacePoint(options,i/24.f,j/24.f).position;
+                Vec3 d{p.x-from.x,p.y-from.y,p.z-from.z};
+                const float depth=std::sqrt(d.x*d.x+d.y*d.y+d.z*d.z);d={d.x/depth,d.y/depth,d.z/depth};
+                const auto h=ui::Intersect(game,Pose{Normalize({d.y,-d.x,0,1-d.z}),from});
+                if(h&&h->inside)least=std::min(least,h->distance/depth);
+            }
+            Require(least<1e9f,"the panel overlaps the menu");
+            return least;
+        };
+        Require(clearance(2,35*.01745329f,1,1)<1,"premise: at the menu's own depth, its curve comes in front of the panel");
+        Require(clearance(2,35*.01745329f,1,ui::kOptionsDepthRatio)>1.08f,
+            "at the default distance, curve and size, the panel is well in front");
+        for(float distance:{1.f,2.f,3.f,4.f})for(float degrees:{0.f,15.f,35.f,60.f})
+            for(float scale:{.2f,.4f,.6f,.75f,.8f,1.f,1.4f,2.f})
+                Require(clearance(distance,degrees*.01745329f,scale,ui::kOptionsDepthRatio)>1.04f,
+                    "in front at every distance, curve and size the settings allow");
+    }
+
     // **The laser's quads** (ui::PointerQuadsFor), as both Prey's frames and hold frames draw them.
     {
         const Pose aim{{},{.4f,.2f,0}};         // forward is -Z, towards `flat`
@@ -510,7 +555,8 @@ int main() {
         const auto spot=ui::SurfacePoint(flat,onPanel->u,onPanel->v);
         Require(near(quads.cursor->pose.position.x,spot.position.x)&&near(quads.cursor->pose.position.y,spot.position.y)&&
                 near(quads.cursor->pose.position.z,spot.position.z+.002f),"2 mm in front of the hit on the surface");
-        Require(quads.beam&&near(quads.beam->width,.002f)&&near(quads.beam->height,2),"the beam reaches the hit");
+        Require(quads.beam&&near(quads.beam->width,.002f)&&near(quads.beam->height,2)&&!quads.fades,
+                "the beam reaches the hit, solid");
         Require(near(quads.beam->pose.position.x,.4f)&&near(quads.beam->pose.position.y,.2f)&&near(quads.beam->pose.position.z,-1),
                 "and is centred halfway along the aim");
         const auto along=Rotate(quads.beam->pose.orientation,{0,1,0});
@@ -522,11 +568,20 @@ int main() {
         Require(quads.cursor&&near(quads.cursor->width,.020f),"the cursor grows while pressed");
         const auto off=ui::Intersect(flat,Pose{{},{1.2f,0,0}});
         quads=ui::PointerQuadsFor(Pose{{},{1.2f,0,0}},off,false,flat,head);
-        Require(!quads.cursor&&quads.beam&&near(quads.beam->height,.65f),"off the panel: no cursor, the 0.65 m beam");
+        Require(!quads.cursor&&quads.beam&&near(quads.beam->height,ui::kLaserFadeLength)&&quads.fades,
+                "off the panel: no cursor, and the beam fades out");
+        Require(near(quads.beam->pose.position.z,-ui::kLaserFadeLength*.5f),"centred halfway along it");
         quads=ui::PointerQuadsFor(aim,std::nullopt,false,flat,head);
-        Require(!quads.cursor&&quads.beam&&near(quads.beam->height,.65f),"no surface hit: the same");
-        quads=ui::PointerQuadsFor(aim,std::nullopt,false,flat,Vec3{.4f,.2f,-.325f});
+        Require(!quads.cursor&&quads.beam&&near(quads.beam->height,ui::kLaserFadeLength)&&quads.fades,
+                "no surface hit: the same");
+        quads=ui::PointerQuadsFor(aim,std::nullopt,false,flat,Vec3{.4f,.2f,-ui::kLaserFadeLength*.5f});
         Require(!quads.beam,"no beam with the head on its axis");
+        // The fade: solid at the controller, nothing at the tip, never brighter further out.
+        Require(near(ui::LaserFade(0),1)&&near(ui::LaserFade(.1f),1)&&near(ui::LaserFade(1),0),
+                "solid for the first tenth, gone at the tip");
+        Require(near(ui::LaserFade(-1),1)&&near(ui::LaserFade(2),0)&&near(ui::LaserFade(std::nanf("")),0),
+                "clamped past either end; nothing for a non-finite position");
+        for(float out=0;out<1;out+=.01f)Require(ui::LaserFade(out+.01f)<=ui::LaserFade(out)+1e-6f,"it only fades going out");
     }
 
     std::cout<<"UI panel geometry, frame layers, panel dragging and laser quads passed\n";

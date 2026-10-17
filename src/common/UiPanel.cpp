@@ -55,7 +55,8 @@ PointerQuads PointerQuadsFor(const Pose& aim, const std::optional<RayHit>& hit, 
         const float size=pressed?.020f:.013f;
         quads.cursor=Panel{Compose(SurfacePoint(surface,hit->u,hit->v),Pose{{},{0,0,.002f}}),size,size};
     }
-    const float length=onSurface?hit->distance:.65f;
+    quads.fades=!onSurface;
+    const float length=onSurface?hit->distance:kLaserFadeLength;
     const auto y=Rotate(aim.orientation,{0,0,-1});
     const Vec3 centre{aim.position.x+y.x*length*.5f,aim.position.y+y.y*length*.5f,aim.position.z+y.z*length*.5f};
     const Vec3 toHead{head.x-centre.x,head.y-centre.y,head.z-centre.z};
@@ -67,6 +68,11 @@ PointerQuads PointerQuadsFor(const Pose& aim, const std::optional<RayHit>& hit, 
         quads.beam=Panel{Pose{stereo::QuaternionFromBasis(x,y,z),centre},.002f,length};
     }
     return quads;
+}
+float LaserFade(float along) {
+    if(!std::isfinite(along))return 0;
+    const float s=std::clamp((along-.1f)/.9f,0.f,1.f);
+    return 1-s*s*(3-2*s); // smoothstep: no visible start or end to the fade
 }
 namespace {
 bool Valid(const Pose& p) {
@@ -233,6 +239,12 @@ std::optional<Panel> PlaceMenu(const MenuAnchor& anchor, float aspect, float dis
     auto panel=FitPanel(anchor.upright,anchor.eyes,aspect,distance,scale,margin);
     if(panel)panel->pose=AroundHead(anchor.upright,panel->pose,right,up);
     return panel;
+}
+Panel ScaleAbout(const Panel& panel, const Vec3& eye, float ratio) {
+    if(!std::isfinite(ratio)||!(ratio>0))return panel;
+    const auto& p=panel.pose.position;
+    return Panel{Pose{panel.pose.orientation,{eye.x+(p.x-eye.x)*ratio,eye.y+(p.y-eye.y)*ratio,eye.z+(p.z-eye.z)*ratio}},
+                 panel.width*ratio,panel.height*ratio};
 }
 Pose GazeHead(const Pose& head, float maxPitch) {
     if (!Valid(head) || !std::isfinite(maxPitch)) return head;

@@ -734,8 +734,6 @@ if(PREYVR_BUILD_TESTS)
             -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/LauncherSettings.Tests.ps1")
         add_test(NAME launcher_stereo COMMAND "${PREYVR_POWERSHELL_EXECUTABLE}"
             -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/LauncherStereo.Tests.ps1")
-        add_test(NAME launcher_window COMMAND "${PREYVR_POWERSHELL_EXECUTABLE}"
-            -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/LauncherWindow.Tests.ps1")
     endif()
     if(PREYVR_POWERSHELL_EXECUTABLE AND PREYVR_BUILD_SMOKE_DLL AND WIN32)
         add_test(
