@@ -8,7 +8,6 @@ namespace preyvr::animik {
 
 namespace {
 
-Quaternion ConjugateOf(const Quaternion& q) { return Quaternion{-q.x, -q.y, -q.z, q.w}; }
 
 } // namespace
 
@@ -29,7 +28,7 @@ bool ValidJoint(int index, unsigned int count)
 Vec3 WorldToModel(const Location& location, const Vec3& world)
 {
     const Vec3 offset{world.x - location.t.x, world.y - location.t.y, world.z - location.t.z};
-    const Vec3 turned = Rotate(ConjugateOf(Normalize(location.q)), offset);
+    const Vec3 turned = Rotate(Conjugate(Normalize(location.q)), offset);
     const float inverseScale = (std::isfinite(location.s) && std::fabs(location.s) > 1e-6f)
                                    ? 1.0f / location.s : 1.0f;
     return Vec3{turned.x * inverseScale, turned.y * inverseScale, turned.z * inverseScale};
@@ -37,7 +36,7 @@ Vec3 WorldToModel(const Location& location, const Vec3& world)
 
 Quaternion WorldToModel(const Location& location, const Quaternion& world)
 {
-    return Normalize(Multiply(ConjugateOf(Normalize(location.q)), Normalize(world)));
+    return Normalize(Multiply(Conjugate(Normalize(location.q)), Normalize(world)));
 }
 
 Vec3 ModelToWorld(const Location& location, const Vec3& model)
@@ -86,7 +85,7 @@ Vec3 ScaleReach(const Vec3& upperJoint, const Vec3& goal, float scale)
 Quaternion CalibrateRotationOffset(const Quaternion& controllerModel,
                                    const Quaternion& wristModel)
 {
-    return Normalize(Multiply(ConjugateOf(Normalize(controllerModel)), Normalize(wristModel)));
+    return Normalize(Multiply(Conjugate(Normalize(controllerModel)), Normalize(wristModel)));
 }
 
 Quaternion ApplyRotationOffset(const Quaternion& controllerModel, const Quaternion& offset)

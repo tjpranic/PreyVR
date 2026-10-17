@@ -6,14 +6,7 @@
 namespace preyvr::use {
 namespace {
 
-constexpr float kPi = 3.14159265358979f;
 
-Vec3 Add(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
-Vec3 Sub(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-Vec3 Scale(Vec3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
-float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-float Length(Vec3 a) { return std::sqrt(Dot(a, a)); }
-bool Finite(Vec3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
 
 float Alpha(float cutoff, float dt)
 {

@@ -7,43 +7,13 @@
 namespace preyvr::handpose {
 namespace {
 
-constexpr float kDegrees = 3.14159265358979f / 180.0f;
+constexpr float kDegrees = kPi / 180.0f;
 
-Vec3 Add(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
-Vec3 Sub(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-Vec3 Mul(Vec3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
-float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-Vec3 Cross(Vec3 a, Vec3 b) { return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x}; }
-float Length(Vec3 a) { return std::sqrt(Dot(a, a)); }
 bool Unit(Vec3& a) {
     const float n = Length(a);
     if (!std::isfinite(n) || n < 1e-6f) { return false; }
-    a = Mul(a, 1.0f / n);
+    a = Scale(a, 1.0f / n);
     return true;
-}
-
-// Rotation matrix (columns = images of the unit axes) -> quaternion.
-Quaternion FromColumns(Vec3 c0, Vec3 c1, Vec3 c2)
-{
-    const float m00 = c0.x, m10 = c0.y, m20 = c0.z;
-    const float m01 = c1.x, m11 = c1.y, m21 = c1.z;
-    const float m02 = c2.x, m12 = c2.y, m22 = c2.z;
-    const float trace = m00 + m11 + m22;
-    Quaternion q{};
-    if (trace > 0.0f) {
-        const float s = std::sqrt(trace + 1.0f) * 2.0f;
-        q = {(m21 - m12) / s, (m02 - m20) / s, (m10 - m01) / s, 0.25f * s};
-    } else if (m00 > m11 && m00 > m22) {
-        const float s = std::sqrt(1.0f + m00 - m11 - m22) * 2.0f;
-        q = {0.25f * s, (m01 + m10) / s, (m02 + m20) / s, (m21 - m12) / s};
-    } else if (m11 > m22) {
-        const float s = std::sqrt(1.0f + m11 - m00 - m22) * 2.0f;
-        q = {(m01 + m10) / s, 0.25f * s, (m12 + m21) / s, (m02 - m20) / s};
-    } else {
-        const float s = std::sqrt(1.0f + m22 - m00 - m11) * 2.0f;
-        q = {(m02 + m20) / s, (m12 + m21) / s, 0.25f * s, (m10 - m01) / s};
-    }
-    return Normalize(q);
 }
 
 Quaternion AboutZ(float radians) { return {0.0f, 0.0f, std::sin(radians * 0.5f), std::cos(radians * 0.5f)}; }
@@ -186,14 +156,14 @@ bool MeasureHandFrame(Side side, const Vec3 baseOffset[4], const Quaternion base
     Vec3 mean{};
     for (int f = 0; f < 4; ++f) {
         knuckle[f] = Add(baseOffset[f], Rotate(baseRotation[f], firstOffset[f]));
-        mean = Add(mean, Mul(knuckle[f], 0.25f));
+        mean = Add(mean, Scale(knuckle[f], 0.25f));
     }
     Vec3 length = mean;
     knuckleDistance = Length(mean);
     if (!Unit(length)) { return false; }
     // Index is the thumb's neighbour on both hands.
     Vec3 across = Sub(knuckle[0], knuckle[3]);
-    across = Sub(across, Mul(length, Dot(across, length)));
+    across = Sub(across, Scale(length, Dot(across, length)));
     if (!Unit(across)) { return false; }
     frame.length = length;
     frame.thumb = across;
@@ -218,15 +188,15 @@ Quaternion FrameToFrame(const Frame& from, const Frame& to)
     Vec3 column[3];
     for (int k = 0; k < 3; ++k) {
         const float a = Dot(from.length, e[k]), b = Dot(from.thumb, e[k]), p = Dot(from.palm, e[k]);
-        column[k] = Add(Add(Mul(to.length, a), Mul(to.thumb, b)), Mul(to.palm, p));
+        column[k] = Add(Add(Scale(to.length, a), Scale(to.thumb, b)), Scale(to.palm, p));
     }
-    return FromColumns(column[0], column[1], column[2]);
+    return QuaternionFromBasis(column[0], column[1], column[2]);
 }
 
 Vec3 GripPointInWrist(const Frame& hand, float knuckleDistance, const GripPoint& point)
 {
-    return Add(Add(Mul(hand.length, point.alongHand * knuckleDistance), Mul(hand.palm, point.outOfPalm)),
-               Mul(hand.thumb, point.towardThumb));
+    return Add(Add(Scale(hand.length, point.alongHand * knuckleDistance), Scale(hand.palm, point.outOfPalm)),
+               Scale(hand.thumb, point.towardThumb));
 }
 
 float RollToMatch(const Vec3& axis, const Vec3* from, const Vec3* to, int count)
@@ -235,8 +205,8 @@ float RollToMatch(const Vec3& axis, const Vec3* from, const Vec3* to, int count)
     // Sum of v'.r is c + A cos t + B sin t, maximal at atan2(B, A).
     float cosine = 0.0f, sine = 0.0f;
     for (int i = 0; i < count; ++i) {
-        const Vec3 v = Sub(from[i], Mul(axis, Dot(from[i], axis)));
-        const Vec3 r = Sub(to[i], Mul(axis, Dot(to[i], axis)));
+        const Vec3 v = Sub(from[i], Scale(axis, Dot(from[i], axis)));
+        const Vec3 r = Sub(to[i], Scale(axis, Dot(to[i], axis)));
         cosine += Dot(v, r);
         sine += Dot(Cross(axis, v), r);
     }
@@ -289,7 +259,7 @@ Vec3 SoftReach(const Vec3& shoulder, const Vec3& goal, float reach, float knee)
     // where the hand would visibly stop, and never the straight-arm singularity.
     const float span = reach - start;
     const float mapped = start + span * (1.0f - std::exp(-(distance - start) / span));
-    return Add(shoulder, Mul(d, mapped / distance));
+    return Add(shoulder, Scale(d, mapped / distance));
 }
 
 } // namespace preyvr::handpose

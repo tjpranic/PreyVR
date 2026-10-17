@@ -5,12 +5,11 @@
 #include <atomic>
 
 namespace preyvr::physical {
-inline Vec3 Add(Vec3 a,Vec3 b){return {a.x+b.x,a.y+b.y,a.z+b.z};}
-inline Vec3 Sub(Vec3 a,Vec3 b){return {a.x-b.x,a.y-b.y,a.z-b.z};}
-inline Vec3 Scale(Vec3 a,float s){return {a.x*s,a.y*s,a.z*s};}
-inline float Length(Vec3 a){return std::sqrt(a.x*a.x+a.y*a.y+a.z*a.z);}
-inline Quaternion Inverse(Quaternion q){return {-q.x,-q.y,-q.z,q.w};}
-inline Pose Inverse(Pose p){auto q=Inverse(p.orientation);return {q,Rotate(q,Scale(p.position,-1))};}
+using preyvr::Add;
+using preyvr::Length;
+using preyvr::Scale;
+using preyvr::Sub;
+inline Pose Inverse(Pose p){auto q=Conjugate(p.orientation);return {q,Rotate(q,Scale(p.position,-1))};}
 inline Vec3 Transform(Pose p,Vec3 v){return Add(p.position,Rotate(p.orientation,v));}
 using Points=std::array<Vec3,9>;
 inline Points Bounds(Vec3 lo,Vec3 hi){

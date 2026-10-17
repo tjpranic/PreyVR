@@ -43,7 +43,7 @@ static_assert(offsetof(Params,hits)==0x38 && offsetof(Params,capacity)==0x40);
 static_assert(offsetof(Params,skipCount)==0x50 && offsetof(Params,skip)==0x58);
 static_assert(offsetof(Params,collisionIgnore)==0x64);
 constexpr float Range = 200.f;
-inline bool Finite(Vec3 v){return std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(v.z);}
+using preyvr::Finite;
 inline bool Build(Params& p,Vec3 origin,Vec3 direction,Hit& hit,void** skip,int count,float range=Range){
     p={};
     const float norm=direction.x*direction.x+direction.y*direction.y+direction.z*direction.z;

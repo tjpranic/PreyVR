@@ -1,5 +1,7 @@
 #include "preyvr/RoomScale.h"
 #include "preyvr/StereoCamera.h"
+#include "TestGeometry.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -10,18 +12,9 @@ using namespace preyvr::roomscale;
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAIL: " << message << "\n";
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
-constexpr float kDeg = 3.14159265f / 180.0f;
-Vec3 Add(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
-Vec3 Sub(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-float Length(Vec3 a) { return std::sqrt(a.x * a.x + a.y * a.y + a.z * a.z); }
+using preyvr::test::kDeg;
 bool Near(Vec3 a, Vec3 b, float e = 1e-4f) { return Length(Sub(a, b)) <= e; }
 
 void TestShiftCancelsTheMove()
@@ -42,8 +35,8 @@ void TestShiftCancelsTheMove()
     Require(Near(HeadOffsetWorld({0, 0, -1}, {}, 0.0f, 1.0f), {0, 1, 0}, 1e-5f), "forward is engine +Y");
 }
 
-Quaternion AboutY(float a) { return {0, std::sin(a / 2), 0, std::cos(a / 2)}; }
-Quaternion AboutX(float a) { return {std::sin(a / 2), 0, 0, std::cos(a / 2)}; }
+using preyvr::test::AboutY;
+using preyvr::test::AboutX;
 
 void TestFollowPointIgnoresHeadRotation()
 {

@@ -1,4 +1,5 @@
 #include "preyvr/WrenchQuery.h"
+#include "TestSupport.h"
 
 #include <array>
 #include <cmath>
@@ -7,13 +8,7 @@
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 bool Near(float left, float right, float epsilon = 0.0001f)
 {

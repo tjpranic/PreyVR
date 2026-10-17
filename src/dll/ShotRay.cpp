@@ -138,12 +138,6 @@ std::atomic<int> gMuzzleOffAimMm{-1}, gMuzzleAlongAimMm{0}, gBarrelAxisMdeg{-1},
 LatestSnapshot<ShotTrace> gLastShot;
 std::atomic<unsigned long long> gShotIndex{0};
 
-bool Finite(Vec3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
-Vec3 Sub(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-Vec3 Add(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
-Vec3 Scale(Vec3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
-float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-float Len(Vec3 a) { return std::sqrt(Dot(a, a)); }
 std::string Point(Vec3 v)
 {
     char text[64];
@@ -271,7 +265,7 @@ void Finish(Pending& p, bool seen)
     (seen ? gProjectiles : gProjectilesUnseen).fetch_add(1, std::memory_order_relaxed);
     if (p.haveAim) { t.spawnOffLineMm = shot::DistanceToLine(t.spawn, p.aimOrigin, t.direction) * 1000.0f; }
     gLastShot.Publish(t);
-    const float distance = Len(Sub(t.target, t.spawn));
+    const float distance = Length(Sub(t.target, t.spawn));
     std::ostringstream line;
     line << "n=" << gShotIndex.fetch_add(1) + 1 << " route=" << shot::RouteName(t.route)
          << " steered=" << (gEnabled.load() ? 1 : 0) << " spawnKind=" << shot::SpawnName(t.spawnKind)
@@ -279,14 +273,14 @@ void Finish(Pending& p, bool seen)
          << " dir=" << Point(t.direction) << " target=" << Point(t.target) << " hit=" << t.entityHit
          << " dist=" << Fixed(distance, 2) << " angleDeg=" << Fixed(t.angleDegrees, 3)
          << " spawnOffAimMm=" << Fixed(t.spawnOffLineMm, 1) << " queryOrigin=" << Point(p.queryOrigin)
-         << " spawnFromQueryMm=" << Fixed(Len(Sub(t.spawn, p.queryOrigin)) * 1000.0f, 1);
-    if (p.haveProjectileDirection && Len(p.projectileDirection) > 1e-6f) {
+         << " spawnFromQueryMm=" << Fixed(Length(Sub(t.spawn, p.queryOrigin)) * 1000.0f, 1);
+    if (p.haveProjectileDirection && Length(p.projectileDirection) > 1e-6f) {
         // Split the projectile's deviation from the aim into up and sideways,
         // CryEngine Z-up: a weapon that lobs to compensate gravity tilts UP only.
-        const Vec3 f = Scale(p.projectileDirection, 1.0f / Len(p.projectileDirection));
+        const Vec3 f = Scale(p.projectileDirection, 1.0f / Length(p.projectileDirection));
         const Vec3 d = t.direction;
         Vec3 side{d.y, -d.x, 0};
-        const float sideLength = Len(side);
+        const float sideLength = Length(side);
         if (sideLength > 1e-4f) {
             side = Scale(side, 1.0f / sideLength);
             const Vec3 up{side.y * d.z, -side.x * d.z, side.x * d.y - side.y * d.x};   // side x d: up for d=+Y, side=+X
@@ -298,7 +292,7 @@ void Finish(Pending& p, bool seen)
         // A projectile route may move the target after the query (pellets get
         // it through the point-blank handler first).
         line << " projTarget=" << Point(p.projectileTarget)
-             << " projTargetMovedMm=" << Fixed(Len(Sub(p.projectileTarget, t.target)) * 1000.0f, 1);
+             << " projTargetMovedMm=" << Fixed(Length(Sub(p.projectileTarget, t.target)) * 1000.0f, 1);
     }
     Log(line.str());
 }
@@ -388,7 +382,7 @@ void ObserveProjectile(Vec3 spawn, Vec3 flight, const Vec3* aimedTarget = nullpt
 {
     auto& p = tPending;
     if (!p.active || MonotonicNanoseconds() - p.ns > 20000000ull) { return; }
-    if (!Finite(spawn) || !Finite(flight) || !(Len(flight) > 1e-6f)) { return; }
+    if (!Finite(spawn) || !Finite(flight) || !(Length(flight) > 1e-6f)) { return; }
     p.trace.spawn = spawn;
     p.projectileDirection = flight;
     p.haveProjectileDirection = true;
@@ -492,7 +486,7 @@ BeamMetrics Measure(const BeamTrace& t)
     BeamMetrics m{};
     const Vec3 d = t.aim.direction;
     if (t.haveMuzzle) {
-        m.beamFromMuzzleMm = Len(Sub(t.beamPosition, t.muzzle)) * 1000.0f;
+        m.beamFromMuzzleMm = Length(Sub(t.beamPosition, t.muzzle)) * 1000.0f;
         if (t.haveAim) { m.muzzleAxisDeg = shot::AngleDegrees(t.muzzleAxis, d); }
     }
     if (t.haveAim) {
@@ -508,7 +502,7 @@ BeamMetrics Measure(const BeamTrace& t)
         // The amber marker: where the aim lane's own scene query of that ray landed.
         if (t.haveAim && t.aim.sceneDistance > 0) {
             m.markerDistance = t.aim.sceneDistance;
-            m.hitFromMarkerMm = Len(Sub(t.hitPoint, Add(t.aim.origin, Scale(d, t.aim.sceneDistance)))) * 1000.0f;
+            m.hitFromMarkerMm = Length(Sub(t.hitPoint, Add(t.aim.origin, Scale(d, t.aim.sceneDistance)))) * 1000.0f;
         }
     }
     return m;
@@ -555,7 +549,7 @@ float __fastcall BeamRayHook(void* out, const Vec3* origin, const Vec3* directio
     t.hit = result > 0 && CopyBytes(&t.hitPoint, static_cast<const std::uint8_t*>(out) + kBeamRayHitPoint, sizeof(Vec3)) &&
             Finite(t.hitPoint);
     t.haveMuzzle = ReadMuzzle(weapon, t.muzzle, t.muzzleAxis);
-    t.haveAim = TryGetAimSample(t.aim) && Len(t.aim.direction) > .5f;
+    t.haveAim = TryGetAimSample(t.aim) && Length(t.aim.direction) > .5f;
     t.ns = MonotonicNanoseconds();
     t.valid = true;
     tBeam = t;
@@ -697,7 +691,7 @@ bool ShotRayFrame(const GameplayPoseFrame& frame, aim::Sample& sample)
     }
     Vec3 grip{};
     if (GripWorld(frame, grip)) {
-        gMuzzleFromGripMm.store(static_cast<int>(Len(Sub(muzzle, grip)) * 1000.0f), std::memory_order_relaxed);
+        gMuzzleFromGripMm.store(static_cast<int>(Length(Sub(muzzle, grip)) * 1000.0f), std::memory_order_relaxed);
     }
     gBarrelAxisMdeg.store(static_cast<int>(shot::AngleDegrees(axis, sample.direction) * 1000.0f),
                           std::memory_order_relaxed);
@@ -814,7 +808,7 @@ std::string ShotRayReport()
     if (gLastShot.TryRead(t) && t.valid) {
         out << " lastShot=" << shot::RouteName(t.route) << " lastSpawnKind=" << shot::SpawnName(t.spawnKind)
             << " lastAngleDeg=" << Fixed(t.angleDegrees, 3) << " lastSpawnOffAimMm=" << Fixed(t.spawnOffLineMm, 1)
-            << " lastHit=" << t.entityHit << " lastDist=" << Fixed(Len(Sub(t.target, t.spawn)), 2)
+            << " lastHit=" << t.entityHit << " lastDist=" << Fixed(Length(Sub(t.target, t.spawn)), 2)
             << " lastAgeMs=" << (MonotonicNanoseconds() - t.ns) / 1000000ull;
     }
     return out.str();

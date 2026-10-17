@@ -1,11 +1,12 @@
 #include "preyvr/UiPanel.h"
+#include "TestSupport.h"
 #include <algorithm>
 #include <cstdlib>
 #include <cmath>
 #include <initializer_list>
 #include <iostream>
 using namespace preyvr;
-void Require(bool b,const char* why) { if(!b){std::cerr<<why<<'\n';std::exit(1);} }
+using preyvr::test::Require;
 int main() {
     const auto near=[](float a,float b){return std::abs(a-b)<.0001f;};
     const ui::Surface flat{{Pose{{},{0,0,-2}},2,1},0};

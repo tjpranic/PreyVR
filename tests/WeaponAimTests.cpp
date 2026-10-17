@@ -1,4 +1,6 @@
 #include "preyvr/WeaponAim.h"
+#include "TestGeometry.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <utility>
@@ -10,22 +12,11 @@ using namespace preyvr::aim;
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAIL: " << message << "\n";
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 bool Near(float a, float b, float e = 1e-4f) { return std::fabs(a - b) <= e; }
 
-Quaternion AxisAngle(Vec3 axis, float radians)
-{
-    const float len = std::sqrt(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
-    const float s = std::sin(radians * 0.5f) / len;
-    return Quaternion{axis.x * s, axis.y * s, axis.z * s, std::cos(radians * 0.5f)};
-}
+using preyvr::test::AxisAngle;
 
 Sample FreshSample(std::uint64_t equip, std::uint64_t reference, std::uint64_t published)
 {

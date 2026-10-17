@@ -8,59 +8,23 @@
 
 namespace preyvr::carry {
 
-Vec3 Add(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
-Vec3 Sub(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-Vec3 Scale(Vec3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
-float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-float Length(Vec3 a) { return std::sqrt(Dot(a, a)); }
-bool Finite(Vec3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
 bool Finite(Quaternion q)
 {
     return std::isfinite(q.x) && std::isfinite(q.y) && std::isfinite(q.z) && std::isfinite(q.w) &&
            q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w > 1e-6f;
 }
-Quaternion Inverse(Quaternion q) { return {-q.x, -q.y, -q.z, q.w}; }
 
 Quaternion FromMatrix34(const float m[12])
 {
     // Columns are the rotated axes; dividing by their length removes scale.
-    float r[3][3];
+    Vec3 column[3];
     for (int c = 0; c < 3; ++c) {
         const float x = m[c], y = m[4 + c], z = m[8 + c];
         const float l = std::sqrt(x * x + y * y + z * z);
         const float k = l > 1e-6f ? 1.0f / l : 0.0f;
-        r[0][c] = x * k;
-        r[1][c] = y * k;
-        r[2][c] = z * k;
+        column[c] = {x * k, y * k, z * k};
     }
-    Quaternion q{};
-    const float trace = r[0][0] + r[1][1] + r[2][2];
-    if (trace > 0.0f) {
-        const float s = std::sqrt(trace + 1.0f) * 2.0f;
-        q.w = 0.25f * s;
-        q.x = (r[2][1] - r[1][2]) / s;
-        q.y = (r[0][2] - r[2][0]) / s;
-        q.z = (r[1][0] - r[0][1]) / s;
-    } else if (r[0][0] > r[1][1] && r[0][0] > r[2][2]) {
-        const float s = std::sqrt(1.0f + r[0][0] - r[1][1] - r[2][2]) * 2.0f;
-        q.w = (r[2][1] - r[1][2]) / s;
-        q.x = 0.25f * s;
-        q.y = (r[0][1] + r[1][0]) / s;
-        q.z = (r[0][2] + r[2][0]) / s;
-    } else if (r[1][1] > r[2][2]) {
-        const float s = std::sqrt(1.0f + r[1][1] - r[0][0] - r[2][2]) * 2.0f;
-        q.w = (r[0][2] - r[2][0]) / s;
-        q.x = (r[0][1] + r[1][0]) / s;
-        q.y = 0.25f * s;
-        q.z = (r[1][2] + r[2][1]) / s;
-    } else {
-        const float s = std::sqrt(1.0f + r[2][2] - r[0][0] - r[1][1]) * 2.0f;
-        q.w = (r[1][0] - r[0][1]) / s;
-        q.x = (r[0][2] + r[2][0]) / s;
-        q.y = (r[1][2] + r[2][1]) / s;
-        q.z = 0.25f * s;
-    }
-    return Normalize(q);
+    return QuaternionFromBasis(column[0], column[1], column[2]);
 }
 
 Vec3 TrackingToWorld(Vec3 v, float yawRadians)
@@ -82,7 +46,7 @@ constexpr float kNs = 1e-9f;
 Vec3 AngularBetween(Quaternion from, Quaternion to, float dt)
 {
     if (!(dt > 0.0f)) { return {}; }
-    Quaternion d = Multiply(to, Inverse(Normalize(from)));
+    Quaternion d = Multiply(to, Conjugate(Normalize(from)));
     if (d.w < 0.0f) { d = {-d.x, -d.y, -d.z, -d.w}; }
     const float s = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
     if (s < 1e-7f) { return {}; }
@@ -238,7 +202,7 @@ Vec3 HalfExtents(const Box& b)
 
 float Support(const Box& box, Quaternion rotation, Vec3 direction)
 {
-    const Vec3 local = Rotate(Inverse(Normalize(rotation)), direction);
+    const Vec3 local = Rotate(Conjugate(Normalize(rotation)), direction);
     const Vec3 e = HalfExtents(box);
     return std::fabs(local.x) * e.x + std::fabs(local.y) * e.y + std::fabs(local.z) * e.z;
 }

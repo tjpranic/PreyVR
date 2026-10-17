@@ -1,4 +1,5 @@
 #include "preyvr/AimState.h"
+#include "TestSupport.h"
 
 #include <array>
 #include <cmath>
@@ -7,13 +8,7 @@
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 constexpr std::array<std::uint8_t, 32> kCenteredFixture = {
     0x9B, 0x70, 0x43, 0x44, 0x5D, 0x70, 0xC4, 0x44,

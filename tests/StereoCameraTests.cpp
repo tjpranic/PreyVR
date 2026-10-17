@@ -1,5 +1,7 @@
 #include "preyvr/CameraEdit.h"
 #include "preyvr/StereoCamera.h"
+#include "TestGeometry.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <limits>
@@ -12,13 +14,7 @@ namespace {
 using namespace preyvr;
 using namespace preyvr::stereo;
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 bool Near(float a, float b, float epsilon = 1e-5f)
 {
@@ -30,13 +26,7 @@ bool NearVec(Vec3 a, Vec3 b, float epsilon = 1e-5f)
     return Near(a.x, b.x, epsilon) && Near(a.y, b.y, epsilon) && Near(a.z, b.z, epsilon);
 }
 
-Quaternion AxisAngle(Vec3 axis, float radians)
-{
-    const float length = std::sqrt(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
-    const float half = radians * 0.5f;
-    const float s = std::sin(half) / length;
-    return {axis.x * s, axis.y * s, axis.z * s, std::cos(half)};
-}
+using preyvr::test::AxisAngle;
 
 void TestAxisConversion()
 {

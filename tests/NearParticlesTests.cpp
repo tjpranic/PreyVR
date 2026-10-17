@@ -1,4 +1,5 @@
 #include "preyvr/NearParticles.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -10,17 +11,8 @@ using namespace preyvr::nearfx;
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAIL: " << message << "\n";
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 bool Near(float a, float b, float e = 1e-5f) { return std::fabs(a - b) <= e; }
-Vec3 Add(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
-Vec3 Sub(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-Vec3 Scale(Vec3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
 
 void TestBuilders()
 {

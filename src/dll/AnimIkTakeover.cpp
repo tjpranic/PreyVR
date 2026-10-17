@@ -624,16 +624,12 @@ void BuildHandRig(std::uint8_t* skeleton, unsigned jointCount, std::uint8_t* rel
     Log(line);
 }
 
-Vec3 Sub3(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-Vec3 Add3(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
-Vec3 Scale3(Vec3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
-Quaternion Conj(Quaternion q) { return {-q.x, -q.y, -q.z, q.w}; }
 
 // Engine world -> the app's OpenXR space: the inverse of ControllerWorldFromHead.
 Vec3 WorldToOpenXr(const GameplayPoseFrame& frame, const Vec3& anchor, const Vec3& world)
 {
-    const Vec3 engine = Rotate(Conj(stereo::YawQuaternion(frame.yaw)), Sub3(world, anchor));
-    return Add3(frame.tracking.head.position, Rotate(Conj(stereo::kOpenXrToEngine), engine));
+    const Vec3 engine = Rotate(Conjugate(stereo::YawQuaternion(frame.yaw)), Sub(world, anchor));
+    return Add(frame.tracking.head.position, Rotate(Conjugate(stereo::kOpenXrToEngine), engine));
 }
 
 // The wrist rotation (engine world) that puts the game hand's anatomical frame
@@ -718,8 +714,8 @@ struct XrMap {
     }
     Vec3 ToModel(const Vec3& xr) const
     {
-        const Vec3 engine = Rotate(stereo::kOpenXrToEngine, Sub3(xr, frame->tracking.head.position));
-        return animik::WorldToModel(location, Add3(anchor, Rotate(stereo::YawQuaternion(frame->yaw), engine)));
+        const Vec3 engine = Rotate(stereo::kOpenXrToEngine, Sub(xr, frame->tracking.head.position));
+        return animik::WorldToModel(location, Add(anchor, Rotate(stereo::YawQuaternion(frame->yaw), engine)));
     }
 };
 
@@ -734,11 +730,7 @@ bool ArmAnchor(const GameplayPoseFrame& frame, Vec3& anchor)
     return true;
 }
 
-float Dist3(Vec3 a, Vec3 b)
-{
-    const Vec3 d = Sub3(a, b);
-    return std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
-}
+float Dist3(Vec3 a, Vec3 b) { return Length(Sub(a, b)); }
 
 // Before the native pass, under gIkMutex: the torso and each shoulder.
 void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& location, std::uint8_t* absolute,
@@ -976,9 +968,9 @@ void DriveHand(unsigned int hand, std::uint8_t* relative, std::uint8_t* absolute
         QuatT nativeRight{};
         if (ReadQuatT(absolute, poseCount, gHandJoint[0].load(std::memory_order_relaxed), nativeRight)) {
             const Quaternion turn = Normalize(Multiply(*supportPrimaryRotation,
-                Conj(Quaternion{nativeRight.q[0], nativeRight.q[1], nativeRight.q[2], nativeRight.q[3]})));
+                Conjugate(Quaternion{nativeRight.q[0], nativeRight.q[1], nativeRight.q[2], nativeRight.q[3]})));
             carryRotation = Normalize(Multiply(turn, Quaternion{wrist.q[0], wrist.q[1], wrist.q[2], wrist.q[3]}));
-            carryGoal = Add3(*supportPrimary, Rotate(turn, Vec3{wrist.t[0] - nativeRight.t[0],
+            carryGoal = Add(*supportPrimary, Rotate(turn, Vec3{wrist.t[0] - nativeRight.t[0],
                                                                 wrist.t[1] - nativeRight.t[1],
                                                                 wrist.t[2] - nativeRight.t[2]}));
             carry = true;
@@ -1059,7 +1051,7 @@ void DriveHand(unsigned int hand, std::uint8_t* relative, std::uint8_t* absolute
                 // support region is where the native left palm is, not its wrist.
                 Vec3 nativeLeftPoint{nativeLeft.t[0], nativeLeft.t[1], nativeLeft.t[2]};
                 if (posed && gHandRig.valid[1]) {
-                    nativeLeftPoint = Add3(nativeLeftPoint, Rotate(
+                    nativeLeftPoint = Add(nativeLeftPoint, Rotate(
                         Quaternion{nativeLeft.q[0], nativeLeft.q[1], nativeLeft.q[2], nativeLeft.q[3]},
                         GripPointLocal(1, pose)));
                 }
@@ -1152,10 +1144,10 @@ void DriveHand(unsigned int hand, std::uint8_t* relative, std::uint8_t* absolute
                 // A long weapon sits back in the hand: the drawn trigger hand
                 // stays on its grip, both move back along the barrel.
                 const Vec3 held = holdBack > 0.0f
-                    ? Sub3(world.position, Scale3(Rotate(aimWorld.orientation, Vec3{0.0f, 1.0f, 0.0f}), holdBack))
+                    ? Sub(world.position, Scale(Rotate(aimWorld.orientation, Vec3{0.0f, 1.0f, 0.0f}), holdBack))
                     : world.position;
-                goal = animik::WorldToModel(location, Sub3(held,
-                    Rotate(wristWorld, Scale3(GripPointLocal(hand, pose), location.s))));
+                goal = animik::WorldToModel(location, Sub(held,
+                    Rotate(wristWorld, Scale(GripPointLocal(hand, pose), location.s))));
             }
         } else if (posed) {
             // The free hand: the game hand's anatomical frame on the player's.
@@ -1164,8 +1156,8 @@ void DriveHand(unsigned int hand, std::uint8_t* relative, std::uint8_t* absolute
             const Pose raw = animik::ControllerWorldFromHead(frame.yaw, anchor, frame.tracking.head, state.gripPose);
             const Quaternion wristWorld = AnatomicalWrist(hand, raw.orientation, pose);
             rotation = animik::WorldToModel(location, wristWorld);
-            goal = animik::WorldToModel(location, Sub3(raw.position,
-                Rotate(wristWorld, Scale3(GripPointLocal(hand, pose), location.s))));
+            goal = animik::WorldToModel(location, Sub(raw.position,
+                Rotate(wristWorld, Scale(GripPointLocal(hand, pose), location.s))));
             writeRotation = true;
             posedFree = true;
         } else {
@@ -1402,7 +1394,7 @@ void PropagateFingers(std::uint8_t* relative, std::uint8_t* absolute, unsigned c
         if (!ReadQuatT(absolute, count, parent, p) || !ReadQuatT(relative, count, rig.joint[side][j], r)) { return; }
         const Quaternion pq{p.q[0], p.q[1], p.q[2], p.q[3]};
         const Quaternion q = Normalize(Multiply(pq, Quaternion{r.q[0], r.q[1], r.q[2], r.q[3]}));
-        const Vec3 t = Add3(Vec3{p.t[0], p.t[1], p.t[2]}, Rotate(pq, Vec3{r.t[0], r.t[1], r.t[2]}));
+        const Vec3 t = Add(Vec3{p.t[0], p.t[1], p.t[2]}, Rotate(pq, Vec3{r.t[0], r.t[1], r.t[2]}));
         const float out[7] = {q.x, q.y, q.z, q.w, t.x, t.y, t.z};
         if (!WriteFloatsGuarded(absolute + static_cast<std::size_t>(rig.joint[side][j]) * kQuatTStride, out, 7)) { return; }
     }
@@ -1428,10 +1420,10 @@ void CarryChild(std::uint8_t* absolute, unsigned count, int child, const QuatT& 
     QuatT c{};
     if (!ReadQuatT(absolute, count, child, c)) { return; }
     const Quaternion po{parentOld.q[0], parentOld.q[1], parentOld.q[2], parentOld.q[3]};
-    Vec3 local = Rotate(Conj(po), Vec3{c.t[0] - parentOld.t[0], c.t[1] - parentOld.t[1], c.t[2] - parentOld.t[2]});
+    Vec3 local = Rotate(Conjugate(po), Vec3{c.t[0] - parentOld.t[0], c.t[1] - parentOld.t[1], c.t[2] - parentOld.t[2]});
     local.x *= alongScale;
-    const Quaternion localQ = Multiply(Conj(po), Quaternion{c.q[0], c.q[1], c.q[2], c.q[3]});
-    WriteQuatT(absolute, count, child, Multiply(parentNew, localQ), Add3(parentNewT, Rotate(parentNew, local)));
+    const Quaternion localQ = Multiply(Conjugate(po), Quaternion{c.q[0], c.q[1], c.q[2], c.q[3]});
+    WriteQuatT(absolute, count, child, Multiply(parentNew, localQ), Add(parentNewT, Rotate(parentNew, local)));
 }
 
 void SolveArms(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsigned count,
@@ -1488,36 +1480,36 @@ void SolveArms(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsigned 
         if (!std::isfinite(em.x) || !std::isfinite(em.y) || !std::isfinite(em.z)) { continue; }
         const auto unit = [](Vec3 v) {
             const float l = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-            return l > 1e-6f ? Scale3(v, 1.0f / l) : Vec3{1, 0, 0};
+            return l > 1e-6f ? Scale(v, 1.0f / l) : Vec3{1, 0, 0};
         };
         const auto len = [](Vec3 v) { return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z); };
         // Clavicle: turned about its root towards the new shoulder.
         const Quaternion clavQ{clav.q[0], clav.q[1], clav.q[2], clav.q[3]};
-        const Quaternion clavNew = Multiply(armpose::FromTo(unit(Sub3(s0, c0)), unit(Sub3(sm, c0))), clavQ);
+        const Quaternion clavNew = Multiply(armpose::FromTo(unit(Sub(s0, c0)), unit(Sub(sm, c0))), clavQ);
         WriteQuatT(absolute, count, rig.clavicle[s], clavNew, c0);
         // Upper arm: at the shoulder, along shoulder -> elbow.
         const Quaternion upperQ{upper.q[0], upper.q[1], upper.q[2], upper.q[3]};
-        const Quaternion upperNew = Multiply(armpose::FromTo(unit(Sub3(e0, s0)), unit(Sub3(em, sm))), upperQ);
-        const float upperScale = len(Sub3(e0, s0)) > 1e-4f ? len(Sub3(em, sm)) / len(Sub3(e0, s0)) : 1.0f;
+        const Quaternion upperNew = Multiply(armpose::FromTo(unit(Sub(e0, s0)), unit(Sub(em, sm))), upperQ);
+        const float upperScale = len(Sub(e0, s0)) > 1e-4f ? len(Sub(em, sm)) / len(Sub(e0, s0)) : 1.0f;
         for (int k = 0; k < 3; ++k) {
             CarryChild(absolute, count, rig.upperChild[s][k], upper, upperNew, sm, upperScale);
         }
         WriteQuatT(absolute, count, rig.upperArm[s], upperNew, sm);
         // Forearm: at the elbow, along elbow -> wrist.
         const Quaternion lowerQ{lower.q[0], lower.q[1], lower.q[2], lower.q[3]};
-        const Quaternion lowerNew = Multiply(armpose::FromTo(unit(Sub3(w0, e0)), unit(Sub3(wm, em))), lowerQ);
-        const float lowerScale = len(Sub3(w0, e0)) > 1e-4f ? len(Sub3(wm, em)) / len(Sub3(w0, e0)) : 1.0f;
+        const Quaternion lowerNew = Multiply(armpose::FromTo(unit(Sub(w0, e0)), unit(Sub(wm, em))), lowerQ);
+        const float lowerScale = len(Sub(w0, e0)) > 1e-4f ? len(Sub(wm, em)) / len(Sub(w0, e0)) : 1.0f;
         CarryChild(absolute, count, rig.lowerTwist[s], lower, lowerNew, em, lowerScale);
         WriteQuatT(absolute, count, rig.lowerArm[s], lowerNew, em);
         // The hand on its goal, its rotation as the pass left it, and what it
         // carries (fingers, the weapon's prop joint) moved with it.
-        const Vec3 move = Sub3(wm, w0);
+        const Vec3 move = Sub(wm, w0);
         if (len(move) > 1e-6f) {
             const auto shift = [&](int j) {
                 QuatT a{};
                 if (ReadQuatT(absolute, count, j, a)) {
                     WriteQuatT(absolute, count, j, Quaternion{a.q[0], a.q[1], a.q[2], a.q[3]},
-                               Add3(Vec3{a.t[0], a.t[1], a.t[2]}, move));
+                               Add(Vec3{a.t[0], a.t[1], a.t[2]}, move));
                 }
             };
             shift(rig.wrist[s]);
@@ -1528,11 +1520,11 @@ void SolveArms(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsigned 
         }
         if (p.forceRotation && p.rotationSet) {
             // Turn the hand and all it carries about the wrist onto the drive's rotation.
-            const Quaternion turn = Normalize(Multiply(p.rotation, Conj(handQ)));
+            const Quaternion turn = Normalize(Multiply(p.rotation, Conjugate(handQ)));
             const auto spin = [&](int j) {
                 QuatT a{};
                 if (ReadQuatT(absolute, count, j, a)) {
-                    const Vec3 t = Add3(wm, Rotate(turn, Sub3(Vec3{a.t[0], a.t[1], a.t[2]}, wm)));
+                    const Vec3 t = Add(wm, Rotate(turn, Sub(Vec3{a.t[0], a.t[1], a.t[2]}, wm)));
                     WriteQuatT(absolute, count, j, Multiply(turn, Quaternion{a.q[0], a.q[1], a.q[2], a.q[3]}), t);
                 }
             };
@@ -1584,15 +1576,15 @@ void CaptureMarks(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsign
                                 j == handpose::kRing3 || j == handpose::kPinky3;
             if (distal) {
                 // No tip joint in the rig: the distal phalanx, ~2.2 cm along its bone.
-                marks.tip[s][j] = toXr(Add3(at, Rotate(Quaternion{a.q[0], a.q[1], a.q[2], a.q[3]},
+                marks.tip[s][j] = toXr(Add(at, Rotate(Quaternion{a.q[0], a.q[1], a.q[2], a.q[3]},
                                                        Vec3{0.022f, 0.0f, 0.0f})));
             }
         }
         const Vec3 point = handpose::GripPointInWrist(rig.frame[s], rig.knuckle[s], settings.point);
-        marks.gripPoint[s] = toXr(Add3(wt, Rotate(wq, point)));
+        marks.gripPoint[s] = toXr(Add(wt, Rotate(wq, point)));
         // Axes as directions in OpenXR space: difference of two mapped points.
         const auto dir = [&](const Vec3& local) {
-            return Sub3(toXr(Add3(wt, Rotate(wq, local))), marks.wrist[s]);
+            return Sub(toXr(Add(wt, Rotate(wq, local))), marks.wrist[s]);
         };
         marks.length[s] = dir(rig.frame[s].length);
         marks.palm[s] = dir(rig.frame[s].palm);
@@ -1607,7 +1599,7 @@ void CaptureMarks(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsign
             marks.prop[s] = toXr(pt);
             const Vec3 axes[3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
             for (int a = 0; a < 3; ++a) {
-                marks.propAxis[s][a] = Sub3(toXr(Add3(pt, Rotate(pq, Scale3(axes[a], 0.05f)))), marks.prop[s]);
+                marks.propAxis[s][a] = Sub(toXr(Add(pt, Rotate(pq, Scale(axes[a], 0.05f)))), marks.prop[s]);
             }
             marks.propValid[s] = true;
         }
@@ -2301,7 +2293,7 @@ std::string ArmReport()
         const char* t = s == 0 ? "R" : "L";
         out << " solved" << t << '=' << st.solved[s];
         if (!st.solved[s]) { continue; }
-        const Vec3 d = Sub3(st.shoulder[s], st.target[s]);
+        const Vec3 d = Sub(st.shoulder[s], st.target[s]);
         out << " shoulderToTargetCm" << t << '=' << std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z) * 100.0f
             << " handMoveCm" << t << '=' << st.handMoveCm[s];
         out.precision(3);
@@ -2338,10 +2330,9 @@ DWORD SetHandPoseReach(unsigned int mode, int kneePercent)
 }
 
 namespace {
-float Len(Vec3 v) { return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z); }
 float AngleDeg(Vec3 a, Vec3 b)
 {
-    const float la = Len(a), lb = Len(b);
+    const float la = Length(a), lb = Length(b);
     if (la < 1e-6f || lb < 1e-6f) { return -1.0f; }
     const float c = std::clamp((a.x * b.x + a.y * b.y + a.z * b.z) / (la * lb), -1.0f, 1.0f);
     return std::acos(c) * 57.29578f;
@@ -2380,15 +2371,15 @@ std::string HandPoseReport()
         const Vec3 palmExp = Rotate(grip.orientation, expected.palm);
         // The game palm's grip point against the controller's grip origin,
         // and the game hand's axes against the real hand's.
-        out << " palmErrCm" << tag << '=' << Len(Sub3(marks.gripPoint[s], grip.position)) * 100.0f
+        out << " palmErrCm" << tag << '=' << Length(Sub(marks.gripPoint[s], grip.position)) * 100.0f
             << " lenErrDeg" << tag << '=' << AngleDeg(marks.length[s], lenExp)
             << " palmNormErrDeg" << tag << '=' << AngleDeg(marks.palm[s], palmExp)
-            << " wristToGripCm" << tag << '=' << Len(Sub3(marks.wrist[s], grip.position)) * 100.0f;
+            << " wristToGripCm" << tag << '=' << Length(Sub(marks.wrist[s], grip.position)) * 100.0f;
         // The game hand's axes in the controller's grip frame (unit), to read
         // WHICH way a hand is off, not only by how much.
         const auto inGrip = [&](Vec3 v) {
-            const float l = Len(v);
-            return l > 1e-6f ? Rotate(Conj(grip.orientation), Scale3(v, 1.0f / l)) : Vec3{};
+            const float l = Length(v);
+            return l > 1e-6f ? Rotate(Conjugate(grip.orientation), Scale(v, 1.0f / l)) : Vec3{};
         };
         const Vec3 lg = inGrip(marks.length[s]), pg = inGrip(marks.palm[s]);
         out.precision(2);
@@ -2398,8 +2389,8 @@ std::string HandPoseReport()
         // grip in aim: what a real runtime says about its controller; the mock
         // uses an estimate (DVR_MockGrip.txt) until a headset has reported it.
         const Pose& aim = marks.aim[s];
-        const Quaternion rel = Normalize(Multiply(Conj(aim.orientation), grip.orientation));
-        const Vec3 off = Rotate(Conj(aim.orientation), Sub3(grip.position, aim.position));
+        const Quaternion rel = Normalize(Multiply(Conjugate(aim.orientation), grip.orientation));
+        const Vec3 off = Rotate(Conjugate(aim.orientation), Sub(grip.position, aim.position));
         const float angle = handpose::AngleBetween(aim.orientation, grip.orientation) * 57.29578f;
         out.precision(3);
         out << " gripInAim" << tag << "=q" << rel.x << ',' << rel.y << ',' << rel.z << ',' << rel.w;
@@ -2407,7 +2398,7 @@ std::string HandPoseReport()
         out << "|deg" << angle << "|cm" << off.x * 100.0f << ',' << off.y * 100.0f << ',' << off.z * 100.0f;
         // The prop joint (a held grenade's) in the grip frame: cm, and its axes (unit).
         if (marks.propValid[s]) {
-            const Vec3 at = Rotate(Conj(grip.orientation), Sub3(marks.prop[s], grip.position));
+            const Vec3 at = Rotate(Conjugate(grip.orientation), Sub(marks.prop[s], grip.position));
             const Vec3 px = inGrip(marks.propAxis[s][0]), py = inGrip(marks.propAxis[s][1]),
                        pz = inGrip(marks.propAxis[s][2]);
             out << " propInGripCm" << tag << '=' << at.x * 100.0f << ',' << at.y * 100.0f << ',' << at.z * 100.0f;
@@ -2435,8 +2426,8 @@ std::string HandPoseMarks()
             << r << ' ' << g << ' ' << bl << '\n';
     };
     const auto unit = [](Vec3 v, float length) {
-        const float l = Len(v);
-        return l > 1e-6f ? Scale3(v, length / l) : Vec3{};
+        const float l = Length(v);
+        return l > 1e-6f ? Scale(v, length / l) : Vec3{};
     };
     for (int s = 0; s < 2; ++s) {
         const int r = s == 1 ? 255 : 255, g = s == 1 ? 255 : 200, b = s == 1 ? 255 : 120;
@@ -2460,14 +2451,14 @@ std::string HandPoseMarks()
         }
         // The game hand's frame at its grip point: length cyan, palm normal magenta.
         const Vec3 p = marks.gripPoint[s];
-        seg(p, Add3(p, unit(marks.length[s], 0.08f)), 0, 255, 255);
-        seg(p, Add3(p, unit(marks.palm[s], 0.06f)), 255, 0, 255);
+        seg(p, Add(p, unit(marks.length[s], 0.08f)), 0, 255, 255);
+        seg(p, Add(p, unit(marks.palm[s], 0.06f)), 255, 0, 255);
         // The real hand's frame at the controller's grip origin, darker.
         const auto side = s == 1 ? handpose::Side::left : handpose::Side::right;
         const handpose::Frame expected = handpose::GripHandFrame(side, settings.tubeLean);
         const Pose& grip = marks.grip[s];
-        seg(grip.position, Add3(grip.position, Scale3(Rotate(grip.orientation, expected.length), 0.08f)), 0, 110, 110);
-        seg(grip.position, Add3(grip.position, Scale3(Rotate(grip.orientation, expected.palm), 0.06f)), 110, 0, 110);
+        seg(grip.position, Add(grip.position, Scale(Rotate(grip.orientation, expected.length), 0.08f)), 0, 110, 110);
+        seg(grip.position, Add(grip.position, Scale(Rotate(grip.orientation, expected.palm), 0.06f)), 110, 0, 110);
         // The drawn arm, orange: clavicle -> shoulder -> elbow -> wrist.
         if (marks.arm[s]) {
             seg(marks.clavicle[s], marks.shoulder[s], 255, 140, 0);
@@ -2488,9 +2479,9 @@ std::string HandPoseMarks()
         // The prop joint (what a held grenade hangs on): pale red/green/blue axes.
         if (marks.propValid[s] && s == 0) {
             const Vec3 o = marks.prop[s];
-            seg(o, Add3(o, marks.propAxis[s][0]), 255, 120, 120);
-            seg(o, Add3(o, marks.propAxis[s][1]), 120, 255, 120);
-            seg(o, Add3(o, marks.propAxis[s][2]), 120, 160, 255);
+            seg(o, Add(o, marks.propAxis[s][0]), 255, 120, 120);
+            seg(o, Add(o, marks.propAxis[s][1]), 120, 255, 120);
+            seg(o, Add(o, marks.propAxis[s][2]), 120, 160, 255);
         }
     }
     if (marks.headValid) {

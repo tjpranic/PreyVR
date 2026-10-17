@@ -11,7 +11,11 @@ This was read-only: nothing was edited, built or run. Five parallel reviews cove
 
 Line numbers are as of commit 8c07a51, before the section A fixes. Files those fixes touched have shifted by a few lines.
 
-**Status:** the section A bugs were fixed the same day; see the status table under A. The consolidation work (B–E) has not started.
+**Status:**
+- **2026-10-17:** the section A bugs were fixed; see the status table under A.
+- **2026-10-18:** B1, D1 and D2 were done, for about 800 lines net; see their status notes. Build passes, 76/76 ctest pass, no new warnings. Nothing has been committed or run in the headset.
+- **Not started:** the rest of B–E.
+- **CameraEditHook research experiments (C):** the user decided on 2026-10-18 to keep them for now.
 
 ## Constraints that shape every fix
 
@@ -74,6 +78,29 @@ A scan of every engine RVA that appears in two or more modules found no other do
 ## B. C++ consolidation, ranked by value × safety
 
 ### B1. Vector and quaternion math library (high value, none to low risk, about 250 LOC)
+
+**Status 2026-10-18: done for every bit-identical copy.**
+
+What went into `VrMath.h`:
+- Inline `Add/Sub/Scale/Dot/Cross/Length/Finite(Vec3)/Conjugate` and `kPi`.
+- `QuaternionFromBasis` (in VrMath.cpp).
+
+What was replaced:
+- **Local copies,** removed from about 30 files: the `Mul`, `Len`, `Sub3/Add3/Scale3`, `Conj`, `ConjugateOf` and `Inv` names now call the shared helpers.
+- **The public copies:** `debugdraw::`, `carry::`, `physical::`, `scene::Finite`, `stereo::Conjugate` and `stereo::QuaternionFromBasis` are now using-declarations, so qualified callers still compile.
+- **The four matrix→quaternion copies** now call the shared one:
+  - HandPose `FromColumns` and WristHolo `FromBasis` are gone.
+  - `carry::FromMatrix34` keeps its column normalisation and calls it.
+- **The quaternion `carry::Inverse` and `physical::Inverse(Quaternion)`** are now `Conjugate`. `physical::Inverse(Pose)` stays.
+- **The local `kPi` copies** were checked first: every spelling is the same float, `0x40490FDB`.
+
+The compiler found the copies: with a shared `preyvr::Add` in scope, any leftover same-signature copy becomes ambiguous through ADL.
+
+**Deliberately left:**
+- Angle-between: the copies return different values for degenerate input, and some use acos where others use atan2.
+- `Slerp` vs `twohand::Mix` and `FromTo` vs `Swing`: different behaviour.
+- The smoothing factor, `Inverse(Pose)`/`Transform`, and the AnimIkTakeover pose algebra: these belong with B11.
+- The dll/BodyFollow `kDegrees`/`kRadians` literals: not provably the same float.
 - **Vec3 helpers are re-defined in about 25 files.** **[V]**
   - `src/common`: ArmPose:11-16, DebugDraw:8-13, GrenadeThrow:18, HandCarry:11-15, HandPose:12-17, InteractionUse:11-15, MotionController:10-19, ShotRay:8-12, TwoHandedAim:7-10, WristHolo:9-14, AimState:15, RuntimeSnapshot:71.
   - `src/dll`: AimRayProbe:67, AimTakeover:109, AnimIkTakeover:627-629/737/2341, InteractionLane:251-254, ShotRay:145-149, WristLane:26-29.
@@ -323,11 +350,29 @@ A scan of every engine RVA that appears in two or more modules found no other do
 ## D. Tests and build
 
 - **D1. Every test file has its own harness (high value, about 300 LOC).**
+  - **Status 2026-10-18: done.**
+    - `tests/TestSupport.h` holds `Require`/`Check` and has no project includes, because three tests that compile DLL sources directly have no `include/` path.
+    - `tests/TestGeometry.h` holds `kDeg`, `AboutX`/`AboutY` and `AxisAngle`, and includes VrMath.
+    - 67 tests take the shared assertion through a using-declaration placed where the old definition was. Nine use the geometry builders, and the Vec3 helpers in the tests now come from VrMath.
+  - **Kept per file, on purpose:**
+    - Every `Near`/`NearV`/`NearQuat`: the epsilon and `<` vs `<=` are each test's own.
+    - The two throw-based `CHECK` macros (InventorySwapchain, NativeWrist).
+    - FrustumCoverage's `Deg()`: its `x * kPi / 180` order rounds differently from `x * kDeg`.
+  - The only visible change is that every failure message now starts with `FAIL: `.
   - All 69 of 69 `*Tests.cpp` define their own `Require`/`Check`/`CHECK`, with 6 stderr-prefix variants. Nothing parses the prefix.
   - Near/approx helpers have 21+ copies with **different** epsilons (1e-3, 1e-4, 1e-5) and different `<` vs `<=`. Quaternion compares handle q/−q differently.
   - Also copied: `AboutX/AboutY` (4 copies, identical), normalizing `AxisAngle` (4), and `kDeg` (4).
   - → `tests/TestSupport.h` in `preyvr::test`, with an explicit epsilon and no default; each file keeps its own `kEps`. Don't build expected values with the production `handpose::AxisAngle`.
 - **D2. CMake test registration (high value, about 220 LOC).**
+  - **Status 2026-10-18: done.** `CMakeLists.txt` went from 790 to 565 lines.
+  - **New helpers:**
+    - `preyvr_add_test(<ctest-name> <source> [TARGET][SOURCES][INCLUDES][DEFS][LIBS][ARGS])`, now used by 69 of the 70 test executables. `dll_load_fail_closed` links nothing, so it keeps its own block.
+    - `preyvr_openxr_loader_copy`, and a single manifest post-build step.
+    - The PowerShell tests are a `foreach`.
+  - **Verification:**
+    - Configuring before and after gave identical `ctest --show-only=json-v1` output, and all 109 generated .vcxproj and every other generated file matched once paths and GUIDs were normalised.
+    - The loader-OFF branch was checked the same way.
+  - **Not done:** the `preyvr_win32` INTERFACE target, since it would change some targets' compile definitions.
   - 54 identical 4-line blocks (362-621) and 16 Win32 variants (623-729). `preyvr_enable_warnings(` appears 80 times.
   - → A `preyvr_add_test(name src [TARGET][SOURCES][LIBS][INCLUDES][DEFS][WIN32])` function. Keep the 7 non-stem CTest names, such as `aim_state_fixture`.
   - Add a `preyvr_win32` INTERFACE target. Today the 4 tests that `#include` dll `.cpp` files compile without the `WIN32_LEAN_AND_MEAN NOMINMAX` that the DLL uses.
@@ -422,10 +467,11 @@ A scan of every engine RVA that appears in two or more modules found no other do
 ## Suggested order
 1. ~~Fix A1–A6.~~ Done on 2026-10-17 (A1–A8 and A10); awaiting a headset run. B2 should keep these fixed failure paths.
 2. Header-only, zero-behaviour work:
-   - Land these together: B1 (VrMath) + D1 (TestSupport.h).
+   - ~~Land these together: B1 (VrMath) + D1 (TestSupport.h).~~ Done on 2026-10-18.
    - Then B3 SafeMemory.h, B4 NativeContract.h + FindLandmark + layout aliases, and B5 EngineAccess.h.
-3. Build: D2 `preyvr_add_test`.
-4. Prune dead code (C), with your sign-off on the CameraEditHook experiments and the harness.
+3. ~~Build: D2 `preyvr_add_test`.~~ Done on 2026-10-18.
+   - Note: `tools/re/vr_scheme_review` (D5) already fails to link on its own: about 65 unresolved DLL-lane symbols, none of them B1's. It needs folding into the root build, or an updated source list.
+4. Prune dead code (C). Keep the CameraEditHook experiments (user, 2026-10-18); the rest still needs sign-off.
 5. Tools: E6 (`git rm --cached` the .pyc files and add an ignore rule), then E1, E2 (unpinned scripts only) and E3.
 6. Larger refactors that need a headset run afterwards: B6, B7, B9, B10, B11.
 

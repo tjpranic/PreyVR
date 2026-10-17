@@ -143,16 +143,16 @@ struct TessellateStats {
 TessellateStats Tessellate(const Scene& scene, const EyeView& eye, std::vector<Vertex>& out,
                            std::size_t maxVertices);
 
-// Geometry helpers shared by the scene builders.
-Vec3 Add(Vec3 a, Vec3 b);
-Vec3 Sub(Vec3 a, Vec3 b);
-Vec3 Scale(Vec3 a, float s);
-float Dot(Vec3 a, Vec3 b);
-float Length(Vec3 a);
-Vec3 Cross(Vec3 a, Vec3 b);
+// Geometry helpers shared by the scene builders (the vector algebra is VrMath's).
+using preyvr::Add;
+using preyvr::Conjugate;
+using preyvr::Cross;
+using preyvr::Dot;
+using preyvr::Length;
+using preyvr::Scale;
+using preyvr::Sub;
 // Any unit vector perpendicular to the unit vector `axis`.
 Vec3 Perpendicular(Vec3 axis);
-Quaternion Conjugate(Quaternion q);
 // The silhouette of a sphere seen from `eye`: the circle of tangency, as its
 // centre, radius and plane normal (towards the eye). False when the eye is
 // inside or on the sphere.

@@ -1,5 +1,6 @@
 #include "preyvr/GrenadeThrow.h"
 #include "preyvr/HandCarry.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -10,16 +11,9 @@ using namespace preyvr::grenade;
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAIL: " << message << "\n";
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 bool Near(float a, float b, float e = 1e-3f) { return std::fabs(a - b) <= e; }
 bool NearV(Vec3 a, Vec3 b, float e = 1e-3f) { return Near(a.x, b.x, e) && Near(a.y, b.y, e) && Near(a.z, b.z, e); }
-float Len(Vec3 v) { return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z); }
 
 // Opened still, the grenade falls at the feet: no gain, no minimum speed.
 void TestStillHandDrops()
@@ -92,10 +86,10 @@ void TestThrowKeepsDirection()
     fixed.parity = false;
     const Release f = ComputeRelease(in, fixed);
     Require(f.thrown && Near(f.gain, 1.5f), "fixed gain from the throw speed");
-    Require(Near(f.speed, Len(in.handVelocity) * 1.5f, 1e-3f), "speed = hand x gain (under the limit)");
+    Require(Near(f.speed, Length(in.handVelocity) * 1.5f, 1e-3f), "speed = hand x gain (under the limit)");
     const Release r = ComputeRelease(in);
     const Vec3 own = carry::Sub(r.velocity, in.player);
-    const float c = (own.x * 4 + own.y * 1 + own.z * 2) / (Len(own) * Len(in.handVelocity));
+    const float c = (own.x * 4 + own.y * 1 + own.z * 2) / (Length(own) * Length(in.handVelocity));
     Require(c > 0.99999f, "direction = the hand's");
     // Along the throw's heading, with the player's velocity in both.
     const float hx = 4.0f / std::sqrt(17.0f), hy = 1.0f / std::sqrt(17.0f);
@@ -170,9 +164,9 @@ void TestLever()
     ThrowSettings s{};
     s.lever = false;
     Require(Near(ComputeRelease(in, s).objectSpeed, 2.0f), "lever off = the grip origin's");
-    Require(Near(Len(r.angular), 20.0f), "spin kept under the cap");
+    Require(Near(Length(r.angular), 20.0f), "spin kept under the cap");
     in.handAngular = {0, 60.0f, 0};
-    Require(Near(Len(ComputeRelease(in).angular), 20.0f), "spin capped");
+    Require(Near(Length(ComputeRelease(in).angular), 20.0f), "spin capped");
 }
 
 void TestNonFinite()

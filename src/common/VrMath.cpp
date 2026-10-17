@@ -21,15 +21,6 @@ bool IsFinite(const Quaternion& value)
     return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
 }
 
-Vec3 Cross(Vec3 left, Vec3 right)
-{
-    return {
-        left.y * right.z - left.z * right.y,
-        left.z * right.x - left.x * right.z,
-        left.x * right.y - left.y * right.x,
-    };
-}
-
 } // namespace
 
 Quaternion Normalize(Quaternion value)
@@ -88,6 +79,29 @@ Pose Compose(Pose parent, Pose child)
             parent.position.z + rotatedChild.z,
         },
     };
+}
+
+Quaternion QuaternionFromBasis(Vec3 x, Vec3 y, Vec3 z)
+{
+    const float m00 = x.x, m01 = y.x, m02 = z.x;
+    const float m10 = x.y, m11 = y.y, m12 = z.y;
+    const float m20 = x.z, m21 = y.z, m22 = z.z;
+    Quaternion q{};
+    const float trace = m00 + m11 + m22;
+    if (trace > 0.0f) {
+        const float s = std::sqrt(trace + 1.0f) * 2.0f;
+        q = {(m21 - m12) / s, (m02 - m20) / s, (m10 - m01) / s, 0.25f * s};
+    } else if (m00 > m11 && m00 > m22) {
+        const float s = std::sqrt(1.0f + m00 - m11 - m22) * 2.0f;
+        q = {0.25f * s, (m01 + m10) / s, (m02 + m20) / s, (m21 - m12) / s};
+    } else if (m11 > m22) {
+        const float s = std::sqrt(1.0f + m11 - m00 - m22) * 2.0f;
+        q = {(m01 + m10) / s, 0.25f * s, (m12 + m21) / s, (m02 - m20) / s};
+    } else {
+        const float s = std::sqrt(1.0f + m22 - m00 - m11) * 2.0f;
+        q = {(m02 + m20) / s, (m12 + m21) / s, 0.25f * s, (m10 - m01) / s};
+    }
+    return Normalize(q);
 }
 
 Vec2 ApplyRadialDeadzone(Vec2 input, float deadzone)

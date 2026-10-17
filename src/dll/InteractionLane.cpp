@@ -247,11 +247,6 @@ struct EntityInfo {
     Vec3 min{}, max{};
 };
 
-bool Finite(Vec3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
-Vec3 Sub(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-Vec3 Add(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
-Vec3 Scale(Vec3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
-float Len(Vec3 a) { return std::sqrt(a.x * a.x + a.y * a.y + a.z * a.z); }
 
 bool DescribeEntity(std::uint32_t id, EntityInfo& out)
 {
@@ -270,7 +265,7 @@ bool DescribeEntity(std::uint32_t id, EntityInfo& out)
         out.max = {box[3], box[4], box[5]};
         // A real prop: finite, ordered, smaller than a room.
         out.bounds = Finite(out.min) && Finite(out.max) && out.min.x <= out.max.x && out.min.y <= out.max.y &&
-                     out.min.z <= out.max.z && Len(Sub(out.max, out.min)) < 40.0f;
+                     out.min.z <= out.max.z && Length(Sub(out.max, out.min)) < 40.0f;
     }
     return true;
 }
@@ -645,7 +640,7 @@ void UpdateInteractionLane(const GameplayPoseFrame& frame, bool tracking)
         if (f.found && e.bounds && next.valid) {
             f.centre = Scale(Add(e.min, e.max), .5f);
             const Vec3 d = Sub(f.centre, next.hand);
-            f.distance = Len(d);
+            f.distance = Length(d);
             // Engine world -> the app's OpenXR space (the inverse of what the
             // controller pose went through), then OpenXR yaw/pitch: -Z forward,
             // +Y up, yaw positive to the left.
@@ -673,7 +668,7 @@ void UpdateInteractionLane(const GameplayPoseFrame& frame, bool tracking)
         const Vec3 centre = Scale(Add(s.target.min, s.target.max), .5f);
         s.measured = true;
         s.angle = use::AngleDegrees(Sub(centre, pointer.hand), pointer.direction);
-        s.distance = Len(Sub(centre, pointer.hand));
+        s.distance = Length(Sub(centre, pointer.hand));
     }
     const bool menuOpen = !HudGameplayInputAllowed();
     if (s.usable != gLast.usable) {

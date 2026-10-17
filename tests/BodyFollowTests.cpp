@@ -1,6 +1,8 @@
 #include "preyvr/ArmPose.h"
 #include "preyvr/BodyFollow.h"
 #include "preyvr/StereoCamera.h"
+#include "TestGeometry.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -11,18 +13,12 @@ using namespace preyvr::bodyfollow;
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAIL: " << message << "\n";
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
-constexpr float kDeg = 3.14159265f / 180.0f;
+using preyvr::test::kDeg;
 bool NearAngle(float a, float b, float e = 1e-3f) { return std::fabs(Wrap(a - b)) <= e; }
-Quaternion AboutX(float a) { return {std::sin(a / 2), 0, 0, std::cos(a / 2)}; }
-Quaternion AboutY(float a) { return {0, std::sin(a / 2), 0, std::cos(a / 2)}; }
+using preyvr::test::AboutX;
+using preyvr::test::AboutY;
 // An engine view rotation: yaw about Z, then pitch about the view's right (+X).
 Quaternion View(float yaw, float pitch, float roll = 0.0f)
 {

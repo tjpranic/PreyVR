@@ -1,4 +1,5 @@
 #include "preyvr/DepthSubmission.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -9,13 +10,7 @@ using namespace preyvr::depth;
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAIL: " << message << "\n";
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 void TestStandardDepthPutsNearAtMinDepth()
 {

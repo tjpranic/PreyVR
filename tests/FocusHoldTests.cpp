@@ -5,6 +5,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include "TestSupport.h"
 
 namespace preyvr::lifecycle {
 std::vector<std::string> gLines;
@@ -35,10 +36,7 @@ using namespace preyvr::dll;
 using preyvr::lifecycle::gLines;
 using Layout = preyvr::engine::GlobalEnvironmentLayout;
 
-void Require(bool value, const char* message)
-{
-    if (!value) { std::cerr << "FAILED: " << message << '\n'; std::exit(1); }
-}
+using preyvr::test::Require;
 bool Logged(const char* text)
 {
     for (const auto& line : gLines) {

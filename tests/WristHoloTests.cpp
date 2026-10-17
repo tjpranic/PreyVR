@@ -1,4 +1,5 @@
 #include "preyvr/WristHolo.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -9,16 +10,9 @@ using namespace preyvr::wrist;
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAIL: " << message << "\n";
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 bool Near(float a, float b, float e = 1e-3f) { return std::fabs(a - b) <= e; }
 bool NearV(Vec3 a, Vec3 b, float e = 1e-3f) { return Near(a.x, b.x, e) && Near(a.y, b.y, e) && Near(a.z, b.z, e); }
-float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
 
 // The watch check: left forearm across the chest at 1.25 m, hand to the right,
 // back of the forearm up; eye 35 cm above and a little behind.

@@ -4,13 +4,7 @@
 
 namespace preyvr::twohand {
 namespace {
-Vec3 Sub(Vec3 a, Vec3 b) { return {a.x-b.x,a.y-b.y,a.z-b.z}; }
-Vec3 Add(Vec3 a, Vec3 b) { return {a.x+b.x,a.y+b.y,a.z+b.z}; }
-Vec3 Mul(Vec3 a,float s) { return {a.x*s,a.y*s,a.z*s}; }
-float Dot(Vec3 a,Vec3 b) { return a.x*b.x+a.y*b.y+a.z*b.z; }
-bool Finite(Vec3 v) { return std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(v.z); }
 bool Valid(Quaternion q) { const float n=q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w; return std::isfinite(n)&&n>.81f&&n<1.21f; }
-Quaternion Inv(Quaternion q) { return {-q.x,-q.y,-q.z,q.w}; }
 Quaternion Mix(Quaternion a,Quaternion b,float t) {
     float d=a.x*b.x+a.y*b.y+a.z*b.z+a.w*b.w;
     if(d<0) { b={-b.x,-b.y,-b.z,-b.w};d=-d; }
@@ -20,12 +14,12 @@ Quaternion Mix(Quaternion a,Quaternion b,float t) {
     return Normalize({a.x*x+b.x*y,a.y*x+b.y*y,a.z*x+b.z*y,a.w*x+b.w*y});
 }
 Quaternion Swing(Vec3 a,Vec3 b) {
-    a=Mul(a,1/std::sqrt(Dot(a,a))); b=Mul(b,1/std::sqrt(Dot(b,b)));
+    a=Scale(a,1/std::sqrt(Dot(a,a))); b=Scale(b,1/std::sqrt(Dot(b,b)));
     const float d=std::clamp(Dot(a,b),-1.f,1.f);
     if(d<-.9999f) {
         // Stable 180-degree branch; no world-up singularity for vertical aim.
         const Vec3 axis=std::fabs(a.x)<.8f?Vec3{1,0,0}:Vec3{0,0,1};
-        const Vec3 perpendicular=Sub(axis,Mul(a,Dot(axis,a)));
+        const Vec3 perpendicular=Sub(axis,Scale(a,Dot(axis,a)));
         return Normalize({perpendicular.x,perpendicular.y,perpendicular.z,0});
     }
     return Normalize({a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x,1+d});
@@ -39,11 +33,11 @@ bool ValidInput(const Input& i) {
 bool ClosestGrip(const Input& i,Vec3& point) {
     if(!ValidInput(i)||!Finite(i.region.start)||!Finite(i.region.end)||
        !std::isfinite(i.region.radius)||i.region.radius<=0||i.region.radius>.25f) return false;
-    const Vec3 local=Rotate(Inv(i.aim.orientation),Sub(i.support.position,Add(i.primary,i.visualPrimaryOffset)));
+    const Vec3 local=Rotate(Conjugate(i.aim.orientation),Sub(i.support.position,Add(i.primary,i.visualPrimaryOffset)));
     const Vec3 segment=Sub(i.region.end,i.region.start);
     const float n=Dot(segment,segment);
     const float t=n>1e-8f?std::clamp(Dot(Sub(local,i.region.start),segment)/n,0.f,1.f):0;
-    point=Add(i.region.start,Mul(segment,t));
+    point=Add(i.region.start,Scale(segment,t));
     // Long-weapon support only. A native offhand beside/behind the grip is not a foregrip.
     const float length=Dot(point,point);
     return point.y>=.12f&&length>=.0144f&&length<=.64f&&
@@ -87,14 +81,14 @@ Output Solver::Update(const Input& i) {
         if(held_&&i.toggleGrip) held_=false;
         else if(!held_&&ClosestGrip(i,socket_)) {
             held_=true;
-            supportInAim_=Multiply(Inv(i.aim.orientation),i.support.orientation);
+            supportInAim_=Multiply(Conjugate(i.aim.orientation),i.support.orientation);
         }
     }
     const Vec3 line=Sub(i.support.position,Add(i.primary,i.visualPrimaryOffset));
     if(held_&&Dot(line,line)<.0144f) { held_=false;armed_=false;blend_=0;swing_={}; }
     if(held_) {
         // Raw controllers steer. The displayed support hand never feeds back here.
-        const Vec3 localLine=Rotate(Inv(i.aim.orientation),line);
+        const Vec3 localLine=Rotate(Conjugate(i.aim.orientation),line);
         swing_=Swing(socket_,localLine);
     }
     const float alpha=1-std::exp(-i.dt*25.f);
@@ -102,7 +96,7 @@ Output Solver::Update(const Input& i) {
     if(!held_&&blend_<.001f) { blend_=0;swing_={}; }
     const Quaternion local=Mix({},swing_,blend_);
     out.orientation=Normalize(Multiply(i.aim.orientation,local));
-    out.correction=Normalize(Multiply(out.orientation,Inv(i.aim.orientation)));
+    out.correction=Normalize(Multiply(out.orientation,Conjugate(i.aim.orientation)));
     out.supportOrientation=Mix(i.support.orientation,Normalize(Multiply(out.orientation,supportInAim_)),blend_);
     out.socket=socket_;out.blend=blend_;out.held=held_;
     return out;

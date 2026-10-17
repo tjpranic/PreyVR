@@ -6,43 +6,12 @@
 namespace preyvr::wrist {
 namespace {
 
-Vec3 Add(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
-Vec3 Sub(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-Vec3 Scale(Vec3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
-float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-Vec3 Cross(Vec3 a, Vec3 b) { return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x}; }
-float Length(Vec3 a) { return std::sqrt(Dot(a, a)); }
-bool Finite(Vec3 a) { return std::isfinite(a.x) && std::isfinite(a.y) && std::isfinite(a.z); }
 bool Unit(Vec3 a, Vec3& out, float minimum = 1e-5f)
 {
     const float l = Length(a);
     if (!std::isfinite(l) || l < minimum) { return false; }
     out = Scale(a, 1.0f / l);
     return true;
-}
-
-// The rotation whose columns are the orthonormal basis (x, y, z).
-Quaternion FromBasis(Vec3 x, Vec3 y, Vec3 z)
-{
-    const float m00 = x.x, m01 = y.x, m02 = z.x;
-    const float m10 = x.y, m11 = y.y, m12 = z.y;
-    const float m20 = x.z, m21 = y.z, m22 = z.z;
-    Quaternion q{};
-    const float trace = m00 + m11 + m22;
-    if (trace > 0.0f) {
-        const float s = std::sqrt(trace + 1.0f) * 2.0f;
-        q = {(m21 - m12) / s, (m02 - m20) / s, (m10 - m01) / s, 0.25f * s};
-    } else if (m00 > m11 && m00 > m22) {
-        const float s = std::sqrt(1.0f + m00 - m11 - m22) * 2.0f;
-        q = {0.25f * s, (m01 + m10) / s, (m02 + m20) / s, (m21 - m12) / s};
-    } else if (m11 > m22) {
-        const float s = std::sqrt(1.0f + m11 - m00 - m22) * 2.0f;
-        q = {(m01 + m10) / s, 0.25f * s, (m12 + m21) / s, (m02 - m20) / s};
-    } else {
-        const float s = std::sqrt(1.0f + m22 - m00 - m11) * 2.0f;
-        q = {(m02 + m20) / s, (m12 + m21) / s, 0.25f * s, (m10 - m01) / s};
-    }
-    return Normalize(q);
 }
 
 float SmoothStep(float x)
@@ -103,7 +72,7 @@ Card PlaceCard(const Arm& arm, const Pose& head, const Placement& placement)
         across = Add(Scale(axis, std::cos(roll)), Scale(Cross(face, axis), std::sin(roll)));
     }
     const Vec3 up = Cross(face, across);   // quad +Y = +Z x +X
-    card.pose.orientation = FromBasis(across, up, face);
+    card.pose.orientation = QuaternionFromBasis(across, up, face);
     card.rollDeg = roll * 57.2957795f;
     card.pose.position = centre;
     card.axis = axis;

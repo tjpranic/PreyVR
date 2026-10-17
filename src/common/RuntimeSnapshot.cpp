@@ -63,16 +63,6 @@ bool Finite(float value)
     return std::isfinite(value);
 }
 
-bool Finite(Vec3 value)
-{
-    return Finite(value.x) && Finite(value.y) && Finite(value.z);
-}
-
-float Length(Vec3 value)
-{
-    return std::sqrt(value.x * value.x + value.y * value.y + value.z * value.z);
-}
-
 // A live object pointer must be non-null and at least 8-byte aligned. This is
 // deliberately weak: the strong check is the vtable comparison that follows.
 bool PlausiblePointer(std::uintptr_t value)

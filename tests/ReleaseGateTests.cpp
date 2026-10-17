@@ -1,6 +1,7 @@
 // A button that leaves a menu must not act in play (ReleaseGate): right B is
 // Back in the inventory and crouch in play.
 #include "preyvr/ReleaseGate.h"
+#include "TestSupport.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -9,10 +10,7 @@ using preyvr::input::PlayResume;
 using preyvr::input::ReleaseGate;
 
 namespace {
-void Check(bool ok, const char* why)
-{
-    if (!ok) { std::cerr << "FAIL: " << why << '\n'; std::exit(1); }
-}
+using preyvr::test::Check;
 } // namespace
 
 int main()

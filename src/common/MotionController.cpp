@@ -5,21 +5,6 @@
 namespace preyvr::controller {
 namespace {
 
-constexpr float kPi = 3.14159265358979323846f;
-
-Vec3 Cross(const Vec3& a, const Vec3& b)
-{
-    return {
-        a.y * b.z - a.z * b.y,
-        a.z * b.x - a.x * b.z,
-        a.x * b.y - a.y * b.x,
-    };
-}
-
-float Length(const Vec3& v)
-{
-    return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-}
 
 std::optional<Vec3> TryNormalize(const Vec3& v, float minimumLength = 1e-6f)
 {
@@ -72,7 +57,6 @@ bool IsUsableRotation(const Quaternion& q)
     return std::isfinite(lengthSquared) && lengthSquared > 0.25f && lengthSquared < 4.0f;
 }
 
-Quaternion ConjugateOf(const Quaternion& q) { return Quaternion{-q.x, -q.y, -q.z, q.w}; }
 
 } // namespace
 
@@ -85,7 +69,7 @@ std::optional<Quaternion> MountRotationFromControllerDelta(
         !IsUsableRotation(currentAim)) {
         return std::nullopt;
     }
-    const Quaternion delta = Normalize(Multiply(currentAim, ConjugateOf(Normalize(calibrationAim))));
+    const Quaternion delta = Normalize(Multiply(currentAim, Conjugate(Normalize(calibrationAim))));
     // Authored mount on the RIGHT: it is the basis being changed.
     const Quaternion composed = Normalize(Multiply(delta, Normalize(authoredMount)));
     if (!IsUsableRotation(composed)) {
@@ -198,7 +182,7 @@ Quaternion WorldTurnToModel(const Quaternion& worldTurn, float bodyYaw)
     // heading, and that reads as the wrist twisting on its own while walking.
     const float half = -bodyYaw * 0.5f;
     const Quaternion basis{0.0f, 0.0f, std::sin(half), std::cos(half)};
-    return Normalize(Multiply(Multiply(basis, worldTurn), ConjugateOf(basis)));
+    return Normalize(Multiply(Multiply(basis, worldTurn), Conjugate(basis)));
 }
 
 } // namespace preyvr::controller

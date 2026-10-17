@@ -5,12 +5,6 @@
 
 namespace preyvr::debugdraw {
 
-Vec3 Add(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
-Vec3 Sub(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-Vec3 Scale(Vec3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
-float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-float Length(Vec3 a) { return std::sqrt(Dot(a, a)); }
-Vec3 Cross(Vec3 a, Vec3 b) { return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x}; }
 Vec3 Perpendicular(Vec3 axis)
 {
     const Vec3 seed = std::fabs(axis.y) < .9f ? Vec3{0, 1, 0} : Vec3{1, 0, 0};
@@ -18,7 +12,6 @@ Vec3 Perpendicular(Vec3 axis)
     const float n = Length(p);
     return n > 1e-6f ? Scale(p, 1 / n) : Vec3{1, 0, 0};
 }
-Quaternion Conjugate(Quaternion q) { return {-q.x, -q.y, -q.z, q.w}; }
 
 bool SphereSilhouette(Vec3 eye, Vec3 centre, float radius, Vec3& circleCentre, float& circleRadius, Vec3& normal)
 {
@@ -35,7 +28,6 @@ bool SphereSilhouette(Vec3 eye, Vec3 centre, float radius, Vec3& circleCentre, f
 
 namespace {
 
-bool Finite(Vec3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
 
 // View space: OpenXR convention, -Z forward, +Y up, +X right.
 Vec3 ToView(const EyeView& eye, Vec3 world)

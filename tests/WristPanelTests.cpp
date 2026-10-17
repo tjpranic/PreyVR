@@ -1,9 +1,10 @@
 #include "../src/dll/WristPanel.h"
+#include "TestSupport.h"
 #include <windows.h>
 #include <fstream>
 #include <iostream>
 #include <cstdlib>
-void Check(bool ok,const char* why){if(!ok){std::cerr<<why<<'\n';std::exit(1);}}
+using preyvr::test::Check;
 int main(int argc,char** argv){
  using namespace preyvr::dll;
  auto p=DrawWristPanel({76,100,55,100,82});

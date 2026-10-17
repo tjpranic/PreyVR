@@ -1,12 +1,13 @@
 #include "preyvr/VrOptions.h"
 #include "preyvr/PsychoscopeGesture.h"
+#include "TestSupport.h"
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <limits>
 using namespace preyvr;
 using namespace preyvr::options;
-void Check(bool ok,const char* why){if(!ok){std::cerr<<why<<'\n';std::exit(1);}}
+using preyvr::test::Check;
 Input Base(){Input i;i.valid=i.modal=true;i.dt=.01f;i.epoch=1;return i;}
 void Ready(Menu& m,Input& i){m.Update(i);m.Update(i);}
 void Open(Menu& m,Input& i){Ready(m,i);m.RequestOpen();m.Update(i);m.Update(i);Check(m.Open()&&m.Armed(),"open on modal");}

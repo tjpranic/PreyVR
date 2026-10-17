@@ -1060,7 +1060,7 @@ std::string HoldLine()
             // The firing position in the grip's frame (OpenXR axes: +X right,
             // +Y up, -Z forward along the handle), metres.
             const Vec3 d = Sub(firing, grip.position);
-            const Vec3 local = Rotate(stereo::Conjugate(stereo::kOpenXrToEngine), Rotate(carry::Inverse(grip.orientation), d));
+            const Vec3 local = Rotate(stereo::Conjugate(stereo::kOpenXrToEngine), Rotate(Conjugate(grip.orientation), d));
             out += " grip=" + Point(grip.position) + " firingFromGripM=" + Fixed(Length(d)) +
                    " firingInGrip=" + Point(local) + " fist=" + Point(FistPoint(grip)) +
                    " firingFromFistM=" + Fixed(Length(Sub(firing, FistPoint(grip))));

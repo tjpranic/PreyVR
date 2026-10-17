@@ -106,11 +106,6 @@ const engine::Landmark* FindLandmark(std::string_view id)
     return nullptr;
 }
 
-float Length(const Vec3& v)
-{
-    return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-}
-
 void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking)
 {
     const auto& right=frame.tracking.hands[static_cast<unsigned int>(Hand::right)];

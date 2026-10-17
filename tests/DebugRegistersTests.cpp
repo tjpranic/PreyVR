@@ -1,4 +1,5 @@
 #include "preyvr/DebugRegisters.h"
+#include "TestSupport.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -14,13 +15,7 @@ using preyvr::debugreg::EncodingFor;
 using preyvr::debugreg::FiredSlotsFromDr6;
 using preyvr::debugreg::WatchKind;
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 // These tests exist because a wrong DR7 encoding is silent. The breakpoint simply
 // never fires, and the run reports "nothing writes this address" with no error

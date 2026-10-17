@@ -155,6 +155,47 @@ function(preyvr_enable_warnings target)
 endfunction()
 preyvr_enable_warnings(preyvr_core)
 
+# Sets <out_var> to the post-build COMMAND that copies openxr_loader.dll beside
+# <target>, so callers can put it in a custom command with other steps.
+function(preyvr_openxr_loader_copy out_var target)
+    set(${out_var}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:openxr_loader>
+            $<TARGET_FILE_DIR:${target}>/$<TARGET_FILE_NAME:openxr_loader>
+        PARENT_SCOPE
+    )
+endfunction()
+
+# preyvr_add_test(<ctest-name> <source> [TARGET <exe>] [SOURCES ...]
+#                 [INCLUDES ...] [DEFS ...] [LIBS ...] [ARGS ...])
+# Builds <source> plus SOURCES into <exe> (default preyvr_<ctest-name>_tests)
+# and registers it with CTest as <ctest-name>, run with ARGS. LIBS replaces the
+# default preyvr_core, so a test that does not link the core lists what it does.
+# Tools and docs name the executables, so keep TARGET when renaming a test.
+function(preyvr_add_test name source)
+    cmake_parse_arguments(PARSE_ARGV 2 arg "" "TARGET" "SOURCES;INCLUDES;DEFS;LIBS;ARGS")
+    if(arg_UNPARSED_ARGUMENTS)
+        message(FATAL_ERROR "preyvr_add_test(${name}): unexpected arguments: ${arg_UNPARSED_ARGUMENTS}")
+    endif()
+    set(target preyvr_${name}_tests)
+    if(arg_TARGET)
+        set(target ${arg_TARGET})
+    endif()
+    if(NOT DEFINED arg_LIBS)
+        set(arg_LIBS preyvr_core)
+    endif()
+    add_executable(${target} ${source} ${arg_SOURCES})
+    if(arg_INCLUDES)
+        target_include_directories(${target} PRIVATE ${arg_INCLUDES})
+    endif()
+    if(arg_DEFS)
+        target_compile_definitions(${target} PRIVATE ${arg_DEFS})
+    endif()
+    target_link_libraries(${target} PRIVATE ${arg_LIBS})
+    preyvr_enable_warnings(${target})
+    add_test(NAME ${name} COMMAND ${target} ${arg_ARGS})
+endfunction()
+
 if((PREYVR_BUILD_TOOLS OR PREYVR_BUILD_SMOKE_DLL) AND WIN32)
     add_executable(preyvr_injector tools/injector/main.cpp)
     target_compile_definitions(preyvr_injector PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
@@ -265,48 +306,35 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
     if(TARGET preyvr_engine_map_probe)
         add_dependencies(preyvr preyvr_engine_map_probe)
     endif()
+    # With the loader, one post-build step copies it beside the DLL first and
+    # the manifest records it.
+    set(preyvr_loader_copy "")
+    set(preyvr_manifest_loader "")
     if(PREYVR_BUILD_OPENXR_LOADER)
         add_dependencies(preyvr openxr_loader)
-        add_custom_command(
-            TARGET preyvr
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:openxr_loader>
-                $<TARGET_FILE_DIR:preyvr>/$<TARGET_FILE_NAME:openxr_loader>
-            COMMAND
-                ${CMAKE_COMMAND}
-                -DPREYVR_DLL=$<TARGET_FILE:preyvr>
-                -DPREYVR_OPENXR_LOADER=$<TARGET_FILE_DIR:preyvr>/$<TARGET_FILE_NAME:openxr_loader>
-                -DPREYVR_MANIFEST=$<TARGET_FILE_DIR:preyvr>/PreyVR-build-manifest.txt
-                -DPREYVR_VERSION=${PREYVR_BUILD_VERSION}
-                -DPREYVR_CONFIGURATION=$<CONFIG>
-                -DPREYVR_EXPECTED_PREYDLL_SHA256=${PREYVR_SUPPORTED_PREYDLL_SHA256}
-                -DPREYVR_ENGINE_MAP_PROBE=$<TARGET_FILE:preyvr_engine_map_probe>
-                -DPREYVR_MINHOOK_COMMIT=${PREYVR_MINHOOK_GIT_COMMIT}
-                -DPREYVR_OPENXR_COMMIT=${PREYVR_OPENXR_GIT_COMMIT}
-                -DPREYVR_IMGUI_COMMIT=${PREYVR_IMGUI_GIT_COMMIT}
-                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/WriteBuildManifest.cmake"
-            VERBATIM
-        )
-    else()
-        add_custom_command(
-            TARGET preyvr
-            POST_BUILD
-            COMMAND
-                ${CMAKE_COMMAND}
-                -DPREYVR_DLL=$<TARGET_FILE:preyvr>
-                -DPREYVR_MANIFEST=$<TARGET_FILE_DIR:preyvr>/PreyVR-build-manifest.txt
-                -DPREYVR_VERSION=${PREYVR_BUILD_VERSION}
-                -DPREYVR_CONFIGURATION=$<CONFIG>
-                -DPREYVR_EXPECTED_PREYDLL_SHA256=${PREYVR_SUPPORTED_PREYDLL_SHA256}
-                -DPREYVR_ENGINE_MAP_PROBE=$<TARGET_FILE:preyvr_engine_map_probe>
-                -DPREYVR_MINHOOK_COMMIT=${PREYVR_MINHOOK_GIT_COMMIT}
-                -DPREYVR_OPENXR_COMMIT=${PREYVR_OPENXR_GIT_COMMIT}
-                -DPREYVR_IMGUI_COMMIT=${PREYVR_IMGUI_GIT_COMMIT}
-                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/WriteBuildManifest.cmake"
-            VERBATIM
-        )
+        preyvr_openxr_loader_copy(preyvr_loader_copy preyvr)
+        set(preyvr_manifest_loader
+            -DPREYVR_OPENXR_LOADER=$<TARGET_FILE_DIR:preyvr>/$<TARGET_FILE_NAME:openxr_loader>)
     endif()
+    add_custom_command(
+        TARGET preyvr
+        POST_BUILD
+        ${preyvr_loader_copy}
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DPREYVR_DLL=$<TARGET_FILE:preyvr>
+            ${preyvr_manifest_loader}
+            -DPREYVR_MANIFEST=$<TARGET_FILE_DIR:preyvr>/PreyVR-build-manifest.txt
+            -DPREYVR_VERSION=${PREYVR_BUILD_VERSION}
+            -DPREYVR_CONFIGURATION=$<CONFIG>
+            -DPREYVR_EXPECTED_PREYDLL_SHA256=${PREYVR_SUPPORTED_PREYDLL_SHA256}
+            -DPREYVR_ENGINE_MAP_PROBE=$<TARGET_FILE:preyvr_engine_map_probe>
+            -DPREYVR_MINHOOK_COMMIT=${PREYVR_MINHOOK_GIT_COMMIT}
+            -DPREYVR_OPENXR_COMMIT=${PREYVR_OPENXR_GIT_COMMIT}
+            -DPREYVR_IMGUI_COMMIT=${PREYVR_IMGUI_GIT_COMMIT}
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/WriteBuildManifest.cmake"
+        VERBATIM
+    )
 endif()
 
 if(PREYVR_BUILD_TOOLS AND WIN32)
@@ -332,366 +360,121 @@ if(PREYVR_BUILD_TOOLS AND WIN32)
             WIN32_LEAN_AND_MEAN NOMINMAX XR_USE_PLATFORM_WIN32 XR_USE_GRAPHICS_API_D3D11)
         target_link_libraries(preyvr_xr_session_probe PRIVATE preyvr_core openxr_loader d3d11 dxgi)
         preyvr_enable_warnings(preyvr_xr_session_probe)
-        add_custom_command(
-            TARGET preyvr_xr_session_probe
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:openxr_loader>
-                $<TARGET_FILE_DIR:preyvr_xr_session_probe>/$<TARGET_FILE_NAME:openxr_loader>
-            VERBATIM
-        )
+        preyvr_openxr_loader_copy(preyvr_loader_copy preyvr_xr_session_probe)
+        add_custom_command(TARGET preyvr_xr_session_probe POST_BUILD ${preyvr_loader_copy} VERBATIM)
 
         add_executable(preyvr_xr_adapter_probe tools/xr_adapter_probe/main.cpp)
         target_compile_definitions(preyvr_xr_adapter_probe PRIVATE
             WIN32_LEAN_AND_MEAN NOMINMAX XR_USE_PLATFORM_WIN32 XR_USE_GRAPHICS_API_D3D11)
         target_link_libraries(preyvr_xr_adapter_probe PRIVATE openxr_loader d3d11 dxgi)
         preyvr_enable_warnings(preyvr_xr_adapter_probe)
-        add_custom_command(
-            TARGET preyvr_xr_adapter_probe
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:openxr_loader>
-                $<TARGET_FILE_DIR:preyvr_xr_adapter_probe>/$<TARGET_FILE_NAME:openxr_loader>
-            VERBATIM
-        )
+        preyvr_openxr_loader_copy(preyvr_loader_copy preyvr_xr_adapter_probe)
+        add_custom_command(TARGET preyvr_xr_adapter_probe POST_BUILD ${preyvr_loader_copy} VERBATIM)
     endif()
 endif()
 
 if(PREYVR_BUILD_TESTS)
     enable_testing()
 
-    add_executable(preyvr_vr_math_tests tests/VrMathTests.cpp)
-    target_link_libraries(preyvr_vr_math_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_vr_math_tests)
-    add_test(NAME vr_math COMMAND preyvr_vr_math_tests)
-
-    add_executable(preyvr_engine_map_tests tests/EngineMapTests.cpp)
-    target_link_libraries(preyvr_engine_map_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_engine_map_tests)
-    add_test(NAME engine_map COMMAND preyvr_engine_map_tests)
-
-    add_executable(preyvr_aim_state_tests tests/AimStateTests.cpp)
-    target_link_libraries(preyvr_aim_state_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_aim_state_tests)
-    add_test(NAME aim_state_fixture COMMAND preyvr_aim_state_tests)
-
-    add_executable(preyvr_wrench_query_tests tests/WrenchQueryTests.cpp)
-    target_link_libraries(preyvr_wrench_query_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_wrench_query_tests)
-    add_test(NAME wrench_query_fixture COMMAND preyvr_wrench_query_tests)
-
-    add_executable(preyvr_interaction_query_tests tests/InteractionQueryTests.cpp)
-    target_link_libraries(preyvr_interaction_query_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_interaction_query_tests)
-    add_test(NAME interaction_query_fixture COMMAND preyvr_interaction_query_tests)
-
-    add_executable(preyvr_runtime_snapshot_tests tests/RuntimeSnapshotTests.cpp)
-    target_link_libraries(preyvr_runtime_snapshot_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_runtime_snapshot_tests)
-    add_test(NAME runtime_snapshot COMMAND preyvr_runtime_snapshot_tests)
-
-    add_executable(preyvr_xr_swapchain_format_tests tests/XrSwapchainFormatTests.cpp)
-    target_link_libraries(preyvr_xr_swapchain_format_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_xr_swapchain_format_tests)
-    add_test(NAME xr_swapchain_format COMMAND preyvr_xr_swapchain_format_tests)
-
-    add_executable(preyvr_xr_frame_contract_tests tests/XrFrameContractTests.cpp)
-    target_link_libraries(preyvr_xr_frame_contract_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_xr_frame_contract_tests)
-    add_test(NAME xr_frame_contract COMMAND preyvr_xr_frame_contract_tests)
-
-    add_executable(preyvr_stereo_frame_tests tests/StereoFrameTests.cpp)
-    target_link_libraries(preyvr_stereo_frame_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_stereo_frame_tests)
-    add_test(NAME stereo_frame COMMAND preyvr_stereo_frame_tests)
-
-    add_executable(preyvr_comfort_controls_tests tests/ComfortControlsTests.cpp)
-    target_link_libraries(preyvr_comfort_controls_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_comfort_controls_tests)
-    add_test(NAME comfort_controls COMMAND preyvr_comfort_controls_tests)
-
-    add_executable(preyvr_motion_controller_tests tests/MotionControllerTests.cpp)
-    target_link_libraries(preyvr_motion_controller_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_motion_controller_tests)
-    add_test(NAME motion_controller COMMAND preyvr_motion_controller_tests)
-
-    add_executable(preyvr_two_handed_aim_tests tests/TwoHandedAimTests.cpp)
-    target_link_libraries(preyvr_two_handed_aim_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_two_handed_aim_tests)
-    add_test(NAME two_handed_aim COMMAND preyvr_two_handed_aim_tests)
-    add_executable(preyvr_vr_options_tests tests/VrOptionsTests.cpp)
-    target_link_libraries(preyvr_vr_options_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_vr_options_tests)
-    add_test(NAME vr_options_contracts COMMAND preyvr_vr_options_tests)
-    add_executable(preyvr_controller_profiles_tests tests/ControllerProfilesTests.cpp)
-    target_link_libraries(preyvr_controller_profiles_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_controller_profiles_tests)
-    add_test(NAME controller_profiles COMMAND preyvr_controller_profiles_tests)
-    add_executable(preyvr_action_map_walk_tests tests/ActionMapWalkTests.cpp)
-    target_link_libraries(preyvr_action_map_walk_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_action_map_walk_tests)
-    add_test(NAME action_map_walk COMMAND preyvr_action_map_walk_tests)
-    add_executable(preyvr_release_gate_tests tests/ReleaseGateTests.cpp)
-    target_link_libraries(preyvr_release_gate_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_release_gate_tests)
-    add_test(NAME release_gate COMMAND preyvr_release_gate_tests)
-    add_executable(preyvr_body_equipment_tests tests/BodyEquipmentTests.cpp)
-    target_link_libraries(preyvr_body_equipment_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_body_equipment_tests)
-    add_test(NAME body_equipment_contracts COMMAND preyvr_body_equipment_tests)
-
-    add_executable(preyvr_anim_ik_tests tests/AnimIkTests.cpp)
-    target_link_libraries(preyvr_anim_ik_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_anim_ik_tests)
-    add_test(NAME anim_ik COMMAND preyvr_anim_ik_tests)
-
-    add_executable(preyvr_hand_pose_tests tests/HandPoseTests.cpp)
-    target_link_libraries(preyvr_hand_pose_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_hand_pose_tests)
-    add_test(NAME hand_pose COMMAND preyvr_hand_pose_tests)
-
-    add_executable(preyvr_arm_pose_tests tests/ArmPoseTests.cpp)
-    target_link_libraries(preyvr_arm_pose_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_arm_pose_tests)
-    add_test(NAME arm_pose COMMAND preyvr_arm_pose_tests)
-
-    add_executable(preyvr_body_follow_tests tests/BodyFollowTests.cpp)
-    target_link_libraries(preyvr_body_follow_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_body_follow_tests)
-    add_test(NAME body_follow COMMAND preyvr_body_follow_tests)
-
-    add_executable(preyvr_room_scale_tests tests/RoomScaleTests.cpp)
-    target_link_libraries(preyvr_room_scale_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_room_scale_tests)
-    add_test(NAME room_scale COMMAND preyvr_room_scale_tests)
-
-    add_executable(preyvr_debug_draw_tests tests/DebugDrawTests.cpp)
-    target_link_libraries(preyvr_debug_draw_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_debug_draw_tests)
-    add_test(NAME debug_draw COMMAND preyvr_debug_draw_tests)
-
-    add_executable(preyvr_shot_ray_tests tests/ShotRayTests.cpp)
-    target_link_libraries(preyvr_shot_ray_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_shot_ray_tests)
-    add_test(NAME shot_ray COMMAND preyvr_shot_ray_tests)
-
-    add_executable(preyvr_near_particles_tests tests/NearParticlesTests.cpp)
-    target_link_libraries(preyvr_near_particles_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_near_particles_tests)
-    add_test(NAME near_particles COMMAND preyvr_near_particles_tests)
-
-    add_executable(preyvr_hand_carry_tests tests/HandCarryTests.cpp)
-    target_link_libraries(preyvr_hand_carry_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_hand_carry_tests)
-    add_test(NAME hand_carry COMMAND preyvr_hand_carry_tests)
-
-    add_executable(preyvr_grenade_throw_tests tests/GrenadeThrowTests.cpp)
-    target_link_libraries(preyvr_grenade_throw_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_grenade_throw_tests)
-    add_test(NAME grenade_throw COMMAND preyvr_grenade_throw_tests)
-
-    add_executable(preyvr_wrist_holo_tests tests/WristHoloTests.cpp)
-    target_link_libraries(preyvr_wrist_holo_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_wrist_holo_tests)
-    add_test(NAME wrist_holo COMMAND preyvr_wrist_holo_tests)
-
-    add_executable(preyvr_interaction_use_tests tests/InteractionUseTests.cpp)
-    target_link_libraries(preyvr_interaction_use_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_interaction_use_tests)
-    add_test(NAME interaction_use COMMAND preyvr_interaction_use_tests)
-
-    add_executable(preyvr_weapon_rig_alignment_tests tests/WeaponRigAlignmentTests.cpp)
-    target_link_libraries(preyvr_weapon_rig_alignment_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_weapon_rig_alignment_tests)
-    add_test(NAME weapon_rig_alignment COMMAND preyvr_weapon_rig_alignment_tests)
-
-    add_executable(preyvr_weapon_aim_tests tests/WeaponAimTests.cpp)
-    target_link_libraries(preyvr_weapon_aim_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_weapon_aim_tests)
-    add_test(NAME weapon_aim COMMAND preyvr_weapon_aim_tests)
-    add_executable(preyvr_scene_query_tests tests/SceneQueryTests.cpp)
-    target_link_libraries(preyvr_scene_query_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_scene_query_tests)
-    add_test(NAME scene_query_contracts COMMAND preyvr_scene_query_tests)
-    add_executable(preyvr_physical_interactions_tests tests/PhysicalInteractionsTests.cpp)
-    target_link_libraries(preyvr_physical_interactions_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_physical_interactions_tests)
-    add_test(NAME physical_interactions COMMAND preyvr_physical_interactions_tests)
-    add_executable(preyvr_psi_medkit_tests tests/PsiMedkitTests.cpp)
-    target_link_libraries(preyvr_psi_medkit_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_psi_medkit_tests)
-    add_test(NAME psi_medkit_contracts COMMAND preyvr_psi_medkit_tests)
-
-    add_executable(preyvr_frustum_coverage_tests tests/FrustumCoverageTests.cpp)
-    target_link_libraries(preyvr_frustum_coverage_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_frustum_coverage_tests)
-    add_test(NAME frustum_coverage COMMAND preyvr_frustum_coverage_tests)
-
-    add_executable(preyvr_depth_submission_tests tests/DepthSubmissionTests.cpp)
-    target_link_libraries(preyvr_depth_submission_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_depth_submission_tests)
-    add_test(NAME depth_submission COMMAND preyvr_depth_submission_tests)
-
-    add_executable(preyvr_frame_clock_tests tests/FrameClockTests.cpp)
-    target_link_libraries(preyvr_frame_clock_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_frame_clock_tests)
-    add_test(NAME frame_clock COMMAND preyvr_frame_clock_tests)
-
-    add_executable(preyvr_frame_timing_tests tests/FrameTimingTests.cpp)
-    target_link_libraries(preyvr_frame_timing_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_frame_timing_tests)
-    add_test(NAME frame_timing COMMAND preyvr_frame_timing_tests)
-
-    add_executable(preyvr_input_event_tests tests/InputEventTests.cpp)
-    target_link_libraries(preyvr_input_event_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_input_event_tests)
-    add_test(NAME input_event COMMAND preyvr_input_event_tests)
-
-    add_executable(preyvr_input_queue_tests tests/InputQueueTests.cpp)
-    target_link_libraries(preyvr_input_queue_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_input_queue_tests)
-    add_test(NAME input_queue COMMAND preyvr_input_queue_tests)
-
-    add_executable(preyvr_menu_navigator_tests tests/MenuNavigatorTests.cpp)
-    target_link_libraries(preyvr_menu_navigator_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_menu_navigator_tests)
-    add_test(NAME menu_navigator COMMAND preyvr_menu_navigator_tests)
-    add_executable(preyvr_render_contract_tests tests/RenderContractTests.cpp)
-    target_link_libraries(preyvr_render_contract_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_render_contract_tests)
-    add_test(NAME render_contract COMMAND preyvr_render_contract_tests)
-
-    add_executable(preyvr_inventory_depth_tests tests/InventoryDepthTests.cpp)
-    target_link_libraries(preyvr_inventory_depth_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_inventory_depth_tests)
-    add_test(NAME inventory_depth COMMAND preyvr_inventory_depth_tests)
-
-    add_executable(preyvr_ui_panel_tests tests/UiPanelTests.cpp)
-    target_link_libraries(preyvr_ui_panel_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_ui_panel_tests)
-    add_test(NAME ui_panel COMMAND preyvr_ui_panel_tests)
-
-    add_executable(preyvr_xr_hold_tests tests/XrHoldTests.cpp)
-    target_link_libraries(preyvr_xr_hold_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_xr_hold_tests)
-    add_test(NAME xr_hold COMMAND preyvr_xr_hold_tests)
-
-    add_executable(preyvr_hud_parts_tests tests/HudPartsTests.cpp)
-    target_link_libraries(preyvr_hud_parts_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_hud_parts_tests)
-    add_test(NAME hud_parts COMMAND preyvr_hud_parts_tests)
-
-    add_executable(preyvr_locomotion_tests tests/LocomotionTests.cpp)
-    target_link_libraries(preyvr_locomotion_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_locomotion_tests)
-    add_test(NAME locomotion COMMAND preyvr_locomotion_tests)
-
-    add_executable(preyvr_render_frame_table_tests tests/RenderFrameTableTests.cpp)
-    target_link_libraries(preyvr_render_frame_table_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_render_frame_table_tests)
-    add_test(NAME render_frame_table COMMAND preyvr_render_frame_table_tests)
-
-    add_executable(preyvr_stereo_camera_tests tests/StereoCameraTests.cpp)
-    target_link_libraries(preyvr_stereo_camera_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_stereo_camera_tests)
-    add_test(NAME stereo_camera COMMAND preyvr_stereo_camera_tests)
-
-    add_executable(preyvr_camera_edit_tests tests/CameraEditTests.cpp)
-    target_link_libraries(preyvr_camera_edit_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_camera_edit_tests)
-    add_test(NAME camera_edit COMMAND preyvr_camera_edit_tests)
-
-    add_executable(preyvr_frame_dump_tests tests/FrameDumpTests.cpp)
-    target_link_libraries(preyvr_frame_dump_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_frame_dump_tests)
-    add_test(NAME frame_dump COMMAND preyvr_frame_dump_tests)
-
-    add_executable(preyvr_debug_registers_tests tests/DebugRegistersTests.cpp)
-    target_link_libraries(preyvr_debug_registers_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_debug_registers_tests)
-    add_test(NAME debug_registers COMMAND preyvr_debug_registers_tests)
-
-    add_executable(preyvr_console_policy_tests tests/ConsolePolicyTests.cpp)
-    target_link_libraries(preyvr_console_policy_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_console_policy_tests)
-    add_test(NAME console_policy COMMAND preyvr_console_policy_tests)
-
-    add_executable(preyvr_runtime_bootstrap_tests tests/RuntimeBootstrapTests.cpp)
-    target_link_libraries(preyvr_runtime_bootstrap_tests PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_runtime_bootstrap_tests)
-    add_test(NAME runtime_bootstrap COMMAND preyvr_runtime_bootstrap_tests)
+    preyvr_add_test(vr_math tests/VrMathTests.cpp)
+    preyvr_add_test(engine_map tests/EngineMapTests.cpp)
+    preyvr_add_test(aim_state_fixture tests/AimStateTests.cpp TARGET preyvr_aim_state_tests)
+    preyvr_add_test(wrench_query_fixture tests/WrenchQueryTests.cpp TARGET preyvr_wrench_query_tests)
+    preyvr_add_test(interaction_query_fixture tests/InteractionQueryTests.cpp TARGET preyvr_interaction_query_tests)
+    preyvr_add_test(runtime_snapshot tests/RuntimeSnapshotTests.cpp)
+    preyvr_add_test(xr_swapchain_format tests/XrSwapchainFormatTests.cpp)
+    preyvr_add_test(xr_frame_contract tests/XrFrameContractTests.cpp)
+    preyvr_add_test(stereo_frame tests/StereoFrameTests.cpp)
+    preyvr_add_test(comfort_controls tests/ComfortControlsTests.cpp)
+    preyvr_add_test(motion_controller tests/MotionControllerTests.cpp)
+    preyvr_add_test(two_handed_aim tests/TwoHandedAimTests.cpp)
+    preyvr_add_test(vr_options_contracts tests/VrOptionsTests.cpp TARGET preyvr_vr_options_tests)
+    preyvr_add_test(controller_profiles tests/ControllerProfilesTests.cpp)
+    preyvr_add_test(action_map_walk tests/ActionMapWalkTests.cpp)
+    preyvr_add_test(release_gate tests/ReleaseGateTests.cpp)
+    preyvr_add_test(body_equipment_contracts tests/BodyEquipmentTests.cpp TARGET preyvr_body_equipment_tests)
+    preyvr_add_test(anim_ik tests/AnimIkTests.cpp)
+    preyvr_add_test(hand_pose tests/HandPoseTests.cpp)
+    preyvr_add_test(arm_pose tests/ArmPoseTests.cpp)
+    preyvr_add_test(body_follow tests/BodyFollowTests.cpp)
+    preyvr_add_test(room_scale tests/RoomScaleTests.cpp)
+    preyvr_add_test(debug_draw tests/DebugDrawTests.cpp)
+    preyvr_add_test(shot_ray tests/ShotRayTests.cpp)
+    preyvr_add_test(near_particles tests/NearParticlesTests.cpp)
+    preyvr_add_test(hand_carry tests/HandCarryTests.cpp)
+    preyvr_add_test(grenade_throw tests/GrenadeThrowTests.cpp)
+    preyvr_add_test(wrist_holo tests/WristHoloTests.cpp)
+    preyvr_add_test(interaction_use tests/InteractionUseTests.cpp)
+    preyvr_add_test(weapon_rig_alignment tests/WeaponRigAlignmentTests.cpp)
+    preyvr_add_test(weapon_aim tests/WeaponAimTests.cpp)
+    preyvr_add_test(scene_query_contracts tests/SceneQueryTests.cpp TARGET preyvr_scene_query_tests)
+    preyvr_add_test(physical_interactions tests/PhysicalInteractionsTests.cpp)
+    preyvr_add_test(psi_medkit_contracts tests/PsiMedkitTests.cpp TARGET preyvr_psi_medkit_tests)
+    preyvr_add_test(frustum_coverage tests/FrustumCoverageTests.cpp)
+    preyvr_add_test(depth_submission tests/DepthSubmissionTests.cpp)
+    preyvr_add_test(frame_clock tests/FrameClockTests.cpp)
+    preyvr_add_test(frame_timing tests/FrameTimingTests.cpp)
+    preyvr_add_test(input_event tests/InputEventTests.cpp)
+    preyvr_add_test(input_queue tests/InputQueueTests.cpp)
+    preyvr_add_test(menu_navigator tests/MenuNavigatorTests.cpp)
+    preyvr_add_test(render_contract tests/RenderContractTests.cpp)
+    preyvr_add_test(inventory_depth tests/InventoryDepthTests.cpp)
+    preyvr_add_test(ui_panel tests/UiPanelTests.cpp)
+    preyvr_add_test(xr_hold tests/XrHoldTests.cpp)
+    preyvr_add_test(hud_parts tests/HudPartsTests.cpp)
+    preyvr_add_test(locomotion tests/LocomotionTests.cpp)
+    preyvr_add_test(render_frame_table tests/RenderFrameTableTests.cpp)
+    preyvr_add_test(stereo_camera tests/StereoCameraTests.cpp)
+    preyvr_add_test(camera_edit tests/CameraEditTests.cpp)
+    preyvr_add_test(frame_dump tests/FrameDumpTests.cpp)
+    preyvr_add_test(debug_registers tests/DebugRegistersTests.cpp)
+    preyvr_add_test(console_policy tests/ConsolePolicyTests.cpp)
+    preyvr_add_test(runtime_bootstrap tests/RuntimeBootstrapTests.cpp)
 
     if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
-        add_executable(preyvr_slot_feedback_tests tests/SlotFeedbackTests.cpp)
-        target_compile_definitions(preyvr_slot_feedback_tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-        target_link_libraries(preyvr_slot_feedback_tests PRIVATE preyvr_core gdi32 user32)
-        preyvr_enable_warnings(preyvr_slot_feedback_tests)
-        add_test(NAME slot_feedback COMMAND preyvr_slot_feedback_tests)
-        add_executable(preyvr_psi_medkit_runtime_tests tests/PsiMedkitRuntimeTests.cpp)
-        target_compile_definitions(preyvr_psi_medkit_runtime_tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-        target_link_libraries(preyvr_psi_medkit_runtime_tests PRIVATE preyvr_core minhook)
-        preyvr_enable_warnings(preyvr_psi_medkit_runtime_tests)
-        add_test(NAME psi_medkit_runtime COMMAND preyvr_psi_medkit_runtime_tests)
-        add_executable(preyvr_physical_runtime_tests tests/PhysicalRuntimeTests.cpp)
-        target_include_directories(preyvr_physical_runtime_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle")
-        target_compile_definitions(preyvr_physical_runtime_tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-        target_link_libraries(preyvr_physical_runtime_tests PRIVATE preyvr_core minhook)
-        preyvr_enable_warnings(preyvr_physical_runtime_tests)
-        add_test(NAME physical_runtime COMMAND preyvr_physical_runtime_tests)
-        add_executable(preyvr_ui_pointer_tests tests/UiPointerTests.cpp)
-        target_include_directories(preyvr_ui_pointer_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle")
-        target_compile_definitions(preyvr_ui_pointer_tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-        target_link_libraries(preyvr_ui_pointer_tests PRIVATE preyvr_core)
-        preyvr_enable_warnings(preyvr_ui_pointer_tests)
-        add_test(NAME ui_pointer_dispatch COMMAND preyvr_ui_pointer_tests)
+        preyvr_add_test(slot_feedback tests/SlotFeedbackTests.cpp
+            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            LIBS preyvr_core gdi32 user32)
+        preyvr_add_test(psi_medkit_runtime tests/PsiMedkitRuntimeTests.cpp
+            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            LIBS preyvr_core minhook)
+        preyvr_add_test(physical_runtime tests/PhysicalRuntimeTests.cpp
+            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            LIBS preyvr_core minhook)
+        preyvr_add_test(ui_pointer_dispatch tests/UiPointerTests.cpp TARGET preyvr_ui_pointer_tests
+            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            DEFS WIN32_LEAN_AND_MEAN NOMINMAX)
         # The VR Options panel, drawn by the real ImGui backend on WARP.
-        add_executable(preyvr_vr_options_ui_tests tests/VrOptionsUiTests.cpp src/dll/VrOptionsUi.cpp)
-        target_include_directories(preyvr_vr_options_ui_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/dll")
-        target_compile_definitions(preyvr_vr_options_ui_tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-        target_link_libraries(preyvr_vr_options_ui_tests PRIVATE preyvr_core preyvr_imgui d3d11)
-        preyvr_enable_warnings(preyvr_vr_options_ui_tests)
-        add_test(NAME vr_options_ui COMMAND preyvr_vr_options_ui_tests)
-        add_executable(preyvr_wrist_panel_tests tests/WristPanelTests.cpp src/dll/WristPanel.cpp)
-        target_compile_definitions(preyvr_wrist_panel_tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-        target_link_libraries(preyvr_wrist_panel_tests PRIVATE preyvr_core gdi32 user32)
-        preyvr_enable_warnings(preyvr_wrist_panel_tests)
-        add_test(NAME wrist_panel COMMAND preyvr_wrist_panel_tests)
-        add_executable(preyvr_native_wrist_tests tests/NativeWristTests.cpp src/dll/NativeWristTexture.cpp)
-        target_compile_definitions(preyvr_native_wrist_tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-        target_link_libraries(preyvr_native_wrist_tests PRIVATE preyvr_core d3d11 d3dcompiler)
-        preyvr_enable_warnings(preyvr_native_wrist_tests)
-        add_test(NAME native_wrist COMMAND preyvr_native_wrist_tests)
-        add_executable(preyvr_vr_options_runtime_tests tests/VrOptionsRuntimeTests.cpp)
-        target_include_directories(preyvr_vr_options_runtime_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle")
-        target_compile_definitions(preyvr_vr_options_runtime_tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-        target_link_libraries(preyvr_vr_options_runtime_tests PRIVATE preyvr_core)
-        preyvr_enable_warnings(preyvr_vr_options_runtime_tests)
-        add_test(NAME vr_options_runtime COMMAND preyvr_vr_options_runtime_tests)
+        preyvr_add_test(vr_options_ui tests/VrOptionsUiTests.cpp SOURCES src/dll/VrOptionsUi.cpp
+            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/dll"
+            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            LIBS preyvr_core preyvr_imgui d3d11)
+        preyvr_add_test(wrist_panel tests/WristPanelTests.cpp SOURCES src/dll/WristPanel.cpp
+            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            LIBS preyvr_core gdi32 user32)
+        preyvr_add_test(native_wrist tests/NativeWristTests.cpp SOURCES src/dll/NativeWristTexture.cpp
+            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            LIBS preyvr_core d3d11 d3dcompiler)
+        preyvr_add_test(vr_options_runtime tests/VrOptionsRuntimeTests.cpp
+            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            DEFS WIN32_LEAN_AND_MEAN NOMINMAX)
 
-        add_executable(preyvr_inventory_capture_tests tests/InventoryPointerCaptureTests.cpp)
-        target_include_directories(preyvr_inventory_capture_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle")
-        target_link_libraries(preyvr_inventory_capture_tests PRIVATE minhook)
-        preyvr_enable_warnings(preyvr_inventory_capture_tests)
-        add_test(NAME inventory_pointer_capture COMMAND preyvr_inventory_capture_tests)
+        preyvr_add_test(inventory_pointer_capture tests/InventoryPointerCaptureTests.cpp
+            TARGET preyvr_inventory_capture_tests
+            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            LIBS minhook)
+        preyvr_add_test(near_fov_override tests/NearFovOverrideTests.cpp TARGET preyvr_near_fov_tests
+            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            LIBS minhook)
+        preyvr_add_test(cull_camera_watch tests/CullCameraWatchTests.cpp
+            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            LIBS minhook)
+        preyvr_add_test(focus_hold tests/FocusHoldTests.cpp
+            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            LIBS preyvr_headers minhook user32)
 
-        add_executable(preyvr_near_fov_tests tests/NearFovOverrideTests.cpp)
-        target_include_directories(preyvr_near_fov_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle")
-        target_link_libraries(preyvr_near_fov_tests PRIVATE minhook)
-        preyvr_enable_warnings(preyvr_near_fov_tests)
-        add_test(NAME near_fov_override COMMAND preyvr_near_fov_tests)
-
-        add_executable(preyvr_cull_camera_watch_tests tests/CullCameraWatchTests.cpp)
-        target_include_directories(preyvr_cull_camera_watch_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle")
-        target_link_libraries(preyvr_cull_camera_watch_tests PRIVATE minhook)
-        preyvr_enable_warnings(preyvr_cull_camera_watch_tests)
-        add_test(NAME cull_camera_watch COMMAND preyvr_cull_camera_watch_tests)
-
-        add_executable(preyvr_focus_hold_tests tests/FocusHoldTests.cpp)
-        target_include_directories(preyvr_focus_hold_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle")
-        target_link_libraries(preyvr_focus_hold_tests PRIVATE preyvr_headers minhook user32)
-        preyvr_enable_warnings(preyvr_focus_hold_tests)
-        add_test(NAME focus_hold COMMAND preyvr_focus_hold_tests)
-
+        # Links nothing and loads the built DLL, so it stays outside preyvr_add_test.
         add_executable(preyvr_dll_smoke_host tests/DllSmokeHost.cpp)
         preyvr_enable_warnings(preyvr_dll_smoke_host)
         add_test(NAME dll_load_fail_closed COMMAND preyvr_dll_smoke_host $<TARGET_FILE:preyvr>)
@@ -703,29 +486,22 @@ if(PREYVR_BUILD_TESTS)
         )
 
         if(PREYVR_BUILD_OPENXR_LOADER)
-            add_executable(preyvr_haptics_tests tests/HapticsTests.cpp src/dll/Haptics.cpp)
-            target_include_directories(preyvr_haptics_tests PRIVATE $<TARGET_PROPERTY:openxr_loader,INTERFACE_INCLUDE_DIRECTORIES>)
-            target_compile_definitions(preyvr_haptics_tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-            target_link_libraries(preyvr_haptics_tests PRIVATE preyvr_core)
-            preyvr_enable_warnings(preyvr_haptics_tests)
-            add_test(NAME haptics_contracts COMMAND preyvr_haptics_tests)
-            add_executable(preyvr_inventory_swapchain_tests tests/InventorySwapchainTests.cpp src/dll/InventorySwapchain.cpp)
-            target_include_directories(preyvr_inventory_swapchain_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/dll"
-                $<TARGET_PROPERTY:openxr_loader,INTERFACE_INCLUDE_DIRECTORIES>)
-            target_compile_definitions(preyvr_inventory_swapchain_tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX
-                XR_USE_PLATFORM_WIN32 XR_USE_GRAPHICS_API_D3D11)
-            target_link_libraries(preyvr_inventory_swapchain_tests PRIVATE d3d11)
-            preyvr_enable_warnings(preyvr_inventory_swapchain_tests)
-            add_test(NAME inventory_swapchain COMMAND preyvr_inventory_swapchain_tests)
+            preyvr_add_test(haptics_contracts tests/HapticsTests.cpp TARGET preyvr_haptics_tests
+                SOURCES src/dll/Haptics.cpp
+                INCLUDES $<TARGET_PROPERTY:openxr_loader,INTERFACE_INCLUDE_DIRECTORIES>
+                DEFS WIN32_LEAN_AND_MEAN NOMINMAX)
+            preyvr_add_test(inventory_swapchain tests/InventorySwapchainTests.cpp
+                SOURCES src/dll/InventorySwapchain.cpp
+                INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/dll"
+                    $<TARGET_PROPERTY:openxr_loader,INTERFACE_INCLUDE_DIRECTORIES>
+                DEFS WIN32_LEAN_AND_MEAN NOMINMAX XR_USE_PLATFORM_WIN32 XR_USE_GRAPHICS_API_D3D11
+                LIBS d3d11)
 
-            add_executable(preyvr_openxr_preflight_tests tests/OpenXRPreflightWin32Tests.cpp)
-            target_include_directories(preyvr_openxr_preflight_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/dll")
-            target_link_libraries(preyvr_openxr_preflight_tests PRIVATE preyvr_win32_bootstrap)
-            preyvr_enable_warnings(preyvr_openxr_preflight_tests)
-            add_test(
-                NAME openxr_preflight_files
-                COMMAND preyvr_openxr_preflight_tests $<TARGET_FILE:openxr_loader> $<TARGET_FILE:preyvr>
-            )
+            preyvr_add_test(openxr_preflight_files tests/OpenXRPreflightWin32Tests.cpp
+                TARGET preyvr_openxr_preflight_tests
+                INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/dll"
+                LIBS preyvr_win32_bootstrap
+                ARGS $<TARGET_FILE:openxr_loader> $<TARGET_FILE:preyvr>)
         endif()
     endif()
 
@@ -739,12 +515,11 @@ if(PREYVR_BUILD_TESTS)
 
     find_program(PREYVR_POWERSHELL_EXECUTABLE NAMES pwsh powershell)
     if(PREYVR_POWERSHELL_EXECUTABLE)
-        add_test(NAME launcher_resolution COMMAND "${PREYVR_POWERSHELL_EXECUTABLE}"
-            -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/LauncherResolution.Tests.ps1")
-        add_test(NAME launcher_settings COMMAND "${PREYVR_POWERSHELL_EXECUTABLE}"
-            -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/LauncherSettings.Tests.ps1")
-        add_test(NAME launcher_stereo COMMAND "${PREYVR_POWERSHELL_EXECUTABLE}"
-            -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/LauncherStereo.Tests.ps1")
+        foreach(suite Resolution Settings Stereo)
+            string(TOLOWER "${suite}" suite_name)
+            add_test(NAME launcher_${suite_name} COMMAND "${PREYVR_POWERSHELL_EXECUTABLE}"
+                -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/Launcher${suite}.Tests.ps1")
+        endforeach()
     endif()
     if(PREYVR_POWERSHELL_EXECUTABLE AND PREYVR_BUILD_SMOKE_DLL AND WIN32)
         add_test(

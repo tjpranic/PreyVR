@@ -7,6 +7,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include "TestSupport.h"
 
 namespace preyvr::lifecycle {
 std::vector<std::string> gLines;
@@ -22,10 +23,7 @@ namespace {
 using namespace preyvr::dll;
 using preyvr::lifecycle::gLines;
 
-void Require(bool value, const char* message)
-{
-    if (!value) { std::cerr << "FAILED: " << message << '\n'; std::exit(1); }
-}
+using preyvr::test::Require;
 template <typename T> void Put(std::vector<std::uint8_t>& memory, std::uintptr_t offset, T value)
 {
     std::memcpy(memory.data() + offset, &value, sizeof(T));

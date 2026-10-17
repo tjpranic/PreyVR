@@ -2,6 +2,7 @@
 // the movie's named layout, the HUD draw's group exclusions, and when a part
 // is lifted. The native calls are faked; the transactions are the real ones.
 #include "preyvr/NativeHudIsolation.h"
+#include "TestSupport.h"
 #include <cstdlib>
 #include <iostream>
 #include <map>
@@ -10,7 +11,7 @@
 #include <initializer_list>
 #include <vector>
 using namespace preyvr;
-void Require(bool b,const char* why){if(!b){std::cerr<<why<<'\n';std::exit(1);}}
+using preyvr::test::Require;
 namespace {
 // One object per path, so a test can ask what a path resolved to; `missing`
 // paths fail to resolve, and every handle taken must be released once.

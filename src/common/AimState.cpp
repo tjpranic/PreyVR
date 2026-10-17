@@ -12,11 +12,6 @@ bool Finite(float value)
     return std::isfinite(value);
 }
 
-float Length(Vec3 value)
-{
-    return std::sqrt(value.x * value.x + value.y * value.y + value.z * value.z);
-}
-
 } // namespace
 
 std::optional<CachedReticleState> DecodeCachedReticleState(

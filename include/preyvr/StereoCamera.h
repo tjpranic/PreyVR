@@ -45,7 +45,7 @@ namespace preyvr::stereo {
 // using the quaternion algebra already in VrMath.
 inline constexpr Quaternion kOpenXrToEngine{0.70710678118f, 0.0f, 0.0f, 0.70710678118f};
 
-Quaternion Conjugate(Quaternion value);
+using preyvr::Conjugate;
 
 Vec3 ToEngineSpace(Vec3 openXr);
 
@@ -82,8 +82,9 @@ Matrix34 MatrixFromPose(const Pose& pose);
 // Branches on the largest diagonal term rather than using the single-branch
 // trace form. That is not premature caution: the naive version loses precision
 // as the trace approaches zero, which happens at exactly the 180-degree
-// orientations a player reaches by turning around.
-Quaternion QuaternionFromBasis(const Vec3& right, const Vec3& forward, const Vec3& up);
+// orientations a player reaches by turning around. The columns are (right,
+// forward, up), matching MatrixFromPose's layout.
+using preyvr::QuaternionFromBasis;
 
 Pose PoseFromMatrix(const Matrix34& matrix);
 

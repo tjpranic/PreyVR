@@ -2,6 +2,7 @@
 // topology of tools/re/decode_h018_bind_snapshot.py's fixture. Synthetic data,
 // never a claim about Prey's shipped bindings.
 #include "preyvr/ActionMapWalk.h"
+#include "TestSupport.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -12,10 +13,7 @@
 using namespace preyvr::input;
 
 namespace {
-void Check(bool ok, const char* why)
-{
-    if (!ok) { std::cerr << "FAIL: " << why << '\n'; std::exit(1); }
-}
+using preyvr::test::Check;
 
 class Image final : public MemoryView {
 public:

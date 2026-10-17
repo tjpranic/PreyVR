@@ -1,4 +1,5 @@
 #include "preyvr/EngineMap.h"
+#include "TestSupport.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -7,13 +8,7 @@
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 std::vector<std::uint8_t> BuildSyntheticSupportedImage()
 {

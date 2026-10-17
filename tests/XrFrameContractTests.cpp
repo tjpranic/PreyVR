@@ -1,4 +1,5 @@
 #include "preyvr/XrFrameContract.h"
+#include "TestSupport.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -10,13 +11,7 @@ using namespace preyvr::xrframe;
 constexpr std::uint32_t kGameThread = 44208;   // observed live 2026-08-29
 constexpr std::uint32_t kRenderThread = 54600;
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 // One complete, correct frame.
 Result RunGoodFrame(FrameContract& contract, std::int64_t time)

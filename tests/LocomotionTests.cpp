@@ -1,4 +1,5 @@
 #include "preyvr/Locomotion.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -9,13 +10,7 @@ namespace {
 
 using namespace preyvr::locomotion;
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 bool Near(float a, float b, float epsilon = 1e-4f)
 {

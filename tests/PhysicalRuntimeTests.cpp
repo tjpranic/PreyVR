@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <thread>
+#include "TestSupport.h"
 namespace {
 using namespace preyvr;using namespace preyvr::dll;
 alignas(16) unsigned char weaponBytes[0x600]{};
@@ -10,7 +11,7 @@ EquippedRig currentRig{};bool modal=false,admit=true,queryRefused=false;
 unsigned attacks=0,nativeHits=0,appends=0,freed=0,pulses=0,rays=0;
 const DWORD drainThread=GetCurrentThreadId();
 Vec3 impulseDirection{};physical::Impulse lastImpulse{};
-void Check(bool ok,const char* why){if(!ok){std::cerr<<"FAIL: "<<why<<'\n';std::exit(1);}}
+using preyvr::test::Check;
 void __fastcall Append(Vector* out,const scene::Hit* h){
     Check(!out->begin&&!out->end&&!out->capacity,"empty engine vector at append boundary");
     out->begin=new scene::Hit(*h);out->end=out->capacity=out->begin+1;++appends;

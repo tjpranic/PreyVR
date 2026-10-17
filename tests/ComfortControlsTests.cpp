@@ -1,10 +1,11 @@
 #include "preyvr/ComfortControls.h"
+#include "TestSupport.h"
 #include <cstdlib>
 #include <iostream>
 #include <limits>
 using namespace preyvr;
 using namespace preyvr::comfort;
-void Require(bool b,const char* why){if(!b){std::cerr<<why<<'\n';std::exit(1);}}
+using preyvr::test::Require;
 bool Near(float a,float b){return std::abs(a-b)<.0001f;}
 bool Near(Vec3 a,Vec3 b){return Near(a.x,b.x)&&Near(a.y,b.y)&&Near(a.z,b.z);}
 Pose World(Vec3 origin,float yaw,Pose head){

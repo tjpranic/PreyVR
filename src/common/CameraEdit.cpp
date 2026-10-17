@@ -1,4 +1,5 @@
 #include "preyvr/CameraEdit.h"
+#include "preyvr/VrMath.h"
 
 #include <cmath>
 #include <cstring>
@@ -6,7 +7,6 @@
 namespace preyvr::cameraedit {
 namespace {
 
-constexpr float kPi = 3.14159265358979323846f;
 
 float ReadFloat(std::span<const std::uint8_t> bytes, std::size_t index)
 {

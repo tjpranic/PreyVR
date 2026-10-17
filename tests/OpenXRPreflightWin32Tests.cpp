@@ -1,4 +1,5 @@
 #include "OpenXRPreflightWin32.h"
+#include "TestSupport.h"
 
 #include <Windows.h>
 
@@ -10,13 +11,7 @@
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 void WriteText(const std::filesystem::path& path, const std::string& text)
 {

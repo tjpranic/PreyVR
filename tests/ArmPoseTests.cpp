@@ -1,4 +1,6 @@
 #include "preyvr/ArmPose.h"
+#include "TestGeometry.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -9,22 +11,13 @@ using namespace preyvr::armpose;
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAIL: " << message << "\n";
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
-constexpr float kDeg = 3.14159265f / 180.0f;
-float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-Vec3 Sub(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-float Length(Vec3 a) { return std::sqrt(Dot(a, a)); }
+using preyvr::test::kDeg;
 float Dist(Vec3 a, Vec3 b) { return Length(Sub(a, b)); }
 bool NearVec(Vec3 a, Vec3 b, float e = 1e-3f) { return Dist(a, b) <= e; }
-Quaternion AboutX(float a) { return {std::sin(a / 2), 0, 0, std::cos(a / 2)}; }
-Quaternion AboutY(float a) { return {0, std::sin(a / 2), 0, std::cos(a / 2)}; }
+using preyvr::test::AboutX;
+using preyvr::test::AboutY;
 
 void TestTorsoFrame()
 {

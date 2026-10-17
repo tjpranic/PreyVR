@@ -289,7 +289,6 @@ std::optional<Quaternion> FacingAxis(const Vec3& position,const Vec3& axis)
     const float yaw=std::atan2(x,z);
     return Quaternion{0,std::sin(yaw*.5f),0,std::cos(yaw*.5f)};
 }
-bool Finite(const Vec3& v){return std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(v.z);}
 // The anchor's forward and right across the floor.
 bool AnchorAxes(const MenuAnchor& anchor,Vec3& forward,Vec3& right)
 {

@@ -4,6 +4,7 @@
 // control sends when the laser uses it: checkbox, choice list, slider, button,
 // tabs by grip, scrolling and back -- and that every tab draws all its rows.
 #include "VrOptionsUi.h"
+#include "TestSupport.h"
 
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -22,10 +23,7 @@ using namespace preyvr::dll;
 using Kind = VrOptionsUiTarget::Kind;
 
 namespace {
-void Check(bool ok, const char* why)
-{
-    if (!ok) { std::cerr << why << '\n'; std::exit(1); }
-}
+using preyvr::test::Check;
 
 std::array<unsigned char, 4> Pixel(ID3D11Device* device, ID3D11DeviceContext* context, ID3D11Texture2D* texture,
                                    unsigned x, unsigned y)

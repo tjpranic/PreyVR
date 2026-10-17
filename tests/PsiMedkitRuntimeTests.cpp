@@ -8,6 +8,7 @@ HMODULE TestModule(const wchar_t*);
 #include <cstdlib>
 #include <iostream>
 #include <thread>
+#include "TestSupport.h"
 namespace {
 using namespace preyvr;using namespace preyvr::dll;
 alignas(16) unsigned char playerBytes[0x2000]{},psiBytes[0x600]{},focusBytes[0x400]{};
@@ -16,7 +17,7 @@ GameplayPoseFrame published{};bool modal=false,poseAvailable=true,selectAllowed=
 unsigned updates=0,activations=0,selections=0,starts=0,stops=0,consumed=0,pulses=0,foreignActivations=0;
 int consumeResult=2;unsigned long long reference=2,menuEpoch=1;
 const DWORD drainThread=GetCurrentThreadId();psi::Ray observed{},castRay{};
-void Check(bool ok,const char* why){if(!ok){std::cerr<<"FAIL: "<<why<<'\n';std::exit(1);}}
+using preyvr::test::Check;
 bool Near(float a,float b){return std::fabs(a-b)<.0001f;}
 template<class T> T& Field(std::uintptr_t p,unsigned offset){return *reinterpret_cast<T*>(p+offset);}
 std::uintptr_t __fastcall GetPlayer(){return player;}

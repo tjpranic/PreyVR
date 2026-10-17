@@ -1,12 +1,13 @@
 #include "preyvr/SceneQuery.h"
 #include "preyvr/WeaponAim.h"
 #include "preyvr/LatestSnapshot.h"
+#include "TestSupport.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
 #include <limits>
 using namespace preyvr;
-void Check(bool ok,const char* why){if(!ok){std::cerr<<why<<'\n';std::exit(1);}}
+using preyvr::test::Check;
 int main(){
     scene::Params params;scene::Hit hit;int dummy=0;void* skip[]={&dummy};
     std::memset(&params,0xcd,sizeof(params));

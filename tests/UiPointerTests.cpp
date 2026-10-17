@@ -3,13 +3,14 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
+#include "TestSupport.h"
 namespace {
 struct Event {int kind,x,y;};
 std::vector<Event> events;
 bool menuKnown=true,menuOpen=true;
 bool optionsOwned=false;
 DWORD modeError=0,cursorError=0,cancelError=0;
-void Require(bool ok,const char* why){if(!ok){std::cerr<<why<<'\n';std::exit(1);}}
+using preyvr::test::Require;
 }
 namespace preyvr::lifecycle {void Log(std::string_view){}}
 namespace preyvr::dll {

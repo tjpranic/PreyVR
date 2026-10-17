@@ -1,4 +1,6 @@
 #include "preyvr/MotionController.h"
+#include "TestGeometry.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -9,13 +11,7 @@ namespace {
 using namespace preyvr;
 using namespace preyvr::controller;
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 bool Near(float a, float b, float epsilon = 1e-5f)
 {
@@ -229,12 +225,7 @@ void TestTurning()
 
 // --- rigid subtree rotation -------------------------------------------------
 
-Quaternion AxisAngle(Vec3 axis, float radians)
-{
-    const float len = std::sqrt(axis.x*axis.x + axis.y*axis.y + axis.z*axis.z);
-    const float s = std::sin(radians * 0.5f) / len;
-    return Quaternion{axis.x*s, axis.y*s, axis.z*s, std::cos(radians * 0.5f)};
-}
+using preyvr::test::AxisAngle;
 
 // **The driven joint must not move.** It is the pivot, so a rotation about it
 
@@ -342,7 +333,6 @@ void TestCompositionOrderIsBasisChangeOnTheLeft()
 // right on the axes they were fitted on, and this shows why.
 void TestMissingYawInvertsPitchAndRoll()
 {
-    const float kPi = 3.14159265358979f;
     // A pure yaw passes through a half-turn conjugation untouched.
     const Quaternion yaw = AxisAngle(Vec3{0.0f, 0.0f, 1.0f}, 0.7f);
     Require(NearQuat(WorldTurnToModel(yaw, kPi), yaw, 1e-4f),

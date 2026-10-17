@@ -8,7 +8,6 @@
 namespace preyvr::roomscale {
 namespace {
 
-bool Finite(const Vec3& v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
 float Horizontal(const Vec3& v) { return std::hypot(v.x, v.y); }
 
 // The sweep's heights above the feet: shins clear of a low step, waist, chest.

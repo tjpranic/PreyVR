@@ -1,4 +1,5 @@
 #include "preyvr/ConsolePolicy.h"
+#include "TestSupport.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -10,13 +11,7 @@ using preyvr::console::Classification;
 using preyvr::console::Classify;
 using preyvr::console::IsAllowlistedCvar;
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 void RequireDenied(std::string_view command, const char* message)
 {

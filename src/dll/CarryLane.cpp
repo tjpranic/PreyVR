@@ -560,7 +560,7 @@ void CaptureGrab(std::uintptr_t entity)
     g.kind = carry::Classify(in, Get(gKindSettings));
     if (haveTm && hand.valid) {
         const Quaternion object = carry::FromMatrix34(tm);
-        g.handToObject = Normalize(Multiply(carry::Inverse(hand.grip.orientation), object));
+        g.handToObject = Normalize(Multiply(Conjugate(hand.grip.orientation), object));
         g.heavy.handOffset = Sub(hand.grip.position, hand.head);
         g.heavy.yaw = hand.bodyYaw;
         // The point the left hand's ray met it at, if this carry is what it pointed at.
@@ -1088,7 +1088,7 @@ void UpdateCarryLane(const GameplayPoseFrame& frame, bool)
             float tm[12];
             if (gGrab.kind != carry::Kind::Corpse && CallWorldTm(entity, tm)) {
                 const Quaternion q = carry::FromMatrix34(tm);
-                const Quaternion d = Multiply(q, carry::Inverse(gGrab.targetRotation));
+                const Quaternion d = Multiply(q, Conjugate(gGrab.targetRotation));
                 const float s = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
                 gGrab.rotationError = 2.0f * std::atan2(s, std::fabs(d.w)) * 57.29578f;
             }

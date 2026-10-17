@@ -1,4 +1,5 @@
 #include "preyvr/CameraEdit.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -10,13 +11,7 @@ namespace {
 
 using namespace preyvr::cameraedit;
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 bool Near(float left, float right, float epsilon = 1e-5f)
 {

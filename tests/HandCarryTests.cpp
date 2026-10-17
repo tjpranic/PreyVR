@@ -1,6 +1,8 @@
 #include "preyvr/HandCarry.h"
 #include "preyvr/InteractionUse.h"
 #include "preyvr/StereoCamera.h"
+#include "TestGeometry.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -11,20 +13,10 @@ using namespace preyvr::carry;
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAIL: " << message << "\n";
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 bool Near(float a, float b, float e = 1e-3f) { return std::fabs(a - b) <= e; }
 bool NearV(Vec3 a, Vec3 b, float e = 1e-3f) { return Near(a.x, b.x, e) && Near(a.y, b.y, e) && Near(a.z, b.z, e); }
-Quaternion AxisAngle(Vec3 axis, float radians)
-{
-    const float s = std::sin(radians * .5f);
-    return {axis.x * s, axis.y * s, axis.z * s, std::cos(radians * .5f)};
-}
+using preyvr::test::AxisAngle;
 constexpr std::int64_t kFrame = 11111111;   // 90 Hz, ns
 
 // --- motion -------------------------------------------------------------------------

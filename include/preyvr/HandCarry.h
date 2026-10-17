@@ -36,15 +36,15 @@
 // inputs and carries out the outputs.
 namespace preyvr::carry {
 
-// --- vector helpers shared with the DLL -----------------------------------------
-Vec3 Add(Vec3 a, Vec3 b);
-Vec3 Sub(Vec3 a, Vec3 b);
-Vec3 Scale(Vec3 a, float s);
-float Dot(Vec3 a, Vec3 b);
-float Length(Vec3 a);
-bool Finite(Vec3 v);
+// --- vector helpers shared with the DLL (the vector algebra is VrMath's) --------
+using preyvr::Add;
+using preyvr::Dot;
+using preyvr::Finite;
+using preyvr::Length;
+using preyvr::Scale;
+using preyvr::Sub;
+// Finite and not degenerate (squared norm above 1e-6).
 bool Finite(Quaternion q);
-Quaternion Inverse(Quaternion q);   // unit quaternions
 // Rotation of a Matrix34 (row-major 3x4, engine convention), scale removed.
 Quaternion FromMatrix34(const float m[12]);
 // A vector in the app's OpenXR tracking space, in the engine world: the axis

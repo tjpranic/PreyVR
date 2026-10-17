@@ -157,7 +157,6 @@ bool InstallMuzzleObserver()
     return true;
 }
 
-Quaternion Conjugate(const Quaternion& q) { return Quaternion{-q.x, -q.y, -q.z, q.w}; }
 
 // The controller's aim rotation in world terms, through the same reference the
 // aim lane uses. Origin-anchored: the camera is offset per eye by the synthetic

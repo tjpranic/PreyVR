@@ -1,4 +1,5 @@
 #include "preyvr/InventoryDepth.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -7,13 +8,7 @@
 using namespace preyvr::inventory;
 
 namespace {
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 bool Near(float a, float b, float tolerance = .0001f) { return std::abs(a - b) < tolerance; }
 } // namespace
 

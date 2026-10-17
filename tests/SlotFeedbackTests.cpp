@@ -2,11 +2,12 @@
 #include <cstdlib>
 #include <iostream>
 #include <fstream>
+#include "TestSupport.h"
 namespace {
 using namespace preyvr;
 bool hints=true,gameplay=true,medkit=true,grip=true,holsters=true;
 std::uint64_t reference=2,menu=5;
-void Check(bool ok,const char* why){if(!ok){std::cerr<<why<<'\n';std::exit(1);}}
+using preyvr::test::Check;
 }
 namespace preyvr::dll {
 bool BeltHintsEnabled(){return hints;}

@@ -1,4 +1,5 @@
 #include "preyvr/FrameClock.h"
+#include "TestSupport.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -7,13 +8,7 @@ using namespace preyvr::frameclock;
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAIL: " << message << "\n";
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 void TestEyeComesFromPresenterParity()
 {

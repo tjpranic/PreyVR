@@ -2,6 +2,7 @@
 #include "../src/dll/InventoryPointerCapture.cpp"
 #include <cstdlib>
 #include <iostream>
+#include "TestSupport.h"
 namespace preyvr::lifecycle {void Log(std::string_view){}}
 namespace {DWORD pinned=1;}
 namespace preyvr::dll {DWORD ModulePinStatus(){return pinned;}bool EnsureMinHook(){return false;}bool HudMenuIsOpen(){return true;}}
@@ -10,7 +11,7 @@ using namespace preyvr::dll;
 unsigned calls=0;
 void* seen=nullptr;
 bool __fastcall NativeCancel(void* self){++calls;seen=self;return false;}
-void Require(bool ok,const char* why){if(!ok){std::cerr<<why<<'\n';std::exit(1);}}
+using preyvr::test::Require;
 struct Fixture {
     alignas(8) std::array<unsigned char,0x80> inventory{},sender{};
     std::uintptr_t base=reinterpret_cast<std::uintptr_t>(&NativeCancel)-kCancel;

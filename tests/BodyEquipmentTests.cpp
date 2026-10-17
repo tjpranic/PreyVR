@@ -1,9 +1,10 @@
 #include "preyvr/BodyEquipment.h"
+#include "TestSupport.h"
 #include <iostream>
 #include <cstdlib>
 using namespace preyvr;
 using namespace preyvr::equipment;
-void Check(bool ok,const char* why){if(!ok){std::cerr<<why<<'\n';std::exit(1);}}
+using preyvr::test::Check;
 int main(){
  Pose head{};head.position={0,1.65f,0};
  auto world=[&](Vec3 p){auto v=Rotate(head.orientation,p);return Vec3{v.x+head.position.x,v.y+head.position.y,v.z+head.position.z};};

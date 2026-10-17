@@ -1,4 +1,5 @@
 #include "preyvr/InteractionUse.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -9,13 +10,7 @@ using namespace preyvr::use;
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAIL: " << message << "\n";
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 bool Near(float a, float b, float e = 1e-3f) { return std::fabs(a - b) <= e; }
 
 ButtonInput Base()

@@ -1,5 +1,6 @@
 #include "preyvr/InputQueue.h"
 #include "preyvr/MenuTapDispatch.h"
+#include "TestSupport.h"
 
 #include <atomic>
 #include <cstdlib>
@@ -12,13 +13,7 @@ namespace {
 
 using namespace preyvr::input;
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 // Every byte of an event carries the same stamp, so an event assembled from two
 // different pushes shows up as bytes that disagree -- the same detector shape the

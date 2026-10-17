@@ -9,7 +9,6 @@ namespace {
 
 constexpr float kNoticeSeconds = 1.2f;
 
-bool Finite(Vec3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
 
 std::string Fixed(float value, int decimals)
 {

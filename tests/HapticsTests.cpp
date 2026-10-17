@@ -1,4 +1,5 @@
 #include "../src/dll/HapticsXr.h"
+#include "TestSupport.h"
 #include <cstdlib>
 #include <iostream>
 using namespace preyvr;
@@ -9,7 +10,7 @@ extern "C" XRAPI_ATTR XrResult XRAPI_CALL xrApplyHapticFeedback(XrSession,const 
     amplitude=pulse.amplitude;duration=pulse.duration;return result;
 }
 extern "C" XRAPI_ATTR XrResult XRAPI_CALL xrStopHapticFeedback(XrSession,const XrHapticActionInfo*){++stops;return XR_SUCCESS;}
-void Check(bool ok,const char* why){if(!ok){std::cerr<<why<<'\n';std::exit(1);}}
+using preyvr::test::Check;
 int main(){
     using namespace dll;
     haptics::Policy policy;haptics::Request request{haptics::Event::MenuChange,1,2,4,1000000000,1};

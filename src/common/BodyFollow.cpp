@@ -7,7 +7,6 @@
 namespace preyvr::bodyfollow {
 namespace {
 
-constexpr float kPi = 3.14159265358979f;
 
 } // namespace
 

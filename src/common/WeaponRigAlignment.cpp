@@ -22,7 +22,6 @@ bool ValidQ(const Quaternion& q)
     const float n = q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w;
     return std::isfinite(n) && n > 0.81f && n < 1.21f;
 }
-Quaternion Inverse(const Quaternion& q) { return {-q.x, -q.y, -q.z, q.w}; }
 
 struct Reader {
     Memory memory;
@@ -148,10 +147,10 @@ Status ReadBasis(const Memory& memory, std::uintptr_t moduleBase,
     // any native adjustment made since projection.
     std::uint32_t flags = 0;
     if (!r.Get(mount, 8, flags)) { return Status::invalidMount; }
-    Quaternion relativeDefault = Multiply(Inverse(bind), absoluteDefault);
+    Quaternion relativeDefault = Multiply(Conjugate(bind), absoluteDefault);
     if ((flags & 0x4000u) && !r.Rotation(mount, 0xF8, relativeDefault)) { return Status::invalidMount; }
     candidate.weaponInWrist = Multiply(Multiply(Multiply(
-        Inverse(wrist), socket), relativeDefault), extra);
+        Conjugate(wrist), socket), relativeDefault), extra);
 
     std::uintptr_t weaponCharacter = 0, weaponSkeleton = 0, weaponJoints = 0;
     unsigned weaponCount = 0;
@@ -245,8 +244,8 @@ bool SolveWrist(const Quaternion& characterWorld, const Quaternion& aimWorld,
 {
     if (basis.source == Source::none || !ValidQ(characterWorld) || !ValidQ(aimWorld) ||
         !ValidQ(basis.weaponInWrist) || !ValidQ(basis.barrelInWeapon)) { return false; }
-    wristModel = Multiply(Multiply(Multiply(Inverse(characterWorld), aimWorld),
-                                   Inverse(basis.barrelInWeapon)), Inverse(basis.weaponInWrist));
+    wristModel = Multiply(Multiply(Multiply(Conjugate(characterWorld), aimWorld),
+                                   Conjugate(basis.barrelInWeapon)), Conjugate(basis.weaponInWrist));
     return true;
 }
 
@@ -263,7 +262,7 @@ bool ReadContactGeometry(const Memory& memory,std::uintptr_t base,const RigIdent
     auto pose=[&](std::uintptr_t p,std::size_t offset,Pose& value){
         return r.Get(p,offset,value)&&ValidQ(value.orientation)&&finite(value.position);
     };
-    auto inverse=[](Pose p){const auto q=Inverse(p.orientation);return Pose{q,Rotate(q,{-p.position.x,-p.position.y,-p.position.z})};};
+    auto inverse=[](Pose p){const auto q=Conjugate(p.orientation);return Pose{q,Rotate(q,{-p.position.x,-p.position.y,-p.position.z})};};
     if(!r.Get(owner.character,0x10,skeleton)||!r.Get(skeleton,0x30,bindArray)||
        !pose(absolute,wristJoint*0x1Cull,wrist)||!pose(absolute,basis.socketJoint*0x1Cull,socket)||
        !pose(bindArray,basis.socketJoint*0x1Cull,bind)||!pose(owner.attachment,0x114,authored)||

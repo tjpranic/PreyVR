@@ -1,10 +1,11 @@
 #include "preyvr/PsiTargeting.h"
 #include "preyvr/MedkitSlot.h"
+#include "TestSupport.h"
 #include <iostream>
 #include <cstdlib>
 #include <limits>
 using namespace preyvr;
-void Check(bool good,const char* why){if(!good){std::cerr<<why<<'\n';std::exit(1);}}
+using preyvr::test::Check;
 bool Near(float a,float b){return std::fabs(a-b)<.0001f;}
 int main(){
  Pose head{{},{0,1.65f,0}},hand{{},{-.3f,1.2f,-.4f}};PoseValidity valid{true,true,true,true,0};

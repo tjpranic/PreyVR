@@ -2,6 +2,7 @@
 #include "preyvr/AnimIk.h"
 #include "preyvr/MotionController.h"
 #include "preyvr/StereoCamera.h"
+#include "TestSupport.h"
 #include <array>
 #include <cmath>
 #include <cstdlib>
@@ -12,20 +13,13 @@
 using namespace preyvr;
 using namespace preyvr::weaponrig;
 namespace {
-void Check(bool ok, const char* why)
-{
-    if (!ok) { std::cerr << "FAIL: " << why << '\n'; std::exit(1); }
-}
+using preyvr::test::Check;
 Quaternion Q(float x, float y, float z, float angle)
 {
     const float s = std::sin(angle * .5f) / std::sqrt(x*x + y*y + z*z);
     return {x*s, y*s, z*s, std::cos(angle*.5f)};
 }
-Quaternion Inv(Quaternion q) { return {-q.x, -q.y, -q.z, q.w}; }
-float Distance(Vec3 a, Vec3 b)
-{
-    return std::sqrt((a.x-b.x)*(a.x-b.x)+(a.y-b.y)*(a.y-b.y)+(a.z-b.z)*(a.z-b.z));
-}
+float Distance(Vec3 a, Vec3 b) { return Length(Sub(a, b)); }
 bool SameRotation(Quaternion a, Quaternion b)
 {
     return Distance(Rotate(a, {1,0,0}), Rotate(b, {1,0,0})) < 1e-4f &&
@@ -147,7 +141,7 @@ void GeometryAndSwitches()
                 // Native forward reconstruction after the engine propagates
                 // descendants: root * newSocket * inv(bind) * A * K * barrel.
                 const auto socketAfter = Multiply(solved, f.socketRelative);
-                const auto mountAfter = Multiply(Multiply(Multiply(socketAfter, Inv(f.bind)), f.authored), f.extra);
+                const auto mountAfter = Multiply(Multiply(Multiply(socketAfter, Conjugate(f.bind)), f.authored), f.extra);
                 const auto helperAfter = Multiply(Multiply(root, mountAfter), Multiply(f.barrel, f.helperExtra));
                 Check(SameRotation(helperAfter, world.orientation), "full barrel frame matches aim after every equip angle");
                 const PoseValidity valid{true,true,true,true,0};
@@ -180,7 +174,7 @@ void ContactBounds()
     const auto expectedSocket=Compose(wrist,g.weaponInWrist);
     // Independent forward equality B * relative = authored. Including
     // nonzero translations catches rotation-only reconstruction mistakes.
-    auto inv=[](Pose p){const auto q=Inv(p.orientation);return Pose{q,Rotate(q,{-p.position.x,-p.position.y,-p.position.z})};};
+    auto inv=[](Pose p){const auto q=Conjugate(p.orientation);return Pose{q,Rotate(q,{-p.position.x,-p.position.y,-p.position.z})};};
     const auto expected=Compose(Compose(socket,Compose(inv(bind),authored)),Pose{f.extra,{}});
     Check(Distance(expected.position,expectedSocket.position)<1e-5f&&SameRotation(expected.orientation,expectedSocket.orientation),"full attachment translation matches native chain");
     Check(g.minimum.y==-.1f&&g.maximum.y==.6f,"bounds read from bound weapon, not arms");

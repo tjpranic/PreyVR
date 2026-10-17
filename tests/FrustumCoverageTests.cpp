@@ -1,4 +1,6 @@
 #include "preyvr/FrustumCoverage.h"
+#include "preyvr/VrMath.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -8,18 +10,11 @@ using namespace preyvr::xr;
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAIL: " << message << "\n";
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 bool Near(float a, float b, float e = 1e-3f) { return std::fabs(a - b) <= e; }
 
-constexpr float kPi = 3.14159265358979323846f;
-float Deg(float degrees) { return degrees * kPi / 180.0f; }
+float Deg(float degrees) { return degrees * preyvr::kPi / 180.0f; }
 
 // The saved Quest 3 / VDXR session, run-20260908-143942, sequence 12380, left
 // eye. These are the numbers in PERFORMANCE-PLAN-2026-09-09.md, and pinning the

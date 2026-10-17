@@ -2,13 +2,14 @@
 #include "../src/dll/VrOptionsRuntime.cpp"
 #include <iostream>
 #include <cstdlib>
+#include "TestSupport.h"
 namespace {
 preyvr::options::Values applied=preyvr::options::Defaults();
 bool nativeModal=true;unsigned pauseTaps=0,recenters=0,calibrations=0,clears=0,holsterClears=0;
 DWORD viewResultForTest=0;
 bool supersedeViewForTest=false;
 preyvr::dll::TrackingFrame currentFrame{};
-void Check(bool ok,const char* why){if(!ok){std::cerr<<why<<'\n';std::exit(1);}}
+using preyvr::test::Check;
 }
 namespace preyvr::lifecycle { void Log(std::string_view){} }
 namespace preyvr::dll {

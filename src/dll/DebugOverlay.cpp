@@ -97,7 +97,6 @@ Vec3 XrDirToEngine(const GameplayPoseFrame& f, Vec3 direction)
 {
     return Rotate(stereo::YawQuaternion(f.yaw), Rotate(stereo::kOpenXrToEngine, direction));
 }
-bool Finite(Vec3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
 
 // The scene hit along a world ray, when the layer asks for hits.
 bool Hit(const GameplayPoseFrame& frame, Vec3 origin, Vec3 direction, unsigned mask, float& distance)

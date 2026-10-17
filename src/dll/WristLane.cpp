@@ -23,11 +23,6 @@ namespace {
 
 using wrist::Card;
 
-Vec3 Add(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
-Vec3 Sub(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-Vec3 Scale(Vec3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
-float Length(Vec3 a) { return std::sqrt(a.x * a.x + a.y * a.y + a.z * a.z); }
-Quaternion Conj(Quaternion q) { return {-q.x, -q.y, -q.z, q.w}; }
 
 // ---- settings (command channel; read on every thread) ----------------------
 std::atomic<unsigned> gAnchor{1};          // 1 the drawn forearm, 0 Funk's grip card

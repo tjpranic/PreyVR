@@ -1,4 +1,5 @@
 #include "preyvr/XrHold.h"
+#include "TestSupport.h"
 #include <cstdlib>
 #include <iostream>
 
@@ -6,10 +7,7 @@ using preyvr::xrhold::StallEnd;
 using preyvr::xrhold::StallTracker;
 
 namespace {
-void Require(bool value, const char* message)
-{
-    if (!value) { std::cerr << "FAILED: " << message << '\n'; std::exit(1); }
-}
+using preyvr::test::Require;
 constexpr std::uint64_t kMs = 1000000;
 constexpr std::uint64_t kThreshold = 100 * kMs;
 }

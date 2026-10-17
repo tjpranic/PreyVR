@@ -1,10 +1,11 @@
 #include "preyvr/RenderContract.h"
 #include "preyvr/SettingReadback.h"
+#include "TestSupport.h"
 #include <cstdlib>
 #include <iostream>
 #include <limits>
 using namespace preyvr;
-void Require(bool v,const char* msg) {if(!v) {std::cerr<<msg<<"\n";std::exit(1);}}
+using preyvr::test::Require;
 int main() {
     RenderContract a{};a.eye=0;a.valid=true;a.displayTime=100;a.tangents={-1,1.2f,1.1f,-.9f};
     RenderContract b=a;b.eye=1;b.displayTime=200;b.pose.position.x=3;

@@ -12,11 +12,6 @@ bool Finite(float value)
     return std::isfinite(value);
 }
 
-bool Finite(Vec3 value)
-{
-    return Finite(value.x) && Finite(value.y) && Finite(value.z);
-}
-
 } // namespace
 
 std::optional<WrenchComponentState> DecodeWrenchComponentState(

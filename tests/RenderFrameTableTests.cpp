@@ -1,4 +1,5 @@
 #include "preyvr/RenderFrameTable.h"
+#include "TestSupport.h"
 
 #include <atomic>
 #include <chrono>
@@ -15,13 +16,7 @@ namespace {
 
 using namespace preyvr::renderframe;
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 void Fill(float (&matrix)[kMatrixFloats], float value)
 {

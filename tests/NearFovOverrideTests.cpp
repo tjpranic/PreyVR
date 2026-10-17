@@ -5,6 +5,7 @@
 #include <iostream>
 #include <limits>
 #include <vector>
+#include "TestSupport.h"
 
 namespace preyvr::lifecycle { void Log(std::string_view) {} }
 namespace preyvr::dll {
@@ -16,10 +17,7 @@ namespace {
 using namespace preyvr::dll;
 float nativeFov = 55.0f;
 unsigned originalCalls = 0;
-void Require(bool value, const char* message)
-{
-    if (!value) { std::cerr << "FAILED: " << message << '\n'; std::exit(1); }
-}
+using preyvr::test::Require;
 void __fastcall EmulateLatch(void* renderer)
 {
     ++originalCalls;

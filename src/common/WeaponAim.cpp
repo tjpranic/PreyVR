@@ -7,12 +7,6 @@ namespace preyvr::aim {
 
 namespace {
 
-Quaternion ConjugateOf(const Quaternion& q) { return Quaternion{-q.x, -q.y, -q.z, q.w}; }
-
-bool Finite(const Vec3& v)
-{
-    return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
-}
 
 } // namespace
 
@@ -73,7 +67,7 @@ ScreenPoint ProjectToScreen(const Vec3& worldPoint,
                       worldPoint.y - eyePosition.y,
                       worldPoint.z - eyePosition.z};
     // Into the eye's own frame. Engine basis: X right, Y forward, Z up.
-    const Vec3 local = Rotate(ConjugateOf(Normalize(eyeOrientation)), offset);
+    const Vec3 local = Rotate(Conjugate(Normalize(eyeOrientation)), offset);
     if (!Finite(local)) { return out; }
     // Forward is +Y, and a point at or behind the eye plane has no projection.
     if (local.y <= 1e-4f) {

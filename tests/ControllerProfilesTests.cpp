@@ -3,6 +3,7 @@
 // complete, each action on one button, a button with one meaning per set, and
 // every path one the controller has, of the kind its action reads.
 #include "preyvr/ControllerProfiles.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -16,10 +17,7 @@
 using namespace preyvr::input;
 
 namespace {
-void Check(bool ok, const char* why)
-{
-    if (!ok) { std::cerr << why << '\n'; std::exit(1); }
-}
+using preyvr::test::Check;
 bool Has(const ControllerProfile& profile, Role role, const std::string& path)
 {
     for (const auto& binding : profile.bindings) {

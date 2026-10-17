@@ -6,21 +6,14 @@
 namespace preyvr::armpose {
 namespace {
 
-constexpr float kPi = 3.14159265358979f;
 
-Vec3 Add(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
-Vec3 Sub(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-Vec3 Mul(Vec3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
-float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-Vec3 Cross(Vec3 a, Vec3 b) { return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x}; }
-float Length(Vec3 a) { return std::sqrt(Dot(a, a)); }
 Vec3 Unit(Vec3 a, Vec3 fallback)
 {
     const float l = Length(a);
-    return l > 1e-6f && std::isfinite(l) ? Mul(a, 1.0f / l) : fallback;
+    return l > 1e-6f && std::isfinite(l) ? Scale(a, 1.0f / l) : fallback;
 }
 // The part of v perpendicular to the unit axis.
-Vec3 Perp(Vec3 v, Vec3 axis) { return Sub(v, Mul(axis, Dot(v, axis))); }
+Vec3 Perp(Vec3 v, Vec3 axis) { return Sub(v, Scale(axis, Dot(v, axis))); }
 float Wrap(float a)
 {
     while (a > kPi) { a -= 2.0f * kPi; }
@@ -82,9 +75,9 @@ float TorsoYaw::Update(float headYaw, float dtSeconds, float deadzone, float rel
 
 Vec3 ShoulderTarget(const Vec3& eye, const TorsoFrame& torso, Side side, const Body& body)
 {
-    return Add(Add(Add(eye, Mul(torso.forward, body.shoulderForward)),
-                   Mul(torso.right, static_cast<float>(side) * body.shoulderOut)),
-               Mul(torso.up, body.shoulderUp));
+    return Add(Add(Add(eye, Scale(torso.forward, body.shoulderForward)),
+                   Scale(torso.right, static_cast<float>(side) * body.shoulderOut)),
+               Scale(torso.up, body.shoulderUp));
 }
 
 Vec3 PlaceShoulder(const Vec3& clavicleRoot, float clavicleLength, const Vec3& target, float stretch)
@@ -94,13 +87,13 @@ Vec3 PlaceShoulder(const Vec3& clavicleRoot, float clavicleLength, const Vec3& t
     if (!(l > 1e-6f) || !(clavicleLength > 0.0f)) { return target; }
     const float s = std::clamp(stretch, 0.0f, 0.9f);
     const float length = std::clamp(l, clavicleLength * (1.0f - s), clavicleLength * (1.0f + s));
-    return Add(clavicleRoot, Mul(d, length / l));
+    return Add(clavicleRoot, Scale(d, length / l));
 }
 
 Vec3 BodyPole(const TorsoFrame& torso, Side side)
 {
-    return Unit(Add(Add(Mul(torso.forward, -0.2f), Mul(torso.right, 0.4f * static_cast<float>(side))),
-                    Mul(torso.up, -0.8f)),
+    return Unit(Add(Add(Scale(torso.forward, -0.2f), Scale(torso.right, 0.4f * static_cast<float>(side))),
+                    Scale(torso.up, -0.8f)),
                 Vec3{0, -1, 0});
 }
 
@@ -121,7 +114,7 @@ float WristRadialDeg(const Vec3& forearm, const Vec3& length, const Vec3& palm, 
 {
     // Deviated by d towards the thumb, the hand's length is forearm*cos(d) +
     // thumb*sin(d): the forearm leans away from the thumb.
-    const Vec3 thumb = Mul(Unit(Cross(length, palm), Vec3{0, 0, 1}), side >= 0 ? 1.0f : -1.0f);
+    const Vec3 thumb = Scale(Unit(Cross(length, palm), Vec3{0, 0, 1}), side >= 0 ? 1.0f : -1.0f);
     return std::asin(std::clamp(-Dot(Unit(forearm, length), thumb), -1.0f, 1.0f)) * 57.29578f;
 }
 
@@ -138,7 +131,7 @@ Vec3 ChooseElbowPole(const Vec3& shoulder, const Vec3& wrist, float upper, float
     // The circle: centre and radius from the same solve SolveElbow does.
     const ArmSolution reference = SolveElbow(shoulder, wrist, upper, fore, body, maxStretch);
     const Vec3 offset = Sub(reference.elbow, shoulder);
-    const Vec3 centre = Add(shoulder, Mul(axis, Dot(offset, axis)));
+    const Vec3 centre = Add(shoulder, Scale(axis, Dot(offset, axis)));
     const float radius = Length(Perp(offset, axis));
     if (radius < 1e-3f) { return body; }
     const Vec3 u = body, v = Cross(axis, body);
@@ -155,8 +148,8 @@ Vec3 ChooseElbowPole(const Vec3& shoulder, const Vec3& wrist, float upper, float
         return 2.0f * (1.0f - std::cos(a)) / (s * s);
     };
     const auto cost = [&](float phi) {
-        const Vec3 dir = Add(Mul(u, std::cos(phi)), Mul(v, std::sin(phi)));
-        const Vec3 forearm = Unit(Sub(wrist, Add(centre, Mul(dir, radius))), axis);
+        const Vec3 dir = Add(Scale(u, std::cos(phi)), Scale(v, std::sin(phi)));
+        const Vec3 forearm = Unit(Sub(wrist, Add(centre, Scale(dir, radius))), axis);
         const float flex = WristFlexionDeg(forearm, length, palm);
         const float rad = WristRadialDeg(forearm, length, palm, side);
         const float f = flex / limits.flexionSigmaDeg;
@@ -179,7 +172,7 @@ Vec3 ChooseElbowPole(const Vec3& shoulder, const Vec3& wrist, float upper, float
     const float cm = cost(best - h), cp = cost(best + h);
     const float den = cm - 2.0f * bestCost + cp;
     if (den > 1e-9f) { best += 0.5f * h * (cm - cp) / den; }
-    return Unit(Add(Mul(u, std::cos(best)), Mul(v, std::sin(best))), body);
+    return Unit(Add(Scale(u, std::cos(best)), Scale(v, std::sin(best))), body);
 }
 
 ArmSolution SolveElbow(const Vec3& shoulder, const Vec3& wrist, float upper, float fore,
@@ -189,10 +182,10 @@ ArmSolution SolveElbow(const Vec3& shoulder, const Vec3& wrist, float upper, flo
     const Vec3 along = Sub(wrist, shoulder);
     const float d = Length(along);
     if (!(d > 1e-5f) || !(upper > 0.0f) || !(fore > 0.0f)) {
-        out.elbow = Add(shoulder, Mul(Unit(pole, Vec3{0, -1, 0}), upper));
+        out.elbow = Add(shoulder, Scale(Unit(pole, Vec3{0, -1, 0}), upper));
         return out;
     }
-    const Vec3 axis = Mul(along, 1.0f / d);
+    const Vec3 axis = Scale(along, 1.0f / d);
     const float reach = 0.995f * (upper + fore);
     if (d > reach) {
         // Lengthen both segments to meet the wrist; past maxStretch the caller
@@ -206,7 +199,7 @@ ArmSolution SolveElbow(const Vec3& shoulder, const Vec3& wrist, float upper, flo
     const float sa = std::sqrt(std::max(0.0f, 1.0f - ca * ca));
     Vec3 perp = Perp(pole, axis);
     perp = Length(perp) > 1e-5f ? Unit(perp, AnyPerp(axis)) : AnyPerp(axis);
-    out.elbow = Add(shoulder, Add(Mul(axis, l1 * ca), Mul(perp, l1 * sa)));
+    out.elbow = Add(shoulder, Add(Scale(axis, l1 * ca), Scale(perp, l1 * sa)));
     return out;
 }
 
@@ -226,7 +219,7 @@ Vec3 SmoothDirection(const Vec3& previous, const Vec3& current, float dtSeconds,
 {
     if (!(Length(previous) > 0.5f) || !(tau > 0.0f)) { return Unit(current, previous); }
     const float a = 1.0f - std::exp(-std::clamp(dtSeconds, 0.0f, 0.25f) / tau);
-    return Unit(Add(previous, Mul(Sub(current, previous), a)), current);
+    return Unit(Add(previous, Scale(Sub(current, previous), a)), current);
 }
 
 } // namespace preyvr::armpose

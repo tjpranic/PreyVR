@@ -1,4 +1,5 @@
 #include "preyvr/HandPose.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -10,17 +11,8 @@ using namespace preyvr::handpose;
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAIL: " << message << "\n";
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
-float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-Vec3 Cross(Vec3 a, Vec3 b) { return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x}; }
-float Length(Vec3 a) { return std::sqrt(Dot(a, a)); }
 bool NearVec(Vec3 a, Vec3 b, float e = 1e-3f)
 {
     return std::fabs(a.x - b.x) <= e && std::fabs(a.y - b.y) <= e && std::fabs(a.z - b.z) <= e;

@@ -2,6 +2,8 @@
 #include "preyvr/DebugDraw.h"
 #include "preyvr/DebugOverlayScene.h"
 #include "preyvr/MedkitSlot.h"
+#include "TestGeometry.h"
+#include "TestSupport.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -13,17 +15,11 @@ using namespace preyvr::debugdraw;
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAIL: " << message << "\n";
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 bool Near(float a, float b, float e = 1e-3f) { return std::fabs(a - b) <= e; }
-Quaternion AboutY(float a) { return {0, std::sin(a / 2), 0, std::cos(a / 2)}; }
-Quaternion AboutX(float a) { return {std::sin(a / 2), 0, 0, std::cos(a / 2)}; }
-constexpr float kDeg = 3.14159265f / 180.0f;
+using preyvr::test::AboutY;
+using preyvr::test::AboutX;
+using preyvr::test::kDeg;
 
 EyeView Square()
 {

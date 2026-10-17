@@ -1,5 +1,6 @@
 #include "preyvr/AimState.h"
 #include "preyvr/InteractionQuery.h"
+#include "TestSupport.h"
 
 #include <array>
 #include <cmath>
@@ -9,13 +10,7 @@
 
 namespace {
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 constexpr std::array<std::uint8_t, 0xE0> kEdgeBaselineCandidates = {
     0x70, 0x2D, 0xFB, 0x3F, 0xE1, 0x5A, 0x76, 0x3F, 0x03, 0x00, 0x00, 0x00, 0x31, 0x38, 0x30, 0x2D,

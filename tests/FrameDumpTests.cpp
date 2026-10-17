@@ -1,4 +1,5 @@
 #include "preyvr/FrameDump.h"
+#include "TestSupport.h"
 
 #include <array>
 #include <cmath>
@@ -16,13 +17,7 @@ using preyvr::framedump::FindHorizontalShift;
 using preyvr::framedump::Header;
 using preyvr::framedump::kHeaderSize;
 
-void Require(bool condition, const char* message)
-{
-    if (!condition) {
-        std::cerr << "FAILED: " << message << '\n';
-        std::exit(1);
-    }
-}
+using preyvr::test::Require;
 
 bool Near(double left, double right, double epsilon = 1e-9)
 {

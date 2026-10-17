@@ -1,9 +1,10 @@
 #include "preyvr/PhysicalInteractions.h"
+#include "TestSupport.h"
 #include <cstdlib>
 #include <iostream>
 #include <limits>
 using namespace preyvr;using namespace preyvr::physical;
-void Check(bool ok,const char* why){if(!ok){std::cerr<<"FAIL: "<<why<<'\n';std::exit(1);}}
+using preyvr::test::Check;
 struct Driver {
     Swing swing;Sample s{};
     Driver(){s.owner=1;s.reference=2;s.epoch=1;s.sequence=1;s.stamp=1000000000;s.points=Bounds({-.05f,0,-.05f},{.05f,.6f,.05f});swing.Update(s,1.2f);}

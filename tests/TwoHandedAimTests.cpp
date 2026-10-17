@@ -1,13 +1,14 @@
 #include "preyvr/TwoHandedAim.h"
 #include "preyvr/MotionController.h"
 #include "preyvr/WeaponRigAlignment.h"
+#include "TestSupport.h"
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <limits>
 using namespace preyvr;
 using namespace preyvr::twohand;
-void Check(bool value,const char* message) { if(!value) { std::cerr<<message<<'\n';std::exit(1); } }
+using preyvr::test::Check;
 bool Near(Vec3 a,Vec3 b,float epsilon=.002f) { return std::fabs(a.x-b.x)<epsilon&&std::fabs(a.y-b.y)<epsilon&&std::fabs(a.z-b.z)<epsilon; }
 Input Base() { Input i{};i.owner=1;i.epoch=1;i.reference=2;i.usable=true;i.dt=.01f;
     i.region.start={0,.25f,0};i.region.end={0,.45f,0};i.support.position={0,.35f,0};return i; }
