@@ -38,6 +38,14 @@ void LoadVrOptions();
 // launcher passes none. VR start calls it last, on every start -- an F11
 // restart included. Settings never chosen in the menu are left as they are.
 void ApplySavedVrOptions();
+// **The saved menu panel settings, before the first menu frame**: size, fit,
+// curvature, guide card, distance, place, text panel and laser hand. VR start
+// calls it right after LoadVrOptions. ApplySavedVrOptions comes only after the
+// headset is tracking and every lane is installed -- 5 to 7 s after the first
+// menu frame on 2026-10-17's runs -- and until then the menu showed at the
+// defaults, then snapped to the saved ones. ApplySavedVrOptions applies them
+// again; the same values refit the menu from the same anchor, unchanged.
+void ApplySavedPanelOptions();
 void ServiceVrOptions(); // worker: settings application and disk I/O
 options::Values VrOptionsValues();
 bool VrOptionsSaveFailed();

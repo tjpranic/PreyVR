@@ -27,6 +27,7 @@
 #include "GrenadeLane.h"
 #include "DebugOverlay.h"
 #include "FocusHold.h"
+#include "InventoryPointerCapture.h"
 #include "preyvr/DebugOverlayScene.h"
 #include "preyvr/LatestSnapshot.h"
 #include <algorithm>
@@ -86,8 +87,10 @@ void EnableVrMode() {
     desiredWidth=GetEnvironmentVariableW(L"PREYVR_RENDER_WIDTH",value,24)?static_cast<unsigned>(_wtoi(value)):0;
     desiredHeight=GetEnvironmentVariableW(L"PREYVR_RENDER_HEIGHT",value,24)?static_cast<unsigned>(_wtoi(value)):0;
     // Panel curvature and the laser hand are VR Options settings: vr-options.ini
-    // holds them (ApplySavedVrOptions), not the launcher's environment.
+    // holds them (ApplySavedVrOptions), not the launcher's environment. The menu
+    // panel's own settings apply now, so its first frame is already the saved one.
     LoadVrOptions();
+    ApplySavedPanelOptions();
     phase=Phase::preparing;deadline=GetTickCount64()+120000;nextInputProbe=0;
     Log("state=waiting_for_renderer controls=F11_enable,F12_recenter");
 }
@@ -122,6 +125,16 @@ void TickVrMode() {
         const auto inputPath=ResolveInputPath();
         if(inputPath==2)return;
         if(inputPath!=0 || SetInputPostEnabled(1)!=0){Fail("input_contract");return;}
+        // The laser's inventory hook, here rather than on its first menu event.
+        // That event runs on Prey's main thread, and installing from there while
+        // the tracking step below installs its hooks back to back starved the
+        // main thread on MinHook's lock (a spin that polls with Sleep(1), held
+        // through each install's thread freeze) until the last of them: Prey
+        // drew nothing for 1.7-2.0 s and the menu froze (5 of 7 starts on
+        // 2026-10-17; the other two installed before the burst began). Not
+        // fatal: a failure here leaves the first event to install it, as before.
+        if(const auto capture=EnsureInventoryPointerCapture())
+            Log("inventory_capture=deferred result="+std::to_string(capture));
         firstFrame=XrSubmittedFrameCount();
         if(XrSessionStatusValue()!=1) {
             SetXrPreferSrgbFormat(1);

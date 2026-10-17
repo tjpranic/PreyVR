@@ -16,8 +16,5 @@ Interactibility:
 UI:
 - Wrist stats bar shows Psi energy before you install a neuromod
 
-UX:
-- Game freezes a bit when first loading before showing the main menu in VR
-
 Bugs:
 - Access violation that causes a crash. Seems to be due to a use-after-free camera related bug. Have got instrumentation in place to catch it.

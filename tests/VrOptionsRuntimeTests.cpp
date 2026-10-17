@@ -331,6 +331,13 @@ int main(){
   applied[options::AimLasers]=1;
   restart();
   Check(HapticStrength()==70&&UiCurveDegrees()==20,"loading the file applies nothing");
+  // The menu panel's settings first, before the session's first menu frame.
+  menuDistance=200;menuRight=menuUp=0;
+  ApplySavedPanelOptions();
+  Check(UiCurveDegrees()==50&&menuDistance==150&&menuRight==20&&menuUp==-10,
+        "the saved panel settings apply before the rest of VR start");
+  Check(HapticStrength()==70&&GrenadeHandEnabled()==1&&AimLasersEnabled()==1&&applied[options::UiScale]==130,
+        "and nothing else, nor a panel setting never chosen in the menu");
   ApplySavedVrOptions();
   Check(HapticStrength()==35&&UiCurveDegrees()==50&&GrenadeHandEnabled()==0&&menuDistance==150,
         "saved choices win over VR start's defaults and earlier commands");

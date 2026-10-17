@@ -263,6 +263,23 @@ void ApplySavedVrOptions(){
  }
  lifecycle::Log("preyvr_options applied="+std::to_string(applied));
 }
+// What the menu panel looks like: its size, fit, curvature, guide card,
+// distance and place, the text panel's distance and the laser's hand. VR start
+// sets none of them itself, and each setter only stores a value (a panel refit
+// waits for the frame thread), so they are safe before the session exists.
+constexpr options::Setting kPanelSettings[]={options::UiScale,options::UiMargin,options::UiCurve,
+ options::UiGuide,options::UiDistance,options::UiOffsetRight,options::UiOffsetUp,options::UiText,
+ options::PointerHand};
+void ApplySavedPanelOptions(){
+ options::Values v;options::Present p;
+ {std::lock_guard lock(savedMutex);v=saved;p=present;}
+ unsigned applied=0;
+ for(const auto id:kPanelSettings){
+  if(!p[id])continue;
+  Apply(id,v[id]);++applied;
+ }
+ lifecycle::Log("preyvr_options panel_applied="+std::to_string(applied));
+}
 void ServiceVrOptions(){
  if(!ready.load())return;
  std::optional<ViewRequest> view;
