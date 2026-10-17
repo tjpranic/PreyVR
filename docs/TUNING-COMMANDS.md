@@ -97,6 +97,7 @@ this session. "Menu only" means no command reaches it.
 | Comfort | Body turn deadzone (`body_turn_deadzone`) | 0–180 degrees | 35 | `arm.torso <degrees> <relax ‰/s>` |
 | Comfort | Body step distance (`body_step`) | 10–300 mm | 30 | `body.zone <startMm> <stopMm> [followMs]` |
 | Comfort | Body glide (`body_glide`) | 0–1000 ms | 50 | `body.zone <startMm> <stopMm> <followMs>` |
+| Hands | Aim lasers (`aim_lasers`) | on/off | on | `dbg.lasers <0\|1>` |
 | Hands | Two-hand aim (`two_hand`) | on/off | on | `aim.twohand <0\|1>` |
 | Hands | Foregrip input (`grip_toggle`) | hold (0), toggle (1) | hold | menu only |
 | Hands | Support hand (`support_snap`) | free (0), snapped (1) | snapped | menu only |
@@ -133,7 +134,7 @@ this session. "Menu only" means no command reaches it.
 | Abilities | Psychic targeting (`psi_target`) | original (0), head (1), left controller (2) | original | `psi.target <0..2>` |
 | Abilities | Left-hip medkit slot (`medkit_slot`) | on/off | off | `medkit.slot <0\|1>` |
 | Abilities | Body slot feedback (`belt_hints`) | on/off | on | menu only |
-| Setup | Debug overlay (`debug_overlay`) | on (every layer) / off | off | `dbg.draw <on\|off\|mask>` |
+| Setup | Debug overlay (`debug_overlay`) | on (every layer) / off; the aim lasers are apart | off | `dbg.draw <on\|off\|mask>` |
 | Experimental | Physical carrying (`carry_hand`) | on/off | on | `carry.hand <0\|1>` |
 | Experimental | Stick charges to surfaces (`grenade_deploy`) | on/off | off | `grenade.deploy <0\|1>` |
 | Experimental | Long-weapon hold-back (`long_reach`) | on/off | on | `ik.longreach <0\|1> ...` (first value) |
@@ -396,7 +397,8 @@ value report, as described above.
 
 | Command | What it is |
 |---|---|
-| `dbg.draw [on\|all\|off\|mask]` | In-world debug drawing. Mask bits: 1 rays, 2 raw, 4 body, 8 wrist, 16 foregrip, 32 labels, 64 status, 128 hits. **Menu** (on = every layer). |
+| `dbg.draw [on\|all\|off\|mask]` | In-world debug drawing. Mask bits: 1 rays, 2 raw, 4 body, 8 wrist, 16 foregrip, 32 labels, 64 status, 128 hits. **Menu** (on = every layer). Drawn beside the aim lasers: `off` leaves them. |
+| `dbg.lasers [0\|1]` | The aim lasers (rays + hits, 129) for this session, apart from `dbg.draw`. **Menu** (Hands > Aim lasers; on at VR start). |
 | `dbg.report`, `dbg.marks` | Overlay counters and primitive positions. |
 | `cull.report`, `cull.watch [0\|1]` | Read-only watch on the engine's pass-camera reset, for the job-worker crash at `PreyDll+0x27EC40`. On from startup, VR or not; `PREYVR_CULL_WATCH=0` before launch leaves it out. Its `preyvr_cull_watch` lines in PreyVR.log are what to send with a crash. |
 | `capture [tag]`, `capture.hud [tag]`, `capture.inventory [tag]` | One frame of what the headset receives, to a file. Stalls the GPU once. |

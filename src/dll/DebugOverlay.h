@@ -25,15 +25,19 @@ struct ID3D11Texture2D;
 // submitted images (the mock, xr-tape) shows exactly what the wearer saw. It
 // needs no engine debug renderer and changes no game state.
 //
-// Off by default. With the mask at 0 every producer returns after one atomic
-// load and the renderer is never reached.
+// The debug layers are off by default; the aim lasers (two of its layers) are
+// switched on at VR start. With nothing drawn every producer returns after one
+// atomic load and the renderer is never reached.
 namespace preyvr::dll {
 struct GameplayPoseFrame;
 struct TrackingFrame;
 
-// Settings and diagnostics (command channel).
+// Settings and diagnostics (command channel). The debug layers and the aim
+// lasers are separate switches; what is drawn is both (dd::DrawnLayers).
 DWORD SetDebugOverlay(unsigned mask);
-unsigned DebugOverlayMask();
+unsigned DebugOverlayMask();        // the debug layers alone, without the lasers
+DWORD SetAimLasers(unsigned enabled);
+unsigned AimLasersEnabled();
 std::string DebugOverlayReport();   // counters and the status text
 std::string DebugOverlayMarks();    // primitive positions, OpenXR space and last projected pixels
 

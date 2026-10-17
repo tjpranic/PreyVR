@@ -217,9 +217,11 @@ void TickVrMode() {
         // right grip held) or carrying (AnimIkTakeover arms.free; arms.free 0 =
         // the game lowers them out of view, as before).
         SetAnimIkFreeArms(1);
-        // The debug overlay is no longer switched on here: it forced the rays
-        // back every start, so the VR Options' "off" never survived a restart.
-        // It follows the menu, or dbg.draw for the session.
+        // The aim lasers by default (each hand's ray to what it points at); VR
+        // Options' Aim lasers turns them off, and its saved choice applies below.
+        // The debug overlay is not switched on here: it follows its own row, or
+        // dbg.draw for the session, and leaves the lasers as they are.
+        SetAimLasers(1);
         // The floating HUD by default; VR Options' HUD style can turn it off.
         if(SetHudLayerEnabled(1)!=0)Log("hud_layer=unavailable native_hud=retained");
         // Saved VR Options choices last, so they win over the defaults above

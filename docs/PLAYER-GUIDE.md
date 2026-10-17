@@ -116,7 +116,9 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   under you, and how quickly it catches up.
 
   Reset VR view is on the Setup page.
-- **Hands:** two-hand aim on/off, hold/toggle foregrip, snapped/free support hand,
+- **Hands:** **aim lasers** (on by default: a laser from each hand to what it
+  points at -- where the right hand aims, faint with no weapon drawn, and what
+  the left hand can grab or use), two-hand aim on/off, hold/toggle foregrip, snapped/free support hand,
   the optional psychoscope gesture, the hands without a weapon, **fingers follow
   the controller** (on by default: a free hand's thumb rests on a button or
   lifts, the index points or curls on the trigger, the other three close with
@@ -137,7 +139,8 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   slot off are the defaults.
 - **Setup:** calibrate posture, reset VR view, and **Debug Overlay (Testing)**,
   which draws each hand's ray and target, the body slots, the wrist test and the
-  foregrip region in the world. Off by default; see
+  foregrip region in the world. Off by default, and separate from the aim
+  lasers: switching it off leaves them as they are. See
   [the overlay note](DEBUG-OVERLAY-2026-10-06.md).
 - **Controls:** what every button does on the controller you hold, by the names
   SteamVR gives them: play, menus and any time. It follows SteamVR: rebind an

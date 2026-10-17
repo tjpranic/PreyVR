@@ -78,7 +78,8 @@ constexpr Spec specs[]={
  {"inventory_layer",L"INVENTORY LAYER",L"The inventory on a see-through layer of its own instead of the whole flat screen.",0,0,1,1},
  {"inventory_stereo",L"STEREO INVENTORY",L"Gives the inventory's layers depth. Needs Inventory Layer.",0,0,1,1},
  {"inventory_depth",L"INVENTORY DEPTH",L"How much depth Stereo Inventory gives.",25,0,100,5,U::percent},
- {"finger_curl",L"FINGERS FOLLOW THE CONTROLLER",L"A free hand's fingers follow yours: the thumb on a button, the index on the trigger, the rest with the grip.",1,0,1,1}
+ {"finger_curl",L"FINGERS FOLLOW THE CONTROLLER",L"A free hand's fingers follow yours: the thumb on a button, the index on the trigger, the rest with the grip.",1,0,1,1},
+ {"aim_lasers",L"AIM LASERS",L"A laser from each hand to what it points at: where the right hand aims, and what the left hand can grab or use.",1,0,1,1}
 };
 static_assert(std::size(specs)==Count,"one Spec per Setting, in order");
 // Each default, name and choice belongs to its setting's range, one name per value.
@@ -95,7 +96,7 @@ static_assert(Consistent(),"every Spec describes its own range");
 // The panel's tabs. Each setting appears once, each button once.
 constexpr int comfort[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,StrafeSpeed,BackwardSpeed,
     BodyFollow,BodyTurnDeadzone,BodyStep,BodyGlide};
-constexpr int hands[]={TwoHand,GripToggle,SupportSnap,Psychoscope,ArmsFree,FingerCurl,CarryHold,GrenadeHand,
+constexpr int hands[]={AimLasers,TwoHand,GripToggle,SupportSnap,Psychoscope,ArmsFree,FingerCurl,CarryHold,GrenadeHand,
     CarryThrowStrength,GrenadeThrowStrength};
 constexpr int interface_[]={UiScale,UiMargin,UiCurve,UiGuide,UiDistance,UiOffsetRight,UiOffsetUp,UiText,
     PointerHand,HudLayer,ReticleWorld,ReticleSize,ReticleFallback};

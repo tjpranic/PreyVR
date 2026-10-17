@@ -27,6 +27,16 @@ enum Layer : unsigned {
     kHits = 1u << 7,      // scene queries along each ray (otherwise rays end at a fixed range)
 };
 inline constexpr unsigned kAllLayers = 0xFFu;
+// **The aim lasers** (VR Options "Aim lasers"): each hand's ray to what it
+// points at, ended on the scene -- what the game drew in every session from
+// 2026-10-06 to 10-13, a player's aid rather than a test's.
+inline constexpr unsigned kLaserLayers = kRays | kHits;
+// What is drawn: the debug layers (`dbg.draw`, the VR Options debug row) and
+// the lasers, each switched on its own, so one's "off" never takes the other.
+inline constexpr unsigned DrawnLayers(unsigned debugLayers, bool lasers)
+{
+    return (debugLayers & kAllLayers) | (lasers ? kLaserLayers : 0u);
+}
 
 // Colours, shared with documentation: amber = right, cyan = left, violet = psi.
 inline constexpr Color kRight{255, 176, 64, 235};

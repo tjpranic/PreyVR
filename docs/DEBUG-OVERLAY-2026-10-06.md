@@ -5,6 +5,12 @@ the holster and medkit body slots, the wrist card's visibility test and the two-
 region, with labels and a status panel. Off by default. Implemented and checked in Prey on the
 headless OpenXR mock (1280 × 1440 per eye, Quest 3 field of view), **not yet in a headset**.
 
+**2026-10-17:** two of its layers, the rays and their scene hits (mask 129), are now the player's
+**aim lasers**, a switch of their own (VR Options > Hands > Aim lasers, `dbg.lasers`, on at VR start).
+What is drawn is the debug layers and the lasers together (`debugdraw::DrawnLayers`), so `dbg.draw off`
+or the Setup row's off leaves the lasers. From 10-06 to 10-13 VR start forced mask 129 on and a saved
+"off" was skipped; the 10-15 options rewrite removed that, which left no lasers at all.
+
 ![Body slots, rays, wrist card and status panel](evidence/debug-overlay-2026-10-06/final_slots_eye0.png)
 
 ## How it is drawn

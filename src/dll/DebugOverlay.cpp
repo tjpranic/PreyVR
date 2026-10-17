@@ -46,7 +46,12 @@ constexpr std::uint64_t kPoseAgeNs = 200000000ull;
 constexpr std::size_t kMaxVertices = 60000;
 constexpr float kPointerRange = 3.0f;               // left pointer without a hit, metres
 
+// What is drawn (dd::DrawnLayers), from its two switches; they change together
+// under gMaskMutex so a command and a menu change cannot cross.
 std::atomic<unsigned> gMask{0};
+std::mutex gMaskMutex;
+unsigned gDebugLayers = 0;  // dbg.draw, the VR Options debug row
+bool gLasers = false;       // VR Options "Aim lasers"; VR start switches it on
 
 struct RayRecord { dd::HandRay ray{}; std::uint64_t ns = 0, reference = 0; };
 struct SlotsRecord { std::array<dd::Slot, 2> slots{}; std::uint64_t ns = 0; };
@@ -501,11 +506,41 @@ std::string Point(Vec3 v) { return Fixed(v.x, 3) + "," + Fixed(v.y, 3) + "," + F
 
 DWORD SetDebugOverlay(unsigned mask)
 {
-    gMask.store(mask & dd::kAllLayers);
-    lifecycle::Log("preyvr_debug_overlay result=0 mask=" + std::to_string(mask & dd::kAllLayers));
+    unsigned drawn = 0;
+    {
+        std::lock_guard lock(gMaskMutex);
+        gDebugLayers = mask & dd::kAllLayers;
+        drawn = dd::DrawnLayers(gDebugLayers, gLasers);
+        gMask.store(drawn);
+    }
+    lifecycle::Log("preyvr_debug_overlay result=0 mask=" + std::to_string(mask & dd::kAllLayers) +
+                   " layers=" + std::to_string(drawn));
     return 0;
 }
-unsigned DebugOverlayMask() { return gMask.load(); }
+unsigned DebugOverlayMask()
+{
+    std::lock_guard lock(gMaskMutex);
+    return gDebugLayers;
+}
+
+DWORD SetAimLasers(unsigned enabled)
+{
+    unsigned drawn = 0;
+    {
+        std::lock_guard lock(gMaskMutex);
+        gLasers = enabled != 0;
+        drawn = dd::DrawnLayers(gDebugLayers, gLasers);
+        gMask.store(drawn);
+    }
+    lifecycle::Log(std::string("preyvr_debug_overlay result=0 lasers=") + (enabled != 0 ? "1" : "0") +
+                   " layers=" + std::to_string(drawn));
+    return 0;
+}
+unsigned AimLasersEnabled()
+{
+    std::lock_guard lock(gMaskMutex);
+    return gLasers ? 1u : 0u;
+}
 
 void DebugOverlayAim(const GameplayPoseFrame& frame, const aim::Sample& sample)
 {
@@ -782,7 +817,8 @@ void ReleaseDebugOverlay()
 std::string DebugOverlayReport()
 {
     std::ostringstream out;
-    out << " mask=" << gMask.load() << " drawn=" << gDrawn.load() << " vertices=" << gVertices.load()
+    out << " mask=" << gMask.load() << " debug=" << DebugOverlayMask() << " lasers=" << AimLasersEnabled()
+        << " drawn=" << gDrawn.load() << " vertices=" << gVertices.load()
         << " truncated=" << gTruncated.load() << " failures=" << gFailures.load() << " queries=" << gQueries.load()
         << " sceneFault=" << SceneQueryFaulted();
     std::lock_guard lock(gLastMutex);

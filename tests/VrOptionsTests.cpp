@@ -85,6 +85,11 @@ void SettingsChecks(){
  Check(Defaults()[PsiTarget]==0&&Defaults()[Medkit]==0,"abilities preserve original behavior by default");
  Check(Valid(PsiTarget,2)&&!Valid(PsiTarget,3)&&!Valid(Medkit,2),"ability ranges");
  Check(Defaults()[DebugOverlay]==0&&Defaults()[MuzzleAim]==0,"the debug overlay and shots from the muzzle are opt in");
+ Check(Defaults()[AimLasers]==1&&KindOf(AimLasers)==Kind::toggle,"the aim lasers are on by default, on/off");
+ {Present marked{};
+  Check(Parse("version=1\naim_lasers=0\n",parsed,&marked)&&parsed[AimLasers]==0&&marked[AimLasers],"aim lasers persist as off");
+  Check(Parse("version=1\ndebug_overlay=0\n",parsed,&marked)&&parsed[AimLasers]==1&&!marked[AimLasers],
+        "a file saved before the lasers, debug overlay off, leaves them to VR start");}
  Check(Parse("version=1\nmuzzle_aim=1\n",parsed)&&parsed[MuzzleAim]==1&&!Valid(MuzzleAim,2),"muzzle aim persists as on/off");
  Check(Defaults()[BodyFollow]==2,"body following turns and moves by default");
  Check(Parse("version=1\nbody_follow=1\n",parsed)&&parsed[BodyFollow]==1&&Valid(BodyFollow,0)&&!Valid(BodyFollow,3),
@@ -149,6 +154,8 @@ void LayoutChecks(){
   Check(Has(MenuEntries(2),e),"menu placement, the HUD and the reticle on the interface tab");
  Check(Describe(ReticleWorld).initial==1&&Display(ReticleWorld,1)==L"IN THE WORLD"&&Display(ReticleWorld,0)==L"ON THE HUD",
        "the reticle sits in the world by default");
+ Check(std::wstring(MenuPageName(1))==L"HANDS"&&MenuEntries(1)[0]==AimLasers,
+       "hands: the aim lasers first, apart from the interface tab's menu laser");
  Check(MenuEntries(3)[0]==Holsters&&MenuEntries(3)[1]==ClearHolsterSlots&&MenuEntries(3)[2]==Wrist,
        "equipment: holsters, clearing them, then the wrist");
  Check(MenuEntries(6).size()==3&&MenuEntries(6)[0]==CalibratePosture&&MenuEntries(6)[1]==RecenterView&&

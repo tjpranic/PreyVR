@@ -501,6 +501,11 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
             result = mask >= 0 ? SetDebugOverlay(static_cast<unsigned>(mask)) : ERROR_INVALID_PARAMETER;
         }
         out << "dbg.draw result=" << result << DebugOverlayReport();
+    } else if (verb == "dbg.lasers") {
+        // The aim lasers (VR Options "Aim lasers") for this session, beside
+        // whatever dbg.draw shows; bare, it only reports.
+        out << "dbg.lasers result=" << (Valued(args) ? SetAimLasers(static_cast<unsigned>(arg(1, 1))) : 0)
+            << DebugOverlayReport();
     } else if (verb == "move.firehold") {
         out << "move.firehold result=" << (Valued(args) ? SetFireLaneHold(static_cast<unsigned>(arg(1, 1))) : 0)
             << " hold=" << FireLaneHold() << " posted=" << FireLaneHoldPosted();

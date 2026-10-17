@@ -72,6 +72,7 @@ PREYVR_STUB(SetTurnLaneDeadzone,TurnLaneDeadzone,TurnDeadzone,unsigned)
 PREYVR_STUB(SetTorsoDeadzone,TorsoDeadzoneDegrees,BodyTurnDeadzone,int)
 PREYVR_STUB(SetAnimIkFreeArms,AnimIkFreeArms,ArmsFree,unsigned)
 PREYVR_STUB(SetAnimIkFingerCurl,AnimIkFingerCurl,FingerCurl,unsigned)
+PREYVR_STUB(SetAimLasers,AimLasersEnabled,AimLasers,unsigned)
 PREYVR_STUB(SetCarryHoldToHold,CarryHoldPreference,CarryHold,unsigned)
 PREYVR_STUB(SetGrenadeHand,GrenadeHandEnabled,GrenadeHand,unsigned)
 PREYVR_STUB(SetCarryThrowGainPercent,CarryThrowGainPercent,CarryThrowStrength,unsigned)
@@ -227,7 +228,7 @@ int main(){
    {options::GrenadeThrowStrength,150},{options::WristOnHud,1},{options::WristTick,0},{options::WristAlong,100},
    {options::WristHover,50},{options::WristTilt,30},{options::CarryHand,0},{options::GrenadeDeploy,1},
    {options::LongReach,0},{options::InventoryLayer,1},{options::InventoryStereo,1},{options::InventoryDepth,50},
-   {options::UiCurve,50},{options::DebugOverlay,1},{options::FingerCurl,0}};
+   {options::UiCurve,50},{options::DebugOverlay,1},{options::FingerCurl,0},{options::AimLasers,0}};
   VrOptionsUiResult result;
   for(const auto& [id,v]:chosen){options::Change change;change.setting=static_cast<int>(id);change.value=v;
    result.changes.push_back(change);}
@@ -327,6 +328,7 @@ int main(){
   // What VR start and earlier commands set before the saved choices apply.
   applied[options::Turn]=45;applied[options::UiMargin]=72;applied[options::UiScale]=130;applied[options::UiCurve]=20;
   applied[options::HapticStrength]=70;applied[options::DebugOverlay]=0;applied[options::GrenadeHand]=1;
+  applied[options::AimLasers]=1;
   restart();
   Check(HapticStrength()==70&&UiCurveDegrees()==20,"loading the file applies nothing");
   ApplySavedVrOptions();
@@ -335,6 +337,7 @@ int main(){
   Check(applied[options::Turn]==45&&applied[options::UiMargin]==72&&applied[options::UiScale]==130,
         "settings never chosen in the menu keep their values; tuner values were never saved");
   Check(DebugOverlayMask()==0,"a saved \"off\" debug overlay stays off after a restart");
+  Check(AimLasersEnabled()==0,"saved \"off\" aim lasers stay off though VR start switches them on");
   applied[options::DebugOverlay]=1;ApplySavedVrOptions();
   Check(DebugOverlayMask()==0,"and a dbg.draw does not outlast the next VR start");
   // F11: a command's curvature lasts until the next VR start, then the saved one is back.

@@ -289,6 +289,22 @@ void TestSceneLayers()
     f.holstersEnabled = false;
     BuildOverlayScene(f, kBody, scene);
     Require(scene.spheres.empty(), "disabled holsters draw nothing");
+    // The aim lasers: the rays ended on the scene, nothing of the debug view.
+    f.holstersEnabled = true;
+    BuildOverlayScene(f, kLaserLayers, scene);
+    Require(!scene.lines.empty() && scene.markers.size() == 3 && scene.spheres.empty() && scene.labels.empty(),
+            "the lasers draw both rays, and no slots, labels or status");
+}
+
+void TestDrawnLayers()
+{
+    // The debug layers and the lasers are switched apart; neither's off takes the other.
+    Require(DrawnLayers(0, false) == 0, "both off: nothing is drawn");
+    Require(DrawnLayers(0, true) == (kRays | kHits), "the lasers alone: rays ended on the scene");
+    Require(DrawnLayers(kAllLayers, false) == kAllLayers, "the debug overlay alone: every layer");
+    Require(DrawnLayers(kBody, true) == (kBody | kRays | kHits), "a debug layer beside the lasers");
+    Require(DrawnLayers(kAllLayers, true) == kAllLayers, "both on: every layer, once");
+    Require(DrawnLayers(0x1FFu, false) == kAllLayers, "no layer beyond the known ones");
 }
 
 void TestSlotColours()
@@ -324,6 +340,7 @@ int main()
     TestGestureTruth();
     TestWristMeasureMatchesVisibility();
     TestSceneLayers();
+    TestDrawnLayers();
     TestSlotColours();
     std::cout << "debug_draw: all tests passed\n";
     return 0;

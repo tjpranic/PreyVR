@@ -211,6 +211,7 @@ constexpr Wiring wiring[]={
  {options::InventoryStereo,Set<SetInventoryStereoEnabled>,Get<InventoryStereoEnabled>},
  {options::InventoryDepth,Set<SetInventoryDepthPercent>,Get<InventoryDepthPercent>},
  {options::FingerCurl,Set<SetAnimIkFingerCurl>,Get<AnimIkFingerCurl>},
+ {options::AimLasers,Set<SetAimLasers>,Get<AimLasersEnabled>},
 };
 constexpr bool InSettingOrder(){
  for(unsigned i=0;i<std::size(wiring);++i)if(wiring[i].id!=i)return false;
