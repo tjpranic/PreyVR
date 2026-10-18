@@ -89,9 +89,11 @@ ButtonOutput UseButton::Update(const ButtonInput& in)
     switch (owner_) {
     case Owner::None:
         if (guard_ > 0) { --guard_; out.suppressTarget = true; }
-        if (leftEdge && !rightEdge && in.carrying && in.holdToHold && !in.chord) {
-            // Carrying something no press of ours picked up (it started after
-            // the press let go, or before this layout): the next press lets go.
+        if (leftEdge && !rightEdge && in.carrying && (in.holdToHold || in.inHand) && !in.chord) {
+            // Holding: carrying something no press of ours picked up (it started
+            // after the press let go, or before this layout). Toggle: the press
+            // that drops what the hand holds. Either way the next press lets go,
+            // with the hand's motion, and Prey never sees it.
             leftArmed_ = false;
             out.releaseCarry = true;
         } else if (leftEdge && rightEdge) {

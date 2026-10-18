@@ -49,10 +49,11 @@ Prey picked it from near the line) and Prey shows its usual prompt. Press **X** 
 prompt's tap action (take, carry, search, take the highlighted item of a locker) or keep it held for the
 hold action (drag a body, carry a heavy object); Prey's **Y** prompts are Y. What you pick up goes to the left
 hand: a light object flies to the hand and is held by the side you pointed at, a heavy one floats ahead and
-follows the hand, a body is dragged from it. Press X again to drop it, as in Prey; the right trigger throws it
-the game's way. With nothing to use, X reloads, as Prey's X does. `carry.hold 1` (VR Options > Hands > Carry:
-hold to carry) keeps the object only while X is held instead, and letting go during a throwing motion throws it
-with the hand's speed. To move grab, rebind **Grab and Use (Prey's X)** in SteamVR's controller bindings for Prey.
+follows the hand, a body is dragged from it. Press X again to let go of it: pressed during a throwing motion,
+it leaves with your hand's speed (a turret is dropped as in Prey). The right trigger throws it the game's way.
+With nothing to use, X reloads, as Prey's X does. `carry.hold 1` (VR Options > Hands > Carry: hold to carry)
+keeps the object only while X is held instead, and letting go during a throwing motion throws it with the
+hand's speed. To move grab, rebind **Grab and Use (Prey's X)** in SteamVR's controller bindings for Prey.
 
 **Grenades** (EMP, Recycler, Nullwave, Lure) sit in the right hand. Hold the right trigger, throw with your
 arm and let go of the trigger: the grenade leaves at that instant with your hand's speed and direction, and comes
@@ -152,9 +153,8 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
 - **Experimental**, features still being proven: physical carrying in the left
   hand (on by default; off restores the game's carry in front of you), sticking
   charges to the surface you look at, long weapons held back toward the body,
-  **Shots from the Muzzle**, **Scene Reticle**, the **Physical Wrench** and
-  **Object Nudges** with their swing speed and strength, and the inventory on a
-  layer of its own, with optional depth.
+  **Shots from the Muzzle**, **Scene Reticle**, the **Physical Wrench** with its
+  swing speed, and the inventory on a layer of its own, with optional depth.
   **Shots from the Muzzle** makes every shot leave the weapon's muzzle along
   your controller's aim, so it lands where the barrel points at any distance,
   also from the hip or around a corner (otherwise the shot is aimed from your

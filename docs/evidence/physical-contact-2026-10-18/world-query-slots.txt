@@ -1,0 +1,77 @@
+== PrimitiveWorldIntersection: 6 strings
+  0x1ca12f0 refs=  2 PrimitiveWorldIntersection(3dEngine)
+  0x1cbbb98 refs=  5 PrimitiveWorldIntersection(Action)
+  0x1cfa840 refs= 17 PrimitiveWorldIntersection(AI)
+  0x1d84f70 refs=  1 PrimitiveWorldIntersection(Queued)
+  0x1df1630 refs= 49 PrimitiveWorldIntersection(Game)
+  0x1dfeea0 refs= 23 PrimitiveWorldIntersection: Got positive distance (%f) but no contact.
+  consuming slots: {'0x1e0': 37}
+== RayWorldIntersection: 12 strings
+  0x1c8b6e8 refs=  3 RayWorldIntersection(3dEngine)
+  0x1ca4e48 refs=  9 RayWorldIntersection(Action)
+  0x1cf8610 refs= 16 RayWorldIntersection(AI)
+  0x1d1b898 refs=  4 RayWorldIntersectionWrapper(AI)
+  0x1d81b88 refs=  3 RayWorldIntersection(PhysParticles)
+  0x1d81fc0 refs=  2 RayWorldIntersection(Physics)
+  0x1d84f2e refs=  0 ÀRayWorldIntersectionEditor
+  0x1d84f50 refs=  1 RayWorldIntersection(Queued)
+  0x1d86b10 refs=  4 RayWorldIntersection(Script)
+  0x1d86c18 refs=  2 RayWorldIntersection
+  0x1da0290 refs=  1 Same as p_draw_helpers_num, but encoded in letters
+Usage [Entity_Types]_[Helper_Types] - [
+  0x1df0cd8 refs= 98 RayWorldIntersection(Game)
+  consuming slots: {'0x118': 90, '0x308': 1, '0xa8': 1, '0x10': 1}
+== GetEntitiesInBox: 2 strings
+  0x1d83430 refs=  1 GetEntitiesInBox: too many cells requested by %s (%d, (%.1f,%.1f,%.1f)-(%.1f,%.1f,%.1f))
+  0x1d9e2f0 refs=  1 Specifies the cell number threshold after which GetEntitiesInBox issues a warning
+  consuming slots: {'0x18': 1, '0x38': 1}
+== CollideEntityWith: 0 strings
+  consuming slots: {}
+== RayTraceEntity: 0 strings
+  consuming slots: {}
+== world global loads: 471
+  slot 0x008 calls=   4 target=0xba9a40 e.g. ['0x5aed56', '0x693e3b', '0x969b1a', '0x96a886']
+  slot 0x010 calls=   1 target=0xbb3170 e.g. ['0x24ebea']
+  slot 0x020 calls=  31 target=0xba8c10 e.g. ['0xb1f59', '0xb32e2', '0xb3c6e', '0xb68a3']
+  slot 0x028 calls=  14 target=0xf3c00 e.g. ['0xcb3a2', '0x11d683', '0x1c97f8', '0x22261f']
+  slot 0x038 calls=   2 target=0xba1200 e.g. ['0x21be12', '0x15cb298']
+  slot 0x040 calls=   2 target=0xbaf970 e.g. ['0x1f2464', '0x1f56ab']
+  slot 0x048 calls=   1 target=0xbbc920 e.g. ['0xdf6405']
+  slot 0x050 calls=   1 target=0xba3d90 e.g. ['0x21bdd8']
+  slot 0x060 calls=   1 target=0xbb1c20 e.g. ['0x21aa00']
+  slot 0x070 calls=   3 target=0xbb22e0 e.g. ['0x55cad1', '0x1160b0d', '0x12320e4']
+  slot 0x078 calls=  28 target=0x10ea140 e.g. ['0x5540e9', '0x5b415f', '0x80d1e9', '0x813cb5']
+  slot 0x088 calls=   5 target=0xba3940 e.g. ['0x2977bf', '0x4fb57e', '0x8f3d21', '0x971615']
+  slot 0x098 calls=  34 target=0xba5580 e.g. ['0xb1eda', '0xb3181', '0xb680d', '0xb88e0']
+  slot 0x0a0 calls=   1 target=0xbb2380 e.g. ['0x5b0e91']
+  slot 0x0a8 calls=  20 target=0xba9730 e.g. ['0x221e64', '0x2969fc', '0x4f2368', '0x5aad7e']
+  slot 0x0b0 calls=  19 target=0xba9650 e.g. ['0x2938c9', '0x293cbf', '0x5b18e0', '0x5b1afe']
+  slot 0x0c0 calls=   1 target=0xbb2a10 e.g. ['0x4f0f7a']
+  slot 0x0d8 calls=   2 target=0xbb9a50 e.g. ['0x4f0601', '0xdf4162']
+  slot 0x0e0 calls=   1 target=0xba9750 e.g. ['0x16ae7d0']
+  slot 0x0e8 calls=   4 target=0xba9940 e.g. ['0x5540d7', '0x971d7e', '0x971dd7', '0x982bc8']
+  slot 0x110 calls=  38 target=0xba8560 e.g. ['0x11d5e9', '0x222587', '0x34eb62', '0x4f2219']
+  slot 0x118 calls=  91 target=0xccf250 e.g. ['0x2c5fe4', '0x5cad9e', '0x5e5d21', '0x61ce2a']
+  slot 0x128 calls=   6 target=0xcd06d0 e.g. ['0x4c263f', '0x924ad1', '0xdf40d7', '0xdf41b7']
+  slot 0x130 calls=   1 target=0xbb1620 e.g. ['0x54a8cc']
+  slot 0x140 calls=   2 target=0xbae700 e.g. ['0x21bde5', '0x943df8']
+  slot 0x148 calls=   1 target=0xba8660 e.g. ['0x8f1f2c']
+  slot 0x150 calls=   1 target=0xbb12a0 e.g. ['0x551c35']
+  slot 0x168 calls=   1 target=0xbb7e60 e.g. ['0x16afbbd']
+  slot 0x1b0 calls=   1 target=0xbb0150 e.g. ['0x21bd9b']
+  slot 0x1d0 calls=   2 target=0xba1d80 e.g. ['0x75d255', '0x1291672']
+  slot 0x1e0 calls=  58 target=0xbaa8b0 e.g. ['0x29388f', '0x3b50c6', '0x3b50f8', '0x3b5151']
+  slot 0x1f8 calls=   1 target=0xbb2620 e.g. ['0x10ddbab']
+  slot 0x228 calls=  13 target=0xb9fc20 e.g. ['0x11a20e', '0x159d25', '0x5a9b3b', '0x693aa5']
+  slot 0x230 calls=   3 target=0xbb01f0 e.g. ['0x159ecf', '0x693dd2', '0x17a8325']
+  slot 0x238 calls=   1 target=0xbae1d0 e.g. ['0x67d67a']
+  slot 0x240 calls=   1 target=0xba9760 e.g. ['0x11489d1']
+  slot 0x248 calls=   3 target=0xba1230 e.g. ['0x4c264f', '0x924ae1', '0x174a333']
+  slot 0x250 calls=   4 target=0xb63bb0 e.g. ['0x2109a3', '0x21af4b', '0x355cc1', '0x5ad5cd']
+  slot 0x258 calls=   1 target=0xb614b0 e.g. ['0x96d723']
+  slot 0x260 calls=   4 target=0xb63470 e.g. ['0xca9dc', '0x96cfb4', '0x96d0eb', '0x96d290']
+  slot 0x268 calls=   1 target=0xb61c50 e.g. ['0x96d1a2']
+  slot 0x288 calls=   1 target=0xba98c0 e.g. ['0xfd73bc']
+  slot 0x2c8 calls=   1 target=0xbb18c0 e.g. ['0x1783cc1']
+  slot 0x2e8 calls=   3 target=0xb9f370 e.g. ['0x29f5e3', '0x16add1a', '0x16af0a6']
+  slot 0x2f0 calls=   2 target=0xba0010 e.g. ['0x96a8e7', '0x96df04']

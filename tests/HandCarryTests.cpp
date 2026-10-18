@@ -487,6 +487,52 @@ void TestToggleUnchanged()
     in.leftPress = false;
     out = b.Update(in);
     Require(!out.down && !out.releaseCarry, "released, still carried");
+    // Not in the hand (the game's own carry, a turret): the next press is
+    // Prey's X, which drops it.
+    in.leftPress = true;
+    out = b.Update(in);
+    Require(out.down && out.pressed && !out.releaseCarry, "toggle, not in hand: Prey drops it");
+}
+
+void TestToggleDropThrows()
+{
+    auto b = Ready();
+    auto in = Base();
+    in.holdToHold = false;
+    in.target = true;
+    in.leftPress = true;
+    Require(b.Update(in).down, "press picks up");
+    in.carrying = true;
+    in.inHand = true;
+    Require(b.Update(in).down, "held while the press is");
+    in.leftPress = false;
+    auto out = b.Update(in);
+    Require(!out.down && !out.releaseCarry && out.owner == use::Owner::None, "let go, still carried");
+    for (int i = 0; i < 5; ++i) { Require(!b.Update(in).releaseCarry, "carried until the next press"); }
+    // The press that drops it is the carry lane's release; Prey sees nothing.
+    in.leftPress = true;
+    out = b.Update(in);
+    Require(out.releaseCarry && !out.down && !out.pressed, "toggle drop: our release");
+    // Still pressed as the carry ends: nothing more until it is let go.
+    in.carrying = in.inHand = false;
+    for (int i = 0; i < 5; ++i) {
+        out = b.Update(in);
+        Require(!out.down && !out.releaseCarry && !out.pressed, "held press after the drop: nothing");
+    }
+    in.leftPress = false;
+    b.Update(in);
+    in.leftPress = true;
+    out = b.Update(in);
+    Require(out.down && out.pressed, "the next press is Prey's X again");
+    // The recentre chord drops nothing.
+    auto c = Ready();
+    auto cin = Base();
+    cin.holdToHold = false;
+    cin.carrying = cin.inHand = true;
+    cin.chord = true;
+    cin.leftPress = true;
+    out = c.Update(cin);
+    Require(!out.releaseCarry && !out.down, "chord: no drop");
 }
 
 }  // namespace
@@ -515,6 +561,7 @@ int main()
     TestTakeLetsGo();
     TestPickupTap();
     TestToggleUnchanged();
+    TestToggleDropThrows();
     std::cout << "hand_carry: all tests passed\n";
     return 0;
 }

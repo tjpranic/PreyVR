@@ -22,7 +22,7 @@ button to press.
 | Right stick click | Psychoscope | Prey's RS: drop, split a stack |
 | Left stick click (Index: left trackpad press) | Steam Frame: sprint. Touch, Index: open inventory | Prey's LS: autosort |
 | Right A / B | Jump / crouch | Select / back |
-| X (Touch: left; Steam Frame: right) | Grab: use or pick up what the left hand points at; press again to drop. With nothing to use: reload | Prey's X action, including Equip |
+| X (Touch: left; Steam Frame: right) | Grab: use or pick up what the left hand points at; press again to let go (mid-throw, it flies with your hand). With nothing to use: reload | Prey's X action, including Equip |
 | Y (Touch: left; Steam Frame: right) | Prey's Y: search, special use; tap to swap weapon, hold for Prey's wheel | Prey's Y action |
 | Steam Frame: bumpers | In Prey's wheel (hold Y): left uses a suit repair kit, right eats food. Otherwise nothing | Previous / next tab |
 | Steam Frame: View (left) | Open inventory | Close the menu |

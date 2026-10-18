@@ -40,13 +40,11 @@ constexpr Spec specs[]={
  {"haptics",L"CONTROLLER FEEDBACK",L"Short pulses for VR menu changes and attaching the support hand.",1,0,1,1},
  {"haptic_strength",L"FEEDBACK STRENGTH",L"Scale controller feedback intensity. Zero silences all pulses.",70,0,100,10,U::percent},
  {"physical_melee",L"PHYSICAL WRENCH",L"Swing the wrench to strike. Native stamina and attack recovery still apply.",0,0,1,1},
- {"physical_contacts",L"OBJECT NUDGES",L"Tap movable objects with weapon bounds. Does not stop your weapon at walls.",0,0,1,1},
  {"swing_speed",L"MINIMUM SWING SPEED",L"Higher values require faster swings. Rest briefly between strikes.",120,80,250,10,U::cmPerSecond},
- {"contact_strength",L"OBJECT NUDGE STRENGTH",L"Scales gentle object impulses. Wrench damage uses the game's rules.",50,0,100,10,U::percent},
  {"psi_target",L"PSYCHIC TARGETING",L"The left trigger casts the equipped power. Original aims it as Prey does; Head or Left Controller aim it with your head or left hand.",0,0,2,1,U::none,psiNames},
  {"medkit_slot",L"LEFT-HIP MEDKIT SLOT",L"Squeeze left grip at left hip, then press left trigger while holding grip. One medkit per grab; native use rules apply.",0,0,1,1},
  {"belt_hints",L"BODY SLOT FEEDBACK",L"Brief feedback for holster requests and medkit selection/use. Requires the corresponding body slot feature.",1,0,1,1},
- {"debug_overlay",L"DEBUG OVERLAY (TESTING)",L"Draws each hand's ray and target, body slots, the wrist test and the foregrip region in the world.",0,0,1,1},
+ {"debug_overlay",L"DEBUG OVERLAY (TESTING)",L"Draws each hand's ray and target, body slots, the wrist test, the foregrip region and the weapon's contact sweep in the world.",0,0,1,1},
  {"muzzle_aim",L"SHOTS FROM THE MUZZLE",L"Shots leave the weapon's muzzle along your controller's aim, so they land where the barrel points at any distance.",0,0,1,1},
  {"body_follow",L"BODY FOLLOWS YOU",L"Turn: your body faces you once you look past a short deadzone. Turn and move: it also steps to stay under you as you walk.",2,0,2,1,U::none,bodyFollowNames},
  {"ui_distance",L"MENU DISTANCE",L"How far away the game's menus float. They keep their apparent size.",200,100,400,5,U::cm},
@@ -108,7 +106,7 @@ constexpr int abilities[]={PsiTarget,Medkit,BeltHints};
 constexpr int setup[]={CalibratePosture,RecenterView,DebugOverlay};
 // Features still being proven, together with the settings that tune them.
 constexpr int experimental[]={CarryHand,GrenadeDeploy,LongReach,MuzzleAim,PhysicalMelee,SwingSpeed,
-    PhysicalContacts,ContactStrength,InventoryLayer,InventoryStereo,InventoryDepth};
+    InventoryLayer,InventoryStereo,InventoryDepth};
 // CONTROLS holds no setting: the panel draws what each action is bound to there.
 constexpr unsigned kControlsPage=7;
 constexpr std::span<const int> menuPages[]={comfort,hands,interface_,equipment,feedback,abilities,setup,
@@ -183,8 +181,9 @@ bool Parse(std::string_view text,Values& result,Present* present){
   if(key=="version"){if(version||value!=1)return false;version=true;continue;}
   // Retired settings: skipped, so a file saved before they went still loads.
   // The next save leaves them out. scene_reticle: the world reticle runs the
-  // scene query itself (reticle_world).
-  if(key=="scene_reticle")continue;
+  // scene query itself (reticle_world). physical_contacts, contact_strength:
+  // Object Nudges, removed 2026-10-18 for a redesign.
+  if(key=="scene_reticle"||key=="physical_contacts"||key=="contact_strength")continue;
   unsigned i=0;for(;i<Count&&key!=specs[i].key;++i){}
   if(i==Count||seen[i]||!Valid(i,value))return false;
   parsed[i]=value;seen[i]=true;

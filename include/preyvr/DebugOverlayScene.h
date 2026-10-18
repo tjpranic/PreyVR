@@ -5,6 +5,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 // What the in-game debug overlay shows, decided from plain state.
 //
@@ -25,8 +26,9 @@ enum Layer : unsigned {
     kLabels = 1u << 5,    // text beside each primitive
     kStatus = 1u << 6,    // the status panel below the view
     kHits = 1u << 7,      // scene queries along each ray (otherwise rays end at a fixed range)
+    kPhysical = 1u << 8,  // the physical-contact sweep: weapon box, swept paths, last contact
 };
-inline constexpr unsigned kAllLayers = 0xFFu;
+inline constexpr unsigned kAllLayers = 0x1FFu;
 // **The aim lasers** (VR Options "Aim lasers"): each hand's ray to what it
 // points at, ended on the scene -- what the game drew in every session from
 // 2026-10-06 to 10-13, a player's aid rather than a test's.
@@ -130,6 +132,29 @@ struct Foregrip {
     float blend = 0;
     Vec3 socket{};
 };
+// The physical-contact sweep (PhysicalInteractions): the weapon's box where the
+// sweep places it, the paths its nine points were swept along in the last
+// second, and the last contact. If the box is not on the visible weapon, the
+// sweep is querying somewhere else.
+inline constexpr float kSweepSeconds = 1.0f, kContactSeconds = 3.0f;
+inline constexpr Color kSweep{255, 220, 70, 200};
+struct PhysicalSweep {
+    std::array<Vec3, 9> from{}, to{};
+    float age = 0;   // seconds
+};
+struct Physical {
+    bool valid = false;              // a box is published (Physical Wrench on)
+    bool open = false;               // every gate passed this frame: a swing can query
+    std::array<Vec3, 9> points{};    // centre, then corner i+1 with bits x/y/z = the box's maximum
+    std::vector<PhysicalSweep> sweeps;
+    bool contact = false;
+    bool acted = false;              // struck; otherwise refused
+    Vec3 point{}, normal{};
+    float contactAge = 0;
+    std::string gate;                // the first refusing gate, or "open"
+    std::string result;              // the last contact's result
+    std::string status;              // counters for the status panel
+};
 struct OverlayFrame {
     bool headValid = false;
     Pose head{};
@@ -141,6 +166,7 @@ struct OverlayFrame {
     Slot medkit{};
     Wrist wrist{};
     Foregrip foregrip{};
+    Physical physical{};
     unsigned psiMode = 0;                // 0 native, 1 head, 2 left controller
     bool sceneQueryFault = false;
     std::string extra;                   // free text appended to the status panel

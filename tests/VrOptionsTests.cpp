@@ -114,6 +114,12 @@ void SettingsChecks(){
        parsed[ReticleWorld]==1&&!seen[ReticleWorld],"a retired key is skipped, not a reason to lose the file");
  Check(Serialize(parsed).find("scene_reticle")==std::string::npos,"and the next save leaves it out");
  Check(!Parse("version=1\nscene_reticle=x\n",parsed),"a retired key still needs a number");
+ // Object Nudges, removed 2026-10-18: a file saved with them keeps everything else.
+ Check(Parse("version=1\nphysical_melee=1\nphysical_contacts=1\nswing_speed=80\ncontact_strength=50\n",parsed,&seen)&&
+       parsed[PhysicalMelee]==1&&parsed[SwingSpeed]==80,"the nudge keys are retired, the wrench's kept");
+ {const auto text=Serialize(parsed);
+  Check(text.find("physical_contacts")==std::string::npos&&text.find("contact_strength")==std::string::npos,
+        "and the next save leaves them out");}
  Check(Defaults()[ReticleSize]==100&&Valid(ReticleSize,50)&&Valid(ReticleSize,200)&&!Valid(ReticleSize,40),
        "the reticle's size, 50..200 percent");
 }
@@ -154,8 +160,8 @@ void LayoutChecks(){
  for(unsigned i=0;i<Count;++i)Check(seen[i]==1,"every setting appears on exactly one tab");
  Check(recenter==1&&clear==1&&calibrate==1,"each button appears once");
  Check(MenuEntries(MenuPages()).empty(),"past the last tab there is nothing");
- for(const int e:{CarryHand,GrenadeDeploy,LongReach,MuzzleAim,PhysicalMelee,SwingSpeed,PhysicalContacts,
-                  ContactStrength,InventoryLayer,InventoryStereo,InventoryDepth})
+ for(const int e:{CarryHand,GrenadeDeploy,LongReach,MuzzleAim,PhysicalMelee,SwingSpeed,
+                  InventoryLayer,InventoryStereo,InventoryDepth})
   Check(Has(MenuEntries(MenuPages()-1),e),"features still being proven, and their tuning, on the experimental tab");
  Check(MenuEntries(0)[0]==Turn&&Has(MenuEntries(0),BodyFollow)&&Has(MenuEntries(0),BodyGlide),"comfort: turning first, body following");
  for(const int e:{UiDistance,UiOffsetRight,UiOffsetUp,UiText,PointerHand,HudLayer,ReticleWorld,ReticleSize,ReticleFallback})

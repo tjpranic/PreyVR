@@ -74,6 +74,16 @@ std::atomic<std::uint64_t> gWristNs{0};
 // The hologram's own card (WristLane), when it is the one in use.
 struct WristCardRecord { dd::Wrist card{}; std::uint64_t ns = 0; };
 LatestSnapshot<WristCardRecord> gWristCard;
+// The physical sweep, in OpenXR space. Its recent sweeps and last contact are
+// kept in engine world space (input-drain thread only) and re-expressed every
+// gameplay frame, so they stay where they happened while the player moves.
+struct PhysicalRecord { dd::Physical physical{}; std::uint64_t ns = 0, reference = 0; };
+LatestSnapshot<PhysicalRecord> gPhysical;
+struct WorldSweep { std::array<Vec3, 9> from{}, to{}; std::uint64_t ns = 0; };
+struct WorldContact { bool valid = false, acted = false; Vec3 point{}, normal{}; std::string result; std::uint64_t ns = 0; };
+std::vector<WorldSweep> gSweepHistory;
+WorldContact gContactHistory;
+constexpr std::size_t kMaxSweeps = 120;   // over a second at 90 Hz
 
 std::atomic<unsigned long long> gDrawn{0}, gVertices{0}, gTruncated{0}, gFailures{0}, gQueries{0};
 std::atomic<DWORD> gLastError{0};
@@ -207,6 +217,11 @@ dd::OverlayFrame Gather(unsigned mask)
     }
     ForegripRecord grip{};
     if (gForegrip.TryRead(grip) && FreshSample(now, grip.ns, kRayAgeNs) && grip.reference == reference) { f.foregrip = grip.grip; }
+    PhysicalRecord physical{};
+    if ((mask & dd::kPhysical) && gameplay && gPhysical.TryRead(physical) && FreshSample(now, physical.ns, kRayAgeNs) &&
+        physical.reference == reference) {
+        f.physical = std::move(physical.physical);
+    }
     f.psiMode = PsiTargetMode();
     f.sceneQueryFault = SceneQueryFaulted();
     if (mask & dd::kStatus) { f.extra = UseStatusLine(); }
@@ -681,6 +696,57 @@ void DebugOverlayForegrip(const GameplayPoseFrame& frame, const twohand::Input& 
     record.ns = MonotonicNanoseconds();
     record.reference = frame.referenceGeneration;
     if (Finite(g.start) && Finite(g.end)) { gForegrip.Publish(record); } else { gForegrip.Clear(); }
+}
+
+bool DebugOverlayWantsPhysical() { return (gMask.load(std::memory_order_relaxed) & dd::kPhysical) != 0; }
+
+void DebugOverlayPhysical(const GameplayPoseFrame& frame, const PhysicalOverlayState& state)
+{
+    if (!DebugOverlayWantsPhysical()) { return; }
+    const auto now = MonotonicNanoseconds();
+    constexpr auto kSweepNs = static_cast<std::uint64_t>(dd::kSweepSeconds * 1e9f);
+    constexpr auto kContactNs = static_cast<std::uint64_t>(dd::kContactSeconds * 1e9f);
+    if (state.swept) {
+        if (gSweepHistory.size() >= kMaxSweeps) { gSweepHistory.erase(gSweepHistory.begin()); }
+        gSweepHistory.push_back({state.from, state.to, now});
+    }
+    gSweepHistory.erase(std::remove_if(gSweepHistory.begin(), gSweepHistory.end(),
+                                       [&](const WorldSweep& s) { return now - s.ns > kSweepNs; }),
+                        gSweepHistory.end());
+    if (state.contact) { gContactHistory = {true, state.acted, state.point, state.normal, state.result, now}; }
+    if (!frame.cameraCentreValid) { gPhysical.Clear(); return; }
+    // The anchor the hands are placed with, so the box lands where the weapon is drawn.
+    auto toXr = [&](Vec3 world) { return EngineToXr(frame, frame.cameraCentre, world); };
+    PhysicalRecord record{};
+    auto& p = record.physical;
+    p.valid = state.box;
+    p.open = state.open;
+    if (state.box) {
+        for (std::size_t i = 0; i < p.points.size(); ++i) { p.points[i] = toXr(state.points[i]); }
+    }
+    p.sweeps.reserve(gSweepHistory.size());
+    for (const auto& s : gSweepHistory) {
+        dd::PhysicalSweep sweep{};
+        for (std::size_t i = 0; i < sweep.from.size(); ++i) {
+            sweep.from[i] = toXr(s.from[i]);
+            sweep.to[i] = toXr(s.to[i]);
+        }
+        sweep.age = static_cast<float>(now - s.ns) * 1e-9f;
+        p.sweeps.push_back(sweep);
+    }
+    if (gContactHistory.valid && now - gContactHistory.ns <= kContactNs) {
+        p.contact = true;
+        p.acted = gContactHistory.acted;
+        p.point = toXr(gContactHistory.point);
+        p.normal = EngineDirToXr(frame, gContactHistory.normal);
+        p.contactAge = static_cast<float>(now - gContactHistory.ns) * 1e-9f;
+        p.result = gContactHistory.result;
+    }
+    p.gate = state.gate;
+    p.status = state.status;
+    record.ns = now;
+    record.reference = frame.referenceGeneration;
+    gPhysical.Publish(record);
 }
 
 void DebugOverlayHolsters(bool live, const std::array<Vec3, 2>& centres, Vec3 hand, bool gripPressed, bool armed,

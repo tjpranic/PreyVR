@@ -37,14 +37,6 @@ int main(){
     Check(rays==9&&contact.found&&contact.hit.collider==reinterpret_cast<void*>(2)&&std::fabs(contact.fraction-.25f)<1e-6f,"earliest contact across all bounds samples wins");
     rays=0;Check(!Sweep(sweep,[&](Vec3,Vec3,scene::Hit& h){h=contact.hit;return ++rays<3;},contact)&&!contact.found,"partial query refuses all hits");
     Check(Sweep(sweep,[](Vec3,Vec3,scene::Hit& h){h.distance=-1;return true;},contact)&&!contact.found,"miss clears previous hit");
-    contact.direction={1,0,0};contact.speed=100;contact.hit.point={2,3,4};contact.hit.partId=7;
-    auto action=Nudge(contact,100);Check(action.type==2&&action.impulse.x==1.5f&&action.angular.x==0&&action.point.z==4&&action.partId==7&&action.applyTime==2&&action.source==2,"bounded native impulse, exact offsets and native wake source");
-    Check(Nudge(contact,0).impulse.x==0&&Nudge(contact,50).impulse.x==.75f,"strength and off scaling");
-    RigidResponse tiny{};tiny.inverseMass=100;tiny.centre=contact.hit.point;tiny.inverseInertia={1,0,0,0,1,0,0,0,1};
-    Check(LimitNudge(action,tiny)&&std::fabs(action.impulse.x-.015f)<1e-6f,"tiny object's induced linear speed capped at 1.5 m/s");
-    action=Nudge(contact,100);action.point={0,1,0};tiny.centre={};tiny.inverseMass=1;tiny.inverseInertia[8]=100;
-    Check(LimitNudge(action,tiny)&&std::fabs(action.impulse.x-.03f)<1e-6f,"off-centre contact induced spin capped at 3 rad/s");
-    tiny.inverseMass=0;Check(!LimitNudge(action,tiny),"infinite-mass rigid object receives no nudge");
     HitOwnership hit;hit.Claim(42);Check(hit.Suppress(42)&&!hit.Suppress(43),"only owned weapon suppressed");
     Check(hit.BlockAttack(42,1,1)&&!hit.BlockAttack(42,1,2),"physical animation blocks extra attack but allows release");
     Check(hit.Suppress(42)&&hit.Suppress(42),"all duplicate delayed events suppressed");
@@ -56,5 +48,5 @@ int main(){
     scene::Params params{};scene::Hit h{};void* skip[]={reinterpret_cast<void*>(1)};
     Check(scene::Build(params,{}, {1,0,0},h,skip,1,.125f)&&params.delta.x==.125f,"short query is not the reticle's 200m ray");
     Check(!scene::Build(params,{}, {1,0,0},h,skip,1,std::numeric_limits<float>::quiet_NaN()),"invalid range rejected");
-    std::cout<<"Physical motion, ownership, short sweeps and impulse contracts passed\n";
+    std::cout<<"Physical motion, ownership and short sweeps passed\n";
 }

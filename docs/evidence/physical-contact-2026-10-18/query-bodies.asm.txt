@@ -1,0 +1,47 @@
+=== slot 0x1d0 0xba1d80 chunk 0xba1d80-0xba1dca size 74
+00ba1d80 mov    r11, rsp
+00ba1d83 mov    qword ptr [r11 + 8], rcx
+00ba1d87 push   rbp
+00ba1d88 push   rsi
+00ba1d89 push   rdi
+00ba1d8a push   r12
+00ba1d8c push   r13
+00ba1d8e lea    rbp, [r11 - 0x488]
+00ba1d95 sub    rsp, 0x560
+00ba1d9c mov    rdi, r9
+00ba1d9f mov    r12d, r8d
+00ba1da2 mov    rsi, rdx
+00ba1da5 mov    r13, rcx
+00ba1da8 test   rdx, rdx
+00ba1dab je     0xba2d11
+00ba1db1 mov    eax, dword ptr [rdx + 0x44]
+00ba1db4 and    eax, 0xff000000
+00ba1db9 cmp    eax, 0x5000000
+00ba1dbe je     0xba2d11
+00ba1dc4 mov    ecx, dword ptr [rip + 0x1be103e]  ; -> 0x2782e08
+=== slot 0x110 0xba8560 chunk 0xba8560-0xba85ca size 106
+00ba8560 push   rbx
+00ba8562 sub    rsp, 0x40
+00ba8566 mov    rbx, rcx
+00ba8569 xor    eax, eax
+00ba856b mov    ecx, 0x10000
+00ba8570 lock cmpxchg dword ptr [rbx + 0x5784], ecx
+00ba8578 je     0xba858e
+00ba857a nop    word ptr [rax + rax]
+00ba8580 pause  
+00ba8582 xor    eax, eax
+00ba8584 lock cmpxchg dword ptr [rbx + 0x5784], ecx
+00ba858c jne    0xba8580
+00ba858e mov    eax, dword ptr [rsp + 0x78]
+00ba8592 mov    rcx, rbx
+00ba8595 mov    dword ptr [rsp + 0x38], 4
+00ba859d mov    dword ptr [rsp + 0x30], eax
+00ba85a1 mov    eax, dword ptr [rsp + 0x70]
+00ba85a5 mov    qword ptr [rsp + 0x28], 0
+00ba85ae mov    dword ptr [rsp + 0x20], eax
+00ba85b2 call   0xba6830  ; call 0xba6830
+00ba85b7 mov    ecx, 0xffff0000
+00ba85bc lock xadd dword ptr [rbx + 0x5784], ecx
+00ba85c4 add    rsp, 0x40
+00ba85c8 pop    rbx
+00ba85c9 ret    

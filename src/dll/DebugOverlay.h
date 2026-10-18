@@ -58,6 +58,22 @@ void DebugOverlayMedkit(bool live, Vec3 centre, Vec3 hand, bool gripPressed, boo
                         bool triggerArmed);
 // Any slot notice, whether or not belt hints are shown.
 void DebugOverlayNotice(equipment::SlotNotice notice);
+// Physical-contact sweep (PhysicalInteractions), game/input-drain thread, once
+// per gameplay frame while DebugOverlayWantsPhysical(). Engine world space.
+struct PhysicalOverlayState {
+    bool box = false;                 // `points` is the published weapon box
+    bool open = false;                // every gate passed: a swing can query
+    std::array<Vec3, 9> points{};     // centre, then the eight corners
+    bool swept = false;               // this frame queried from[i] -> to[i]
+    std::array<Vec3, 9> from{}, to{};
+    bool contact = false, acted = false;
+    Vec3 point{}, normal{};
+    const char* gate = "";
+    const char* result = "";
+    std::string status;
+};
+bool DebugOverlayWantsPhysical();
+void DebugOverlayPhysical(const GameplayPoseFrame& frame, const PhysicalOverlayState& state);
 // XR frame thread: the wrist layer's own decision this frame.
 void DebugOverlayWristDecision(bool gate, bool visible);
 // XR frame thread: the forearm hologram's card and its look test (WristLane);

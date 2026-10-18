@@ -4,13 +4,21 @@
 #include <iostream>
 #include <thread>
 #include "TestSupport.h"
+#include <string>
+#include <vector>
+std::vector<std::string> logLines;
+namespace preyvr::lifecycle {void Log(std::string_view line){logLines.emplace_back(line);}}
+bool Logged(const char* a,const char* b=""){
+    for(const auto& l:logLines)if(l.find(a)!=std::string::npos&&l.find(b)!=std::string::npos)return true;
+    return false;
+}
 namespace {
 using namespace preyvr;using namespace preyvr::dll;
 alignas(16) unsigned char weaponBytes[0x600]{};
 EquippedRig currentRig{};bool modal=false,admit=true,queryRefused=false;
 unsigned attacks=0,nativeHits=0,appends=0,freed=0,pulses=0,rays=0;
 const DWORD drainThread=GetCurrentThreadId();
-Vec3 impulseDirection{};physical::Impulse lastImpulse{};
+Vec3 impulseDirection{};
 using preyvr::test::Check;
 void __fastcall Append(Vector* out,const scene::Hit* h){
     Check(!out->begin&&!out->end&&!out->capacity,"empty engine vector at append boundary");
@@ -26,7 +34,6 @@ void __fastcall NativeHit(std::uintptr_t w,float){
     if(v.begin){Check(v.end==v.begin+1&&v.begin->partId==7,"exact contact reaches native consumer");delete v.begin;++freed;}
 }
 void __fastcall NativeImpulse(void*,void*,const Vec3* d,int,std::uintptr_t,float,float,float){impulseDirection=*d;}
-int __fastcall RigidAction(std::uintptr_t,const physical::Impulse* p,int threaded){Check(threaded==1,"native threadsafe impulse ABI");lastImpulse=*p;return 1;}
 }
 namespace preyvr::dll {
 bool EnsureMinHook(){return false;}
@@ -40,6 +47,13 @@ bool QueryPhysicalSegment(const GameplayPoseFrame&,Vec3 origin,Vec3 delta,scene:
     h.normal={-1,0,0};h.collider=reinterpret_cast<void*>(1);h.partId=7;return !queryRefused;
 }
 void QueueHaptic(Hand,haptics::Event event,const TrackingFrame&){Check(event==haptics::Event::WeaponContact,"physical feedback event");++pulses;}
+bool overlayBox=false,overlaySwept=false,overlayStruck=false;
+bool DebugOverlayWantsPhysical(){return true;}
+void DebugOverlayPhysical(const GameplayPoseFrame&,const PhysicalOverlayState& s){
+    overlayBox|=s.box&&s.open&&physical::Length(physical::Sub(s.points[8],s.points[1]))>.5f;
+    overlaySwept|=s.swept&&s.from[0].x<s.to[0].x;
+    overlayStruck|=s.contact&&s.acted&&std::string(s.result)=="struck"&&s.point.x!=0;
+}
 }
 int main(){
     using namespace preyvr;using namespace preyvr::dll;using namespace preyvr::physical;
@@ -71,17 +85,15 @@ int main(){
     for(int i=0;i<25;++i)tick();const auto strikesBefore=strikes.load();
     for(int i=0;i<5;++i)tick(.025f);
     Check(strikes==strikesBefore+1&&pulses==1,"production path admits one strike and pulse");
+    Check(Logged("preyvr_physical contact kind=wrench","result=struck state=1"),"strike logs its contact");
+    Check(Logged("preyvr_physical settings melee=1")&&Logged("preyvr_physical hooks result=0"),"settings and hooks logged");
+    Check(Logged("preyvr_physical geometry rig=1 wrench=1"),"weapon bounds logged once per equip");
+    Check(overlayBox&&overlaySwept&&overlayStruck,"the debug overlay gets the box, the swept paths and the strike");
     const auto raysBefore=rays;for(int i=0;i<10;++i)tick(.025f);Check(rays==raysBefore,"continued swing makes no repeat query");
     modal=true;tick();modal=false;tick(.04f);Check(rays==raysBefore,"menu exit requires fresh neutral rest");
     for(int i=0;i<40;++i)tick();queryRefused=true;for(int i=0;i<5;++i)tick(.025f);
     Check(strikes==strikesBefore+1,"query refusal cannot reuse last contact");queryRefused=false;
+    Check(Logged("preyvr_physical swing","end=query_refused"),"refused query ends the swing in the log");
     SetPhysicalMelee(0);for(int i=0;i<20;++i)tick(.03f);Check(strikes==strikesBefore+1,"option disabled stops consumer");
-    module=reinterpret_cast<std::uintptr_t>(RigidAction)-native::RigidAction;
-    alignas(16) unsigned char rigid[0x400]{};auto& collider=*reinterpret_cast<std::uintptr_t*>(rigid);
-    collider=module+native::RigidVtable;c.hit.collider=rigid;
-    *reinterpret_cast<float*>(rigid+0x2e8)=1;
-    for(unsigned i:{0u,4u,8u})*reinterpret_cast<float*>(rigid+0x328+i*4)=1;
-    SetContactStrength(50);Check(NudgeRigid(c)&&lastImpulse.impulse.x==.5f&&lastImpulse.partId==7,"rigid nudge uses bounded momentum without melee call");
-    collider=module+native::RigidVtable+8;Check(!NudgeRigid(c),"unknown classes receive no generic impulse");
-    std::cout<<"Physical dispatch, duplicate suppression, ownership and rigid impulse ABI passed\n";
+    std::cout<<"Physical dispatch, duplicate suppression and ownership passed\n";
 }

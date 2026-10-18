@@ -1,0 +1,26 @@
+; ---- chunk 0xba8560-0xba85ca (106 bytes)
+00ba8560 push   rbx
+00ba8562 sub    rsp, 0x40
+00ba8566 mov    rbx, rcx
+00ba8569 xor    eax, eax
+00ba856b mov    ecx, 0x10000
+00ba8570 lock cmpxchg dword ptr [rbx + 0x5784], ecx
+00ba8578 je     0xba858e
+00ba857a nop    word ptr [rax + rax]
+00ba8580 pause  
+00ba8582 xor    eax, eax
+00ba8584 lock cmpxchg dword ptr [rbx + 0x5784], ecx
+00ba858c jne    0xba8580
+00ba858e mov    eax, dword ptr [rsp + 0x78]
+00ba8592 mov    rcx, rbx
+00ba8595 mov    dword ptr [rsp + 0x38], 4
+00ba859d mov    dword ptr [rsp + 0x30], eax
+00ba85a1 mov    eax, dword ptr [rsp + 0x70]
+00ba85a5 mov    qword ptr [rsp + 0x28], 0
+00ba85ae mov    dword ptr [rsp + 0x20], eax
+00ba85b2 call   0xba6830  ; call 0xba6830
+00ba85b7 mov    ecx, 0xffff0000
+00ba85bc lock xadd dword ptr [rbx + 0x5784], ecx
+00ba85c4 add    rsp, 0x40
+00ba85c8 pop    rbx
+00ba85c9 ret    

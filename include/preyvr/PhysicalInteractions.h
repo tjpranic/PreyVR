@@ -79,34 +79,6 @@ template<class Query> bool Sweep(const Motion& m,Query&& query,Contact& result){
     }
     result=best;return true;
 }
-// Steam pe_action_impulse, proved at producer 0x1231940 and rigid consumer
-// 0xBCF990. Explicit vectors avoid the engine's uninitialised/unused sentinels.
-struct Impulse {
-    int type=2;Vec3 impulse{},angular{},point{};
-    int partId=0,part=static_cast<int>(0x80000000u),applyTime=2,source=2;
-};
-static_assert(sizeof(Impulse)==0x38&&offsetof(Impulse,point)==0x1c&&offsetof(Impulse,source)==0x34);
-inline Impulse Nudge(const Contact& c,unsigned percent){
-    Impulse p{};p.point=c.hit.point;p.partId=c.hit.partId;
-    p.impulse=Scale(c.direction,std::min(1.5f,c.speed*.5f)*std::min(percent,100u)*.01f);return p;
-}
-struct RigidResponse {float inverseMass=0;Vec3 centre{};std::array<float,9> inverseInertia{};};
-// A fixed impulse alone can launch a tiny prop. Bound the induced velocity,
-// including torque about the centre of mass, before asking native physics.
-inline bool LimitNudge(Impulse& p,const RigidResponse& body){
-    if(!std::isfinite(body.inverseMass)||body.inverseMass<=0||!scene::Finite(body.centre)||
-       !scene::Finite(p.point)||!scene::Finite(p.impulse))return false;
-    for(float f:body.inverseInertia)if(!std::isfinite(f))return false;
-    const auto arm=Sub(p.point,body.centre),v=p.impulse;
-    const Vec3 torque{arm.y*v.z-arm.z*v.y,arm.z*v.x-arm.x*v.z,arm.x*v.y-arm.y*v.x};
-    const auto& a=body.inverseInertia;
-    const Vec3 angular{a[0]*torque.x+a[1]*torque.y+a[2]*torque.z,
-        a[3]*torque.x+a[4]*torque.y+a[5]*torque.z,a[6]*torque.x+a[7]*torque.y+a[8]*torque.z};
-    const float linear=Length(v)*body.inverseMass,rotation=Length(angular);
-    if(!std::isfinite(linear)||!std::isfinite(rotation))return false;
-    const float scale=std::min({1.f,linear>1.5f?1.5f/linear:1.f,rotation>3.f?3.f/rotation:1.f});
-    p.impulse=Scale(p.impulse,scale);return Length(p.impulse)>0;
-}
 // Own the whole native animation after an immediate VR impact. Keep the marker
 // after its delayed event, so duplicate animation events cannot apply damage.
 // A subsequent admitted idle attack restores the normal button path.

@@ -300,7 +300,58 @@ void TestDrawnLayers()
     Require(DrawnLayers(kAllLayers, false) == kAllLayers, "the debug overlay alone: every layer");
     Require(DrawnLayers(kBody, true) == (kBody | kRays | kHits), "a debug layer beside the lasers");
     Require(DrawnLayers(kAllLayers, true) == kAllLayers, "both on: every layer, once");
-    Require(DrawnLayers(0x1FFu, false) == kAllLayers, "no layer beyond the known ones");
+    Require(DrawnLayers(0x3FFu, false) == kAllLayers, "no layer beyond the known ones");
+}
+
+void TestPhysicalLayer()
+{
+    OverlayFrame f{};
+    f.headValid = true;
+    auto& p = f.physical;
+    p.valid = true;
+    p.open = true;
+    p.gate = "open";
+    const Vec3 lo{-.06f, 1.2f, -.5f}, hi{.06f, 1.3f, -.1f};
+    p.points[0] = Scale(Add(lo, hi), .5f);
+    for (unsigned i = 0; i < 8; ++i) { p.points[i + 1] = {i & 1 ? hi.x : lo.x, i & 2 ? hi.y : lo.y, i & 4 ? hi.z : lo.z}; }
+    Scene scene;
+    BuildOverlayScene(f, kRays, scene);
+    Require(scene.lines.empty() && scene.markers.empty(), "the sweep is its own layer");
+    BuildOverlayScene(f, kPhysical, scene);
+    Require(scene.lines.size() == 12 && scene.markers.size() == 1, "a box is twelve edges and its centre");
+    Require(scene.lines[0].color.r == kRight.r && scene.lines[0].color.g == kRight.g, "open: drawn amber");
+    p.open = false;
+    p.gate = "rig";
+    BuildOverlayScene(f, kPhysical | kLabels, scene);
+    Require(scene.lines[0].color.r == kMuted.r && scene.labels.size() == 1 && scene.labels[0].text == "SWEEP rig",
+            "gated: grey, labelled with the refusing gate");
+    PhysicalSweep sweep{};
+    for (unsigned i = 0; i < 9; ++i) { sweep.from[i] = p.points[i]; sweep.to[i] = Add(p.points[i], {.03f, 0, 0}); }
+    sweep.age = .2f;
+    p.sweeps.push_back(sweep);
+    sweep.age = 2.0f;
+    p.sweeps.push_back(sweep);
+    BuildOverlayScene(f, kPhysical, scene);
+    Require(scene.lines.size() == 12 + 9, "a recent sweep draws nine paths; an old one nothing");
+    p.contact = true;
+    p.acted = false;
+    p.point = hi;
+    p.normal = {0, 0, 1};
+    p.contactAge = .5f;
+    p.result = "not_rigid";
+    BuildOverlayScene(f, kPhysical | kLabels, scene);
+    Require(scene.markers.size() == 2 && scene.markers[1].color.r == kDenied.r && scene.lines.size() == 12 + 9 + 1,
+            "a refused contact: a red dot and its normal");
+    Require(scene.labels.size() == 2 && scene.labels[1].text == "CONTACT not_rigid", "labelled with its result");
+    p.contactAge = kContactSeconds + 1;
+    BuildOverlayScene(f, kPhysical, scene);
+    Require(scene.markers.size() == 1, "an old contact is gone");
+    p.status = "wrench on  gate rig";
+    Require(OverlayStatusText(f, kAllLayers).find("\nPhysical wrench on") != std::string::npos, "the status panel reports it");
+    Require(OverlayStatusText(f, kRays).find("Physical") == std::string::npos, "only with the layer");
+    p.points[3].x = NAN;
+    BuildOverlayScene(f, kPhysical, scene);
+    Require(scene.lines.size() == 9, "a box with a bad corner is not drawn");
 }
 
 void TestSlotColours()
@@ -337,6 +388,7 @@ int main()
     TestWristMeasureMatchesVisibility();
     TestSceneLayers();
     TestDrawnLayers();
+    TestPhysicalLayer();
     TestSlotColours();
     std::cout << "debug_draw: all tests passed\n";
     return 0;

@@ -142,8 +142,6 @@ this session. "Menu only" means no command reaches it.
 | Experimental | Shots from the muzzle (`muzzle_aim`) | on/off | off | `aim.shot <0\|1>` |
 | Experimental | Physical wrench (`physical_melee`) | on/off | off | menu only (`physical` reports) |
 | Experimental | Minimum swing speed (`swing_speed`) | 80–250 cm/s | 120 | menu only |
-| Experimental | Object nudges (`physical_contacts`) | on/off | off | menu only |
-| Experimental | Object nudge strength (`contact_strength`) | 0–100 % | 50 | menu only |
 | Experimental | Inventory layer (`inventory_layer`) | on/off | off | `ui.inventory <0\|1>` |
 | Experimental | Stereo inventory (`inventory_stereo`) | on/off | off | `ui.stereo <0\|1>` |
 | Experimental | Inventory depth (`inventory_depth`) | 0–100 % | 25 | `ui.depth <0..100>` |
@@ -317,7 +315,7 @@ value report, as described above.
 | `use.filter <on> [minCutoff] [beta] [backlash]` | centi-Hz, ×100, centi-degrees | 1 100 200 75 | Smoothing on the use pointer. |
 | `use.find <entityId>` / `use.report` | | | Test harness; lane state. |
 | `carry.hand` | 0/1 | 0 → VR 1 | Carried objects in the left hand, thrown with it. **Menu (Experimental).** |
-| `carry.hold` | 0/1 | 0 | 0: press grab (X) to pick up and again to drop, as Prey does. 1: hold it to keep holding. **Menu.** |
+| `carry.hold` | 0/1 | 0 | 0: press grab (X) to pick up and again to let go, as Prey does; an object in the hand leaves with the hand's motion. 1: hold it to keep holding. **Menu.** |
 | `carry.throw <gain> <throwCm/s> <maxCm/s> <heavyMaxCm/s>` | 50–300, 20–1000, 100–5000, 50–3000 | 140 160 1600 500 | Throw strength, drop/throw threshold, speed caps. **Menu** (gain). |
 | `carry.heavy <kg> <diagCm> <holdMs> <shiftCm> <tauMs>` | | 25 120 500 60 100 | What counts as heavy and how a heavy prop follows. |
 | `carry.corpse <minCm> <maxFromNativeCm> <tauMs>` | | 75 110 120 | Where a dragged body is held. |
@@ -371,7 +369,7 @@ value report, as described above.
 | `haptics [0\|1] [strength]` | 0–100 | 1 70 | Controller pulses and their strength. **Menu.** |
 | `psi.target` | 0 original, 1 head, 2 left controller | 0 | Psi power aiming. **Menu.** |
 | `medkit.slot` | 0/1 | 0 | Left-hip medkit. **Menu.** |
-| `physical` | report | | Physical wrench and object nudge state; set them in the menu. |
+| `physical` | report | | Physical wrench state and the first refusing gate (`gate=`); set it in the menu. Also logged every 10 s when it changes. |
 
 ### Stereo and rendering
 
@@ -399,7 +397,7 @@ value report, as described above.
 
 | Command | What it is |
 |---|---|
-| `dbg.draw [on\|all\|off\|mask]` | In-world debug drawing. Mask bits: 1 rays, 2 raw, 4 body, 8 wrist, 16 foregrip, 32 labels, 64 status, 128 hits. **Menu** (on = every layer). Drawn beside the aim lasers: `off` leaves them. |
+| `dbg.draw [on\|all\|off\|mask]` | In-world debug drawing. Mask bits: 1 rays, 2 raw, 4 body, 8 wrist, 16 foregrip, 32 labels, 64 status, 128 hits, 256 physical sweep (weapon box, swept paths, last contact). **Menu** (on = every layer). Drawn beside the aim lasers: `off` leaves them. |
 | `dbg.lasers [0\|1]` | The aim lasers (rays + hits, 129) for this session, apart from `dbg.draw`. **Menu** (Hands > Aim lasers; on at VR start). |
 | `dbg.report`, `dbg.marks` | Overlay counters and primitive positions. |
 | `cull.report`, `cull.watch [0\|1]` | Read-only watch on the engine's pass-camera reset, for the job-worker crash at `PreyDll+0x27EC40`. On from startup, VR or not; `PREYVR_CULL_WATCH=0` before launch leaves it out. Its `preyvr_cull_watch` lines in PreyVR.log are what to send with a crash. |

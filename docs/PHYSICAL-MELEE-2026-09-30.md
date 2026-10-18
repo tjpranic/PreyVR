@@ -1,5 +1,8 @@
 # Physical wrench swings and weapon contact nudges
 
+> **Object Nudges was removed on 2026-10-18** (see the last section). The rest of this
+> record describes the 09-30 design as built.
+
 Status: implemented for the Steam target; **static and offline tests only**. No game, simulator, or headset run was performed for this batch. Both gameplay changes default off, under **VR Options → Physical**.
 
 ## Player-facing behaviour
@@ -68,3 +71,95 @@ The Release DLL builds, and **54/54 offline CTest checks passed**. See [test out
 Read-only diagnostic command: `physical`. It reports options, `poses`, `sweeps`, `contactsFound`, `strikes`, `substituted`, `suppressed`, `nudges`, `admissionRefused`, `refused`, `fault` and `error`. A strike counter means an admitted native attack/hit call, not confirmed health damage; `nudges` means accepted/queued, not observed object motion. Also read `aim.scene` if scene-query faults are suspected, since the query adapter is shared.
 
 Build/test evidence and the inspected Physical page raster live under `docs/evidence/physical-melee-2026-09-30/`. Fleet receipt submission and graph refresh remain pending until the branch artifacts reach the fleet-registered canonical checkout; this integration worktree is not registered. No release package is created by this batch.
+
+## Logging (2026-10-18, package PreyVR-21)
+
+Until now the lane wrote no log lines, so no run could say whether a physical strike ever
+landed: the `physical` report had never been requested. Every line is `preyvr_physical`:
+
+- `settings melee= contacts= speedCms= strength=` at start and on each change.
+- `geometry rig= wrench= min= max= scale=`, once per equip: the bounds the sweep uses.
+- `gate result=0`, `hooks result=0 count=4`, or `fault error=` (once each).
+- `swing peakCms= needCms= frames= fastFrames= sweeps= contacts= end=`, one per armed
+  swing that came within 60% of the strike speed, queried, or touched something. `end=` is
+  `stopped` or the gate that ended it (`menu`, `rig`, `query_refused`, ...). A swing whose
+  peak beat `needCms` with `fastFrames=0` did not travel the 9 cm.
+- `contact kind=wrench|weapon speedCms= swingCms= strike= at= type= vt= surface= partId=
+  point= normal= result=`, per contact. `type` is the collider's IPhysicalEntity GetType
+  (1 static, 2 rigid, 4 living, 6 articulated), `vt` its vtable RVA: the first record of
+  what glass, characters and props are. `result` is `struck`, `weapon_busy` (with `state`:
+  Prey's attack still recovering), `not_admitted` (stamina), `below_strike_speed`, `nudged`
+  (with `mass` and `impulse`), `not_rigid`, ...
+- `report ...`, the `physical` report, every 10 s when a counter or the refusing gate
+  changed. It now ends `gate=`: the first gate refusing (`off`, `menu`, `no_geometry`,
+  `rig`, ...) or `open`.
+
+No behaviour changed. `physical_runtime` checks the strike, settings, hooks, geometry and
+refused-swing lines. `ctest` 79/79.
+
+Headset checklist (Physical Wrench on):
+1. Draw the wrench: a `geometry ... wrench=1` line with plausible bounds (a wrench is
+   roughly 0.5 m long).
+2. Swing it into a prop, a wall, glass and an enemy, a few times each. Each should log a
+   `swing` line and a `contact` line; note what happened in game for each.
+3. Swing in empty air: `swing ... contacts=0`.
+4. Swing quickly twice: the second may log `result=weapon_busy` (Prey's recovery).
+
+## The sweep in the debug overlay (2026-10-18, package PreyVR-22)
+
+The PreyVR-21 run (`player-20261018-134329`) made 75 sweeps with Object Nudges and the
+wrench, and found 0 contacts: no ray of any sweep hit anything. The suspect is where the
+box is placed. The debug overlay's new **physical layer** (`dbg.draw` bit 256, part of
+VR Options "Debug overlay (testing)") draws it where the sweep puts it:
+
+- **The weapon box**: the twelve edges of the bounds the sweep uses, in world space
+  through the same anchor the hands are drawn with. Amber when a swing can query, grey
+  and labelled with the refusing gate (`SWEEP rig`, ...) otherwise.
+- **The swept paths**: each queried frame's nine point paths for the last second, yellow,
+  fading. A swing draws the trail the rays actually took.
+- **The last contact**, for 3 s: a dot with its normal, green when it struck or nudged,
+  red when refused, labelled `CONTACT <result>`.
+- Status panel: `Physical wrench on|off nudges on|off gate ... sweeps contacts nudged struck`.
+
+Only drawing changed. `debug_draw` (`TestPhysicalLayer`: edges, colours, sweep ageing,
+contact colour and label, status line, a bad corner) and `physical_runtime` (the producer
+receives the box, the paths and the strike). `ctest` 79/79.
+
+Headset checklist (VR Options: Debug overlay on; Object Nudges on, Physical Wrench off):
+1. Draw the wrench and a gun in turn. Does the amber box sit on the visible weapon and
+   follow it? Note where it is if not (offset, scale, behind, at the body).
+2. Swing through a can or box: the yellow trail should pass through it. Note whether
+   the trail goes through the object and whether a contact dot appears.
+3. Watch the status line's gate while still, swinging, in a menu and after a weapon change.
+
+## Object Nudges removed (2026-10-18, package PreyVR-23)
+
+Worn on PreyVR-22 (`player-20261018-140113`), with the overlay showing the box on the
+visible weapon and the swept paths where expected. The wearer: nudging "just completely
+broken", one registered nudge and the object did not move, and contacts only registered
+very close to an object. The log agrees:
+
+- 61 contacts. Almost all were `type=1` (static, `vt=0x1d82188`, surface 131): fixed
+  scenery, refused `not_rigid`. Hitting it repeatedly gave pairs of contacts 2.8 cm apart
+  with opposite normals, both faces of one thin static slab.
+- Two nudges reached a prop (`type=2`, `vt=0x1d83870`, both `mass=1.00`), with impulses of
+  0.122 and 0.250 N·s: 0.12 and 0.25 m/s at most, before friction. The design's caps
+  (1.5 N·s raw, half of that at the default strength, then 1.5 m/s) made a "nudge" too
+  small to see.
+- Contacts need the nine sampled points' frame-to-frame paths to cross a surface, during a
+  gesture (a 150 ms rest, then 25 cm/s), one per 350 ms: a weapon held against or moved
+  slowly into an object never registers.
+
+The user chose a clean slate. Removed: the `physical_contacts` and `contact_strength`
+options (now retired keys, so a saved file still loads), `NudgeRigid`, the impulse and
+bounding math (`Impulse`, `Nudge`, `RigidResponse`, `LimitNudge`), the rigid-class and
+queue-descriptor checks in the gate, and their tests.
+
+Kept, because the wrench uses them or a redesign will: the weapon box and its sweep (shown
+correct in the headset), the `preyvr_physical` log lines, the debug overlay's physical
+layer, and the verified native rows in `include/preyvr/PhysicalNative.h` (rigid action
+`0xBCF990`, impulse producer `0x1231940`, queue action `0xB1B160`, validation `0xB43870`)
+with `tools/re/verify_physical_interactions.py` and this record's table above. Those rows
+are still hashed by the gate; nothing calls the rigid ones now.
+
+The Physical Wrench is unchanged and still opt-in. `ctest` 79/79.

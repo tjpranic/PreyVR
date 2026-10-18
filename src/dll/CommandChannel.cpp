@@ -8,6 +8,7 @@
 #include "AimTakeover.h"
 #include "AnimIkTakeover.h"
 #include "DebugOverlay.h"
+#include "preyvr/DebugOverlayScene.h"
 #include "NearFovOverride.h"
 #include "CameraEditHook.h"
 #include "ConsoleBridgeWin32.h"
@@ -497,9 +498,9 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
         if (Valued(args)) {
             const std::string& value = args[1];
             int mask = -1;
-            if (value == "on" || value == "all") { mask = 255; }
+            if (value == "on" || value == "all") { mask = static_cast<int>(debugdraw::kAllLayers); }
             else if (value == "off") { mask = 0; }
-            else if (!ParseInt(value, mask) || mask < 0 || mask > 255) { mask = -1; }
+            else if (!ParseInt(value, mask) || mask < 0 || mask > static_cast<int>(debugdraw::kAllLayers)) { mask = -1; }
             result = mask >= 0 ? SetDebugOverlay(static_cast<unsigned>(mask)) : ERROR_INVALID_PARAMETER;
         }
         out << "dbg.draw result=" << result << DebugOverlayReport();

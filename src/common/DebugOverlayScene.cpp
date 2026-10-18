@@ -243,6 +243,73 @@ void AddForegrip(Scene& scene, const Foregrip& grip, unsigned mask)
     }
 }
 
+// The sweep's box in amber when a swing can query (grey while a gate refuses),
+// the last second's swept paths fading in yellow, and the last contact: green
+// when it struck, red when it was refused.
+void AddPhysical(Scene& scene, const Physical& p, unsigned mask)
+{
+    for (const auto& sweep : p.sweeps) {
+        if (!(sweep.age >= 0) || sweep.age > kSweepSeconds) { continue; }
+        const auto alpha = static_cast<std::uint8_t>(kSweep.a * (1 - .7f * sweep.age / kSweepSeconds));
+        for (unsigned i = 0; i < sweep.from.size(); ++i) {
+            if (Finite(sweep.from[i]) && Finite(sweep.to[i])) {
+                scene.lines.push_back({sweep.from[i], sweep.to[i], WithAlpha(kSweep, alpha), .0015f, 1.2f});
+            }
+        }
+    }
+    const bool box = p.valid && std::all_of(p.points.begin(), p.points.end(), [](Vec3 v) { return Finite(v); });
+    if (box) {
+        const Color color = p.open ? kRight : kMuted;
+        // Twelve edges: corners whose indices differ in one bit.
+        for (unsigned corner = 0; corner < 8; ++corner) {
+            for (unsigned bit = 1; bit < 8; bit <<= 1) {
+                if (!(corner & bit)) {
+                    scene.lines.push_back({p.points[corner + 1], p.points[(corner | bit) + 1], color, .002f, 1.5f});
+                }
+            }
+        }
+        Marker centre{};
+        centre.centre = p.points[0];
+        centre.radius = .008f;
+        centre.color = color;
+        centre.minPixels = 4.0f;
+        scene.markers.push_back(centre);
+        if (mask & kLabels) {
+            Label label{};
+            label.anchor = p.points[0];
+            label.color = color;
+            label.offsetX = 1.2f;
+            label.height = .012f;
+            label.minPixels = 16.0f;
+            label.maxPixels = 26.0f;
+            label.text = "SWEEP " + (p.open ? std::string("OPEN") : p.gate);
+            scene.labels.push_back(label);
+        }
+    }
+    if (p.contact && p.contactAge >= 0 && p.contactAge <= kContactSeconds && Finite(p.point)) {
+        const Color color = p.acted ? kActive : kDenied;
+        Marker hit{};
+        hit.centre = p.point;
+        hit.radius = .02f;
+        hit.color = color;
+        hit.minPixels = 7.0f;
+        scene.markers.push_back(hit);
+        if (Finite(p.normal)) { scene.lines.push_back({p.point, Add(p.point, Scale(p.normal, .1f)), color, .002f, 1.5f}); }
+        if (mask & kLabels) {
+            Label label{};
+            label.anchor = p.point;
+            label.color = color;
+            label.offsetX = .9f;
+            label.offsetY = .9f;
+            label.height = .012f;
+            label.minPixels = 16.0f;
+            label.maxPixels = 26.0f;
+            label.text = "CONTACT " + p.result;
+            scene.labels.push_back(label);
+        }
+    }
+}
+
 }  // namespace
 
 float SlotHandDistance(const Slot& slot)
@@ -335,6 +402,7 @@ void BuildOverlayScene(const OverlayFrame& frame, unsigned mask, Scene& scene)
     }
     if (mask & kWrist) { AddWrist(scene, frame.wrist, mask); }
     if (mask & kForegrip) { AddForegrip(scene, frame.foregrip, mask); }
+    if (mask & kPhysical) { AddPhysical(scene, frame.physical, mask); }
     if ((mask & kStatus) && frame.headValid) {
         Label status{};
         // About 25 degrees below the gaze: out of the aiming area, a glance down to read.
@@ -387,6 +455,7 @@ std::string OverlayStatusText(const OverlayFrame& f, unsigned mask)
         text += "\nShot " + f.shot.route + " " + Fixed(f.shot.angleDegrees, 2) + " deg  spawn " + f.shot.spawnKind +
                 " " + Fixed(f.shot.spawnOffAimMm, 0) + " mm off aim" + (f.shot.projectileSeen ? "" : " (query only)");
     }
+    if ((mask & kPhysical) && !f.physical.status.empty()) { text += "\nPhysical " + f.physical.status; }
     if (!f.extra.empty()) { text += "\n" + f.extra; }
     return text;
 }

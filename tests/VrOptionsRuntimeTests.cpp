@@ -16,9 +16,7 @@ namespace preyvr::dll {
 DWORD SetPsiTargetMode(unsigned v){applied[options::PsiTarget]=v;return 0;}unsigned PsiTargetMode(){return applied[options::PsiTarget];}
 DWORD SetMedkitSlot(unsigned v){applied[options::Medkit]=v;return 0;}unsigned MedkitSlotEnabled(){return applied[options::Medkit];}
 void SetPhysicalMelee(unsigned v){applied[options::PhysicalMelee]=v;}unsigned PhysicalMeleeEnabled(){return applied[options::PhysicalMelee];}
-void SetPhysicalContacts(unsigned v){applied[options::PhysicalContacts]=v;}unsigned PhysicalContactsEnabled(){return applied[options::PhysicalContacts];}
 void SetSwingSpeed(unsigned v){applied[options::SwingSpeed]=v;}unsigned SwingSpeed(){return applied[options::SwingSpeed];}
-void SetContactStrength(unsigned v){applied[options::ContactStrength]=v;}unsigned ContactStrength(){return applied[options::ContactStrength];}
 void QueueHaptic(Hand,haptics::Event,const TrackingFrame&){}
 DWORD SetReticleInWorld(unsigned v){applied[options::ReticleWorld]=v;return 0;}
 unsigned ReticleInWorld(){return applied[options::ReticleWorld];}
@@ -181,10 +179,9 @@ int main(){
  set(options::ReticleSize,150);Check(ReticleSizePercent()==150,"the reticle's size reaches the reticle lane");
  set(options::ReticleFallback,10500);Check(ReticleConvergenceMillimetres()==10500,"fallback setting retains sub-metre precision");
  set(options::Haptics,0);Check(!HapticsEnabled(),"haptics disable reaches XR adapter");
- Check(!PhysicalMeleeEnabled()&&!PhysicalContactsEnabled(),"physical features independently off by default");
+ Check(!PhysicalMeleeEnabled(),"the physical wrench is off by default");
  set(options::PhysicalMelee,1);
- Check(PhysicalMeleeEnabled()&&!PhysicalContactsEnabled(),"physical wrench opt-in reaches consumer independently");
- set(options::PhysicalContacts,1);Check(PhysicalContactsEnabled(),"object nudge opt-in reaches consumer");
+ Check(PhysicalMeleeEnabled(),"physical wrench opt-in reaches consumer");
  Check(PsiTargetMode()==0&&!MedkitSlotEnabled(),"abilities start with native behavior");
  set(options::PsiTarget,1);Check(PsiTargetMode()==1,"head-directed psi reaches adapter");
  set(options::PsiTarget,2);Check(PsiTargetMode()==2,"controller-directed psi reaches adapter");

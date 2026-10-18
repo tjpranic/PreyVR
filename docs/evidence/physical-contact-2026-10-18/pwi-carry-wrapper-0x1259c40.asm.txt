@@ -1,0 +1,84 @@
+=== ref 0x1259c8b function 0x1259c40 0x1259e2a
+01259c40 mov    qword ptr [rsp + 8], rbx
+01259c45 mov    qword ptr [rsp + 0x10], rsi
+01259c4a mov    qword ptr [rsp + 0x18], rdi
+01259c4f mov    qword ptr [rsp + 0x20], r14
+01259c54 push   rbp
+01259c55 lea    rbp, [rsp - 0x30]
+01259c5a sub    rsp, 0x130
+01259c61 mov    rdi, rdx
+01259c64 mov    rsi, r8
+01259c67 xor    edx, edx
+01259c69 mov    r14, rcx
+01259c6c lea    rcx, [rbp - 0x50]
+01259c70 mov    rbx, r9
+01259c73 lea    r8d, [rdx + 0x78]
+01259c77 call   0x1b9ae5c  ; call 0x1b9ae5c
+01259c7c mov    rcx, qword ptr [rip + 0xff3d45]  ; -> 0x224d9c8
+01259c83 lea    rax, [rbp + 0x18]
+01259c87 movsd  xmm0, qword ptr [rsi]
+01259c8b lea    r9, [rip + 0xb9799e]  ; -> 0x1df1630 "PrimitiveWorldIntersection(Game)" <==
+01259c92 mov    qword ptr [rbp + 0x20], rax
+01259c96 lea    rdx, [rbp - 0x50]
+01259c9a mov    rax, qword ptr [rbp + 0x70]
+01259c9e xor    r8d, r8d
+01259ca1 mov    qword ptr [rbp + 0x10], rax
+01259ca5 shr    rax, 0x20
+01259ca9 bts    eax, 0x16
+01259cad mov    qword ptr [rbp + 8], rbx
+01259cb1 mov    dword ptr [rbp + 0x14], eax
+01259cb4 mov    eax, dword ptr [rbp + 0x60]
+01259cb7 mov    dword ptr [rbp - 0x1c], eax
+01259cba mov    eax, dword ptr [rbp + 0x68]
+01259cbd mov    dword ptr [rbp - 0xc], eax
+01259cc0 xor    eax, eax
+01259cc2 mov    dword ptr [rbp - 0x38], eax
+01259cc5 mov    qword ptr [rbp + 0x70], rax
+01259cc9 lea    rax, [rbp + 0x70]
+01259ccd mov    qword ptr [rbp - 0x18], rax
+01259cd1 mov    eax, dword ptr [rsi + 8]
+01259cd4 mov    dword ptr [rbp - 0x20], eax
+01259cd7 mov    dword ptr [rbp], 1
+01259cde mov    qword ptr [rbp - 0x30], rdi
+01259ce2 movsd  qword ptr [rbp - 0x28], xmm0
+01259ce7 mov    rax, qword ptr [rcx]
+01259cea call   qword ptr [rax + 0x1e0]
+01259cf0 movaps xmm3, xmm0
+01259cf3 xorps  xmm1, xmm1
+01259cf6 comiss xmm3, xmm1
+01259cf9 jbe    0x1259df9
+01259cff mov    rcx, qword ptr [rbp + 0x70]
+01259d03 test   rcx, rcx
+01259d06 je     0x1259de1
+01259d0c mov    eax, dword ptr [rcx + 0x2c]
+01259d0f lea    rdx, [rsp + 0x20]
+01259d14 movups xmm0, xmmword ptr [rcx + 0x18]
+01259d18 mov    dword ptr [rsp + 0x4c], eax
+01259d1c mov    rax, qword ptr [rcx + 0x34]
+01259d20 movsd  xmm1, qword ptr [rcx]
+01259d24 movups xmm2, xmmword ptr [rcx + 8]
+01259d28 mov    qword ptr [rsp + 0x54], rax
+01259d2d mov    rax, qword ptr [rcx + 0x3c]
+01259d31 mov    qword ptr [rsp + 0x5c], rax
+01259d36 mov    rax, qword ptr [rcx + 0x44]
+01259d3a mov    qword ptr [rsp + 0x64], rax
+01259d3f mov    rax, qword ptr [rcx + 0x4c]
+01259d43 mov    qword ptr [rsp + 0x6c], rax
+01259d48 mov    rax, qword ptr [rcx + 0x58]
+01259d4c mov    qword ptr [rsp + 0x78], rax
+01259d51 mov    rax, qword ptr [rcx + 0x60]
+01259d55 movups xmmword ptr [rsp + 0x38], xmm0
+01259d5a mov    qword ptr [rbp - 0x80], rax
+01259d5e mov    eax, dword ptr [rcx + 0x68]
+01259d61 movss  xmm0, dword ptr [rcx + 0x28]
+01259d66 movss  dword ptr [rsp + 0x48], xmm0
+01259d6c movss  xmm0, dword ptr [rcx + 0x30]
+01259d71 mov    dword ptr [rbp - 0x78], eax
+01259d74 mov    eax, dword ptr [rcx + 0x6c]
+01259d77 mov    dword ptr [rbp - 0x74], eax
+01259d7a movzx  eax, byte ptr [rcx + 0x7c]
+01259d7e movss  dword ptr [rsp + 0x50], xmm0
+01259d84 movss  xmm0, dword ptr [rcx + 0x70]
+01259d89 mov    byte ptr [rbp - 0x64], al
+01259d8c mov    rax, qword ptr [rcx + 0x80]
+01259d93 movsd  qword ptr [rsp + 0x20], xmm1

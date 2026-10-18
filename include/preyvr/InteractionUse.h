@@ -49,6 +49,10 @@ struct ButtonInput {
     // the game does it (press to pick up, press again to drop).
     bool carrying = false;
     bool holdToHold = true;
+    // What is carried is in the hand (the carry lane placed it). In toggle
+    // mode the press that drops it is then the carry lane's release, which
+    // keeps the hand's motion: drop it mid-swing and it is thrown.
+    bool inHand = false;
     // The selected entity's id (0 = none). With holdToHold, a press whose
     // target leaves the selection without a carry starting -- an item taken
     // into the inventory -- lets the button go at once: a VR hand stays closed

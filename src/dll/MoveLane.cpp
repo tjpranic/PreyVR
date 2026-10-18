@@ -599,6 +599,7 @@ void UpdateTurnAndFireLanes()
         // Phase 2: held in the hand for as long as the grip is (carry.hold).
         useIn.carrying = carrying;
         useIn.holdToHold = CarryHoldToHold() != 0;
+        useIn.inHand = carrying && CarryHoldingInHand();
         useIn.targetId = UseTargetId();
         useIn.tapOnly = UseTargetTapOnly();
         useIn.holstered = ArmsHolstered();
