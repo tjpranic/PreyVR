@@ -110,6 +110,7 @@ int main()
     moving.w = push.w;
     Check(!Solve(moving, top, up, 0, {0, 0, -1}, .7f, dt, ps).apply, "once it keeps up, nothing more");
     Check(!Solve(light, top, up, 0, {0, 0, 1}, .7f, dt, ps).apply, "a hand moving away never pulls");
+    Check(!Solve(light, top, up, 0, {.004f, .003f, -.005f}, .7f, dt, ps).apply, "a resting hand's jitter pushes nothing");
     Body crate = light;
     crate.inverseMass = 1 / 100.0f;
     crate.inverseInertia = {.1f, 0, 0, 0, .1f, 0, 0, 0, .1f};
@@ -153,5 +154,18 @@ int main()
     const Vec3 v = PointVelocity(p1, p0, tip, .01f);
     Check(Near(Length(v), 3.4f, .2f) && std::fabs(Dot(v, p1.axis[2])) < .1f * Length(v),
           "a turn moves the tip across the box, not along it");
-    std::cout << "contact_query: box, bounds, records, tracking and pushing passed\n";
+    // --- hands ---
+    // Grip axes as OpenXR's: x across the palm, y up, z along the handle.
+    const std::array<Vec3, 3> grip{Vec3{1, 0, 0}, Vec3{0, 1, 0}, Vec3{0, 0, 1}};
+    const Box leftHand = HandBox({1, 2, 3}, grip, true), rightHand = HandBox({1, 2, 3}, grip, false);
+    const HandShape shape{};
+    Check(NearV(leftHand.half, {(shape.back + shape.front) * .5f, shape.up, shape.along}), "a palm-sized box");
+    Check(leftHand.centre.x < 1 && rightHand.centre.x > 1 && Near(leftHand.centre.y, 2) && Near(rightHand.centre.z, 3),
+          "each hand's box leans to the back of that hand: -x on the left, +x on the right");
+    Check(Near(leftHand.centre.x - leftHand.half.x, 1 - shape.back) && Near(leftHand.centre.x + leftHand.half.x, 1 + shape.front),
+          "from the back of the hand to the fingers round the handle");
+    Box rebuilt{};
+    Check(BoxFromPoints(BoxPoints(rightHand), rebuilt) && NearV(rebuilt.centre, rightHand.centre) && NearV(rebuilt.half, rightHand.half) &&
+          NearV(rebuilt.axis[1], rightHand.axis[1]), "BoxPoints and BoxFromPoints round-trip");
+    std::cout << "contact_query: box, bounds, records, tracking, pushing and hands passed\n";
 }

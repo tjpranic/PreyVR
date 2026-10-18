@@ -79,6 +79,9 @@ void DebugOverlayPhysical(const GameplayPoseFrame& frame, const PhysicalOverlayS
 struct ContactOverlayState {
     bool box = false, open = false;
     std::array<Vec3, 9> points{};
+    // The hands' boxes, right then left, when they push (physical::Bounds order).
+    std::array<bool, 2> handBox{};
+    std::array<std::array<Vec3, 9>, 2> hands{};
     struct Mark { Vec3 point{}, normal{}; float dist = 0; bool sweep = false, articulated = false; Vec3 push{}; bool pushed = false; };
     std::array<Mark, 16> marks{};
     unsigned count = 0;

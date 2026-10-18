@@ -165,6 +165,7 @@ struct Physical {
     std::string result;              // the last contact's result
     std::string status;              // counters for the status panel
     std::vector<ContactMark> contacts;
+    std::vector<std::array<Vec3, 9>> handBoxes;   // the hands' boxes, when they push
     std::string contactStatus;       // the contact lane's status line
 };
 struct OverlayFrame {

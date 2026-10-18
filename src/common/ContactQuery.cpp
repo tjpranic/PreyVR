@@ -59,6 +59,29 @@ void Bounds(const Box& a, const Box& b, float margin, Vec3& lo, Vec3& hi)
     }
 }
 
+std::array<Vec3, 9> BoxPoints(const Box& box)
+{
+    std::array<Vec3, 9> p{};
+    p[0] = box.centre;
+    for (unsigned i = 0; i < 8; ++i) {
+        Vec3 c = box.centre;
+        for (int k = 0; k < 3; ++k) { c = Add(c, Scale(box.axis[k], ((i >> k) & 1 ? 1.0f : -1.0f) * (&box.half.x)[k])); }
+        p[i + 1] = c;
+    }
+    return p;
+}
+
+Box HandBox(Vec3 grip, const std::array<Vec3, 3>& axes, bool left, const HandShape& s)
+{
+    Box b{};
+    b.axis = axes;
+    // Out of the palm is +x on the left hand, -x on the right.
+    const float palm = left ? 1.0f : -1.0f;
+    b.centre = Add(grip, Scale(axes[0], palm * (s.front - s.back) * .5f));
+    b.half = {(s.front + s.back) * .5f, s.up, s.along};
+    return b;
+}
+
 Vec3 PointVelocity(const Box& now, const Box& before, Vec3 point, float dt)
 {
     if (!(dt > 0) || !std::isfinite(dt)) { return {}; }
@@ -114,8 +137,10 @@ Push Solve(const Body& body, Vec3 point, Vec3 normal, float depth, Vec3 proxyVel
     const Vec3 rel = Sub(hand, Add(body.v, Cross(body.w, r)));
     out.approach = -Dot(rel, n);
     const float ease = depth > s.slop ? std::min(s.maxSeparation, (depth - s.slop) * s.separation) : 0.0f;
-    const float wanted = std::max(0.0f, out.approach) + ease;
-    if (!(wanted > 0)) { return out; }   // moving apart: a contact never pulls
+    // Moving apart never pulls; a hand resting on an object, jittering by a few
+    // mm/s, does not push it (or keep waking it).
+    const float wanted = (out.approach > s.deadband ? out.approach : 0.0f) + ease;
+    if (!(wanted > 0)) { return out; }
     const float kn = Effective(body, r, n);
     if (!(kn > 0)) { return out; }
     const float jn = wanted / kn;

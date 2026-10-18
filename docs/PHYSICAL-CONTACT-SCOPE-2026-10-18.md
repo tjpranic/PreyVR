@@ -189,8 +189,8 @@ read from is in the same folder.
 |---|---|---|---|
 | 0. Static contracts | **Done 2026-10-18** (above). | Offline bytes. | — |
 | 1. Contact query, diagnostic only | **Worn 2026-10-18 on PreyVR-24**: overlaps work for movable props (below). | Headset: a contact at touch distance, held against, inside; object types and normals reported; cost per frame measured. | M |
-| 2. Weapon pushes props | **Built 2026-10-18, package PreyVR-25, awaiting headset** (below). | Offline: solver math. Headset: push, slide, swat, heavy props resist, nothing launches. | M |
-| 3. Hands | Palm proxies, hand arbitration (carry, psi, medkit, foregrip, two-hand), hand haptics. | Headset. | S–M |
+| 2. Weapon pushes props | **Worn 2026-10-18 on PreyVR-25: works** (below). | Offline: solver math. Headset: push, slide, swat, heavy props resist, nothing launches. | M |
+| 3. Hands | **Built 2026-10-18, package PreyVR-26, awaiting headset** (below). | Headset. | S–M |
 | 4. Corpses | Articulated bodies, one part per contact, by impulse if per-part velocity is unsafe. | Phase 0 articulated contract, then headset. | M |
 | 5. Polish | Friction/drag, skip what the player stands on (`pe_status_living` ground collider: Prey's struct is not the SDK's), performance budget, logging cleanup. | Headset. | S–M |
 
@@ -383,3 +383,77 @@ on to see the arrows; Physical Wrench off):
 7. Bodies should not move yet; the carried object should not be pushed by your weapon.
 8. Afterwards, `preyvr_contact push` lines give mass, approach and velocity change for each
    push, and `report` gives the counts.
+
+### Phase 2 in the headset (2026-10-18, PreyVR-25, `player-20261018-153543`)
+
+The wearer confirmed it works.
+- **Activity:** 733 pushes in 31 push starts, with no failure or refusal and `push=1`.
+- **Cost:** 2 µs per frame on average, 141 µs at most.
+- **Heavy props:** 15 kg props were force-limited at 0.3 m/s per frame (400 N / 15 kg at
+  90 Hz).
+- **Light props:** 1 kg cans kept up, up to 3.8 m/s on a swat.
+- **Friction:** about half the pushes slid.
+- **Carry:** releases still go through the mod (`ours=1`) after the shared
+  `PhysicsCalls.h` change.
+
+## Phase 3: the hands push (2026-10-18, package PreyVR-26)
+
+**What is new.**
+- **Proxies:** the lane queries up to three boxes a frame (`Contact::proxy`), each with
+  its own last pose, so each moves at its own measured speed:
+  - **The weapon:** the existing box.
+  - **The right hand:** while no weapon is drawn, since a drawn weapon is the right
+    hand's box.
+  - **The left hand:** unless it carries (`UseCarrying`, `CarryHoldingInHand`), holds
+    the foregrip (`TwoHandedAimHeld`), works the medkit slot (`MedkitZoneHasLeftHand`)
+    or aims psi (`PsiButtonHeld`).
+- **The hand box,** `contact::HandBox`: palm-sized, from the controller's grip pose,
+  mapped into the world by `animik::ControllerWorldFromHead`, the carry lane's own
+  route.
+  - It runs from the back of the hand (6.5 cm behind the grip centre along the palm
+    normal) to the fingers round the handle (3 cm in front), 10 cm up the hand and 12 cm
+    along the handle.
+  - The palm faces grip +x on the left hand and -x on the right; the handle sits 3.5 cm
+    out of the palm (`HandPose.h` `GripPoint`).
+- **One push per object:** each object gets one push per frame, from the deepest overlap
+  across all boxes, else a sweep, so two boxes on one object never fight. The pulse goes
+  to the hand that pushed: the right for the weapon or the right hand, the left for the
+  left hand.
+- **Deadband:** an approach under 1 cm/s pushes nothing (`PushSettings::deadband`). The
+  lane test found that a resting hand's measured speed (float noise, and in the headset
+  tracking jitter) pushed and woke the object every frame.
+- **Logging and overlay:** log lines name the box (`proxy=weapon|right_hand|left_hand`).
+  The overlay draws each pushing hand's box in cyan, and the status line lists the
+  active `boxes`. The gate is `idle` when no box is active.
+- **Options:** no new options. Physical Contact and Push Strength cover the hands, as
+  decided.
+
+Tests:
+- `contact_query`: the hand box's size and lean to the back of each hand, the
+  `BoxPoints`/`BoxFromPoints` round trip, and the jitter deadband.
+- `contact_lane`:
+  - with no weapon, the right hand pushes the can with its own pulse, and the overlay
+    shows its box alone;
+  - the free left hand pushes, with a left pulse;
+  - carrying, foregrip, medkit or psi each keep the left hand out;
+  - weapon and left hand on one object give one push;
+  - a resting hand pushes nothing.
+
+`ctest` 82/82. Not run in the game.
+
+**Headset checklist** (Physical Contact on, Debug overlay on):
+1. **Box placement:** holster the weapon and look at both hands. The cyan boxes should
+   wrap each visible hand. Note any offset; the box is placed from the controller, and
+   the drawn hand may sit elsewhere.
+2. **Swatting:** swat a can off a table with an empty right hand, then with the left;
+   each pulses its own hand.
+3. **Pressing and dragging:** press a box down and drag it with an open hand; push a
+   heavy prop (it should resist).
+4. **Resting:** rest a hand on an object and hold still. It should stay put and not
+   buzz.
+5. **Drawing a weapon:** the right hand's box goes and the weapon's box takes over. The
+   left hand still pushes until it grabs the foregrip.
+6. **Left-hand jobs:** carry with the left hand (its box goes away: the carried object
+   is not pushed). Aim psi or reach for the medkit slot: no left box.
+7. **Reaching to grab:** reach in to pick something up with X. Note whether the hand
+   pushing it away first gets in the way of grabbing.

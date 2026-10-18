@@ -154,8 +154,8 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   hand (on by default; off restores the game's carry in front of you), sticking
   charges to the surface you look at, long weapons held back toward the body,
   **Shots from the Muzzle**, **Scene Reticle**, the **Physical Wrench** with its
-  swing speed, **Physical Contact** with its push strength (your weapon pushes loose objects:
-  light ones keep up with it, heavy ones resist; friction lets you drag them), and the
+  swing speed, **Physical Contact** with its push strength (your weapon and free hands push loose
+  objects: light ones keep up, heavy ones resist; friction lets you drag them), and the
   inventory on a layer of its own, with optional depth.
   **Shots from the Muzzle** makes every shot leave the weapon's muzzle along
   your controller's aim, so it lands where the barrel points at any distance,

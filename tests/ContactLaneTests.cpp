@@ -144,12 +144,18 @@ DWORD SceneQueryWorld(const GameplayPoseFrame&, std::uintptr_t&, void*&) { retur
 std::uintptr_t CarriedPhysics() { return 0; }
 bool DebugOverlayWantsPhysical() { return true; }
 void DebugOverlayContact(const GameplayPoseFrame&, const ContactOverlayState& s) { lastOverlay = s; ++overlays; }
-unsigned pulses = 0;
+unsigned pulses = 0, leftPulses = 0;
 void QueueHaptic(Hand hand, haptics::Event event, const TrackingFrame&)
 {
-    Check(hand == Hand::right && event == haptics::Event::WeaponContact, "a push pulses the weapon hand");
-    ++pulses;
+    Check(event == haptics::Event::WeaponContact, "a push pulses as a contact");
+    ++(hand == Hand::left ? leftPulses : pulses);
 }
+bool carrying = false, foregrip = false, medkit = false, psi = false;
+bool UseCarrying() { return carrying; }
+bool CarryHoldingInHand() { return false; }
+bool TwoHandedAimHeld() { return foregrip; }
+bool MedkitZoneHasLeftHand() { return medkit; }
+bool PsiButtonHeld() { return psi; }
 }
 
 int main()
@@ -222,6 +228,8 @@ int main()
         for (auto& p : weapon.points) { p = Add(p, d); }
         ++weapon.sequence;
         weapon.stamp += 11111111ull;   // 90 Hz
+        ++f.tracking.sequence;
+        f.tracking.displayTime += 11111111ll;
         weapon.publishedNs = f.tracking.publishedNs = MonotonicNanoseconds();
         UpdateContactLane(f, true);
     };
@@ -274,6 +282,59 @@ int main()
     move({0, 0, -.01f});
     Check(!sets.empty() && sets.back().entity == &crate && Length(sets.back().action.v) < .01f && Logged("push entity=", "limited=1"),
           "a 10,000 kg crate barely moves");
+    // --- hands ---
+    // No weapon drawn: the right hand's own box pushes, and that hand pulses.
+    const PoseValidity tracked{true, true, true, true, 0};
+    auto& right = f.tracking.hands[static_cast<unsigned>(Hand::right)];
+    auto& left = f.tracking.hands[static_cast<unsigned>(Hand::left)];
+    f.tracking.head = {{0, 0, 0, 1}, {0, 1.6f, 0}};
+    f.tracking.headValidity = tracked;
+    right.gripPose = {{0, 0, 0, 1}, {.2f, 1.2f, -.3f}};
+    right.gripValidity = tracked;
+    haveBox = false;
+    listed = {&can};
+    auto hands = [&](Vec3 d) {
+        right.gripPose.position = Add(right.gripPose.position, d);
+        left.gripPose.position = Add(left.gripPose.position, d);
+        move({});
+    };
+    sets.clear();
+    for (int i = 0; i < 31; ++i) { hands({}); }   // the can's last push lapses
+    Check(sets.empty(), "a hand resting on the can pushes nothing (float noise and jitter are below the deadband)");
+    const unsigned pulsesBefore = pulses;
+    logSecondNs = 0;   // this test runs faster than the 40-lines-a-second budget
+    hands({0, -.01f, 0});   // OpenXR down: engine -z, into the can's top
+    Check(Logged("push entity=", "proxy=right_hand"), "with no weapon drawn the right hand's box pushes the can");
+    Check(!sets.empty() && sets.back().entity == &can && sets.back().action.v.z < -.8f && pulses == pulsesBefore + 1,
+          "the right hand pushes it down, and the right hand pulses");
+    Check(lastOverlay.handBox[0] && !lastOverlay.handBox[1] && !lastOverlay.box, "the overlay shows the right hand's box alone");
+    // The left hand, free: its own box, its own pulse.
+    right.gripValidity = {};
+    left.gripPose = {{0, 0, 0, 1}, {-.2f, 1.2f, -.3f}};
+    left.gripValidity = tracked;
+    for (int i = 0; i < 31; ++i) { hands({}); }
+    sets.clear();
+    logSecondNs = 0;
+    hands({0, -.01f, 0});
+    Check(!sets.empty() && leftPulses == 1 && Logged("push entity=", "proxy=left_hand"), "the free left hand pushes, and pulses itself");
+    // A busy left hand pushes nothing: carrying, the foregrip, the medkit slot, psi.
+    for (bool* busy : {&carrying, &foregrip, &medkit, &psi}) {
+        *busy = true;
+        sets.clear();
+        hands({0, -.01f, 0});
+        Check(sets.empty() && !lastOverlay.handBox[1] && !std::strcmp(lastOverlay.gate, "idle"), "a busy left hand pushes nothing");
+        *busy = false;
+    }
+    // Weapon and left hand on one object: one push, from the deepest contact.
+    haveBox = true;
+    for (int i = 0; i < 2; ++i) { hands({}); }
+    sets.clear();
+    hands({0, -.01f, 0});
+    unsigned canSets = 0;
+    for (const auto& s : sets) { canSets += s.entity == &can; }
+    Check(canSets <= 1 && lastOverlay.box && lastOverlay.handBox[1] && !lastOverlay.handBox[0],
+          "weapon drawn: its box and the left hand's; one push per object a frame");
+    left.gripValidity = {};
     SetPushStrength(10);
     tick(0);
     Check(PushStrength() == 25 && Logged("settings enabled=1 strength=25"), "strength clamps to 25..200 percent");

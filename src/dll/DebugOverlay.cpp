@@ -83,6 +83,7 @@ LatestSnapshot<PhysicalRecord> gPhysical;
 struct ContactRecord {
     bool box = false, open = false;
     std::array<Vec3, 9> points{};
+    std::vector<std::array<Vec3, 9>> hands;
     std::vector<dd::ContactMark> marks;
     std::string gate, status;
     std::uint64_t ns = 0, reference = 0;
@@ -240,6 +241,7 @@ dd::OverlayFrame Gather(unsigned mask)
             f.physical.points = touch.points;
             f.physical.gate = touch.gate;
         }
+        f.physical.handBoxes = std::move(touch.hands);
         f.physical.contacts = std::move(touch.marks);
         f.physical.contactStatus = std::move(touch.status);
     }
@@ -780,6 +782,12 @@ void DebugOverlayContact(const GameplayPoseFrame& frame, const ContactOverlaySta
     record.open = state.open;
     if (state.box) {
         for (std::size_t i = 0; i < record.points.size(); ++i) { record.points[i] = toXr(state.points[i]); }
+    }
+    for (unsigned h = 0; h < 2; ++h) {
+        if (!state.handBox[h]) { continue; }
+        std::array<Vec3, 9> points{};
+        for (std::size_t i = 0; i < points.size(); ++i) { points[i] = toXr(state.hands[h][i]); }
+        record.hands.push_back(points);
     }
     record.marks.reserve(state.count);
     for (unsigned i = 0; i < state.count && i < state.marks.size(); ++i) {

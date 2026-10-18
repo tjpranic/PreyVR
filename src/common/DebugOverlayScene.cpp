@@ -286,6 +286,15 @@ void AddPhysical(Scene& scene, const Physical& p, unsigned mask)
             scene.labels.push_back(label);
         }
     }
+    // The hands' boxes, cyan: what each hand pushes with.
+    for (const auto& hand : p.handBoxes) {
+        if (!std::all_of(hand.begin(), hand.end(), [](Vec3 v) { return Finite(v); })) { continue; }
+        for (unsigned corner = 0; corner < 8; ++corner) {
+            for (unsigned bit = 1; bit < 8; bit <<= 1) {
+                if (!(corner & bit)) { scene.lines.push_back({hand[corner + 1], hand[(corner | bit) + 1], kContact, .0015f, 1.2f}); }
+            }
+        }
+    }
     // The contact lane's contacts: overlap filled cyan, sweep a yellow ring, a
     // body violet; each with its normal. The first few are labelled.
     unsigned labelled = 0;

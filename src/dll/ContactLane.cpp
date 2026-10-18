@@ -8,16 +8,22 @@
 #include "HeadTrackingHook.h"
 #include "HudBridge.h"
 #include "InputPost.h"
+#include "InteractionLane.h"
 #include "Logger.h"
+#include "MoveLane.h"
 #include "PhysicalInteractions.h"
 #include "PhysicsCalls.h"
+#include "PsiMedkit.h"
 #include "SceneQuery.h"
+#include "XrInput.h"
+#include "preyvr/AnimIk.h"
 #include "preyvr/ContactNative.h"
 #include "preyvr/ContactQuery.h"
 #include "preyvr/MonotonicClock.h"
 #include "preyvr/NativeContract.h"
 #include "preyvr/PhysicalNative.h"
 #include "preyvr/SceneQueryNative.h"
+#include "preyvr/StereoCamera.h"
 #include "preyvr/TextFormat.h"
 #include <algorithm>
 #include <atomic>
@@ -238,8 +244,22 @@ bool ReadRigid(void* entity, contact::Body& body, float& mass)
 }
 
 // --- the lane (input-drain thread) ----------------------------------------------
-struct Last { Box box{}; std::uint64_t rig = 0, sequence = 0, reference = 0, stamp = 0; float yaw = 0; bool valid = false; };
-Last last;
+// The boxes that push (Contact::proxy): the held weapon; the right hand while no
+// weapon is drawn (a drawn weapon is its box); the left hand while it is free.
+enum Proxy : std::uint8_t { kWeapon = 0, kRightHand = 1, kLeftHand = 2, kProxies = 3 };
+const char* ProxyName(unsigned p) { return p == kWeapon ? "weapon" : p == kRightHand ? "right_hand" : "left_hand"; }
+Hand ProxyHand(unsigned p) { return p == kLeftHand ? Hand::left : Hand::right; }
+// One proxy this frame: its box, and what tells this pose from the last.
+struct ProxyNow {
+    bool active = false;
+    const char* why = "";   // why not, when inactive
+    Box box{};
+    std::uint64_t key = 0, sequence = 0, stamp = 0, reference = 0;
+    float yaw = 0;
+};
+using Proxies = std::array<ProxyNow, kProxies>;
+struct Last { Box box{}; std::uint64_t key = 0, sequence = 0, reference = 0, stamp = 0; float yaw = 0; bool valid = false; };
+std::array<Last, kProxies> last{};
 contact::Tracker tracker;
 std::uint64_t seenSettings = 0, reportNs = 0, reportSum = 0, logSecondNs = 0;
 const char* reportGate = nullptr;
@@ -285,7 +305,7 @@ void EndAll(const char* why)
                                " frames=" + std::to_string(events[i].frames) + " why=" + why); }
     }
 }
-void LogEvents(const Natives& n, const Contact* contacts, unsigned count, const Vec3& sweep)
+void LogEvents(const Natives& n, const Contact* contacts, unsigned count)
 {
     const void* touched[kMaxContacts]{};
     for (unsigned i = 0; i < count; ++i) { touched[i] = contacts[i].collider; }
@@ -312,19 +332,24 @@ void LogEvents(const Natives& n, const Contact* contacts, unsigned count, const 
         for (unsigned i = 0; i < count; ++i) { both |= contacts[i].collider == event.collider && contacts[i].kind != c->kind; }
         const auto d = Describe(n, c->collider, c->hit.surface);
         Log("begin entity=" + id + " type=" + TypeName(c->type) + " kind=" + contact::KindName(c->kind) +
-            (both ? "+sweep" : "") + " dist=" + Fixed(c->hit.distance, 4) + " partId=" + std::to_string(c->hit.partId) +
-            " surface=" + std::to_string(c->hit.surface) + " friction=" + Fixed(d.friction, 2) +
-            " bounciness=" + Fixed(d.bounciness, 2) + " mass=" + Fixed(d.mass, 2) + " point=" + Point(c->hit.point) +
-            " normal=" + Point(c->hit.normal) + " sweepCm=" + Fixed(Length(sweep) * 100, 1));
+            (both ? "+sweep" : "") + " proxy=" + ProxyName(c->proxy) + " dist=" + Fixed(c->hit.distance, 4) +
+            " partId=" + std::to_string(c->hit.partId) + " surface=" + std::to_string(c->hit.surface) +
+            " friction=" + Fixed(d.friction, 2) + " bounciness=" + Fixed(d.bounciness, 2) + " mass=" + Fixed(d.mass, 2) +
+            " point=" + Point(c->hit.point) + " normal=" + Point(c->hit.normal));
     }
 }
-void Publish(const GameplayPoseFrame& frame, const Box* box, const std::array<Vec3, 9>* points, const char* gate,
-             const Contact* contacts, unsigned count, const Vec3* pushed = nullptr, unsigned pushCount = 0)
+void Publish(const GameplayPoseFrame& frame, const Proxies& proxy, const char* gate, const Contact* contacts, unsigned count,
+             const Vec3* pushed = nullptr, unsigned pushCount = 0)
 {
     if (!DebugOverlayWantsPhysical()) { return; }
     ContactOverlayState state{};
-    state.box = box && points;
-    if (state.box) { state.points = *points; }
+    state.box = proxy[kWeapon].active;
+    if (state.box) { state.points = contact::BoxPoints(proxy[kWeapon].box); }
+    for (unsigned h = 0; h < 2; ++h) {
+        const auto& hand = proxy[kRightHand + h];
+        state.handBox[h] = hand.active;
+        if (hand.active) { state.hands[h] = contact::BoxPoints(hand.box); }
+    }
     state.open = !std::strcmp(gate, "open");
     state.gate = gate;
     unsigned overlap = 0, sweep = 0;
@@ -340,11 +365,16 @@ void Publish(const GameplayPoseFrame& frame, const Box* box, const std::array<Ve
             if (pushed && Length(pushed[i]) > 0) { m.push = pushed[i]; m.pushed = true; }
         }
     }
+    std::string boxes;
+    for (unsigned p = 0; p < kProxies; ++p) {
+        if (proxy[p].active) { boxes += std::string(boxes.empty() ? "" : "+") + ProxyName(p); }
+    }
     const auto q = queries.load();
-    state.status = std::string(enabled.load() ? "on" : "off") + "  gate " + gate + "  overlap " + std::to_string(overlap) +
-                   "  sweep " + std::to_string(sweep) + "  objects " + std::to_string(tracker.Tracked()) +
-                   "  push " + std::to_string(pushCount) + (pushReady.load() ? "" : " (unavailable)") + "  us avg " +
-                   std::to_string(q ? usTotal.load() / q : 0) + " max " + std::to_string(usMax.load());
+    state.status = std::string(enabled.load() ? "on" : "off") + "  gate " + gate + "  boxes " + (boxes.empty() ? "-" : boxes) +
+                   "  overlap " + std::to_string(overlap) + "  sweep " + std::to_string(sweep) + "  objects " +
+                   std::to_string(tracker.Tracked()) + "  push " + std::to_string(pushCount) +
+                   (pushReady.load() ? "" : " (unavailable)") + "  us avg " + std::to_string(q ? usTotal.load() / q : 0) +
+                   " max " + std::to_string(usMax.load());
     DebugOverlayContact(frame, state);
 }
 void MaybeReport()
@@ -360,16 +390,17 @@ void MaybeReport()
     reportGate = gate;
     Log("report" + ContactReport());
 }
-// One push per touched rigid object: its deepest overlap, else its sweep. The
-// velocity change keeps its surface with the weapon (contact::Solve). `pushed`
-// gets each applied contact's velocity change, by contact index.
+// One push per touched rigid object: its deepest overlap from any proxy, else its
+// sweep. The velocity change keeps its surface with that proxy (contact::Solve),
+// so two proxies on one object never fight. `pushed` gets each applied contact's
+// velocity change, by contact index.
 unsigned PushContacts(const GameplayPoseFrame& frame, const Natives& n, const Contact* contacts, unsigned count,
-                      const Box& box, const Box* previous, float dt, Vec3* pushed)
+                      const Proxies& proxy, const std::array<const Box*, kProxies>& previous,
+                      const std::array<float, kProxies>& dt, Vec3* pushed)
 {
     if (!n.push) { return 0; }
     contact::PushSettings tuning{};
     tuning.force *= static_cast<float>(strength.load()) * .01f;
-    const float step = dt > 0 ? dt : 1.0f / 90.0f;
     ++pushFrame;
     unsigned applied = 0;
     for (unsigned i = 0; i < count; ++i) {
@@ -390,7 +421,9 @@ unsigned PushContacts(const GameplayPoseFrame& frame, const Natives& n, const Co
         if (!n.surface || c.hit.surface < 0 || !n.surface(n.world, c.hit.surface, &bounciness, &friction, &flags)) {
             friction = tuning.proxyFriction;   // the engine's default surface
         }
-        const Vec3 velocity = previous ? contact::PointVelocity(box, *previous, c.hit.point, dt) : Vec3{};
+        const unsigned p = c.proxy < kProxies ? c.proxy : kWeapon;
+        const float step = dt[p] > 0 ? dt[p] : 1.0f / 90.0f;
+        const Vec3 velocity = previous[p] && dt[p] > 0 ? contact::PointVelocity(proxy[p].box, *previous[p], c.hit.point, dt[p]) : Vec3{};
         const float depth = c.kind == Kind::Overlap ? c.hit.distance : 0.0f;
         const auto push = contact::Solve(body, c.hit.point, c.hit.normal, depth, velocity, friction, step, tuning);
         if (!push.apply) { continue; }
@@ -408,13 +441,14 @@ unsigned PushContacts(const GameplayPoseFrame& frame, const Natives& n, const Co
         ++applied;
         if (!PushStarts(c.collider)) { continue; }
         ++pushBegins;
-        QueueHaptic(Hand::right, haptics::Event::WeaponContact, frame.tracking);
+        QueueHaptic(ProxyHand(p), haptics::Event::WeaponContact, frame.tracking);
         if (LogBudget()) {
-            Log("push entity=" + Hex(reinterpret_cast<std::uintptr_t>(c.collider)) + " kind=" + contact::KindName(c.kind) +
-                " mass=" + Fixed(mass, 2) + " friction=" + Fixed(friction, 2) + " approachCms=" + Fixed(push.approach * 100, 1) +
-                " handCms=" + Fixed(Length(velocity) * 100, 1) + " dvCms=" + Fixed(Length(change) * 100, 1) +
-                " depthMm=" + Fixed(depth * 1000, 1) + " limited=" + std::to_string(push.limited) +
-                " sliding=" + std::to_string(push.sliding) + " dtMs=" + Fixed(step * 1000, 1));
+            Log("push entity=" + Hex(reinterpret_cast<std::uintptr_t>(c.collider)) + " proxy=" + ProxyName(p) +
+                " kind=" + contact::KindName(c.kind) + " mass=" + Fixed(mass, 2) + " friction=" + Fixed(friction, 2) +
+                " approachCms=" + Fixed(push.approach * 100, 1) + " handCms=" + Fixed(Length(velocity) * 100, 1) +
+                " dvCms=" + Fixed(Length(change) * 100, 1) + " depthMm=" + Fixed(depth * 1000, 1) +
+                " limited=" + std::to_string(push.limited) + " sliding=" + std::to_string(push.sliding) +
+                " dtMs=" + Fixed(step * 1000, 1));
         }
     }
     return applied;
@@ -423,6 +457,38 @@ float AngleBetween(float a, float b)
 {
     const float d = std::remainder(a - b, 6.2831853f);
     return std::fabs(d);
+}
+// A hand's box, from its controller's grip pose mapped into the world as the
+// hands are placed (animik::ControllerWorldFromHead, the carry lane's own route).
+void HandProxy(const GameplayPoseFrame& f, Hand hand, ProxyNow& out)
+{
+    const auto& h = f.tracking.hands[static_cast<unsigned>(hand)];
+    if (!IsPoseUsable(h.gripPose, h.gripValidity, kMaxPoseAgeNs)) { out.why = "hand_pose"; return; }
+    const Pose grip = animik::ControllerWorldFromHead(f.yaw, f.cameraCentre, f.tracking.head, h.gripPose);
+    const auto& q = grip.orientation;
+    if (!Finite(grip.position) || !std::isfinite(q.x) || !std::isfinite(q.y) || !std::isfinite(q.z) || !std::isfinite(q.w)) {
+        out.why = "hand_pose";
+        return;
+    }
+    const std::array<Vec3, 3> axes{Rotate(q, stereo::ToEngineSpace(Vec3{1, 0, 0})), Rotate(q, stereo::ToEngineSpace(Vec3{0, 1, 0})),
+                                   Rotate(q, stereo::ToEngineSpace(Vec3{0, 0, 1}))};
+    out.box = contact::HandBox(grip.position, axes, hand == Hand::left);
+    out.key = 1 + static_cast<unsigned>(hand);
+    out.sequence = f.tracking.sequence;
+    out.stamp = static_cast<std::uint64_t>(f.tracking.displayTime);
+    out.reference = f.referenceGeneration;
+    out.yaw = f.yaw;
+    out.active = true;
+}
+// The left hand is not free while it carries, holds the foregrip, works the
+// medkit slot or aims psi: those are its jobs, and a push would fight them.
+const char* LeftHandBusy()
+{
+    if (UseCarrying() || CarryHoldingInHand()) { return "carrying"; }
+    if (TwoHandedAimHeld()) { return "foregrip"; }
+    if (MedkitZoneHasLeftHand()) { return "medkit"; }
+    if (PsiButtonHeld()) { return "psi"; }
+    return nullptr;
 }
 void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
 {
@@ -433,9 +499,7 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
         Log("settings enabled=" + std::to_string(enabled.load()) + " strength=" + std::to_string(strength.load()));
     }
     const auto now = MonotonicNanoseconds();
-    WeaponBox sample{};
-    Box box{};
-    bool boxed = false;
+    Proxies proxy{};
     const char* why = nullptr;
     if (!enabled.load()) { why = "off"; }
     else if (fault.load()) { why = "fault"; }
@@ -445,29 +509,34 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
     else if (!frame.cameraCentreValid || !frame.headYawUsable || !std::isfinite(frame.yaw)) { why = "camera"; }
     else if (!FreshSample(now, frame.tracking.publishedNs, kFreshNs) ||
              frame.referenceGeneration != HeadTrackingReferenceGeneration()) { why = "pose"; }
-    else if (!TryGetWeaponBox(sample) || !FreshSample(now, sample.publishedNs, kFreshNs)) { why = "no_weapon"; }
     else {
-        boxed = contact::BoxFromPoints(sample.points, box);
-        if (!boxed) { why = "bad_box"; }
-        else if (sample.reference != frame.referenceGeneration || sample.epoch != frame.tracking.epoch) { why = "reference"; }
+        auto& weapon = proxy[kWeapon];
+        WeaponBox sample{};
+        if (!TryGetWeaponBox(sample) || !FreshSample(now, sample.publishedNs, kFreshNs)) { weapon.why = "no_weapon"; }
+        else if (!contact::BoxFromPoints(sample.points, weapon.box)) { weapon.why = "bad_box"; }
+        else if (sample.reference != frame.referenceGeneration || sample.epoch != frame.tracking.epoch) { weapon.why = "reference"; }
+        else {
+            weapon.active = true;
+            weapon.key = sample.rig;
+            weapon.sequence = sample.sequence;
+            weapon.stamp = sample.stamp;
+            weapon.reference = sample.reference;
+            weapon.yaw = sample.yaw;
+        }
+        // A drawn weapon is the right hand's box, whatever its own state.
+        if (std::strcmp(weapon.why, "no_weapon") != 0) { proxy[kRightHand].why = "weapon"; }
+        else { HandProxy(frame, Hand::right, proxy[kRightHand]); }
+        if (const char* busy = LeftHandBusy()) { proxy[kLeftHand].why = busy; }
+        else { HandProxy(frame, Hand::left, proxy[kLeftHand]); }
+        if (!proxy[kWeapon].active && !proxy[kRightHand].active && !proxy[kLeftHand].active) { why = "idle"; }
     }
     lastGate = why ? why : "open";
     if (why) {
         if (tracker.Tracked()) { EndAll(why); }
         last = {};
         pushing = {};
-        Publish(frame, boxed ? &box : nullptr, boxed ? &sample.points : nullptr, why, nullptr, 0);
+        Publish(frame, proxy, why, nullptr, 0);
         return;
-    }
-    // Last frame's box, if it is the same weapon, a newer pose, and nothing jumped
-    // (a snap turn swings the whole box about the player).
-    // A copy: `last` takes this frame's box before the push reads the previous one.
-    Box before{};
-    const Box* previous = nullptr;
-    if (last.valid && last.rig == sample.rig && last.reference == sample.reference && sample.sequence > last.sequence &&
-        AngleBetween(sample.yaw, last.yaw) < .05f && Length(Sub(box.centre, last.box.centre)) < .3f) {
-        before = last.box;
-        previous = &before;
     }
     Natives natives{};
     if (const DWORD ready = gResolve(frame, natives)) {
@@ -485,43 +554,64 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
         Log("gate result=0 rows=" + std::to_string(std::size(cn::Contracts)) + " push=" + std::to_string(natives.push));
     }
     Contact contacts[kMaxContacts]{};
-    QueryStats stats{};
     unsigned count = 0;
+    // Last frame's box per proxy, if it is the same weapon or hand, a newer pose,
+    // and nothing jumped (a snap turn swings every box about the player). Copies:
+    // `last` takes this frame's boxes before the push reads the previous ones.
+    std::array<Box, kProxies> before{};
+    std::array<const Box*, kProxies> previous{};
+    // Each proxy's speed comes from its last two poses. Outside 1/240..1/20 s
+    // apart it is not trusted: no velocity, only easing an overlap out.
+    std::array<float, kProxies> dt{};
+    QueryStats total{};
     LARGE_INTEGER start{}, end{}, frequency{};
     QueryPerformanceCounter(&start);
-    const DWORD result = SafeQuery(natives, box, previous, contacts, kMaxContacts, count, stats);
+    for (unsigned p = 0; p < kProxies; ++p) {
+        const auto& current = proxy[p];
+        auto& was = last[p];
+        if (!current.active) { was = {}; continue; }
+        if (was.valid && was.key == current.key && was.reference == current.reference && current.sequence > was.sequence &&
+            AngleBetween(current.yaw, was.yaw) < .05f && Length(Sub(current.box.centre, was.box.centre)) < .3f) {
+            before[p] = was.box;
+            previous[p] = &before[p];
+            float d = current.stamp > was.stamp ? static_cast<float>(current.stamp - was.stamp) * 1e-9f : 0.0f;
+            dt[p] = d >= 1.0f / 240.0f && d <= 1.0f / 20.0f ? d : 0.0f;
+        }
+        QueryStats stats{};
+        unsigned written = 0;
+        const DWORD result = SafeQuery(natives, current.box, previous[p], contacts + count, kMaxContacts - count, written, stats);
+        if (result == ERROR_BUFFER_OVERFLOW) {
+            ++overflows;
+            ++refused;
+            written = 0;
+        } else if (result) {
+            fault = true;
+            error = result;
+            Log("fault error=" + std::to_string(result) + " detail=query proxy=" + ProxyName(p));
+            EndAll("fault");
+            return;
+        }
+        for (unsigned i = count; i < count + written; ++i) { contacts[i].proxy = static_cast<std::uint8_t>(p); }
+        count += written;
+        total.entities += stats.entities;
+        total.other += stats.other;
+        was = {current.box, current.key, current.sequence, current.reference, current.stamp, current.yaw, true};
+    }
     QueryPerformanceCounter(&end);
     QueryPerformanceFrequency(&frequency);
     const auto us = static_cast<std::uint64_t>((end.QuadPart - start.QuadPart) * 1000000 / std::max<LONGLONG>(frequency.QuadPart, 1));
     ++queries;
     usTotal += us;
     if (us > usMax.load()) { usMax = us; }
-    if (result == ERROR_BUFFER_OVERFLOW) {
-        ++overflows;
-        ++refused;
-        count = 0;
-    } else if (result) {
-        fault = true;
-        error = result;
-        Log("fault error=" + std::to_string(result) + " detail=query");
-        EndAll("fault");
-        return;
-    }
-    entities += stats.entities;
-    if (stats.entities > entitiesMax.load()) { entitiesMax = stats.entities; }
-    others += stats.other;
+    entities += total.entities;
+    if (total.entities > entitiesMax.load()) { entitiesMax = total.entities; }
+    others += total.other;
     found += count;
     for (unsigned i = 0; i < count; ++i) { (contacts[i].kind == Kind::Sweep ? sweeps : overlaps) += 1; }
-    const Vec3 sweep = previous ? Sub(box.centre, previous->centre) : Vec3{};
-    // The weapon's speed comes from its last two poses. Outside 1/240..1/20 s apart
-    // it is not trusted: no velocity, only easing an overlap out.
-    float dt = previous && sample.stamp > last.stamp ? static_cast<float>(sample.stamp - last.stamp) * 1e-9f : 0.0f;
-    if (dt < 1.0f / 240.0f || dt > 1.0f / 20.0f) { dt = 0; }
-    last = {box, sample.rig, sample.sequence, sample.reference, sample.stamp, sample.yaw, true};
-    LogEvents(natives, contacts, count, sweep);
+    LogEvents(natives, contacts, count);
     Vec3 pushed[kMaxContacts]{};
-    const unsigned pushCount = PushContacts(frame, natives, contacts, count, box, dt > 0 ? previous : nullptr, dt, pushed);
-    Publish(frame, &box, &sample.points, "open", contacts, count, pushed, pushCount);
+    const unsigned pushCount = PushContacts(frame, natives, contacts, count, proxy, previous, dt, pushed);
+    Publish(frame, proxy, "open", contacts, count, pushed, pushCount);
 }
 } // namespace
 

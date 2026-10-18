@@ -37,6 +37,21 @@ bool BoxFromPoints(const std::array<Vec3, 9>& points, Box& out);
 BoxPrimitive ToPrimitive(const Box& box);
 // The world AABB holding the box at both poses, grown by `margin`.
 void Bounds(const Box& a, const Box& b, float margin, Vec3& lo, Vec3& hi);
+// The nine points of a box, as the weapon sweep publishes them: the centre, then
+// corner i+1 whose bits x/y/z pick +half on that axis. BoxFromPoints' inverse.
+std::array<Vec3, 9> BoxPoints(const Box& box);
+// A hand as a box, from its controller's grip pose in world space. `axes` are the
+// grip's own x, y, z (OpenXR: x across the palm, y up the hand, z along the
+// handle) in world space. The palm faces +x on the left hand and -x on the right,
+// and the handle sits in the fist 3.5 cm out of the palm (HandPose.h GripPoint):
+// the box runs from the back of the hand to the fingers round the handle.
+struct HandShape {
+    float back = .065f;   // grip centre to the back of the hand, along the palm normal
+    float front = .03f;   // grip centre to the fingers wrapped round it
+    float up = .05f;      // half-size along y
+    float along = .06f;   // half-size along z, the handle
+};
+Box HandBox(Vec3 grip, const std::array<Vec3, 3>& axes, bool left, const HandShape& shape = {});
 // How fast the box's material at `point` (on the box at `now`) moved since
 // `before`, dt seconds earlier: its translation, its turn and the player's own motion.
 Vec3 PointVelocity(const Box& now, const Box& before, Vec3 point, float dt);
@@ -50,6 +65,7 @@ struct Contact {
     int type = 0;            // pe_type: 2 rigid, 6 articulated
     Kind kind = Kind::Overlap;
     scene::Hit hit{};        // dist, part, partId, surface, point, normal (out of the object)
+    std::uint8_t proxy = 0;  // which box touched it: the lane's own numbering
 };
 // A native record this lane can use: about `collider`, finite, a unit normal.
 bool Valid(const scene::Hit& hit, const void* collider);
@@ -69,6 +85,7 @@ struct PushSettings {
     float separation = 10;      // 1/s: easing-out speed per metre of overlap past the slop
     float maxSeparation = .5f;  // m/s
     float proxyFriction = .7f;  // the weapon's own surface: the engine's default friction
+    float deadband = .01f;      // m/s: a slower approach is tracking jitter, not a push
 };
 struct Push {
     bool apply = false;
