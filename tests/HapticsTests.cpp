@@ -25,6 +25,9 @@ int main(){
     request.serial=6;Check(!policy.Consume(request,request.stamp+100000001,2,4,1,70,true).duration,"stale event refused");
     request.serial=7;Check(!policy.Consume(request,request.stamp,2,4,1,0,true).duration,"zero strength silent");
     request.serial=8;Check(!policy.Consume(request,request.stamp,2,4,1,70,false).duration,"unfocused silent");
+    {haptics::Policy strike;haptics::Request r{haptics::Event::WeaponStrike,1,2,4,1000000000,1};
+     const auto p=strike.Consume(r,1000000000,2,4,1,100,true);
+     Check(p.amplitude==1.f&&p.duration==45000000,"a strike is the strongest, longest pulse");}
     const auto session=reinterpret_cast<XrSession>(1);
     const auto action=reinterpret_cast<XrAction>(2);const std::array<XrPath,2> paths{11,12};
     TrackingFrame frame;frame.epoch=1;frame.publishedNs=MonotonicNanoseconds();

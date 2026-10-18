@@ -1,0 +1,125 @@
+0x1c7eb28 1.0 0x3f800000
+0x1c7f7a8 100.0 0x42c80000
+0x1c8b724 0.008726646192371845 0x3c0efa35
+0x1c7eb24 0.5 0x3f000000
+0x1c80790 2.0 0x40000000
+0x1c7eb70 -0.0 0x80000000
+0x1c7f7b4 999999986991104.0 0x58635fa9
+0x1c7f7c0 -999999986991104.0 0xd8635fa9
+0x1c86464 1.5707963705062866 0x3fc90fdb
+0x1c7f77c 0.05000000074505806 0x3d4ccccd
+0x1c7f7a4 5.0 0x40a00000
+0x1c7eb20 1.1754943508222875e-38 0x800000
+0x1c7f7a0 1.5 0x3fc00000
+0x1c7eb60 nan 0x7fffffff
+--- WeaponHit call to component OnHit
+016b2bc0 mov    qword ptr [rsp + 0x10], rbx
+016b2bc5 mov    qword ptr [rsp + 0x18], rsi
+016b2bca push   rdi
+016b2bcb sub    rsp, 0x30
+016b2bcf movss  xmm3, dword ptr [rcx + 0x528]
+016b2bd7 mov    rdi, rcx
+016b2bda movss  xmm0, dword ptr [rcx + 0x524]
+016b2be2 movaps xmm2, xmm3
+016b2be5 minss  xmm0, xmm3
+016b2be9 mov    r8, rdi
+016b2bec movzx  eax, byte ptr [rdi + 0x531]
+016b2bf3 mov    byte ptr [rsp + 0x20], al
+016b2bf7 subss  xmm2, xmm0
+016b2bfb movss  xmm0, dword ptr [rip + 0x5cbf25]  ; -> 0x1c7eb28
+016b2c03 divss  xmm2, xmm3
+016b2c07 movaps xmm3, xmm0
+016b2c0a subss  xmm3, xmm2
+016b2c0e mulss  xmm3, dword ptr [rcx + 0x52c]
+016b2c16 add    rcx, 0x4c8
+016b2c1d addss  xmm3, xmm0
+016b2c21 call   0x13bf730  ; call 0x13bf730
+--- OnHit: the event build and dispatch call
+013bfdec lea    r8, [rbp + 0x10]
+013bfdf0 mov    r9, qword ptr [rbp + 0xa8]
+013bfdf7 lea    rdx, [rbp + 0x20]
+013bfdfb mov    word ptr [rsp + 0x40], ax
+013bfe00 lea    rcx, [rbp + 0xf0]
+013bfe07 mov    rax, qword ptr [rbp + 0xa0]
+013bfe0e movaps xmm0, xmm13
+013bfe12 xorps  xmm0, xmm7
+013bfe15 mov    byte ptr [rsp + 0x38], 1
+013bfe1a movss  dword ptr [rbp + 0x10], xmm0
+013bfe1f movaps xmm1, xmm12
+013bfe23 movaps xmm0, xmm11
+013bfe27 movss  dword ptr [rsp + 0x30], xmm10
+013bfe2e xorps  xmm0, xmm7
+013bfe31 movss  dword ptr [rsp + 0x28], xmm14
+013bfe38 xorps  xmm1, xmm7
+013bfe3b movss  dword ptr [rbp + 0x18], xmm0
+013bfe40 movss  dword ptr [rbp + 0x14], xmm1
+013bfe45 mov    qword ptr [rsp + 0x20], rax
+013bfe4a call   0x16aef20  ; call 0x16aef20 <==
+013bfe4f mov    r13, qword ptr [rbp + 0xb0]
+013bfe56 xor    r8d, r8d
+--- getters
+0x157c990 0x30
+0157c990 sub    rsp, 0x28
+0157c994 mov    rcx, qword ptr [rip + 0xcd108d]  ; -> 0x224da28
+0157c99b mov    rax, qword ptr [rcx]
+0157c99e call   qword ptr [rax + 0x70]
+0157c9a1 mov    rcx, rax
+0157c9a4 mov    rdx, qword ptr [rax]
+0157c9a7 call   qword ptr [rdx + 0xc0]
+0157c9ad mov    edx, 0x7777
+0157c9b2 mov    rcx, rax
+0157c9b5 mov    r8, qword ptr [rax]
+0157c9b8 add    rsp, 0x28
+0157c9bc jmp    qword ptr [r8 + 0x18]
+0x1587c20 None
+01587c20 mov    rax, qword ptr [rcx + 0x88]
+01587c27 ret    
+01587c28 int3   
+01587c29 int3   
+01587c2a int3   
+01587c2b int3   
+01587c2c int3   
+01587c2d int3   
+01587c2e int3   
+01587c2f int3   
+01587c30 mov    rax, qword ptr [rcx + 0x118]
+01587c37 ret    
+01587c38 int3   
+01587c39 int3   
+01587c3a int3   
+01587c3b int3   
+01587c3c int3   
+01587c3d int3   
+01587c3e int3   
+01587c3f int3   
+01587c40 mov    rax, qword ptr [rcx + 0x68]
+01587c44 ret    
+01587c45 int3   
+01587c46 int3   
+01587c47 int3   
+01587c48 int3   
+01587c49 int3   
+01587c4a int3   
+01587c4b int3   
+01587c4c int3   
+01587c4d int3   
+01587c4e int3   
+01587c4f int3   
+0x157c9c0 0x3c
+0157c9c0 sub    rsp, 0x28
+0157c9c4 mov    rcx, qword ptr [rip + 0xcd105d]  ; -> 0x224da28
+0157c9cb test   rcx, rcx
+0157c9ce je     0x157c9f5
+0157c9d0 mov    rax, qword ptr [rcx]
+0157c9d3 call   qword ptr [rax + 0x70]
+0157c9d6 mov    rcx, rax
+0157c9d9 mov    rdx, qword ptr [rax]
+0157c9dc call   qword ptr [rdx + 0xc0]
+0157c9e2 mov    edx, 0x7777
+0157c9e7 mov    rcx, rax
+0157c9ea mov    r8, qword ptr [rax]
+0157c9ed add    rsp, 0x28
+0157c9f1 jmp    qword ptr [r8 + 0x18]
+0157c9f5 xor    eax, eax
+0157c9f7 add    rsp, 0x28
+0157c9fb ret    

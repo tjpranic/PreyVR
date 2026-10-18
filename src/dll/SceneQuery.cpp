@@ -45,13 +45,15 @@ DWORD World(const GameplayPoseFrame& frame,std::uintptr_t& base,std::uintptr_t& 
         return ERROR_INVALID_ADDRESS;
     return ERROR_SUCCESS;
 }
-DWORD Query(const GameplayPoseFrame& frame,Vec3 origin,Vec3 direction,float range,scene::Hit& hit){
+// `also` (optional) is skipped as well as the player; `objectTypes` the classes asked for.
+DWORD Query(const GameplayPoseFrame& frame,Vec3 origin,Vec3 direction,float range,scene::Hit& hit,
+            int objectTypes=scene::AllObjects,void* also=nullptr){
     hit={};hit.distance=-1;
     __try {
-        std::uintptr_t base=0,world=0;void* skip[1]={};
+        std::uintptr_t base=0,world=0;void* skip[2]={nullptr,also};
         if(const DWORD ready=World(frame,base,world,skip[0]))return ready;
         scene::Params params{};
-        if(!scene::Build(params,origin,direction,hit,skip,1,range))return ERROR_INVALID_DATA;
+        if(!scene::Build(params,origin,direction,hit,skip,also?2:1,range,objectTypes))return ERROR_INVALID_DATA;
         // Synchronous flags only. Stack skip/hit storage cannot escape. Native
         // caller=4 acquires the physics caller lock; never call from render/XR.
         using Ray=int(__fastcall*)(std::uintptr_t,const scene::Params*,const char*,int);
@@ -116,6 +118,24 @@ bool QuerySegment(const GameplayPoseFrame& frame,Vec3 a,Vec3 b,scene::Hit& hit){
     thread_local bool busy=false;
     if(busy)return false;
     busy=true;const auto result=Query(frame,a,{d.x/length,d.y/length,d.z/length},length,hit);busy=false;
+    if(result){lastError=result;++refused;
+        if(result!=ERROR_NOT_READY&&result!=ERROR_INVALID_THREAD_ID)fault=true;
+        hit={};hit.distance=-1;
+    }
+    return result==ERROR_SUCCESS;
+}
+bool QuerySceneryBetween(const GameplayPoseFrame& frame,Vec3 a,Vec3 b,void* skip,scene::Hit& hit){
+    hit={};hit.distance=-1;
+    const Vec3 d{b.x-a.x,b.y-a.y,b.z-a.z};
+    const float length=std::sqrt(d.x*d.x+d.y*d.y+d.z*d.z);
+    if(fault.load()||!std::isfinite(length)||length<.001f||length>2.f||!HudGameplayInputAllowed()||
+       !FreshSample(MonotonicNanoseconds(),frame.tracking.publishedNs)||
+       frame.referenceGeneration!=HeadTrackingReferenceGeneration())return false;
+    thread_local bool busy=false;
+    if(busy)return false;
+    busy=true;
+    const auto result=Query(frame,a,{d.x/length,d.y/length,d.z/length},length,hit,scene::SceneryObjects,skip);
+    busy=false;
     if(result){lastError=result;++refused;
         if(result!=ERROR_NOT_READY&&result!=ERROR_INVALID_THREAD_ID)fault=true;
         hit={};hit.distance=-1;

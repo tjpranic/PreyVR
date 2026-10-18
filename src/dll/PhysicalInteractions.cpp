@@ -4,6 +4,7 @@
 #include "AimTakeover.h"
 #include "BodyFollow.h"
 #include "ContactLane.h"
+#include "SwingLane.h"
 #include "DebugOverlay.h"
 #include "HeadTrackingHook.h"
 #include "HudBridge.h"
@@ -312,7 +313,8 @@ void UpdatePhysicalInteractions(const GameplayPoseFrame& frame,bool allowed){
     thread_local bool busy=false;
     if(busy||!EngineThread())return;
     struct Guard{bool& value;explicit Guard(bool& v):value(v){value=true;}~Guard(){value=false;}} guard(busy);
-    const bool drawn=DebugOverlayWantsPhysical();
+    // The physical layer is the free-swing lane's (SwingLane.cpp) unless this lane is on.
+    const bool drawn=DebugOverlayWantsPhysical()&&PhysicalInteractionsEnabled();
     PhysicalOverlayState overlay{};
     UpdatePhysicalInteractionsImpl(frame,allowed,drawn?&overlay:nullptr);
     if(!drawn)return;
@@ -321,7 +323,7 @@ void UpdatePhysicalInteractions(const GameplayPoseFrame& frame,bool allowed){
     DebugOverlayPhysical(frame,overlay);
 }
 bool PhysicalInteractionsEnabled(){return !fault.load()&&melee.load();}
-bool PhysicalGeometryWanted(){return PhysicalInteractionsEnabled()||PhysicalContactEnabled();}
+bool PhysicalGeometryWanted(){return PhysicalInteractionsEnabled()||PhysicalContactEnabled()||SwingLaneWanted();}
 bool TryGetWeaponBox(WeaponBox& out){
     out={};Geometry g{};
     if(!geometry.TryRead(g))return false;
@@ -329,7 +331,9 @@ bool TryGetWeaponBox(WeaponBox& out){
     const auto q=g.sample.worldFromReference.orientation;
     out.yaw=2*std::atan2(q.z,q.w);
     out.rig=g.sample.owner;out.sequence=g.sample.sequence;out.reference=g.sample.reference;out.epoch=g.sample.epoch;
-    out.publishedNs=g.published;out.stamp=g.sample.stamp;out.wrench=g.wrench;return true;
+    out.publishedNs=g.published;out.stamp=g.sample.stamp;out.wrench=g.wrench;
+    out.local=g.sample.points;out.worldFromReference=g.sample.worldFromReference;out.grip=g.sample.grip.position;
+    out.weapon=g.rig.weapon;return true;
 }
 void SetPhysicalMelee(unsigned v){melee=v!=0;++settings;}unsigned PhysicalMeleeEnabled(){return melee.load();}
 void SetSwingSpeed(unsigned v){speed=std::clamp(v,80u,250u);++settings;}unsigned SwingSpeed(){return speed.load();}

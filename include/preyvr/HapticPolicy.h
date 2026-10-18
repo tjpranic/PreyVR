@@ -3,7 +3,8 @@
 #include <algorithm>
 namespace preyvr::haptics {
 // WristOpened: the status hologram unfolding, a smartwatch's faint tick.
-enum class Event { MenuChange, ForegripAttached, WeaponContact, ObjectGrabbed, ObjectThrown, WristOpened };
+// WeaponStrike: the free-swing wrench landing a strike, the strongest pulse.
+enum class Event { MenuChange, ForegripAttached, WeaponContact, ObjectGrabbed, ObjectThrown, WristOpened, WeaponStrike };
 struct Request {
     Event event=Event::MenuChange;
     std::uint64_t serial=0,epoch=0,reference=0,stamp=0,generation=0;
@@ -19,11 +20,12 @@ public:
            !FreshSample(now,r.stamp,100000000)||
            (last_&&now>=last_&&now-last_<40000000))return {};
         last_=now;
-        const float amplitude=r.event==Event::WeaponContact?.55f:r.event==Event::ObjectThrown?.5f:
+        const float amplitude=r.event==Event::WeaponStrike?1.f:r.event==Event::WeaponContact?.55f:r.event==Event::ObjectThrown?.5f:
             r.event==Event::ForegripAttached||r.event==Event::ObjectGrabbed?.45f:
             r.event==Event::WristOpened?.16f:.25f;
         return {amplitude*std::min(strength,100u)*.01f,r.event==Event::MenuChange?18000000:
-            r.event==Event::ObjectThrown?25000000:r.event==Event::WristOpened?14000000:35000000};
+            r.event==Event::ObjectThrown?25000000:r.event==Event::WristOpened?14000000:
+            r.event==Event::WeaponStrike?45000000:35000000};
     }
     void Reset(){*this={};}
 private:

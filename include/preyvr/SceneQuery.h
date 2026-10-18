@@ -43,8 +43,12 @@ static_assert(offsetof(Params,hits)==0x38 && offsetof(Params,capacity)==0x40);
 static_assert(offsetof(Params,skipCount)==0x50 && offsetof(Params,skip)==0x58);
 static_assert(offsetof(Params,collisionIgnore)==0x64);
 constexpr float Range = 200.f;
+// The broadphase classes a query asks for: everything the native rays ask for
+// (static, sleeping and awake rigid, living, independent, terrain), or fixed
+// scenery alone (static and terrain), which a held weapon or hand never is.
+constexpr int AllObjects = 0x11f, SceneryObjects = 0x101;
 using preyvr::Finite;
-inline bool Build(Params& p,Vec3 origin,Vec3 direction,Hit& hit,void** skip,int count,float range=Range){
+inline bool Build(Params& p,Vec3 origin,Vec3 direction,Hit& hit,void** skip,int count,float range=Range,int objectTypes=AllObjects){
     p={};
     const float norm=direction.x*direction.x+direction.y*direction.y+direction.z*direction.z;
     if(!Finite(origin)||!Finite(direction)||std::fabs(norm-1.f)>.002f||!skip||count<1||count>2||
@@ -52,7 +56,7 @@ inline bool Build(Params& p,Vec3 origin,Vec3 direction,Hit& hit,void** skip,int 
     for(int i=0;i<count;++i)if(!skip[i])return false;
     hit={};hit.distance=-1;
     p.origin=origin;p.delta={direction.x*range,direction.y*range,direction.z*range};
-    p.objectTypes=0x11f;p.flags=0xf;p.hits=&hit;p.capacity=1;p.skipCount=count;p.skip=skip;
+    p.objectTypes=objectTypes;p.flags=0xf;p.hits=&hit;p.capacity=1;p.skipCount=count;p.skip=skip;
     p.collisionIgnore=0x400000;
     return true;
 }

@@ -7,6 +7,7 @@
 #include "ShotRay.h"
 #include "PhysicalInteractions.h"
 #include "ContactLane.h"
+#include "SwingLane.h"
 #include "Haptics.h"
 #include "BodyEquipment.h"
 #include "Psychoscope.h"
@@ -296,6 +297,8 @@ void __fastcall UpdateCachedRayWithTakeover(void* player)
     UpdatePsychoscopeGesture(frame,haveTracking&&gEnabled.load());
     UpdateBodyEquipment(frame,haveTracking&&gEnabled.load());
     UpdatePhysicalInteractions(frame,haveTracking&&gEnabled.load());
+    // Before contact: a strike will tell contact what not to push (phase 2).
+    UpdateSwingLane(frame,haveTracking&&gEnabled.load());
     UpdateContactLane(frame,haveTracking&&gEnabled.load());
     UpdateInteractionLane(frame,haveTracking&&gEnabled.load());
     UpdateCarryLane(frame,haveTracking&&gEnabled.load());

@@ -1,0 +1,92 @@
+0x1c7e7b8 .rdata BREAKABLE_PHYSICS_CHUNK_DESC
+0x1c7f560 .rdata Incompatible vertex format for breakable glass! Found:[%d] ('%s')
+0x1c7f5b0 .rdata Mesh is too detailed to be breakable glass! [%d/%d Verts, %d/%d Tris] ('%s')
+0x1c7f604 .rdata BreakableGlass] Can't match front and back pairs. Check for mirrored UVs or try resetting vertex normals to face normals
+0x1c7f680 .rdata [ArkBreakableGlass] Plane intersected %d edges. [VOLUME:%f]
+0x1c7f6c0 .rdata Objects/ArkEffects/BreakPatterns/glass_fracture_b.cgf
+0x1c7f6f8 .rdata Objects/ArkEffects/BreakPatterns/glass_fracture_e.cgf
+0x1c7f730 .rdata ArkLooseGlassFrag
+0x1c7f748 .rdata CArkBreakableGlass
+0x1c90ad8 .rdata #ForceBreakable
+0x1c92a00 .rdata LookingGlass
+0x1c935b0 .rdata Visible LookingGlass Windows: %d
+0x1c9c330 .rdata e_ArkLookingGlass
+0x1c9c3c8 .rdata e_ArkLookingGlassDebug
+0x1c9c3e0 .rdata Minimum impact radius for breakable glass, for tuning look.
+0x1c9c420 .rdata e_ArkGlassMinImpactRadius
+0x1c9da38 .rdata breakable_id
+0x1c9db38 .rdata breakable_2d
+0x1c9de18 .rdata breakable_glass
+0x1c9e770 .rdata Unknown version of breakable physics chunk
+0x1ca5507 .rdata +GlassBreakAudioEffect
+0x1ca5520 .rdata Breakable glass is being initialized with a non-orthonormal matrix. Check if scaled.
+0x1ccaf2d .rdata sh=17,IrradianceVolume=18,RenderProxy=19,GameEffect=20,BreakableGlass=23,MergedMesh=24,GeomCache=25,ArkBreakableGlass=26
+0x1cd58e0 .rdata Breakable
+0x1cd9110 .rdata Breakables
+0x1cd9218 .rdata FlushBreakables
+0x1cd9398 .rdata SerializeBreakables
+0x1cf0e20 .rdata GlassBreakingClasses
+0x1cf0e38 .rdata NonGlassBreakingClasses
+0x1cf0e50 .rdata GlassBreakingAudio
+0x1cf1168 .rdata Sets a budget for procedurally breakable objects (in KBs)
+0x1cf1320 .rdata Make all glass break after a given time, overrides art settings
+0x1cf1360 .rdata g_glassForceTimeout
+0x1cf1378 .rdata Add a random amount to forced glass shattering
+0x1cf13a8 .rdata g_glassForceTimeoutSpread
+0x1cf13c8 .rdata Turns off glass decals
+0x1cf13e0 .rdata g_glassNoDecals
+0x1cf1428 .rdata g_glassAutoShatter
+0x1cf1488 .rdata g_glassAutoShatterOnExplosions
+0x1cf14a8 .rdata Max glass breaks, before auto-shattering is forced
+0x1cf14e0 .rdata g_glassMaxPanesToBreakPerFrame
+0x1cf1500 .rdata Enables the new dynamic breaking system for glass
+0x1cf1538 .rdata g_glassSystemEnable
+0x1cf15c0 .rdata g_breakageTreeIncGlass
+0x1cf20b0 .rdata Updated breakable mesh %s: %dKb->%I64uKb, new total size %I64uKb
+0x1cf20f8 .rdata Removing obsolete breakable mesh record of %dKb
+0x1cf2130 .rdata Breakable memory limit breached - removing a mesh; new total size %dKb
+0x1cf2228 .rdata BreakableObjects
+0x1cf4768 .rdata OnBreakable2d
+0x1d0ca30 .rdata Maximum mass of a non-destroyable, non-deformable, non-breakable rigid body entity to be considered.
+0x1d2f7d0 .rdata [Breakable2d] : geometry is not thin enough, breaking denied ( %s %s)
+0x1d2f820 .rdata [Breakable2d] : breakable tessellation is too fine, breaking denied ( %s %s)
+0x1d2f870 .rdata [Breakable2d] : geometry has several submaterials, breaking denied ( %s %s)
+0x1d2f8c0 .rdata [Breakable2d] : geometry is not suitable for breaking, breaking denied ( %s %s)
+0x1d2f910 .rdata breakable_plane_piece
+0x1d39098 .rdata mat_breakable
+0x1d82798 .rdata bBreakable
+0x1d83c18 .rdata breakableLin
+0x1d83c38 .rdata breakableAng
+0x1d9f050 .rdata Sets the breakable objects structure update interval
+0x1d9f088 .rdata p_tick_breakable
+0x1d9f0a0 .rdata If set, breakable objects will log tensions at the weakest spots
+0x1d9f310 .rdata Breakable trees are approximated with capsules of this length (0 disables approximation)
+0x1d9f390 .rdata Maximum number of capsule approximation levels for breakable trees
+0x1d9f3f0 .rdata Whether living entities are allowed to break static objects with breakable joints
+0x1d9f720 .rdata Time step used for gravity in breakable joints (larger = stronger gravity effects)
+0x1d9f800 .rdata Default fraction of damage (tension) accumulated on a breakable joint
+0x1dcfba8 .rdata q_ShaderGlass
+0x1dcfbb8 .rdata   $3q_ShaderGlass = $6%d
+0x1dd0334 .rdata Usage: q_ShaderGlass 0=low/1=med/2=high/3=very high (default)
+0x1dd0374 .rdata Glass
+0x1dd6784 .rdata GLASS
+0x1dd9e20 .rdata ArkBreakableGlass
+0x1e0ea70 .rdata ArkNpcBreakGlassEvent
+0x1e0eb78 .rdata ArkGlassBreaker
+0x1e0eb88 .rdata NpcMeleeGlassBreaker
+0x1e11280 .rdata ArkBreakable
+0x1e172d0 .rdata bBreaksGlass
+0x1e22530 .rdata bAllowBreakable
+0x1e3e4f8 .rdata ArkScalableBreakable
+0x1e5fcc0 .rdata breakable
+0x1e6c288 .rdata bShouldBreakGlass
+0x1e940d8 .rdata Scripts/Entities/Ark/ArkBreakableglass.lua
+0x1e94aa8 .rdata Scripts/Entities/Ark/ArkBreakable.lua
+0x1e94c40 .rdata Scripts/Entities/Ark/ArkGlassBreaker.lua
+0x1e94eb8 .rdata Scripts/Entities/Ark/ArkScalableBreakable.lua
+0x1e968e8 .rdata gcc_breakable
+0x1e9d120 .rdata ThrowHitWallGlassCheckHeight
+0x1eabaa0 .rdata ShowNanoGlass
+0x2415368 .data .?AU?$DeleteWithRelease@VCArkGlassBreaker@@@@
+0x2415548 .data .?AU?$DeleteWithRelease@VCArkBreakable@@@@
+0x2416088 .data .?AU?$DeleteWithRelease@VArkBreakableGlass@@@@

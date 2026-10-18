@@ -35,6 +35,7 @@
 #include "ArmsLane.h"
 #include "PhysicalInteractions.h"
 #include "ContactLane.h"
+#include "SwingLane.h"
 #include "PsiMedkit.h"
 #include "Haptics.h"
 #include "HudBridge.h"
@@ -606,6 +607,18 @@ bool ExecuteContact(const std::vector<std::string>& args, std::ostringstream& ou
     out << "contact" << ContactReport();
     return true;
 }
+bool ExecuteSwing(const std::vector<std::string>& args, std::ostringstream& out)
+{
+    if (args[0] != "swing") { return false; }
+    // swing log [0|1]: the per-event begin, strike and swing lines.
+    if (args.size() > 1 && args[1] == "log") {
+        int on = 1;
+        if (args.size() > 2) { ParseInt(args[2], on); }
+        SetSwingEventLog(on != 0);
+    }
+    out << "swing" << SwingReport();
+    return true;
+}
 
 // Rung 1b, the RT_RenderScene double submission (DualSceneStereo.h). Kept out
 // of Execute's chain for the same C1061 reason as ExecutePose.
@@ -686,7 +699,7 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
 
     if (ExecutePose(args, out) || ExecuteCarryCommand(args, out) || ExecuteGrenadeCommand(args, out) || ExecuteArmsCommand(args, out) ||
         ExecuteWristCommand(args, out) || ExecuteDualCommand(args, out) || ExecuteReticle(args, out) ||
-        ExecutePrompts(args, out) || ExecuteContact(args, out)) {
+        ExecutePrompts(args, out) || ExecuteContact(args, out) || ExecuteSwing(args, out)) {
         return;
     }
     if (verb == "vr.options") {
