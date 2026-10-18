@@ -142,6 +142,8 @@ this session. "Menu only" means no command reaches it.
 | Experimental | Shots from the muzzle (`muzzle_aim`) | on/off | off | `aim.shot <0\|1>` |
 | Experimental | Physical wrench (`physical_melee`) | on/off | off | menu only (`physical` reports) |
 | Experimental | Minimum swing speed (`swing_speed`) | 80–250 cm/s | 120 | menu only |
+| Experimental | Physical contact (`physical_contact`) | on/off | off | menu only (`contact` reports) |
+| Experimental | Push strength (`push_strength`) | 25–200 % of 400 N | 100 | menu only |
 | Experimental | Inventory layer (`inventory_layer`) | on/off | off | `ui.inventory <0\|1>` |
 | Experimental | Stereo inventory (`inventory_stereo`) | on/off | off | `ui.stereo <0\|1>` |
 | Experimental | Inventory depth (`inventory_depth`) | 0–100 % | 25 | `ui.depth <0..100>` |
@@ -370,6 +372,7 @@ value report, as described above.
 | `psi.target` | 0 original, 1 head, 2 left controller | 0 | Psi power aiming. **Menu.** |
 | `medkit.slot` | 0/1 | 0 | Left-hip medkit. **Menu.** |
 | `physical` | report | | Physical wrench state and the first refusing gate (`gate=`); set it in the menu. Also logged every 10 s when it changes. |
+| `contact` | report | | Physical contact: queries, objects per query, contacts by kind, begins/ends, pushes (`pushes`, `pushBegins`, `limited`, `sliding`, `pushFailed`, `dvMaxCms`, `push` = the push contracts passed), refusals, cost per frame (`usAvg`, `usMax`) and the first refusing gate. Also logged every 10 s when it changes. |
 
 ### Stereo and rendering
 

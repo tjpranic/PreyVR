@@ -41,6 +41,8 @@ constexpr Spec specs[]={
  {"haptic_strength",L"FEEDBACK STRENGTH",L"Scale controller feedback intensity. Zero silences all pulses.",70,0,100,10,U::percent},
  {"physical_melee",L"PHYSICAL WRENCH",L"Swing the wrench to strike. Native stamina and attack recovery still apply.",0,0,1,1},
  {"swing_speed",L"MINIMUM SWING SPEED",L"Higher values require faster swings. Rest briefly between strikes.",120,80,250,10,U::cmPerSecond},
+ {"physical_contact",L"PHYSICAL CONTACT",L"Your weapon pushes loose objects: light ones keep up with it, heavy ones resist. Shown in the debug overlay.",0,0,1,1},
+ {"push_strength",L"PUSH STRENGTH",L"How hard your weapon pushes. Light objects keep up either way; heavier ones move sooner with more.",100,25,200,25,U::percent},
  {"psi_target",L"PSYCHIC TARGETING",L"The left trigger casts the equipped power. Original aims it as Prey does; Head or Left Controller aim it with your head or left hand.",0,0,2,1,U::none,psiNames},
  {"medkit_slot",L"LEFT-HIP MEDKIT SLOT",L"Squeeze left grip at left hip, then press left trigger while holding grip. One medkit per grab; native use rules apply.",0,0,1,1},
  {"belt_hints",L"BODY SLOT FEEDBACK",L"Brief feedback for holster requests and medkit selection/use. Requires the corresponding body slot feature.",1,0,1,1},
@@ -106,7 +108,7 @@ constexpr int abilities[]={PsiTarget,Medkit,BeltHints};
 constexpr int setup[]={CalibratePosture,RecenterView,DebugOverlay};
 // Features still being proven, together with the settings that tune them.
 constexpr int experimental[]={CarryHand,GrenadeDeploy,LongReach,MuzzleAim,PhysicalMelee,SwingSpeed,
-    InventoryLayer,InventoryStereo,InventoryDepth};
+    PhysicalContact,PushStrength,InventoryLayer,InventoryStereo,InventoryDepth};
 // CONTROLS holds no setting: the panel draws what each action is bound to there.
 constexpr unsigned kControlsPage=7;
 constexpr std::span<const int> menuPages[]={comfort,hands,interface_,equipment,feedback,abilities,setup,

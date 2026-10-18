@@ -74,6 +74,18 @@ struct PhysicalOverlayState {
 };
 bool DebugOverlayWantsPhysical();
 void DebugOverlayPhysical(const GameplayPoseFrame& frame, const PhysicalOverlayState& state);
+// Physical contact (ContactLane), same thread and condition. Engine world space.
+// Its box is drawn when the wrench's is not; its contacts always.
+struct ContactOverlayState {
+    bool box = false, open = false;
+    std::array<Vec3, 9> points{};
+    struct Mark { Vec3 point{}, normal{}; float dist = 0; bool sweep = false, articulated = false; Vec3 push{}; bool pushed = false; };
+    std::array<Mark, 16> marks{};
+    unsigned count = 0;
+    const char* gate = "";
+    std::string status;
+};
+void DebugOverlayContact(const GameplayPoseFrame& frame, const ContactOverlayState& state);
 // XR frame thread: the wrist layer's own decision this frame.
 void DebugOverlayWristDecision(bool gate, bool visible);
 // XR frame thread: the forearm hologram's card and its look test (WristLane);

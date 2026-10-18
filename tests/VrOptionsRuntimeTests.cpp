@@ -16,6 +16,8 @@ namespace preyvr::dll {
 DWORD SetPsiTargetMode(unsigned v){applied[options::PsiTarget]=v;return 0;}unsigned PsiTargetMode(){return applied[options::PsiTarget];}
 DWORD SetMedkitSlot(unsigned v){applied[options::Medkit]=v;return 0;}unsigned MedkitSlotEnabled(){return applied[options::Medkit];}
 void SetPhysicalMelee(unsigned v){applied[options::PhysicalMelee]=v;}unsigned PhysicalMeleeEnabled(){return applied[options::PhysicalMelee];}
+void SetPhysicalContact(unsigned v){applied[options::PhysicalContact]=v;}unsigned PhysicalContactEnabled(){return applied[options::PhysicalContact];}
+void SetPushStrength(unsigned v){applied[options::PushStrength]=v;}unsigned PushStrength(){return applied[options::PushStrength];}
 void SetSwingSpeed(unsigned v){applied[options::SwingSpeed]=v;}unsigned SwingSpeed(){return applied[options::SwingSpeed];}
 void QueueHaptic(Hand,haptics::Event,const TrackingFrame&){}
 DWORD SetReticleInWorld(unsigned v){applied[options::ReticleWorld]=v;return 0;}
@@ -182,6 +184,9 @@ int main(){
  Check(!PhysicalMeleeEnabled(),"the physical wrench is off by default");
  set(options::PhysicalMelee,1);
  Check(PhysicalMeleeEnabled(),"physical wrench opt-in reaches consumer");
+ Check(!PhysicalContactEnabled(),"physical contact is off by default");
+ set(options::PhysicalContact,1);Check(PhysicalContactEnabled(),"physical contact opt-in reaches the contact lane");
+ set(options::PushStrength,150);Check(PushStrength()==150,"push strength reaches the contact lane");
  Check(PsiTargetMode()==0&&!MedkitSlotEnabled(),"abilities start with native behavior");
  set(options::PsiTarget,1);Check(PsiTargetMode()==1,"head-directed psi reaches adapter");
  set(options::PsiTarget,2);Check(PsiTargetMode()==2,"controller-directed psi reaches adapter");

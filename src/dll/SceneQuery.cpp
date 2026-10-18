@@ -21,28 +21,35 @@ static_assert(contract::Gated(scene::native::Contracts,scene::native::Query)&&
               contract::Gated(scene::native::Contracts,scene::native::EntityPhysics)&&
               contract::Gated(scene::native::Contracts,engine::ArkPlayerLayout::getInstanceRva));
 bool Gate(std::uintptr_t base){return contract::BodiesMatch(base,scene::native::Contracts);}
+// The physical world and the player's own physics (what every query skips),
+// after the thread, player and vtable checks. Faults propagate to the caller's __try.
+DWORD World(const GameplayPoseFrame& frame,std::uintptr_t& base,std::uintptr_t& world,void*& player){
+    if(InputDrainThreadId()==0||InputDrainThreadId()!=GetCurrentThreadId())return ERROR_INVALID_THREAD_ID;
+    base=PreyBase();
+    if(!base||!frame.player)return ERROR_NOT_READY;
+    static bool gated=false;
+    if(!gated){if(!Gate(base))return ERROR_BAD_EXE_FORMAT;gated=true;}
+    const auto instance=reinterpret_cast<std::uintptr_t(__fastcall*)()>(base+engine::ArkPlayerLayout::getInstanceRva)();
+    if(instance!=frame.player)return ERROR_NOT_READY;
+    const auto entity=*reinterpret_cast<const std::uintptr_t*>(instance+scene::native::PlayerEntityOffset);
+    if(!entity)return ERROR_NOT_READY;
+    const auto entityTable=*reinterpret_cast<const std::uintptr_t*>(entity);
+    if(!entityTable||*reinterpret_cast<const std::uintptr_t*>(entityTable+scene::native::PhysicsSlot)!=base+scene::native::EntityPhysics)
+        return ERROR_INVALID_ADDRESS;
+    player=reinterpret_cast<void*(__fastcall*)(std::uintptr_t)>(base+scene::native::EntityPhysics)(entity);
+    if(!player)return ERROR_NOT_READY;
+    world=*reinterpret_cast<const std::uintptr_t*>(base+scene::native::WorldPointer);
+    if(!world)return ERROR_NOT_READY;
+    const auto table=*reinterpret_cast<const std::uintptr_t*>(world);
+    if(table!=base+scene::native::WorldVtable||*reinterpret_cast<const std::uintptr_t*>(table+0x118)!=base+scene::native::Query)
+        return ERROR_INVALID_ADDRESS;
+    return ERROR_SUCCESS;
+}
 DWORD Query(const GameplayPoseFrame& frame,Vec3 origin,Vec3 direction,float range,scene::Hit& hit){
     hit={};hit.distance=-1;
     __try {
-        if(InputDrainThreadId()==0||InputDrainThreadId()!=GetCurrentThreadId())return ERROR_INVALID_THREAD_ID;
-        const auto base=PreyBase();
-        if(!base||!frame.player)return ERROR_NOT_READY;
-        static bool gated=false;
-        if(!gated){if(!Gate(base))return ERROR_BAD_EXE_FORMAT;gated=true;}
-        const auto player=reinterpret_cast<std::uintptr_t(__fastcall*)()>(base+engine::ArkPlayerLayout::getInstanceRva)();
-        if(player!=frame.player)return ERROR_NOT_READY;
-        const auto entity=*reinterpret_cast<const std::uintptr_t*>(player+scene::native::PlayerEntityOffset);
-        if(!entity)return ERROR_NOT_READY;
-        const auto entityTable=*reinterpret_cast<const std::uintptr_t*>(entity);
-        if(!entityTable||*reinterpret_cast<const std::uintptr_t*>(entityTable+scene::native::PhysicsSlot)!=base+scene::native::EntityPhysics)
-            return ERROR_INVALID_ADDRESS;
-        void* skip[1]={reinterpret_cast<void*(__fastcall*)(std::uintptr_t)>(base+scene::native::EntityPhysics)(entity)};
-        if(!skip[0])return ERROR_NOT_READY;
-        const auto world=*reinterpret_cast<const std::uintptr_t*>(base+scene::native::WorldPointer);
-        if(!world)return ERROR_NOT_READY;
-        const auto table=*reinterpret_cast<const std::uintptr_t*>(world);
-        if(table!=base+scene::native::WorldVtable||*reinterpret_cast<const std::uintptr_t*>(table+0x118)!=base+scene::native::Query)
-            return ERROR_INVALID_ADDRESS;
+        std::uintptr_t base=0,world=0;void* skip[1]={};
+        if(const DWORD ready=World(frame,base,world,skip[0]))return ready;
         scene::Params params{};
         if(!scene::Build(params,origin,direction,hit,skip,1,range))return ERROR_INVALID_DATA;
         // Synchronous flags only. Stack skip/hit storage cannot escape. Native
@@ -114,6 +121,11 @@ bool QuerySegment(const GameplayPoseFrame& frame,Vec3 a,Vec3 b,scene::Hit& hit){
         hit={};hit.distance=-1;
     }
     return result==ERROR_SUCCESS;
+}
+DWORD SceneQueryWorld(const GameplayPoseFrame& frame,std::uintptr_t& world,void*& player){
+    world=0;player=nullptr;std::uintptr_t base=0;
+    __try{return World(frame,base,world,player);}
+    __except(EXCEPTION_EXECUTE_HANDLER){world=0;player=nullptr;return GetExceptionCode();}
 }
 bool SceneQueryFaulted(){return fault.load();}
 void SetSceneReticle(unsigned on){enabled=on!=0;}

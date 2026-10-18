@@ -1279,7 +1279,7 @@ void DriveHand(unsigned int hand, std::uint8_t* relative, std::uint8_t* absolute
 
     // Target: absolute position (and rotation once calibrated); weight: relative X = 1.
     weaponrig::ContactGeometry contactGeometry{};
-    const bool contactReady=hand==0&&aligned&&PhysicalInteractionsEnabled()&&
+    const bool contactReady=hand==0&&aligned&&PhysicalGeometryWanted()&&
         weaponrig::ReadContactGeometry({nullptr,ReadAlignmentMemory},
             PreyBase(),owner,
             reinterpret_cast<std::uintptr_t>(absolute),poseCount,handJoint,contactGeometry);

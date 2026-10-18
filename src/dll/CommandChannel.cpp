@@ -34,6 +34,7 @@
 #include "GrenadeLane.h"
 #include "ArmsLane.h"
 #include "PhysicalInteractions.h"
+#include "ContactLane.h"
 #include "PsiMedkit.h"
 #include "Haptics.h"
 #include "HudBridge.h"
@@ -591,6 +592,15 @@ bool ExecutePrompts(const std::vector<std::string>& args, std::ostringstream& ou
     return true;
 }
 
+// Physical contact (ContactLane.h): its report. Kept out of Execute's chain for
+// the same C1061 reason as ExecutePose.
+bool ExecuteContact(const std::vector<std::string>& args, std::ostringstream& out)
+{
+    if (args[0] != "contact") { return false; }
+    out << "contact" << ContactReport();
+    return true;
+}
+
 // Rung 1b, the RT_RenderScene double submission (DualSceneStereo.h). Kept out
 // of Execute's chain for the same C1061 reason as ExecutePose.
 bool ExecuteDualCommand(const std::vector<std::string>& args, std::ostringstream& out)
@@ -670,7 +680,7 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
 
     if (ExecutePose(args, out) || ExecuteCarryCommand(args, out) || ExecuteGrenadeCommand(args, out) || ExecuteArmsCommand(args, out) ||
         ExecuteWristCommand(args, out) || ExecuteDualCommand(args, out) || ExecuteReticle(args, out) ||
-        ExecutePrompts(args, out)) {
+        ExecutePrompts(args, out) || ExecuteContact(args, out)) {
         return;
     }
     if (verb == "vr.options") {

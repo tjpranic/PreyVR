@@ -50,6 +50,9 @@ void UpdateCarryLane(const GameplayPoseFrame& frame, bool tracking);
 void RequestCarryRelease();
 // The hand holds something the lane placed (the pointer hides, the fingers close).
 bool CarryHoldingInHand();
+// Input-drain thread, as UpdateCarryLane: the physics of what is carried, or 0
+// (physical contact skips it).
+std::uintptr_t CarriedPhysics();
 
 std::string CarryReport();
 // carry.* verbs; false if the verb is not one of them.

@@ -286,6 +286,36 @@ void AddPhysical(Scene& scene, const Physical& p, unsigned mask)
             scene.labels.push_back(label);
         }
     }
+    // The contact lane's contacts: overlap filled cyan, sweep a yellow ring, a
+    // body violet; each with its normal. The first few are labelled.
+    unsigned labelled = 0;
+    for (const auto& c : p.contacts) {
+        if (!Finite(c.point)) { continue; }
+        const Color color = c.articulated ? kPsi : c.sweep ? kNear : kContact;
+        Marker mark{};
+        mark.centre = c.point;
+        mark.radius = .012f;
+        mark.color = color;
+        mark.filled = !c.sweep;
+        mark.minPixels = 6.0f;
+        scene.markers.push_back(mark);
+        if (Finite(c.normal)) { scene.lines.push_back({c.point, Add(c.point, Scale(c.normal, .06f)), color, .0015f, 1.2f}); }
+        // A push: green, 10 cm per m/s of velocity change.
+        if (c.pushed && Finite(c.push)) { scene.lines.push_back({c.point, Add(c.point, Scale(c.push, .1f)), kActive, .003f, 2.0f}); }
+        if ((mask & kLabels) && labelled < 4) {
+            ++labelled;
+            Label label{};
+            label.anchor = c.point;
+            label.color = color;
+            label.offsetX = .8f;
+            label.offsetY = -.6f;
+            label.height = .011f;
+            label.minPixels = 15.0f;
+            label.maxPixels = 24.0f;
+            label.text = std::string(c.sweep ? "SWEEP " : "OVERLAP ") + Fixed(c.dist * 1000, 0) + " mm";
+            scene.labels.push_back(label);
+        }
+    }
     if (p.contact && p.contactAge >= 0 && p.contactAge <= kContactSeconds && Finite(p.point)) {
         const Color color = p.acted ? kActive : kDenied;
         Marker hit{};
@@ -456,6 +486,7 @@ std::string OverlayStatusText(const OverlayFrame& f, unsigned mask)
                 " " + Fixed(f.shot.spawnOffAimMm, 0) + " mm off aim" + (f.shot.projectileSeen ? "" : " (query only)");
     }
     if ((mask & kPhysical) && !f.physical.status.empty()) { text += "\nPhysical " + f.physical.status; }
+    if ((mask & kPhysical) && !f.physical.contactStatus.empty()) { text += "\nContact " + f.physical.contactStatus; }
     if (!f.extra.empty()) { text += "\n" + f.extra; }
     return text;
 }

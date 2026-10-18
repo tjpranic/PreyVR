@@ -3,7 +3,7 @@
 #include <cstdint>
 namespace preyvr::physical::native {
 inline constexpr std::uintptr_t WrenchVtable=0x1E92F00,Attack=0x16B1FD0,WeaponHit=0x16B2BC0,GetHits=0x13BD620,AppendHit=0x13BD250,WeaponImpulse=0x16AE410;
-inline constexpr std::uintptr_t RigidVtable=0x1D83870,RigidAction=0xBCF990,RigidGetType=0x13D1B90,CharacterAabb=0x82DD40;
+inline constexpr std::uintptr_t RigidVtable=0x1D83870,RigidAction=0xBCF990,RigidGetType=0x13D1B90,CharacterAabb=0x82DD40,QueueAction=0xB1B160;
 struct Contract {std::uintptr_t rva;std::size_t size;std::uint64_t hash;};
 inline constexpr Contract Contracts[]={
     {0x16B1FD0,648,0x2EE831A4AAD157F1ull}, // Attack

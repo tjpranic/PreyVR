@@ -11,7 +11,7 @@ namespace preyvr::options {
 // these ids are this build's alone and their order is free to change.
 enum Setting : unsigned { Turn, HeadRelative, TurnSpeed, TwoHand, GripToggle,
     SupportSnap, Psychoscope, UiScale, UiMargin, UiCurve, UiGuide, Holsters, Wrist, WristSize,
-    ReticleWorld, ReticleSize, ReticleFallback, Haptics, HapticStrength, PhysicalMelee, SwingSpeed,
+    ReticleWorld, ReticleSize, ReticleFallback, Haptics, HapticStrength, PhysicalMelee, SwingSpeed, PhysicalContact, PushStrength,
     PsiTarget, Medkit, BeltHints, DebugOverlay, MuzzleAim, BodyFollow,
     UiDistance, UiOffsetRight, UiOffsetUp, UiText, PointerHand, HudLayer,
     MoveDeadzone, TurnDeadzone, StrafeSpeed, BackwardSpeed, BodyTurnDeadzone, BodyStep, BodyGlide,

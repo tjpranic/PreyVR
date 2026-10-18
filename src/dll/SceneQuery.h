@@ -2,6 +2,7 @@
 #include "preyvr/WeaponAim.h"
 #include "preyvr/SceneQuery.h"
 #include <string>
+#include <windows.h>
 namespace preyvr::dll {
 struct GameplayPoseFrame;
 void QueryAimScene(const GameplayPoseFrame&,aim::Sample&);
@@ -17,4 +18,7 @@ bool QueryDebugRay(const GameplayPoseFrame&,Vec3 origin,Vec3 direction,scene::Hi
 // then hit.distance<0 means clear. Shares the query's gates and fault latch.
 bool QuerySegment(const GameplayPoseFrame&,Vec3 a,Vec3 b,scene::Hit&);
 bool SceneQueryFaulted();
+// Input-drain thread only: the physical world and the player's own physics,
+// after the scene query's thread, player and vtable checks. ERROR_SUCCESS or why not.
+DWORD SceneQueryWorld(const GameplayPoseFrame&,std::uintptr_t& world,void*& player);
 }

@@ -10,6 +10,7 @@
 #include "InteractionLane.h"
 #include "Logger.h"
 #include "MinHookInit.h"
+#include "PhysicsCalls.h"
 #include "XrInput.h"
 #include "preyvr/AnimIk.h"
 #include "preyvr/EngineMap.h"
@@ -79,8 +80,6 @@ constexpr std::uintptr_t kEntitySystemRva = 0x224DA38;   // gEnv->pEntitySystem
 // start-up by 0xD0D1D0): type 2 (impulse) is 0x38 at +2*4, which is what
 // PhysicalInteractions verifies; type 10 (pe_action_set_velocity) must be 40
 // bytes with no pointed-to payload, or the queued copy would be wrong.
-constexpr std::uintptr_t kActionSizeTableRva = 0x2982CA0;
-constexpr std::uintptr_t kActionPayloadTableRva = 0x2982DE0;
 
 constexpr std::uintptr_t kCarryInInteraction = 0x28;
 constexpr std::uintptr_t kGrabberConstrained = 0x60;
@@ -93,7 +92,7 @@ constexpr std::uintptr_t kJustThrown = 0xFF;
 constexpr std::size_t kGetIdSlot = 0x08, kGetClassSlot = 0x18, kGetArchetypeSlot = 0x20, kGetNameSlot = 0x78;
 constexpr std::size_t kWorldTmSlot = 0xE8, kWorldBoundsSlot = 0xF8, kLocalBoundsSlot = 0x100, kPhysicsSlot = 0x228;
 constexpr std::size_t kNameSlot = 0x10;   // IEntityClass / IEntityArchetype GetName
-constexpr std::size_t kPhysTypeSlot = 0x08, kPhysStatusSlot = 0x30, kPhysActionSlot = 0x38;
+constexpr std::size_t kPhysTypeSlot = phys::kTypeSlot;
 constexpr std::size_t kGetEntitySlot = 0x70;
 
 using UpdateFn = std::uint64_t(__fastcall*)(std::uintptr_t carry, float frameTime);
@@ -340,51 +339,6 @@ bool CopyName(const char* source, char* out, std::size_t size)
     }
 }
 
-// pe_status_dynamics (Prey's physinterface.h): type 8; partid/ipart unused;
-// v +0x0C, w +0x18, mass +0x4C; 92 bytes.
-struct Dynamics {
-    Vec3 v{}, w{};
-    float mass = 0;
-};
-bool CallDynamics(std::uintptr_t physics, Dynamics& out)
-{
-    alignas(16) std::uint8_t status[128]{};
-    const int type = 8, unused = INT_MIN;
-    std::memcpy(status, &type, 4);
-    std::memcpy(status + 4, &unused, 4);
-    std::memcpy(status + 8, &unused, 4);
-    __try {
-        if (!physics || !VCall<int>(physics, kPhysStatusSlot, static_cast<void*>(status))) { return false; }
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-    std::memcpy(&out.v, status + 0x0C, sizeof(Vec3));
-    std::memcpy(&out.w, status + 0x18, sizeof(Vec3));
-    std::memcpy(&out.mass, status + 0x4C, sizeof(float));
-    return Finite(out.v) && Finite(out.w) && std::isfinite(out.mass);
-}
-
-// pe_action_set_velocity: type 10, ipart/partid unused (the whole entity),
-// v, w (x = the engine's "unused" NaN keeps the current spin),
-// bRotationAroundPivot 0 (about the centre of mass).
-struct SetVelocityAction {
-    int type = 10;
-    int ipart = INT_MIN;
-    int partid = INT_MIN;
-    Vec3 v{}, w{};
-    int aroundPivot = 0;
-};
-static_assert(sizeof(SetVelocityAction) == 40, "pe_action_set_velocity is 40 bytes in Prey");
-bool CallSetVelocity(std::uintptr_t physics, const SetVelocityAction& action)
-{
-    __try {
-        // bThreadSafe = 1, as the native release's own impulse: both queue (or
-        // both apply now) in order, so this one lands after it.
-        return physics && VCall<int>(physics, kPhysActionSlot, static_cast<const void*>(&action), 1) != 0;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
 // The velocity change the native release's impulse gives an object, per m/s
 // of the vector it is handed: the producer scales by the mass CLAMPED to the
 // physics vars' range (a 1 kg towel is pushed as if it were heavier), then the
@@ -436,9 +390,9 @@ std::uintptr_t PlayerEntity(std::uintptr_t player)
 }
 Vec3 PlayerVelocity()
 {
-    Dynamics d{};
+    phys::Dynamics d{};
     const auto physics = CallPhysics(PlayerEntity(CallGetPlayer()));
-    return physics && CallDynamics(physics, d) ? d.v : Vec3{};
+    return physics && phys::QueryDynamics(physics, d) ? d.v : Vec3{};
 }
 bool PlayerFeet(Vec3& out)
 {
@@ -516,8 +470,8 @@ void CaptureGrab(std::uintptr_t entity)
     if (!CopyName(CallName(entity, kGetClassSlot), g.cls, sizeof(g.cls))) { std::snprintf(g.cls, sizeof(g.cls), "?"); }
     const auto physics = CallPhysics(entity);
     g.articulated = CallPhysicsType(physics) == 6;   // PE_ARTICULATED: a ragdoll
-    Dynamics d{};
-    if (CallDynamics(physics, d)) { g.mass = d.mass; }
+    phys::Dynamics d{};
+    if (phys::QueryDynamics(physics, d)) { g.mass = d.mass; }
     float box[6]{};
     if (CallBounds(entity, kLocalBoundsSlot, box)) {
         g.box.min = {box[0], box[1], box[2]};
@@ -633,7 +587,7 @@ void ExecuteRelease(std::uintptr_t carry, const Pending& p, std::uint32_t id)
 
 void ApplyVelocity(std::uintptr_t physics, Vec3 v, const Vec3* w, std::uint32_t entity)
 {
-    SetVelocityAction a{};
+    phys::SetVelocityAction a{};
     a.v = v;
     if (w) {
         a.w = *w;
@@ -641,7 +595,9 @@ void ApplyVelocity(std::uintptr_t physics, Vec3 v, const Vec3* w, std::uint32_t 
         const std::uint32_t unused = 0xFFBFFFFFu;
         std::memcpy(&a.w.x, &unused, 4);
     }
-    if (gVelocityQueueOk && Finite(v) && CallSetVelocity(physics, a)) {
+    // Thread-safe, as the native release's own impulse: both queue (or both
+    // apply now) in order, so this one lands after it.
+    if (gVelocityQueueOk && Finite(v) && phys::SetVelocity(physics, a)) {
         gVelocitySets.fetch_add(1);
         gWatch = {};
         gWatch.entity = entity;
@@ -837,8 +793,8 @@ void __fastcall StopHook(std::uintptr_t carry, float impulse, std::uint8_t angul
             // exact; a moving one: one physics step of that difference).
             Vec3 v = o.release.velocity;
             if (gImpulseMode.load() == 0) {
-                Dynamics d{};
-                CallDynamics(physics, d);
+                phys::Dynamics d{};
+                phys::QueryDynamics(physics, d);
                 const float k = NativeImpulseScale(physics, d.mass);
                 v = Sub(v, Scale(PlayerVelocity(), k));
                 gLastScale.store(k);
@@ -941,9 +897,7 @@ bool EnsureCarryLane()
     }
     std::uint32_t size = 0;
     std::uintptr_t payload = 1;
-    gVelocityQueueOk = Read(gBase + kActionSizeTableRva + 10 * 4, size) &&
-                       Read(gBase + kActionPayloadTableRva + 10 * 8, payload) &&
-                       size == sizeof(SetVelocityAction) && payload == 0;
+    gVelocityQueueOk = phys::VelocityQueueReady(gBase, &size, &payload);
     EnsureMinHook();
     gInstalled = HookAt(kUpdateRva, kUpdatePrologue, reinterpret_cast<void*>(&UpdateHook), gUpdate, "update") &&
                  HookAt(kTargetRva, kTargetPrologue, reinterpret_cast<void*>(&TargetHook), gTarget, "target") &&
@@ -983,6 +937,11 @@ DWORD SetCarryThrowGainPercent(unsigned percent)
 }
 unsigned CarryThrowGainPercent() { return static_cast<unsigned>(std::lround(Get(gThrow).gain * 100.0f)); }
 bool CarryHoldingInHand() { return gHolding.load(); }
+std::uintptr_t CarriedPhysics()
+{
+    if (!gGrab.active) { return 0; }
+    return CallPhysics(CallGetEntity(gGrab.entity));
+}
 
 void RecordCarryMotion(const TrackingFrame& frame)
 {
@@ -1075,7 +1034,7 @@ void UpdateCarryLane(const GameplayPoseFrame& frame, bool)
     // the game give its collision back, and did it stay in the world?
     if (gWatch.entity) {
         ++gWatch.frames;
-        Dynamics d{};
+        phys::Dynamics d{};
         const auto watched = CallGetEntity(gWatch.entity);
         const auto physics = CallPhysics(watched);
         float wtm[12];
@@ -1087,7 +1046,7 @@ void UpdateCarryLane(const GameplayPoseFrame& frame, bool)
             gWatch.restored = true;
             gWatch.restoredFrame = gWatch.frames;
         }
-        if (physics && CallDynamics(physics, d)) {
+        if (physics && phys::QueryDynamics(physics, d)) {
             if (gWatch.frames == 2) {
                 gWatch.firstSpeed = Length(d.v);
                 gWatch.firstVelocity = d.v;

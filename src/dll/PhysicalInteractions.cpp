@@ -3,6 +3,7 @@
 #include "EngineAccess.h"
 #include "AimTakeover.h"
 #include "BodyFollow.h"
+#include "ContactLane.h"
 #include "DebugOverlay.h"
 #include "HeadTrackingHook.h"
 #include "HudBridge.h"
@@ -206,7 +207,7 @@ bool Prepare(bool wrench){
 }
 void PublishPhysicalWeapon(const GameplayPoseFrame& frame,const RigIdentity& rig,const animik::Location& location,
                            Pose wrist,const weaponrig::ContactGeometry& shape){
-    if(!PhysicalInteractionsEnabled()||!frame.cameraCentreValid||!frame.headYawUsable||
+    if(!PhysicalGeometryWanted()||!frame.cameraCentreValid||!frame.headYawUsable||
        !std::isfinite(frame.yaw)||(frame.referenceGeneration&1)||
        !IsPoseUsable(frame.tracking.head,frame.tracking.headValidity,100000000)||
        !IsPoseUsable(frame.tracking.hands[1].gripPose,frame.tracking.hands[1].gripValidity,100000000)||
@@ -320,6 +321,16 @@ void UpdatePhysicalInteractions(const GameplayPoseFrame& frame,bool allowed){
     DebugOverlayPhysical(frame,overlay);
 }
 bool PhysicalInteractionsEnabled(){return !fault.load()&&melee.load();}
+bool PhysicalGeometryWanted(){return PhysicalInteractionsEnabled()||PhysicalContactEnabled();}
+bool TryGetWeaponBox(WeaponBox& out){
+    out={};Geometry g{};
+    if(!geometry.TryRead(g))return false;
+    for(unsigned i=0;i<g.sample.points.size();++i)out.points[i]=Transform(g.sample.worldFromReference,g.sample.points[i]);
+    const auto q=g.sample.worldFromReference.orientation;
+    out.yaw=2*std::atan2(q.z,q.w);
+    out.rig=g.sample.owner;out.sequence=g.sample.sequence;out.reference=g.sample.reference;out.epoch=g.sample.epoch;
+    out.publishedNs=g.published;out.stamp=g.sample.stamp;out.wrench=g.wrench;return true;
+}
 void SetPhysicalMelee(unsigned v){melee=v!=0;++settings;}unsigned PhysicalMeleeEnabled(){return melee.load();}
 void SetSwingSpeed(unsigned v){speed=std::clamp(v,80u,250u);++settings;}unsigned SwingSpeed(){return speed.load();}
 std::string PhysicalInteractionsReport(){return " melee="+std::to_string(melee.load())+

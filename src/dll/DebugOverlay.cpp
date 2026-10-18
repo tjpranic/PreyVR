@@ -79,6 +79,15 @@ LatestSnapshot<WristCardRecord> gWristCard;
 // gameplay frame, so they stay where they happened while the player moves.
 struct PhysicalRecord { dd::Physical physical{}; std::uint64_t ns = 0, reference = 0; };
 LatestSnapshot<PhysicalRecord> gPhysical;
+// Physical contact (ContactLane): its box, drawn when the wrench's is not, and its contacts.
+struct ContactRecord {
+    bool box = false, open = false;
+    std::array<Vec3, 9> points{};
+    std::vector<dd::ContactMark> marks;
+    std::string gate, status;
+    std::uint64_t ns = 0, reference = 0;
+};
+LatestSnapshot<ContactRecord> gContact;
 struct WorldSweep { std::array<Vec3, 9> from{}, to{}; std::uint64_t ns = 0; };
 struct WorldContact { bool valid = false, acted = false; Vec3 point{}, normal{}; std::string result; std::uint64_t ns = 0; };
 std::vector<WorldSweep> gSweepHistory;
@@ -221,6 +230,18 @@ dd::OverlayFrame Gather(unsigned mask)
     if ((mask & dd::kPhysical) && gameplay && gPhysical.TryRead(physical) && FreshSample(now, physical.ns, kRayAgeNs) &&
         physical.reference == reference) {
         f.physical = std::move(physical.physical);
+    }
+    ContactRecord touch{};
+    if ((mask & dd::kPhysical) && gameplay && gContact.TryRead(touch) && FreshSample(now, touch.ns, kRayAgeNs) &&
+        touch.reference == reference) {
+        if (!f.physical.valid && touch.box) {
+            f.physical.valid = true;
+            f.physical.open = touch.open;
+            f.physical.points = touch.points;
+            f.physical.gate = touch.gate;
+        }
+        f.physical.contacts = std::move(touch.marks);
+        f.physical.contactStatus = std::move(touch.status);
     }
     f.psiMode = PsiTargetMode();
     f.sceneQueryFault = SceneQueryFaulted();
@@ -747,6 +768,30 @@ void DebugOverlayPhysical(const GameplayPoseFrame& frame, const PhysicalOverlayS
     record.ns = now;
     record.reference = frame.referenceGeneration;
     gPhysical.Publish(record);
+}
+
+void DebugOverlayContact(const GameplayPoseFrame& frame, const ContactOverlayState& state)
+{
+    if (!DebugOverlayWantsPhysical()) { return; }
+    if (!frame.cameraCentreValid) { gContact.Clear(); return; }
+    auto toXr = [&](Vec3 world) { return EngineToXr(frame, frame.cameraCentre, world); };
+    ContactRecord record{};
+    record.box = state.box;
+    record.open = state.open;
+    if (state.box) {
+        for (std::size_t i = 0; i < record.points.size(); ++i) { record.points[i] = toXr(state.points[i]); }
+    }
+    record.marks.reserve(state.count);
+    for (unsigned i = 0; i < state.count && i < state.marks.size(); ++i) {
+        const auto& m = state.marks[i];
+        record.marks.push_back({toXr(m.point), EngineDirToXr(frame, m.normal), m.dist, m.sweep, m.articulated,
+                                EngineDirToXr(frame, m.push), m.pushed});
+    }
+    record.gate = state.gate;
+    record.status = state.status;
+    record.ns = MonotonicNanoseconds();
+    record.reference = frame.referenceGeneration;
+    gContact.Publish(record);
 }
 
 void DebugOverlayHolsters(bool live, const std::array<Vec3, 2>& centres, Vec3 hand, bool gripPressed, bool armed,

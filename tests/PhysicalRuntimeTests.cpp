@@ -49,6 +49,7 @@ bool QueryPhysicalSegment(const GameplayPoseFrame&,Vec3 origin,Vec3 delta,scene:
 void QueueHaptic(Hand,haptics::Event event,const TrackingFrame&){Check(event==haptics::Event::WeaponContact,"physical feedback event");++pulses;}
 bool overlayBox=false,overlaySwept=false,overlayStruck=false;
 bool DebugOverlayWantsPhysical(){return true;}
+unsigned PhysicalContactEnabled(){return 0;}
 void DebugOverlayPhysical(const GameplayPoseFrame&,const PhysicalOverlayState& s){
     overlayBox|=s.box&&s.open&&physical::Length(physical::Sub(s.points[8],s.points[1]))>.5f;
     overlaySwept|=s.swept&&s.from[0].x<s.to[0].x;

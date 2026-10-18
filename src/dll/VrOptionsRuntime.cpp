@@ -1,6 +1,7 @@
 #include "VrOptionsRuntime.h"
 #include "SceneQuery.h"
 #include "PhysicalInteractions.h"
+#include "ContactLane.h"
 #include "PsiMedkit.h"
 #include "Haptics.h"
 #include "ReticleFollow.h"
@@ -168,6 +169,8 @@ constexpr Wiring wiring[]={
  {options::HapticStrength,Set<SetHapticStrength>,Get<HapticStrength>},
  {options::PhysicalMelee,Set<SetPhysicalMelee>,Get<PhysicalMeleeEnabled>},
  {options::SwingSpeed,Set<SetSwingSpeed>,Get<SwingSpeed>},
+ {options::PhysicalContact,Set<SetPhysicalContact>,Get<PhysicalContactEnabled>},
+ {options::PushStrength,Set<SetPushStrength>,Get<PushStrength>},
  {options::PsiTarget,Set<SetPsiTargetMode>,Get<PsiTargetMode>},
  {options::Medkit,Set<SetMedkitSlot>,Get<MedkitSlotEnabled>},
  {options::BeltHints,[](int v){beltHints=v!=0;},[]{return static_cast<int>(beltHints.load());}},

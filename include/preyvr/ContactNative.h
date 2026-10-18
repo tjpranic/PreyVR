@@ -29,6 +29,9 @@ inline constexpr std::size_t TypeSlot=0x08,StatusSlot=0x30,ActionSlot=0x38;
 inline constexpr std::uintptr_t RigidVtable=0x1D83870,RigidGetStatus=0xBE2BB0;
 inline constexpr std::uintptr_t ArticulatedVtable=0x1D803E8,ArticulatedGetType=0xB2D060,
     ArticulatedGetStatus=0xB2C660,ArticulatedAction=0xB1CF30;
+// CRigidEntity fields the rigid Action reads for an impulse (PhysicalNative.h
+// witnesses): inverse mass, and the world inverse inertia (3x3, row-major).
+inline constexpr std::size_t RigidInverseMass=0x2E8,RigidInverseInertia=0x328;
 // pe_type values from GetType, and the broadphase classes contact asks for:
 // ent_sleeping_rigid | ent_rigid (no static, terrain or living).
 inline constexpr int TypeStatic=1,TypeRigid=2,TypeLiving=4,TypeArticulated=6;

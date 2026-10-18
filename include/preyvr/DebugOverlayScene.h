@@ -138,6 +138,16 @@ struct Foregrip {
 // sweep is querying somewhere else.
 inline constexpr float kSweepSeconds = 1.0f, kContactSeconds = 3.0f;
 inline constexpr Color kSweep{255, 220, 70, 200};
+// A contact the physical-contact lane found this frame: overlap (the box still)
+// or sweep (the box moving from last frame's pose).
+struct ContactMark {
+    Vec3 point{}, normal{};
+    float dist = 0;
+    bool sweep = false, articulated = false;
+    Vec3 push{};          // the velocity change given (m/s), when pushed
+    bool pushed = false;
+};
+inline constexpr Color kContact{80, 205, 255, 240};
 struct PhysicalSweep {
     std::array<Vec3, 9> from{}, to{};
     float age = 0;   // seconds
@@ -154,6 +164,8 @@ struct Physical {
     std::string gate;                // the first refusing gate, or "open"
     std::string result;              // the last contact's result
     std::string status;              // counters for the status panel
+    std::vector<ContactMark> contacts;
+    std::string contactStatus;       // the contact lane's status line
 };
 struct OverlayFrame {
     bool headValid = false;

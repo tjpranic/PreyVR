@@ -188,8 +188,8 @@ read from is in the same folder.
 | Phase | Work | Proof | Size |
 |---|---|---|---|
 | 0. Static contracts | **Done 2026-10-18** (above). | Offline bytes. | — |
-| 1. Contact query, diagnostic only | Query layer for the weapon box; overlay and logs; no pushing. | Headset: a contact at touch distance, held against, inside; object types and normals reported; cost per frame measured. | M |
-| 2. Weapon pushes props | Velocity-matching solver on rigid props; options; haptics. | Offline: solver math (idempotent, caps, mass fade, spin). Headset: push, slide, swat, heavy props resist, nothing launches. | M |
+| 1. Contact query, diagnostic only | **Worn 2026-10-18 on PreyVR-24**: overlaps work for movable props (below). | Headset: a contact at touch distance, held against, inside; object types and normals reported; cost per frame measured. | M |
+| 2. Weapon pushes props | **Built 2026-10-18, package PreyVR-25, awaiting headset** (below). | Offline: solver math. Headset: push, slide, swat, heavy props resist, nothing launches. | M |
 | 3. Hands | Palm proxies, hand arbitration (carry, psi, medkit, foregrip, two-hand), hand haptics. | Headset. | S–M |
 | 4. Corpses | Articulated bodies, one part per contact, by impulse if per-part velocity is unsafe. | Phase 0 articulated contract, then headset. | M |
 | 5. Polish | Friction/drag, skip what the player stands on (`pe_status_living` ground collider: Prey's struct is not the SDK's), performance budget, logging cleanup. | Headset. | S–M |
@@ -218,3 +218,168 @@ Not in scope:
 2. **Friction:** included, reusing the engine's own physics where possible: its friction
    tables and its combining rule.
 3. **Options:** one switch with a strength setting.
+
+## Phase 1: contact query, diagnostic only (2026-10-18, package PreyVR-24)
+
+**What runs.** VR Options > Experimental > **Physical Contact** (`physical_contact`, off by
+default). The one switch the scope settled on; its strength setting arrives with pushing
+in phase 2. While it is on, `ContactLane.cpp` runs once per gameplay frame on the
+input-drain thread, after the physical lane, and pushes nothing:
+
+1. **The box:** the weapon box (`TryGetWeaponBox`), rebuilt as an oriented box
+   (`contact::BoxFromPoints`). The physical lane now publishes it for either consumer
+   (`PhysicalGeometryWanted`), so the wrench option no longer has to be on.
+2. **Broadphase:** `GetEntitiesInBox` over the box at this pose and the last, plus 2 cm,
+   asking for movable classes only, into our own 32-entry buffer (`prealloc` 32).
+   More objects than that, or the engine's shared buffer handed back, is a refusal.
+3. **Filtering:** skips the player's physics (shared with the scene query:
+   `SceneQueryWorld`) and the carried object (`CarriedPhysics`). Only the rigid and
+   articulated vtables go on; everything else is counted as `other`.
+4. **The box tests:** per object, `CollideEntityWithPrimitive` with the box still (overlap)
+   and, when the pose moved, from last frame's pose along the motion (sweep). Each call
+   gets its own primitive. No sweep across a recentre, a weapon change, a jump over
+   30 cm or a turn of more than 3 degrees: a snap turn swings the whole box around the
+   player.
+5. **The gate:** the first use checks the 11 `ContactNative.h` bodies and 7 vtable slots.
+   A bad contract or a fault latches the lane off.
+
+**What it reports.** Lines start `preyvr_contact`.
+- **`settings enabled=`:** at start and on each change.
+- **`gate result=0`:** once, when the contracts pass.
+- **`fault error= detail=`:** when something latches the lane off.
+- **`begin entity= type=rigid|articulated kind=overlap|sweep[+sweep] dist= partId= surface= friction= bounciness= mass= point= normal= sweepCm=`:**
+  when an object starts touching. Mass comes from the hashed `GetStatus`; friction and
+  bounciness from the engine's surface tables. These are the inputs phase 2 will use.
+- **`end entity= frames= [why=]`:** after 3 frames untouched, or at once for a menu, a
+  weapon change or a fault.
+- **`report`:** every 10 s when anything changed. It holds queries, refusals, overflow,
+  objects per query, contacts by kind, begins and ends, cost per frame in microseconds
+  (`usAvg`, `usMax`) and the refusing gate. The same as the `contact` command.
+
+Event lines are capped at 40 a second; the rest are counted (`droppedLines`). The debug
+overlay's physical layer draws the queried box (amber, or grey with its gate) and each
+contact this frame: an overlap as a filled cyan dot, a sweep as a yellow ring, a body
+violet. Each has its normal and a label (`OVERLAP 2 mm`). The status panel line is `Contact`.
+
+Tests:
+- `contact_query`: box rebuild and native layout, bounds over both poses, record
+  validation, begin/end tracking.
+- `contact_lane`: the production lane against mock engine calls. It covers our buffer
+  and its overflow, the skipped player, carried object and other classes, a fresh
+  primitive per call, overlap-still and sweep-along, the begin line with mass and
+  friction, the ends, a menu, and a fault latch.
+
+`ctest` 82/82. Not run in the game.
+
+**Open questions this run answers.**
+- What does `dist` hold in an overlap: depth, or 0?
+- Do contacts register at touch distance, held against an object, and inside it?
+- Which objects come back, with which class, mass and friction?
+- What does the broadphase plus box tests cost per frame, given that they take the
+  world lock?
+
+**Headset checklist** (VR Options: Physical Contact on, Debug overlay on; Physical
+Wrench off):
+1. Draw the wrench, then a gun: the amber box on the weapon; the `Contact` status line
+   says `gate open`.
+2. Touch a can or bottle lightly; hold the weapon against it; push the weapon into it.
+   A cyan dot should appear on contact and stay while held. Note the `OVERLAP` mm
+   values: touching, then deeper.
+3. Swipe quickly past a can: a yellow `SWEEP` ring, even if the box passes through it.
+4. Touch a corpse: violet. Touch a wall or a desk: nothing (not a movable class).
+5. Stand among many props (a cluttered desk) and watch `us avg` / `max`.
+6. Open a menu while touching: contact ends. Change weapons: the box follows the new
+   weapon.
+7. Afterwards, the log's `preyvr_contact begin` lines say what each object was (class,
+   mass, friction), and `report` gives the cost.
+
+### Phase 1 in the headset (2026-10-18, PreyVR-24, `player-20261018-151130`)
+
+- **Movable props register.** The wearer confirmed it, and the log has 21 begins and
+  1,104 contacts over 6,439 queries.
+- **Static props do not, by design.** Fixed scenery, glass and the table are not asked
+  for (`MovableObjects`), and the wearer accepted that.
+- **Cost:** 2–4 µs per frame on average, 74 µs at most, with at most 2 objects near the
+  box.
+- **An overlap's `dist` is penetration depth:** 0.3 mm on touching, up to about 10 cm
+  pushed in.
+- **Masses** 1, 3, 7 and 10,000 kg; **friction** 0.5–1.0 from the surface tables.
+- **31 sweeps** caught passes the overlap test would have missed.
+- **Deep inside, contact can drop out briefly:** twice, at 7–10 cm into a 7 kg prop, for
+  a few frames. Most likely the box was wholly inside the object.
+
+## Phase 2: the weapon pushes props (2026-10-18, package PreyVR-25)
+
+**What is new.**
+- **The push step:** each touched rigid object gets one push per frame, from its deepest
+  overlap or else its sweep, in `ContactLane.cpp` `PushContacts`.
+- **The solver,** `contact::Solve` (pure, tested offline):
+  - **Velocity matching:** the object's surface at the contact keeps up with the
+    weapon's own velocity there (`contact::PointVelocity`, from its last two poses:
+    hand motion, wrist turn and the player's walking).
+  - **Never pulls:** moving away pushes nothing.
+  - **Easing out:** an overlap past 5 mm is eased out at 10 cm/s per cm, at most
+    0.5 m/s.
+  - **Friction:** the object's surface friction from the engine table, combined with the
+    weapon's own (the engine default, 0.7) by the engine's rule. It drags sideways up to
+    that times the normal push, and 2/3 of it once sliding.
+  - **Realistic mass:** the whole impulse is at most force × dt, with 400 N at the
+    default strength. At 90 Hz a 1 kg can keeps up at once; a 7 kg prop gains about
+    0.6 m/s a frame; a 100 kg crate about 0.04 m/s a frame, less than floor friction
+    takes away; 10,000 kg does not budge.
+  - **Speed cap:** hand speed is counted at most 6 m/s.
+- **Applying it:** the new velocity and spin go through `pe_action_set_velocity`.
+  Applying the same result twice before a physics step is harmless, so a queued set
+  cannot stack. The rigid inverse mass and world inverse inertia come from the rigid
+  Action's own fields (`ContactNative.h` `RigidInverseMass`, `RigidInverseInertia`). A
+  body whose inverse mass disagrees with its reported mass by 5% or more is not pushed.
+- **The gate:**
+  - It adds the rigid Action and QueueAction bodies (`PhysicalNative.h`), the rigid
+    Action slot, and the queue's set-velocity entry (`phys::VelocityQueueReady`). `push=`
+    in the gate line and the report says whether they passed.
+  - Without them the lane still detects but pushes nothing.
+- **Shared code:** `PhysicsCalls.h` now holds the dynamics status, set velocity and queue
+  check that `CarryLane.cpp` had to itself. The carry lane uses it too: the same calls,
+  now reading the centre of mass as well.
+- **Options:** VR Options > Experimental > **Physical Contact** (one switch) and **Push
+  Strength** (`push_strength`, 25–200% of 400 N, default 100%; the retired
+  `contact_strength` key is not reused).
+- **Feedback:** a weapon-hand pulse and a `push` log line when an object starts being
+  pushed. A push lasts until the object goes 30 frames without one. The overlay draws
+  each push as a green line along the velocity change, 10 cm per m/s.
+- **Scope:** rigid props only. Bodies (articulated) are found but not pushed (phase 4);
+  hands are phase 3.
+
+**Log.**
+- **`push entity= kind= mass= friction= approachCms= handCms= dvCms= depthMm= limited= sliding= dtMs=`:**
+  when a push starts.
+- **The report adds:** `push= strength= pushes= pushBegins= limited= sliding= pushFailed= dvMaxCms=`.
+
+Tests:
+- `contact_query`: the solver. Covers matching and idempotence, never pulling, force
+  limits for 100 kg and 10,000 kg, the speed cap, off-centre spin, stick and slide, zero
+  grip, easing out and the slop, refusals, and the weapon's point velocity in
+  translation and turn.
+- `contact_lane`: the production lane. Covers pressing down setting the can's velocity
+  through the entity's Action (type 10, thread-safe), a push starting once with a line
+  and a pulse, the overlay arrow, bodies left alone, the 10,000 kg crate limited, and
+  the strength clamp.
+
+`ctest` 82/82. Not run in the game.
+
+**Headset checklist** (VR Options: Physical Contact on, Push Strength 100%, Debug overlay
+on to see the arrows; Physical Wrench off):
+1. Press a can down onto a table, then slide the weapon sideways while pressing: it
+   should be dragged along. A light touch from the side should push it away at the
+   weapon's speed, and it should stop when the weapon stops (no pull back).
+2. Swat a can or bottle quickly: it should fly at about the swing's speed, not faster.
+3. Push a heavier prop (a 7 kg one, a chair, a box): it should move, but slower than
+   your hand. Push something heavy: it should not move. Note anything that launches,
+   spins wildly or jitters.
+4. Hold the weapon still just inside an object: it should drift gently out of the
+   weapon, not jump.
+5. Push a can into a wall and hold it there: note any jitter or the can passing through.
+6. Try Push Strength 25% and 200% on the same prop.
+7. Bodies should not move yet; the carried object should not be pushed by your weapon.
+8. Afterwards, `preyvr_contact push` lines give mass, approach and velocity change for each
+   push, and `report` gives the counts.
