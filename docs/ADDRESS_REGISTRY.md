@@ -2513,3 +2513,19 @@ receiver player+0x9B0 and float time step in XMM1. It integrates/clamps cursor
 +0x60/+0x64 while receiver+0x98 is 1 and dispatches `reticlePosition`.
 It is not just a transition reset. The donor EGS `0x157EBA0` is not this
 function on Steam. See [examination correction](RE-WORLD-UI-CURSOR-2026-09-10.md).
+
+### 2026-10-18 addendum -- control scheme, inventory item menu and controller glyphs
+
+Hardware-mouse `0x2CFCC0` maps events 1/3 to left down, 2 to left up, 4/6 to
+right down, 5 to right up and 10 to the wheel. `0x182D3A0` broadcasts scheme 2
+for device 0/1 through `0x182D7D0` unless `gGameCVars+0x924`
+(`hud_forceControllerGlyphs`) is set, and 3/4/5 for XInput (`+0x920` is
+`hud_playstationContext`). The cvar's change callback `0x1726630` moves a
+scheme of 1/2 to 3 (5 with a Steam controller). DaniellePDA's scheme listener
+is `0x1639E00`. ArkInventoryUI `0x162B010` registers `inventoryRightClick`
+`0x162D4E0` and `inventorySetHL` `0x162D600`. The PDA inventory page's
+constructor `0x164A090` writes vtables `0x1E67328`, `0x1E67368` (+0x18, the
+page and its action handler `0x164CE30` at +0x28) and `0x1E673B8` (+0x28: the
+popup opens from +0x40 `0x164BFA0`, and a highlight change closes it via +0x38
+`0x164C0D0`). Gamepad `menu_examine` (`xi_y`) opens the popup `0x164C550`. See
+[controller prompts](CONTROLLER-PROMPTS-2026-10-18.md).

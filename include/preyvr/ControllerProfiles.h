@@ -51,11 +51,17 @@ enum class Role : unsigned char {
     // Prey's Y, passed straight through: special use, search, the scanner's
     // lock; a tap swaps weapon and a hold opens Prey's own wheel.
     special,
-    weaponWheel,  // the PC weapon wheel (Prey's middle mouse), while held
+    // The PC weapon wheel (Prey's middle mouse), while held. Unbound by
+    // default: the wheel is Prey's own, Y held. Left for SteamVR's binding UI.
+    weaponWheel,
     // Prey's own gamepad buttons: the left and right stick clicks, and the
     // D-pad (quick slots, and up for the torch) on a controller that has one.
     sprint, psychoscope,
     quickSlotLeft, quickSlotRight, quickSlotDown, torch,
+    // Prey's LB and RB inside its weapon wheel: a suit repair kit and food.
+    // Outside the wheel they send nothing (Prey's bumpers lean, which VR does
+    // by itself).
+    wheelSuitRepair, wheelFood,
     // menu
     navigate,  // the stick; the Steam Frame's D-pad below it
     navigateUp, navigateDown, navigateLeft, navigateRight,
@@ -63,6 +69,13 @@ enum class Role : unsigned char {
     confirm, back,
     secondary, tertiary,  // Prey's X and Y actions (Equip, Search, Eat...)
     exit,      // closes the menu: the Steam Frame's View, as on a gamepad
+    // Prey's LB/RB and LT/RT in menus, where a controller has buttons for them:
+    // the Steam Frame's bumpers (tabs) and grips (pages), as Prey's prompts
+    // name them. Without these the grips are the tabs, and the trigger of the
+    // hand without the laser is a page (XrInput).
+    previousTab, nextTab, previousPage, nextPage,
+    // The stick clicks in menus: Prey's autosort (left), drop and split (right).
+    leftStickClick, rightStickClick,
     count
 };
 inline constexpr std::size_t kRoleCount = static_cast<std::size_t>(Role::count);

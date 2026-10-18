@@ -16,19 +16,19 @@ layout wherever VR leaves one free.
 | Control | Gameplay | Menu / inventory |
 | --- | --- | --- |
 | Left stick | Head-relative locomotion | — |
-| Left stick click | Steam Frame: sprint. Touch: open inventory | — |
+| Left stick click (Index: left trackpad press) | Steam Frame: sprint. Touch, Index: open inventory | Prey's LS: autosort, centre the map |
 | Right stick | 45-degree snap turn (default) | Navigate |
-| Right stick click | Psychoscope | — |
+| Right stick click | Psychoscope | Prey's RS: drop, split a stack, reset the map's zoom |
 | Steam Frame: left D-pad | Prey's quick slots (left, right, down); up: torch | Navigate |
 | Right A / B | Jump / crouch | Select / back |
 | X (Touch: left; Steam Frame: right) | Prey's X: **grab** and use what the left hand points at (press to pick up, press again to drop); with nothing to use, reload | X action shown by Prey |
 | Y (Touch: left; Steam Frame: right) | Prey's Y, as Prey handles it: search, special use, the psychoscope's lock; tap to swap weapon, hold for Prey's own wheel | Y action shown by Prey |
-| Steam Frame: right bumper | Hold: weapon wheel | — |
+| Steam Frame: bumpers | In Prey's wheel (hold Y): left uses a suit repair kit, right eats food (Prey's LB / RB). Otherwise nothing | Previous / next tab (Prey's LB / RB), on release |
 | Steam Frame: View (left) | Open inventory | Close the menu |
-| Right grip | Tap: reload (never uses what the left hand points at). Hold: holster the weapon. With the weapon holstered: draw it again | Next tab, on release |
-| Left trigger | Prey's psi power (hold to use), or with psychic targeting on, aim it and let go to cast | Previous page (LT); clicks instead when the laser is on the left |
-| Right trigger | Fire (hold for automatic fire and to charge the Disruptor); with a grenade: hold it, let go during a throwing motion to throw it | Clicks with the laser (default); next page (RT) when the laser is on the left |
-| Left grip | Hold a long weapon's support grip; the left-hip medkit slot and the psychoscope gesture, when enabled | Previous tab, on release |
+| Right grip | Tap: reload (never uses what the left hand points at). Hold: holster the weapon. With the weapon holstered: draw it again | Next tab, on release (Steam Frame: next page, Prey's RT) |
+| Left trigger | Prey's psi power (hold to use), or with psychic targeting on, aim it and let go to cast | Previous page (LT), on release; clicks instead when the laser is on the left |
+| Right trigger | Fire (hold for automatic fire and to charge the Disruptor); with a grenade: hold it, let go during a throwing motion to throw it | Clicks with the laser (default); next page (RT), on release, when the laser is on the left |
+| Left grip | Hold a long weapon's support grip; the left-hip medkit slot and the psychoscope gesture, when enabled | Previous tab, on release (Steam Frame: previous page, Prey's LT) |
 | Menu button (Touch: left; Steam Frame: right) | Tap: pause. Hold: VR options | Tap: pause / resume. Hold: VR options |
 | Menu + both grips | Reset VR view | Reset and bring the panel in front of you |
 | F11 | Enable VR or retry setup | Enable VR or retry setup |
@@ -68,7 +68,7 @@ medkit's) or with Menu held for the recenter chord. `use.hand 0` restores the pr
 
 To equip a weapon, open inventory with **View** (Touch: **left stick click**), highlight it with the right stick, press **X** for Prey's Equip action, then **B** to return to the game. Follow the native button prompts for other items. B backs out one level at a time in nested screens.
 
-The Touch profile has been tested in the injected game through xr-sim; physical controller acceptance remains. Index bindings are included: left A/B correspond to X/Y, pressing the **left trackpad** opens inventory, and **left stick click** opens pause. **Steam Frame** controllers get their own profile when SteamVR offers it (`xr_input_extension name=XR_VALVE_frame_controller_interaction enabled=1`, `detail=bindings profile=frame path=...`, and `interaction_profile ... valve/frame_controller` in the log). Each button then does what a gamepad's does in Prey, so the game's prompts name the button to press: right **X** and **Y** are Prey's X (grab and use; reload with nothing to use) and Y (search, special use; tap to swap weapon), **View** opens the inventory and closes menus, **Menu** pauses, the stick clicks sprint (left) and toggle the psychoscope (right), and the left **D-pad** is Prey's quick slots in play (up: torch) and navigates the game's menus and VR Options (left/right adjust there, up/down move). The right **bumper** holds the weapon wheel; the left one does nothing yet. Without the profile SteamVR presents them as Touch: right X and Y act as B, the D-pad arrives as left X (down) and Y (the rest), and View is the menu button. To rebind any action, use SteamVR's controller bindings for Prey. Other controller profiles do not yet have dedicated mappings. Headset rendering uses OpenXR; the panel fits both runtime eye frusta, including their asymmetry.
+The Touch profile has been tested in the injected game through xr-sim; physical controller acceptance remains. Index bindings are included: left A/B correspond to X/Y, pressing the **left trackpad** opens inventory, and **left stick click** opens pause. **Steam Frame** controllers get their own profile when SteamVR offers it (`xr_input_extension name=XR_VALVE_frame_controller_interaction enabled=1`, `detail=bindings profile=frame path=...`, and `interaction_profile ... valve/frame_controller` in the log). Each button then does what a gamepad's does in Prey, so the game's prompts name the button to press: right **X** and **Y** are Prey's X (grab and use; reload with nothing to use) and Y (search, special use; tap to swap weapon), **View** opens the inventory and closes menus, **Menu** pauses, the stick clicks sprint (left) and toggle the psychoscope (right), and the left **D-pad** is Prey's quick slots in play (up: torch) and navigates the game's menus and VR Options (left/right adjust there, up/down move). Inside Prey's weapon wheel (hold **Y**) the **bumpers** are Prey's LB and RB, a suit repair kit and food; outside it they do nothing in play, and in menus they change tabs. Without the profile SteamVR presents them as Touch: right X and Y act as B, the D-pad arrives as left X (down) and Y (the rest), and View is the menu button. To rebind any action, use SteamVR's controller bindings for Prey. Other controller profiles do not yet have dedicated mappings. Headset rendering uses OpenXR; the panel fits both runtime eye frusta, including their asymmetry.
 
 ## Comfort settings
 
@@ -97,7 +97,7 @@ offset settings do not move it. Point and pull the trigger or press **A**, or mo
 with the **right stick** up/down (or a Steam Frame's left **D-pad**) and press
 **A**; **right stick left/right** steps the slider or list under the laser (or
 the one last selected), and repeats while held; the **left stick** scrolls a
-long list; a **grip** changes tab when let go (both together change nothing) and **B** closes it, back to the game or the
+long list; a **bumper** (Steam Frame) or **grip** changes tab when let go (both grips together change nothing) and **B** closes it, back to the game or the
 game menu. Releasing the controls is required before they can operate what is
 behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
 
@@ -127,7 +127,9 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   throwing, and how hard thrown objects and grenades fly.
 - **Interface:** size, visible-area limit, panel curvature, controls guide, where
   the game's menus float (distance, left/right, up/down), the text panel's
-  distance, which hand's laser points at menus, the HUD style (floating
+  distance, which hand's laser points at menus, **controller prompts** (on by
+  default: menus show your controller's buttons, not the keyboard's, while the
+  laser points at them), the HUD style (floating
   panel, or in the world as Prey draws it), and the reticle: in the world or on
   the HUD, its size, and how far it sits when your aim hits nothing.
 - **Equipment:** optional body holsters, clear holster assignments, wrist status,

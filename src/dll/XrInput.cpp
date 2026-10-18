@@ -531,6 +531,8 @@ void UpdateXrInput(void* sessionHandle, void* spaceHandle, long long predictedDi
         play.quickSlotRight = button(Role::quickSlotRight, XR_NULL_PATH);
         play.quickSlotDown = button(Role::quickSlotDown, XR_NULL_PATH);
         play.torch = button(Role::torch, XR_NULL_PATH);
+        play.wheelSuitRepair = button(Role::wheelSuitRepair, XR_NULL_PATH);
+        play.wheelFood = button(Role::wheelFood, XR_NULL_PATH);
 
         // **The mod's panels and the game's menus navigate with one
         // device-neutral input**: the navigate stick, plus a controller's own
@@ -548,6 +550,28 @@ void UpdateXrInput(void* sessionHandle, void* spaceHandle, long long predictedDi
         menu.secondary = button(Role::secondary, XR_NULL_PATH);
         menu.tertiary = button(Role::tertiary, XR_NULL_PATH);
         menu.exit = button(Role::exit, XR_NULL_PATH);
+        // Tabs on the controller's own tab buttons when it binds them (the
+        // Steam Frame's bumpers, as Prey's LB/RB prompts name them), else on
+        // the grips. Pages on its page buttons (the Frame's grips), and also on
+        // the trigger of the hand without the laser, which is Prey's LT or RT.
+        const auto bound = [&](Role role) {
+            XrActionStateGetInfo get{XR_TYPE_ACTION_STATE_GET_INFO};
+            get.action = Action(role);
+            XrActionStateBoolean state{XR_TYPE_ACTION_STATE_BOOLEAN};
+            return get.action != XR_NULL_HANDLE && XR_SUCCEEDED(xrGetActionStateBoolean(session, &get, &state)) &&
+                   state.isActive;
+        };
+        const auto& leftHand = frame.hands[0];
+        const auto& rightHand = frame.hands[1];
+        const bool tabButtons = bound(Role::previousTab) || bound(Role::nextTab);
+        menu.previousTab = tabButtons ? button(Role::previousTab, XR_NULL_PATH) : leftHand.gripPressed;
+        menu.nextTab = tabButtons ? button(Role::nextTab, XR_NULL_PATH) : rightHand.gripPressed;
+        menu.previousPage = button(Role::previousPage, XR_NULL_PATH) ||
+                            (leftHand.triggerPressed && UiPointerHand() != 0);
+        menu.nextPage = button(Role::nextPage, XR_NULL_PATH) || (rightHand.triggerPressed && UiPointerHand() != 1);
+        menu.leftStick = button(Role::leftStickClick, XR_NULL_PATH);
+        menu.rightStick = button(Role::rightStickClick, XR_NULL_PATH);
+        menu.bothGrips = leftHand.gripPressed && rightHand.gripPressed;
 
         frame.system.pause = button(Role::pause, XR_NULL_PATH);
     }
@@ -591,20 +615,21 @@ void UpdateXrInput(void* sessionHandle, void* spaceHandle, long long predictedDi
         menu.stickY = frame.menu.navigate.y;
         menu.accept = frame.menu.confirm;
         menu.cancel = frame.menu.back;
-        const auto& left = frame.hands[0];
-        const auto& right = frame.hands[1];
         // Short menu taps / long options holds share one tested owner. Menu
         // with both grips held is the recenter chord, not a pause.
-        menu.start = !VrOptionsReady() && frame.system.pause && !(left.gripPressed && right.gripPressed);
-        // Paired grips suppress tab clicks in ModalMenuRouter: both grips are a
-        // two-handed hold, and with Menu the recenter chord.
-        menu.previousTab = left.gripPressed;
-        menu.nextTab = right.gripPressed;
+        menu.start = !VrOptionsReady() && frame.system.pause && !frame.menu.bothGrips;
+        // Paired grips suppress tab and page clicks in ModalMenuRouter: both
+        // grips are a two-handed hold, and with Menu the recenter chord.
+        menu.previousTab = frame.menu.previousTab;
+        menu.nextTab = frame.menu.nextTab;
         menu.secondary = frame.menu.secondary;
         menu.tertiary = frame.menu.tertiary;
         menu.exit = frame.menu.exit;
-        menu.previousPage=left.triggerPressed && UiPointerHand()!=0;
-        menu.nextPage=right.triggerPressed && UiPointerHand()!=1;
+        menu.previousPage = frame.menu.previousPage;
+        menu.nextPage = frame.menu.nextPage;
+        menu.leftStick = frame.menu.leftStick;
+        menu.rightStick = frame.menu.rightStick;
+        menu.bothGrips = frame.menu.bothGrips;
 
         input::MenuAction actions[12];
         const unsigned int count = gNavigator.Update(menu, modal, delta, actions, 12);

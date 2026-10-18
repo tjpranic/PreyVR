@@ -48,7 +48,9 @@ bool Send(int event,int x,int y) {
     // HardwareMouse delivers Flash coordinates, but the independent input
     // listener 0x182D3A0 selects keyboard/mouse versus gamepad UI behaviour.
     // A zero mouse axis selects that native mode without moving the camera or
-    // introducing a held gameplay button when a click closes the menu.
+    // introducing a held gameplay button when a click closes the menu. With
+    // hud_forceControllerGlyphs set (ControllerPrompts.h) Prey keeps the
+    // gamepad scheme's prompts and only records the mouse as the last device.
     if(event==0&&HudMenuStateKnown()&&HudMenuIsOpen()) {
         const auto modeResult=PostRawInputImmediate(input::kMouseX,input::kStateChanged,0);
         if(modeResult)return Refuse(modeResult,"input_mode");

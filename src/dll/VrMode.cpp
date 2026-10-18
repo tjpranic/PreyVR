@@ -27,6 +27,7 @@
 #include "GrenadeLane.h"
 #include "DebugOverlay.h"
 #include "FocusHold.h"
+#include "ControllerPrompts.h"
 #include "InventoryPointerCapture.h"
 #include "preyvr/DebugOverlayScene.h"
 #include "preyvr/LatestSnapshot.h"
@@ -65,6 +66,8 @@ void StopFeatures() {
     SetMenuNavigation(0); SetMoveLaneMode(0);
     SetTurnLaneEnabled(0); SetFireLaneEnabled(0); SetInteractionEnabled(0);
     SetBodyFollowActive(0);
+    // Prey's keyboard/mouse prompts again, if VR start had set the controller's.
+    SetControllerPrompts(0);
     // Leave the input drain alive to deliver the owned releases on the next frame.
     StopXrSession();
 }
@@ -237,6 +240,9 @@ void TickVrMode() {
         SetAimLasers(1);
         // The floating HUD by default; VR Options' HUD style can turn it off.
         if(SetHudLayerEnabled(1)!=0)Log("hud_layer=unavailable native_hud=retained");
+        // The menus keep the controller's prompts under the laser
+        // (ControllerPrompts.h); VR Options' Controller Prompts can turn it off.
+        SetControllerPrompts(1);
         // Saved VR Options choices last, so they win over the defaults above
         // (an F11 restart included).
         ApplySavedVrOptions();
@@ -256,7 +262,7 @@ void TickVrMode() {
             // The same text dual.report and hud.layer answer with.
             Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
                 " } body={"+BodyFollowReport()+" } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } focus={"+
-                FocusHoldReport()+" } hold={"+XrHoldReport()+" }");
+                FocusHoldReport()+" } hold={"+XrHoldReport()+" } prompts={"+ControllerPromptsReport()+" }");
         }
         const auto owner=AnimIkOwnerGeneration();
         const auto reference=HeadTrackingReferenceGeneration();

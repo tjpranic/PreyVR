@@ -16,4 +16,12 @@ void RequestBindingDump(bool allKeys);
 // Main thread, once per rendered frame (CameraEditHook, beside the lanes).
 void ServiceBindingDump();
 
+// **Prey's own weapon wheel is open**: its `focusmode` action map is enabled
+// (ReadActionMapEnabled). Main thread, every frame: the map is found once by a
+// binding walk -- retried every two seconds until Prey has its bindings -- and
+// after that each call is a handful of guarded, re-checked reads. False until
+// the map is found, and whenever it fails to check out (then found again).
+// Each change is logged, so a headset run shows the wheel opening and closing.
+bool PreyWheelOpen();
+
 } // namespace preyvr::dll

@@ -18,7 +18,7 @@ enum Setting : unsigned { Turn, HeadRelative, TurnSpeed, TwoHand, GripToggle,
     ArmsFree, CarryHold, GrenadeHand, CarryThrowStrength, GrenadeThrowStrength,
     WristOnHud, WristTick, WristAlong, WristHover, WristTilt,
     CarryHand, GrenadeDeploy, LongReach, InventoryLayer, InventoryStereo, InventoryDepth,
-    FingerCurl, AimLasers,
+    FingerCurl, AimLasers, ControllerPrompts,
     Count };
 // What a value counts, for Display. `metresInMm` shows millimetres as metres;
 // the two directional units name the side instead of a sign.

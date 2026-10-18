@@ -247,6 +247,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/ConsoleBridgeWin32.cpp
         src/dll/CullCameraWatch.cpp
         src/dll/FocusHold.cpp
+        src/dll/ControllerPrompts.cpp
         src/dll/DebugWatch.cpp
         src/dll/DllMain.cpp
         src/dll/FrameCaptureWin32.cpp
@@ -466,6 +467,8 @@ if(PREYVR_BUILD_TESTS)
         preyvr_add_test(focus_hold tests/FocusHoldTests.cpp
             INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
             LIBS preyvr_headers minhook user32)
+        preyvr_add_test(controller_prompts tests/ControllerPromptsTests.cpp
+            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle")
         preyvr_add_test(hook_install tests/HookInstallTests.cpp
             DEFS WIN32_LEAN_AND_MEAN NOMINMAX
             LIBS minhook)

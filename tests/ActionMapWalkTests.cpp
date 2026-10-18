@@ -131,6 +131,36 @@ int main()
         std::string why;
         Check(f.Run(out, why) && out.empty(), "no bindings is an answer, not a failure");
     }
+    {
+        // **One map's enabled flag**, from the address a walk found, checked again on every read.
+        Fixture f;
+        std::vector<BoundAction> out;
+        std::string why;
+        Check(f.Run(out, why) && out[0].mapAddress == f.map, "a binding names its map's address");
+        bool enabled = false;
+        Check(ReadActionMapEnabled(f.image, kBase, f.layout, f.map, "player", enabled, why) && enabled,
+              "an enabled map reads enabled");
+        f.image.B(f.map + 8, 0);
+        Check(ReadActionMapEnabled(f.image, kBase, f.layout, f.map, "player", enabled, why) && !enabled,
+              "and a disabled one disabled");
+        f.image.B(f.map + 8, 1);
+        f.image.B(kManager + 0xDC, 0);
+        Check(ReadActionMapEnabled(f.image, kBase, f.layout, f.map, "player", enabled, why) && !enabled,
+              "a disabled manager disables every map");
+        f.image.B(kManager + 0xDC, 1);
+        Check(!ReadActionMapEnabled(f.image, kBase, f.layout, f.map, "focusmode", enabled, why) && !enabled &&
+              !why.empty(), "a map whose name is not the one found is refused");
+        Check(!ReadActionMapEnabled(f.image, kBase, f.layout, 0, "player", enabled, why), "no map, no answer");
+        f.image.Q(f.map + 0x10, kManager + 1);
+        Check(!ReadActionMapEnabled(f.image, kBase, f.layout, f.map, "player", enabled, why) && !enabled,
+              "a map no longer this manager's is refused (freed or rebuilt)");
+        f.image.Q(f.map + 0x10, kManager);
+        f.image.Q(f.map, 0x1234);
+        Check(!ReadActionMapEnabled(f.image, kBase, f.layout, f.map, "player", enabled, why), "so is another vtable");
+        f.image.Q(f.map, kBase + f.layout.mapVtable);
+        f.image.Q(kBase + f.layout.managerPointer, 0);
+        Check(!ReadActionMapEnabled(f.image, kBase, f.layout, f.map, "player", enabled, why), "and no manager");
+    }
     std::cout << "action map walk: bindings read, every malformation refused\n";
     return 0;
 }

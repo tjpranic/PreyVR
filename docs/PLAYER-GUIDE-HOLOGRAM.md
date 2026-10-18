@@ -19,15 +19,15 @@ button to press.
 | Left stick | Locomotion | — |
 | Right stick | Turning | Navigate |
 | Steam Frame: left D-pad | Quick slots; up: torch | Navigate |
-| Right stick click | Psychoscope | — |
-| Left stick click | Steam Frame: sprint. Touch: open inventory | — |
+| Right stick click | Psychoscope | Prey's RS: drop, split a stack |
+| Left stick click (Index: left trackpad press) | Steam Frame: sprint. Touch, Index: open inventory | Prey's LS: autosort |
 | Right A / B | Jump / crouch | Select / back |
 | X (Touch: left; Steam Frame: right) | Grab: use or pick up what the left hand points at; press again to drop. With nothing to use: reload | Prey's X action, including Equip |
 | Y (Touch: left; Steam Frame: right) | Prey's Y: search, special use; tap to swap weapon, hold for Prey's wheel | Prey's Y action |
-| Steam Frame: right bumper | Hold: weapon wheel | — |
+| Steam Frame: bumpers | In Prey's wheel (hold Y): left uses a suit repair kit, right eats food. Otherwise nothing | Previous / next tab |
 | Steam Frame: View (left) | Open inventory | Close the menu |
-| Right grip | Reload; hold to holster | Next tab, on release |
-| Left grip | Hold a long weapon's support grip | Previous tab, on release |
+| Right grip | Reload; hold to holster | Next tab, on release (Steam Frame: next page) |
+| Left grip | Hold a long weapon's support grip | Previous tab, on release (Steam Frame: previous page) |
 | Left trigger | Psi power (hold to use) | Previous page, or click when the beam is on the left |
 | Right trigger | Fire | Click / hold to drag (the default beam hand) |
 | Menu button (Touch: left; Steam Frame: right) | Pause | Pause / resume |
@@ -38,7 +38,7 @@ button to press.
 
 Open inventory with **View** (Touch: **left stick click**). You can point at an item, or navigate with the right stick. For the native button route, highlight a weapon, press **X** to equip, then **B** to return to gameplay. The control card shows the VR bindings even when Prey changes its own prompts between mouse and gamepad icons.
 
-The Steam Frame's right bumper holds Prey's middle-mouse Favorites Wheel open; let go to close it. Holding Y opens Prey's own gamepad wheel instead, as on a gamepad.
+Hold **Y** for Prey's own weapon wheel, as on a gamepad. While it is open, the Steam Frame's bumpers are Prey's LB and RB: left uses a suit repair kit, right eats food. Outside the wheel they do nothing in play.
 
 Release held controls after closing a menu before using them in gameplay. The mod waits for this neutral state to prevent an inventory input from immediately firing or moving. A trigger already held when a menu opens must also be released before it can click.
 

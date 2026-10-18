@@ -74,6 +74,7 @@ PREYVR_STUB(SetTorsoDeadzone,TorsoDeadzoneDegrees,BodyTurnDeadzone,int)
 PREYVR_STUB(SetAnimIkFreeArms,AnimIkFreeArms,ArmsFree,unsigned)
 PREYVR_STUB(SetAnimIkFingerCurl,AnimIkFingerCurl,FingerCurl,unsigned)
 PREYVR_STUB(SetAimLasers,AimLasersEnabled,AimLasers,unsigned)
+PREYVR_STUB(SetControllerPrompts,ControllerPromptsEnabled,ControllerPrompts,unsigned)
 PREYVR_STUB(SetCarryHoldToHold,CarryHoldPreference,CarryHold,unsigned)
 PREYVR_STUB(SetGrenadeHand,GrenadeHandEnabled,GrenadeHand,unsigned)
 PREYVR_STUB(SetCarryThrowGainPercent,CarryThrowGainPercent,CarryThrowStrength,unsigned)
@@ -149,16 +150,22 @@ int main(){
  const auto before=VrOptionsValues();
  currentFrame.menu.confirm=false;tick();ServiceVrOptions();
  Check(VrOptionsValues()==before,"the state machine itself changes nothing");
- r.gripPressed=true;tick();Check(!VrOptionsUiFrameInput().nextPage,"a grip steps the tab when let go");
- r.gripPressed=false;tick();Check(VrOptionsUiFrameInput().nextPage,"a grip goes to the panel");
+ // XrInput publishes the tab buttons: the grips on Touch and Index, the
+ // Steam Frame's bumpers.
+ auto& m=currentFrame.menu;
+ m.nextTab=true;tick();Check(!VrOptionsUiFrameInput().nextPage,"a tab button steps the tab when let go");
+ m.nextTab=false;tick();Check(VrOptionsUiFrameInput().nextPage,"a tab button goes to the panel");
  tick();Check(!VrOptionsUiFrameInput().nextPage,"one page step per press");
- {auto& l=currentFrame.hands[0];
-  // Both grips, in either order -- a two-handed hold or the recenter chord --
-  // step no tab, as in the game's menus.
-  l.gripPressed=true;tick();r.gripPressed=true;tick();l.gripPressed=false;tick();
+ {// Both grips, in either order -- a two-handed hold or the recenter chord --
+  // step no tab, as in the game's menus, whichever buttons the tabs are on.
+  m.previousTab=true;tick();m.nextTab=true;m.bothGrips=true;tick();m.previousTab=false;tick();
   Check(!VrOptionsUiFrameInput().previousPage,"a grip let go from both steps no tab");
-  r.gripPressed=false;tick();
-  Check(!VrOptionsUiFrameInput().previousPage&&!VrOptionsUiFrameInput().nextPage,"nor does the other");}
+  m.nextTab=false;m.bothGrips=false;tick();
+  Check(!VrOptionsUiFrameInput().previousPage&&!VrOptionsUiFrameInput().nextPage,"nor does the other");
+  m.nextTab=true;tick();m.bothGrips=true;tick();m.bothGrips=false;tick();m.nextTab=false;tick();
+  Check(!VrOptionsUiFrameInput().nextPage,"both grips spoil a bumper's tab held meanwhile");
+  r.gripPressed=true;tick();r.gripPressed=false;tick();
+  Check(!VrOptionsUiFrameInput().nextPage,"a grip alone is no tab once XrInput says the tabs are elsewhere");}
  set(options::GripToggle,1);
  Check(applied[options::GripToggle]==1,"menu applies toggle preference");
  {const auto data=readFile();
@@ -229,7 +236,8 @@ int main(){
    {options::GrenadeThrowStrength,150},{options::WristOnHud,1},{options::WristTick,0},{options::WristAlong,100},
    {options::WristHover,50},{options::WristTilt,30},{options::CarryHand,0},{options::GrenadeDeploy,1},
    {options::LongReach,0},{options::InventoryLayer,1},{options::InventoryStereo,1},{options::InventoryDepth,50},
-   {options::UiCurve,50},{options::DebugOverlay,1},{options::FingerCurl,0},{options::AimLasers,0}};
+   {options::UiCurve,50},{options::DebugOverlay,1},{options::FingerCurl,0},{options::AimLasers,0},
+   {options::ControllerPrompts,0}};
   VrOptionsUiResult result;
   for(const auto& [id,v]:chosen){options::Change change;change.setting=static_cast<int>(id);change.value=v;
    result.changes.push_back(change);}
@@ -329,7 +337,7 @@ int main(){
   // What VR start and earlier commands set before the saved choices apply.
   applied[options::Turn]=45;applied[options::UiMargin]=72;applied[options::UiScale]=130;applied[options::UiCurve]=20;
   applied[options::HapticStrength]=70;applied[options::DebugOverlay]=0;applied[options::GrenadeHand]=1;
-  applied[options::AimLasers]=1;
+  applied[options::AimLasers]=1;applied[options::ControllerPrompts]=1;
   restart();
   Check(HapticStrength()==70&&UiCurveDegrees()==20,"loading the file applies nothing");
   // The menu panel's settings first, before the session's first menu frame.
@@ -346,6 +354,7 @@ int main(){
         "settings never chosen in the menu keep their values; tuner values were never saved");
   Check(DebugOverlayMask()==0,"a saved \"off\" debug overlay stays off after a restart");
   Check(AimLasersEnabled()==0,"saved \"off\" aim lasers stay off though VR start switches them on");
+  Check(ControllerPromptsEnabled()==0,"and saved \"off\" controller prompts likewise");
   applied[options::DebugOverlay]=1;ApplySavedVrOptions();
   Check(DebugOverlayMask()==0,"and a dbg.draw does not outlast the next VR start");
   // F11: a command's curvature lasts until the next VR start, then the saved one is back.
@@ -377,6 +386,19 @@ int main(){
   Check(!find(input::ActionOf(input::Role::trigger).label)&&!find(input::ActionOf(input::Role::gripPose).label),
         "the hands' own trigger, grip and poses are not buttons to list");
   Check(find("Recenter")&&find("Recenter")->buttons=="Right Hand Menu Button + both grips","recenter on what pauses");
+  Check(find("Tabs")&&find("Tabs")->buttons=="Grips, on release","no tab buttons: the grips are the tabs");
+  Check(find("Pages")!=nullptr,"the trigger of the hand without the laser pages on every controller");
+  {// The Steam Frame: its bumpers are the tabs, listed by name, and the grips' row goes.
+   auto frame=bound;
+   frame[static_cast<std::size_t>(input::Role::previousTab)].sources={"Left Hand Bumper"};
+   frame[static_cast<std::size_t>(input::Role::nextTab)].sources={"Right Hand Bumper"};
+   const auto frameRows=VrOptionsControlRows(frame);
+   bool grips=false,bumper=false;
+   for(const auto& row:frameRows){
+    grips=grips||row.action=="Tabs";
+    bumper=bumper||(row.action==input::ActionOf(input::Role::previousTab).label&&row.buttons=="Left Hand Bumper");
+   }
+   Check(bumper&&!grips,"a controller with tab buttons lists them, not the grips");}
   std::size_t play=0,menus=0;
   for(std::size_t i=0;i<rows.size();++i){if(rows[i].action=="PLAY")play=i;if(rows[i].action=="MENUS")menus=i;}
   std::size_t jump=0;for(std::size_t i=0;i<rows.size();++i)if(rows[i].action=="Jump")jump=i;

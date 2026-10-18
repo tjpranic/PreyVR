@@ -5,6 +5,7 @@
 #include "ArmsLane.h"
 #include "AimTakeover.h"
 #include "BodyEquipment.h"
+#include "BindingDump.h"
 #include "BodyFollow.h"
 #include "InteractionLane.h"
 #include "CarryLane.h"
@@ -103,7 +104,9 @@ enum ActionSlot {
     kActionQuickSlotDown = 10,
     kActionTorch = 11,
     kActionPsi = 12,
-    kActionCount = 13,
+    kActionWheelLeft = 13,
+    kActionWheelRight = 14,
+    kActionCount = 15,
 };
 
 struct ActionBinding {
@@ -122,7 +125,7 @@ ActionBinding gActions[kActionCount] = {
     // Native PC Favorites Wheel shortcut (Bethesda manual); Steam CMouse::Init
     // proves mouse3/0x102. The wheel the mod has always opened, now on its own
     // button, so Y is free to be Prey's.
-    {{input::kMouse3}, {0}, {0}, {0}, false},    // wheel     <- Frame right bumper, held
+    {{input::kMouse3}, {0}, {0}, {0}, false},    // wheel     <- unbound (Prey's own wheel is Y held)
     // Prey's own gamepad buttons (the key ids read from this build; which
     // action each drives is logged by BindingDump in play).
     {{input::kButtonY}, {0}, {0}, {0}, false},   // Prey's Y  <- Y
@@ -133,6 +136,10 @@ ActionBinding gActions[kActionCount] = {
     {{input::kDPadDown}, {0}, {0}, {0}, false},  // quick slot <- Frame D-pad down
     {{input::kDPadUp}, {0}, {0}, {0}, false},    // torch     <- Frame D-pad up
     {{input::kTriggerLButton}, {0}, {0}, {0}, false}, // psi power <- left trigger
+    // Prey's LB/RB inside its weapon wheel (focusmode: use_armor_item,
+    // use_food_item). Outside it Prey's bumpers lean, so nothing is sent.
+    {{input::kShoulderL}, {0}, {0}, {0}, false}, // suit repair kit <- Frame left bumper, in the wheel
+    {{input::kShoulderR}, {0}, {0}, {0}, false}, // food      <- Frame right bumper, in the wheel
 };
 std::atomic<bool> gActionsEnabled{false};
 std::atomic<bool> gActionsNeutralize{false};
@@ -407,6 +414,8 @@ void UpdateTurnAndFireLanes()
     // before this ran, so the B that did it must not crouch.
     static input::PlayResume resume;
     const bool menuFrame = resume.Update(HudGameplayInputAllowed());
+    // Prey's own weapon wheel (Y held): its focusmode action map is enabled.
+    const bool wheelOpen = PreyWheelOpen();
 
     // Both grips + Menu: both grips alone are a natural two-handed hold.
     // Requiring Menu keeps recenter deliberate and independent of grab timing.
@@ -611,7 +620,7 @@ void UpdateTurnAndFireLanes()
             play.inventory,                           // inventory <- Frame View, Touch left stick click
             play.jump,                                // jump      <- right A
             play.crouch,                              // crouch    <- right B
-            play.weaponWheel,                         // wheel     <- Frame right bumper, held
+            play.weaponWheel,                         // wheel     <- unbound (SteamVR rebinding)
             play.special,                             // Prey's Y  <- Y
             play.sprint,                              // sprint    <- left stick click
             play.psychoscope,                         // psychoscope <- right stick click
@@ -620,12 +629,17 @@ void UpdateTurnAndFireLanes()
             play.quickSlotDown,
             play.torch,                               // torch     <- D-pad up
             psi && PsiTargetMode() == 0,              // psi power <- left trigger, Original targeting
+            play.wheelSuitRepair,                     // Prey's LB <- Frame left bumper, in the wheel
+            play.wheelFood,                           // Prey's RB <- Frame right bumper, in the wheel
         };
-        // A button down in a menu, or as one closes, waits for its release.
+        // A button down in a menu, or as one closes, waits for its release; the
+        // wheel's bumpers likewise, pressed outside the wheel or as it closes.
         static input::ReleaseGate gates[kActionCount];
         for (int slot = 0; slot < kActionCount; ++slot) {
+            const bool wheelSlot = slot == kActionWheelLeft || slot == kActionWheelRight;
             // Slot 0's grip arbitration lives in the use button above.
-            const bool source = slot == kActionInteract ? sources[slot] : gates[slot].Update(sources[slot], menuFrame);
+            const bool source = slot == kActionInteract ? sources[slot] :
+                gates[slot].Update(sources[slot], menuFrame || (wheelSlot && !wheelOpen));
             ActionBinding& binding = gActions[slot];
             const bool wanted = actionsOn && !releaseActions && source;
             if (wanted == binding.held) { continue; }
@@ -746,7 +760,7 @@ std::string InteractionReport()
 {
     static const char* const kSlotNames[kActionCount] = {
         "interact", "inventory", "jump", "crouch", "wheel", "y", "sprint", "psychoscope",
-        "quickLeft", "quickRight", "quickDown", "torch", "psi"};
+        "quickLeft", "quickRight", "quickDown", "torch", "psi", "wheelLB", "wheelRB"};
     std::ostringstream out;
     out << " actions=" << (gActionsEnabled.load(std::memory_order_relaxed) ? 1 : 0)
         << " useHoldPosted=" << gUseHoldPosted.load(std::memory_order_relaxed);

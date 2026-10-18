@@ -69,7 +69,11 @@ constexpr Role kDpadAndView[] = {Role::navigateUp, Role::navigateDown, Role::nav
                                  Role::torch};
 constexpr Role kOptional[] = {Role::navigateUp, Role::navigateDown, Role::navigateLeft, Role::navigateRight,
                               Role::exit, Role::quickSlotLeft, Role::quickSlotRight, Role::quickSlotDown,
-                              Role::torch, Role::sprint, Role::weaponWheel};
+                              Role::torch, Role::sprint, Role::weaponWheel, Role::wheelSuitRepair, Role::wheelFood,
+                              Role::previousTab, Role::nextTab,
+                              Role::previousPage, Role::nextPage, Role::leftStickClick, Role::rightStickClick};
+// Prey's LB/RB and LT/RT in menus: only a controller with buttons for them.
+constexpr Role kTabsAndPages[] = {Role::previousTab, Role::nextTab, Role::previousPage, Role::nextPage};
 
 // **The components each controller has**, per hand, without the system
 // button, which belongs to the runtime. Touch and Index from the bundled
@@ -161,11 +165,12 @@ int main()
     Check(ActionOf(Role::pause).set == ActionSet::common, "pause, and the recenter chord, work in play and in menus");
     for (const Role role : {Role::move, Role::turn, Role::fire, Role::grab, Role::psi, Role::reload, Role::jump,
                             Role::crouch, Role::inventory, Role::special, Role::weaponWheel, Role::sprint, Role::psychoscope, Role::quickSlotLeft,
-                            Role::quickSlotRight, Role::quickSlotDown, Role::torch}) {
+                            Role::quickSlotRight, Role::quickSlotDown, Role::torch, Role::wheelSuitRepair, Role::wheelFood}) {
         Check(ActionOf(role).set == ActionSet::gameplay, "play's actions in the gameplay set");
     }
     for (const Role role : {Role::navigate, Role::scroll, Role::confirm, Role::back, Role::secondary, Role::tertiary,
-                            Role::exit, Role::navigateUp}) {
+                            Role::exit, Role::navigateUp, Role::previousTab, Role::nextTab, Role::previousPage,
+                            Role::nextPage, Role::leftStickClick, Role::rightStickClick}) {
         Check(ActionOf(role).set == ActionSet::menu, "the menus' actions in the menu set");
     }
 
@@ -241,6 +246,15 @@ int main()
               "A and B on the right: jump and crouch in play, select and back in menus");
         Check(Has(profile, Role::psychoscope, "/user/hand/right/input/thumbstick/click"),
               "the right stick's click is the psychoscope on every controller, as on Prey's gamepad");
+        Check(Has(profile, Role::rightStickClick, "/user/hand/right/input/thumbstick/click"),
+              "and Prey's RS in menus (drop, split)");
+        Check(Count(profile, Role::leftStickClick) == 1, "every controller has Prey's LS in menus (autosort)");
+        // Never a button that also pauses: pause works in menus too.
+        for (const auto& binding : profile.bindings) {
+            if (binding.role == Role::leftStickClick) {
+                Check(!Has(profile, Role::pause, binding.path), "Prey's LS is not the pause button");
+            }
+        }
     }
 
     const auto& touch = Profile("touch");
@@ -266,9 +280,18 @@ int main()
           "Index: the left A/B stand in for X/Y, the left trackpad opens the TranScribe, and the left stick's click "
           "opens pause, so it does not sprint");
 
+    Check(Has(touch, Role::leftStickClick, "/user/hand/left/input/thumbstick/click"),
+          "Touch: the TranScribe's click is Prey's LS in menus");
+    Check(Has(index, Role::leftStickClick, "/user/hand/left/input/trackpad/force"),
+          "Index: the left stick's click pauses, so the trackpad press is Prey's LS in menus");
     for (const auto* profile : {&touch, &index}) {
         for (const Role role : kDpadAndView) { Check(Count(*profile, role) == 0, "no D-pad or View to bind"); }
         Check(Count(*profile, Role::weaponWheel) == 0, "no bumper: Prey's own Y-hold is the wheel");
+        Check(Count(*profile, Role::wheelSuitRepair) == 0 && Count(*profile, Role::wheelFood) == 0,
+              "and no bumpers for its suit repair kit and food");
+        for (const Role role : kTabsAndPages) {
+            Check(Count(*profile, role) == 0, "no bumpers: the grips are the tabs, the free trigger a page");
+        }
     }
 
     const auto& frame = Profile("frame");
@@ -297,11 +320,23 @@ int main()
           Has(frame, Role::navigateLeft, "/user/hand/left/input/dpad_left/click") &&
           Has(frame, Role::navigateRight, "/user/hand/left/input/dpad_right/click"),
           "the Frame's left D-pad navigates");
-    Check(Has(frame, Role::weaponWheel, "/user/hand/right/input/bumper/click"), "the right bumper holds the PC wheel");
+    Check(Count(frame, Role::weaponWheel) == 0, "the wheel is Prey's own, Y held: no PC wheel on a bumper");
+    Check(Has(frame, Role::wheelSuitRepair, "/user/hand/left/input/bumper/click") &&
+          Has(frame, Role::wheelFood, "/user/hand/right/input/bumper/click"),
+          "in play the bumpers are Prey's LB/RB in its wheel: a suit repair kit and food");
+    Check(Has(frame, Role::previousTab, "/user/hand/left/input/bumper/click") &&
+          Has(frame, Role::nextTab, "/user/hand/right/input/bumper/click"),
+          "in menus the bumpers are Prey's LB/RB, the tabs, as its prompts name them");
+    Check(Has(frame, Role::previousPage, "/user/hand/left/input/squeeze/click") &&
+          Has(frame, Role::nextPage, "/user/hand/right/input/squeeze/click"),
+          "and the grips its LT/RT, the pages");
+    Check(Has(frame, Role::leftStickClick, "/user/hand/left/input/thumbstick/click"),
+          "the left stick's click sprints in play and is Prey's LS in menus");
     for (const auto& binding : frame.bindings) {
         Check(std::strstr(binding.path, "bumper") == nullptr ||
-                  (binding.role == Role::weaponWheel && std::strstr(binding.path, "/right/") != nullptr),
-              "and the bumpers are otherwise left unbound");
+                  binding.role == Role::wheelSuitRepair || binding.role == Role::wheelFood ||
+                  binding.role == Role::previousTab || binding.role == Role::nextTab,
+              "and the bumpers are otherwise left unbound: no lean in play");
     }
 
     // Hysteresis: down at the press point, up only below the release point.

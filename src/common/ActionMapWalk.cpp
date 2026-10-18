@@ -133,11 +133,37 @@ bool ReadBindings(const MemoryView& memory, std::uintptr_t base, const ActionMap
         previous = crc;
         row.enabled = managerEnabled && r.B(map + 8) != 0;
         row.activation = r.U(input + 0xC4);
+        row.mapAddress = map;
         if (!r.Ok()) { break; }
         rows.push_back(std::move(row));
     }
     if (!r.Ok()) { return false; }
     out = std::move(rows);
+    return true;
+}
+
+bool ReadActionMapEnabled(const MemoryView& memory, std::uintptr_t base, const ActionMapLayout& layout,
+                          std::uintptr_t map, const std::string& name, bool& enabled, std::string& why)
+{
+    enabled = false;
+    why.clear();
+    Reader r(memory, why);
+    const std::uintptr_t manager = r.Q(base + layout.managerPointer);
+    if (!r.Ok()) { return false; }
+    if (manager == 0) { why = "no action map manager yet"; return false; }
+    if (r.Q(manager) != base + layout.managerVtable || r.Q(manager + 8) != base + layout.managerSecondaryVtable) {
+        r.Fail("manager vtables do not match this build");
+        return false;
+    }
+    if (map == 0 || r.Q(map) != base + layout.mapVtable || r.Q(map + 0x10) != manager) {
+        r.Fail("map vtable or back-pointer");
+        return false;
+    }
+    const std::string mapName = r.String(r.Q(map + 0x58));
+    if (r.Ok() && mapName != name) { r.Fail("map name"); }
+    const bool on = r.B(manager + 0xDC) != 0 && r.B(map + 8) != 0;
+    if (!r.Ok()) { return false; }
+    enabled = on;
     return true;
 }
 

@@ -118,14 +118,16 @@ unsigned int ModalMenuRouter::Update(const ModalMenuState& state, bool modal, fl
     startWas_ = state.start;
     const bool buttons[] = {state.accept, state.cancel, state.previousTab,
                             state.nextTab, state.secondary, state.tertiary,state.previousPage,state.nextPage,
-                            state.exit};
+                            state.exit, state.leftStick, state.rightStick};
+    static_assert(sizeof(buttons) / sizeof(buttons[0]) == sizeof(blocked_) / sizeof(blocked_[0]),
+                  "one blocked/was slot per button");
     constexpr unsigned kButtons = sizeof(buttons) / sizeof(buttons[0]);
     if (!modal || !modal_) {
         navigator_.Reset();
         blockStick_ = std::fabs(state.stickX) > .35f || std::fabs(state.stickY) > .35f;
         for (unsigned i = 0; i < kButtons; ++i) { blocked_[i] = buttons[i]; }
         for (bool& held : was_) { held = false; }
-        previousTab_.Reset(); nextTab_.Reset();
+        previousTab_.Reset(); nextTab_.Reset(); previousPage_.Reset(); nextPage_.Reset();
     }
     modal_ = modal;
     if (!modal) { return count; }
@@ -139,15 +141,18 @@ unsigned int ModalMenuRouter::Update(const ModalMenuState& state, bool modal, fl
     if (count < capacity) { count += navigator_.Update(nav, seconds, out+count, capacity-count); }
     const auto emit = [&](MenuAction action) { if (count < capacity) { out[count++] = action; } };
     const auto down = [&](unsigned i) { return buttons[i] && !blocked_[i]; };
-    // The tabs act on release, and not at all when both grips were held
-    // meanwhile (ReleaseTap).
-    const bool grips = state.previousTab && state.nextTab;
-    if (previousTab_.Update(down(2), grips)) { emit(MenuAction::PreviousTab); }
-    if (nextTab_.Update(down(3), grips)) { emit(MenuAction::NextTab); }
-    // X, Y, the pages and exit act on press.
+    // The tabs and pages act on release, and not at all when both grips, or
+    // both of the pair, were held meanwhile (ReleaseTap).
+    const bool tabs = state.bothGrips || (state.previousTab && state.nextTab);
+    if (previousTab_.Update(down(2), tabs)) { emit(MenuAction::PreviousTab); }
+    if (nextTab_.Update(down(3), tabs)) { emit(MenuAction::NextTab); }
+    const bool pages = state.bothGrips || (state.previousPage && state.nextPage);
+    if (previousPage_.Update(down(6), pages)) { emit(MenuAction::PreviousPage); }
+    if (nextPage_.Update(down(7), pages)) { emit(MenuAction::NextPage); }
+    // X, Y, exit and the stick clicks act on press.
     constexpr struct { unsigned button; MenuAction action; } pressed[] = {
-        {4, MenuAction::Secondary}, {5, MenuAction::Tertiary}, {6, MenuAction::PreviousPage},
-        {7, MenuAction::NextPage}, {8, MenuAction::Exit}};
+        {4, MenuAction::Secondary}, {5, MenuAction::Tertiary}, {8, MenuAction::Exit},
+        {9, MenuAction::LeftStick}, {10, MenuAction::RightStick}};
     for (const auto& [i, action] : pressed) {
         if (down(i) && !was_[i]) { emit(action); }
         was_[i] = down(i);

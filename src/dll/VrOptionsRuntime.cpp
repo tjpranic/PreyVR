@@ -7,6 +7,7 @@
 #include "AimTakeover.h"
 #include "BodyEquipment.h"
 #include "BodyFollow.h"
+#include "ControllerPrompts.h"
 #include "HeadTrackingHook.h"
 #include "HudBridge.h"
 #include "MoveLane.h"
@@ -96,16 +97,16 @@ void HandleChange(const options::Change& change,const TrackingFrame& f,Hand hand
 void CaptureUiInput(const TrackingFrame& f,const std::optional<ui::RayHit>& hit,bool armed,float dt,bool trigger){
  VrOptionsUiInput in;in.dt=dt;
  if(hit&&hit->inside){in.pointer=true;in.u=hit->u;in.v=hit->v;}
- const auto& l=f.hands[0];const auto& r=f.hands[1];
  const auto held=[](bool& state,float value){
   constexpr input::MenuNavigatorPolicy nav{};state=state?value>nav.release:value>nav.engage;return state;};
  const bool up=held(stickUp,f.menu.navigate.y),down=held(stickDown,-f.menu.navigate.y);
  const bool left=held(stickLeft,-f.menu.navigate.x),right=held(stickRight,f.menu.navigate.x);
- // The grips step through the tabs when let go, and not when both were held: a
- // two-handed hold, or the recenter chord (ReleaseTap, as in the game's menus).
- // A grip let go as the panel arms is no tab.
- const bool grips=l.gripPressed&&r.gripPressed;
- const bool previous=previousTab.Update(l.gripPressed,grips),next=nextTab.Update(r.gripPressed,grips);
+ // The game menus' tab buttons (the Steam Frame's bumpers, else the grips) step
+ // through the tabs when let go, and not when both grips or both tab buttons
+ // were held: a two-handed hold, or the recenter chord (ReleaseTap, as in the
+ // game's menus). A tab button let go as the panel arms is no tab.
+ const bool spoiled=f.menu.bothGrips||(f.menu.previousTab&&f.menu.nextTab);
+ const bool previous=previousTab.Update(f.menu.previousTab,spoiled),next=nextTab.Update(f.menu.nextTab,spoiled);
  if(!armed){previousTab.Reset();nextTab.Reset();}
  if(armed){
   in.click=trigger;in.accept=f.menu.confirm;in.up=up;in.down=down;in.left=left;in.right=right;
@@ -214,6 +215,7 @@ constexpr Wiring wiring[]={
  {options::InventoryDepth,Set<SetInventoryDepthPercent>,Get<InventoryDepthPercent>},
  {options::FingerCurl,Set<SetAnimIkFingerCurl>,Get<AnimIkFingerCurl>},
  {options::AimLasers,Set<SetAimLasers>,Get<AimLasersEnabled>},
+ {options::ControllerPrompts,Set<SetControllerPrompts>,Get<ControllerPromptsEnabled>},
 };
 constexpr bool InSettingOrder(){
  for(unsigned i=0;i<std::size(wiring);++i)if(wiring[i].id!=i)return false;
@@ -304,11 +306,11 @@ void ServiceVrOptions(){
  if(changed)Save();
 }
 bool ProcessVrOptionsInput(const TrackingFrame& f){
- options::Input i;const auto& l=f.hands[0];const auto& r=f.hands[1];
+ options::Input i;
  i.valid=ready.load()&&FreshSample(MonotonicNanoseconds(),f.publishedNs)&&IsPoseUsable(f.head,f.headValidity,kMaxPoseAgeNs);
  i.modal=HudMenuStateKnown()&&HudMenuIsOpen();i.epoch=f.epoch;
  i.start=f.system.pause;i.accept=f.menu.confirm;i.cancel=f.menu.back;
- i.previous=l.gripPressed;i.next=r.gripPressed;i.chord=l.gripPressed&&r.gripPressed;
+ i.previous=f.menu.previousTab;i.next=f.menu.nextTab;i.chord=f.menu.bothGrips;
  // Navigation held is not "at rest" when the panel arms.
  i.x=f.menu.navigate.x;i.y=f.menu.navigate.y;
  const auto hand=UiPointerHand();i.trigger=hand<2?f.hands[hand].triggerPressed:false;
@@ -370,7 +372,10 @@ std::vector<VrOptionsControlRow> VrOptionsControlRows(const std::vector<XrBoundC
  rows.push_back({"Two-Hand Aim","Left grip, at a long weapon's foregrip",false});
  rows.push_back({"MENUS","",true});
  add(input::ActionSet::menu);
- rows.push_back({"Tabs","Grips, on release",false});
+ // A controller without tab buttons (the Steam Frame's bumpers) has them on its grips.
+ if(names(input::Role::previousTab).empty()&&names(input::Role::nextTab).empty())
+  rows.push_back({"Tabs","Grips, on release",false});
+ rows.push_back({"Pages","Also the trigger of the hand without the laser, on release",false});
  rows.push_back({"ANY TIME","",true});
  add(input::ActionSet::common);
  const std::string pause=names(input::Role::pause);

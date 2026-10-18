@@ -143,7 +143,7 @@ private:
         }
         int shown = -1;
         for (unsigned p = 0; p < options::MenuPages(); ++p) {
-            // A grip step selects the tab; otherwise ImGui's own selection leads.
+            // A tab step (bumper or grip) selects the tab; otherwise ImGui's own selection leads.
             const ImGuiTabItemFlags flags = forced_ && p == page_ ? ImGuiTabItemFlags_SetSelected : 0;
             const bool open = ImGui::BeginTabItem(Utf8(options::MenuPageName(p)).c_str(), nullptr, flags);
             Record(Kind::tab, static_cast<int>(p));
@@ -321,7 +321,7 @@ private:
         } else if (blank) {
             ImGui::TextUnformatted("Hold the trigger here to drag the panel");
         } else {
-            ImGui::TextDisabled("Trigger or A: select   Right stick: move, left/right adjust   Left stick: scroll   Grips: tabs");
+            ImGui::TextDisabled("Trigger or A: select   Right stick: move, left/right adjust   Left stick: scroll   Bumpers or grips: tabs");
         }
         ImGui::PopFont();
     }
@@ -492,7 +492,7 @@ VrOptionsUiResult VrOptionsUi::Render(ID3D11Device* device, ID3D11DeviceContext*
     // it as A goes down lets A reach a control the laser selected, as left/right
     // already do, and frames what A acted on.
     if (acceptDown && !acceptClicks_) { ImGui::SetNavCursorVisible(true); }
-    // The grips step through the tabs.
+    // The tab buttons (the bumpers, else the grips) step through the tabs.
     const bool forced = input.previousPage != input.nextPage;
     if (forced) {
         page_ = (page_ + (input.nextPage ? 1u : options::MenuPages() - 1u)) % options::MenuPages();

@@ -191,6 +191,12 @@ void TestConsoleWideningIsExact()
     RequireDenied("con_restricted 0", "lifting the engine's own restriction is not on the list");
     RequireDenied("con_showonload 1", "neighbouring console cvars are not admitted by association");
     // No hud_ prefix rule: a prefix would silently admit every future hud_ cvar.
+    // The one hud_ scheme entry, 2026-10-18, is named; its neighbours are not.
+    Require(Classify("hud_forceControllerGlyphs 1") == Classification::sceneControl,
+        "the menus can keep the controller's prompts under the laser");
+    Require(Classify("hud_forceControllerGlyphs 0") == Classification::sceneControl,
+        "and be given Prey's default back");
+    RequireDenied("hud_playstationContext 1", "its neighbouring glyph cvar is not admitted by association");
     RequireDenied("hud_startPaused 1", "an unlisted hud_ cvar is still denied");
     RequireDenied("hud_allowMouseInput 1", "including one that sounds harmless");
     // The separator ban still applies to the new entries, which is the whole

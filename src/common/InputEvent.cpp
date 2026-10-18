@@ -165,6 +165,8 @@ int MenuActionKeyId(MenuAction action)
         case MenuAction::PreviousPage: return kTriggerLButton;
         case MenuAction::NextPage: return kTriggerRButton;
         case MenuAction::Exit: return kBack;
+        case MenuAction::LeftStick: return kThumbL;
+        case MenuAction::RightStick: return kThumbR;
     }
     return -1;
 }

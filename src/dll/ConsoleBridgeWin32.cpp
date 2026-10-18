@@ -152,6 +152,9 @@ DWORD QueueVerifiedRendererSetting(const char* command) {
     // The focus hold's pair (FocusHold.h): an int cvar, read back the same way.
     else if(command && std::strcmp(command,"g_pauseOnLoseFocus 0")==0) name="g_pauseOnLoseFocus";
     else if(command && std::strcmp(command,"g_pauseOnLoseFocus 1")==0) {name="g_pauseOnLoseFocus";expected=1;}
+    // The controller prompts' pair (ControllerPrompts.h), the same kind of int cvar.
+    else if(command && std::strcmp(command,"hud_forceControllerGlyphs 0")==0) name="hud_forceControllerGlyphs";
+    else if(command && std::strcmp(command,"hud_forceControllerGlyphs 1")==0) {name="hud_forceControllerGlyphs";expected=1;}
     else return static_cast<DWORD>(ConsoleBridgeResult::denied);
     std::unique_lock lock(gQueueMutex,kQueueLockTimeout);
     if(!lock.owns_lock() || gHasQueued.load()) return static_cast<DWORD>(ConsoleBridgeResult::busy);

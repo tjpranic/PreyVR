@@ -91,6 +91,13 @@ void SettingsChecks(){
   Check(Parse("version=1\naim_lasers=0\n",parsed,&marked)&&parsed[AimLasers]==0&&marked[AimLasers],"aim lasers persist as off");
   Check(Parse("version=1\ndebug_overlay=0\n",parsed,&marked)&&parsed[AimLasers]==1&&!marked[AimLasers],
         "a file saved before the lasers, debug overlay off, leaves them to VR start");}
+ Check(Defaults()[ControllerPrompts]==1&&KindOf(ControllerPrompts)==Kind::toggle,
+       "the menus keep the controller's prompts by default, on/off");
+ {Present marked{};
+  Check(Parse("version=1\ncontroller_prompts=0\n",parsed,&marked)&&parsed[ControllerPrompts]==0&&
+        marked[ControllerPrompts],"controller prompts persist as off");
+  Check(Parse("version=1\naim_lasers=0\n",parsed,&marked)&&parsed[ControllerPrompts]==1&&!marked[ControllerPrompts],
+        "a file saved before the prompts leaves them to VR start");}
  Check(Parse("version=1\nmuzzle_aim=1\n",parsed)&&parsed[MuzzleAim]==1&&!Valid(MuzzleAim,2),"muzzle aim persists as on/off");
  Check(Defaults()[BodyFollow]==2,"body following turns and moves by default");
  Check(Parse("version=1\nbody_follow=1\n",parsed)&&parsed[BodyFollow]==1&&Valid(BodyFollow,0)&&!Valid(BodyFollow,3),
@@ -153,6 +160,9 @@ void LayoutChecks(){
  Check(MenuEntries(0)[0]==Turn&&Has(MenuEntries(0),BodyFollow)&&Has(MenuEntries(0),BodyGlide),"comfort: turning first, body following");
  for(const int e:{UiDistance,UiOffsetRight,UiOffsetUp,UiText,PointerHand,HudLayer,ReticleWorld,ReticleSize,ReticleFallback})
   Check(Has(MenuEntries(2),e),"menu placement, the HUD and the reticle on the interface tab");
+ {const auto page=MenuEntries(2);const auto laser=std::find(page.begin(),page.end(),PointerHand);
+  Check(laser!=page.end()&&laser+1!=page.end()&&laser[1]==ControllerPrompts,
+        "the menus' prompts sit under the laser hand that switches them");}
  Check(Describe(ReticleWorld).initial==1&&Display(ReticleWorld,1)==L"IN THE WORLD"&&Display(ReticleWorld,0)==L"ON THE HUD",
        "the reticle sits in the world by default");
  Check(std::wstring(MenuPageName(1))==L"HANDS"&&MenuEntries(1)[0]==AimLasers,

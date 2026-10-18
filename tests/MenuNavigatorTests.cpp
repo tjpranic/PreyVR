@@ -165,9 +165,35 @@ int main()
         s.previousTab=false;router.Update(s,true,.016f,out,8);
         s.nextTab=false;
         Require(router.Update(s,true,.016f,out,8)==0,"chord releases never change tabs");
-        s.previousPage=true;s.nextPage=true;
-        Require(router.Update(s,true,.016f,out,8)==2,"both trigger page actions are available inside a modal");
-        Require(router.Update(s,true,.016f,out,8)==0,"held page triggers do not repeat");
+        s.previousPage=true;
+        Require(router.Update(s,true,.016f,out,8)==0,"a page waits for release, like a tab");
+        Require(router.Update(s,true,.016f,out,8)==0,"held page buttons do not repeat");
+        s.previousPage=false;
+        Require(router.Update(s,true,.016f,out,8)==1&&out[0]==MenuAction::PreviousPage,"and turns on release");
+        s.nextPage=true;router.Update(s,true,.016f,out,8);s.nextPage=false;
+        Require(router.Update(s,true,.016f,out,8)==1&&out[0]==MenuAction::NextPage,"either page");
+        // The Steam Frame's pages are its grips: the recenter chord's two grips
+        // must not turn a page, whichever is squeezed first.
+        s.nextPage=true;s.bothGrips=false;router.Update(s,true,.016f,out,8);
+        s.bothGrips=true;router.Update(s,true,.016f,out,8);
+        s.nextPage=false;s.bothGrips=false;
+        Require(router.Update(s,true,.016f,out,8)==0,"both grips held spoil a page");
+        // And its tabs are the bumpers: both grips still spoil a tab held meanwhile.
+        s.nextTab=true;router.Update(s,true,.016f,out,8);
+        s.bothGrips=true;router.Update(s,true,.016f,out,8);
+        s.nextTab=false;s.bothGrips=false;
+        Require(router.Update(s,true,.016f,out,8)==0,"both grips held spoil a tab on another button");
+        s.nextTab=true;router.Update(s,true,.016f,out,8);s.nextTab=false;
+        Require(router.Update(s,true,.016f,out,8)==1&&out[0]==MenuAction::NextTab,"a lone bumper changes tab");
+        // The stick clicks: Prey's LS and RS, on press, once each.
+        s.leftStick=true;
+        Require(router.Update(s,true,.016f,out,8)==1&&out[0]==MenuAction::LeftStick,"the left stick's click on press");
+        Require(router.Update(s,true,.016f,out,8)==0,"once");
+        s.leftStick=false;s.rightStick=true;
+        Require(router.Update(s,true,.016f,out,8)==1&&out[0]==MenuAction::RightStick,"the right stick's click");
+        s.rightStick=false;router.Update(s,true,.016f,out,8);
+        Require(MenuActionKeyId(MenuAction::LeftStick)==kThumbL&&MenuActionKeyId(MenuAction::RightStick)==kThumbR,
+                "as Prey's xi_thumbl (autosort) and xi_thumbr (drop, split)");
         s.stickX = 1;
         Require(router.Update(s, false, .016f, out, 8) == 0, "closing stops modal input");
         Require(router.Update(s, true, .016f, out, 8) == 0, "reopening requires neutral");

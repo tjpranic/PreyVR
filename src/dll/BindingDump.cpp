@@ -41,7 +41,54 @@ bool gLoggedInPlay = false;
 unsigned gFramesInPlay = 0;
 constexpr unsigned kFramesBeforeDump = 180;
 
+// PreyWheelOpen's map, found by a walk; main thread only.
+constexpr const char* kWheelMap = "focusmode";
+std::uintptr_t gWheelMap = 0;
+unsigned long long gNextWheelFind = 0;
+constexpr unsigned long long kWheelFindRetryMs = 2000;
+int gWheelLogged = -1;
+
+bool FindWheelMap(std::uintptr_t base)
+{
+    const auto now = GetTickCount64();
+    if (now < gNextWheelFind) { return false; }
+    gNextWheelFind = now + kWheelFindRetryMs;
+    std::vector<input::BoundAction> rows;
+    std::string why;
+    if (!input::ReadBindings(GuardedMemory{}, base, input::ActionMapLayout{}, rows, why)) { return false; }
+    for (const auto& row : rows) {
+        if (row.map == kWheelMap) {
+            gWheelMap = row.mapAddress;
+            std::ostringstream line;
+            line << "result=0 detail=wheel_map map=" << kWheelMap << " at=0x" << std::hex << (gWheelMap - base);
+            Log(line.str());
+            return true;
+        }
+    }
+    return false;
+}
+
 } // namespace
+
+bool PreyWheelOpen()
+{
+    const HMODULE module = GetModuleHandleW(L"PreyDll.dll");
+    if (module == nullptr) { return false; }
+    const auto base = reinterpret_cast<std::uintptr_t>(module);
+    if (gWheelMap == 0 && !FindWheelMap(base)) { return false; }
+    bool open = false;
+    std::string why;
+    if (!input::ReadActionMapEnabled(GuardedMemory{}, base, input::ActionMapLayout{}, gWheelMap, kWheelMap, open, why)) {
+        Log("result=failed detail=wheel_map reason=\"" + why + "\" refind=1");
+        gWheelMap = 0;
+        open = false;
+    }
+    if (static_cast<int>(open) != gWheelLogged) {
+        gWheelLogged = open ? 1 : 0;
+        Log(std::string("result=0 detail=wheel open=") + (open ? "1" : "0"));
+    }
+    return open;
+}
 
 void RequestBindingDump(bool allKeys) { gRequest.store(allKeys ? 2 : 1, std::memory_order_release); }
 

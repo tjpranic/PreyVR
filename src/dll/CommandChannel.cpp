@@ -13,6 +13,7 @@
 #include "ConsoleBridgeWin32.h"
 #include "CullCameraWatch.h"
 #include "FocusHold.h"
+#include "ControllerPrompts.h"
 #include "HotkeyBridge.h"
 #include "preyvr/ConsolePolicy.h"
 #include "FrameObserverHook.h"
@@ -577,6 +578,18 @@ bool ExecuteReticle(const std::vector<std::string>& args, std::ostringstream& ou
     return true;
 }
 
+// The menus' prompts (ControllerPrompts.h). Kept out of Execute's chain for the
+// same C1061 reason as ExecutePose.
+bool ExecutePrompts(const std::vector<std::string>& args, std::ostringstream& out)
+{
+    if (args[0] != "ui.prompts") { return false; }
+    int value = 1;
+    if (args.size() > 1) { ParseInt(args[1], value); }
+    out << "ui.prompts result=" << (Valued(args) ? SetControllerPrompts(static_cast<unsigned>(value)) : 0)
+        << " enabled=" << ControllerPromptsEnabled() << ControllerPromptsReport();
+    return true;
+}
+
 // Rung 1b, the RT_RenderScene double submission (DualSceneStereo.h). Kept out
 // of Execute's chain for the same C1061 reason as ExecutePose.
 bool ExecuteDualCommand(const std::vector<std::string>& args, std::ostringstream& out)
@@ -655,7 +668,8 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
     };
 
     if (ExecutePose(args, out) || ExecuteCarryCommand(args, out) || ExecuteGrenadeCommand(args, out) || ExecuteArmsCommand(args, out) ||
-        ExecuteWristCommand(args, out) || ExecuteDualCommand(args, out) || ExecuteReticle(args, out)) {
+        ExecuteWristCommand(args, out) || ExecuteDualCommand(args, out) || ExecuteReticle(args, out) ||
+        ExecutePrompts(args, out)) {
         return;
     }
     if (verb == "vr.options") {
@@ -1309,6 +1323,7 @@ DWORD WINAPI PollThread(LPVOID)
         TickVrMode();
         ServiceVrOptions();
         ServiceFocusHold();
+        ServiceControllerPrompts();
         // Keys and startup progress are serviced at 50 Hz; disk polling stays 5 Hz.
         static unsigned poll=0;
         if (++poll%10!=0) { Sleep(20); continue; }

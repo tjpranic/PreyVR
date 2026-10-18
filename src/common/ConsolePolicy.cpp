@@ -62,7 +62,16 @@ namespace {
 // None reaches outside the game, all are reversible by setting them back, and
 // unlike the resolution entries none of them touches the swapchain, so there is
 // no latched-size hazard to guard.
-constexpr std::array<std::string_view, 43> kAllowlist{
+constexpr std::array<std::string_view, 44> kAllowlist{
+    // **Added 2026-10-18 for the menus' prompts**
+    // (docs/CONTROLLER-PROMPTS-2026-10-18.md). Registered with default 0, no
+    // flags, and the help text "If this is set then we won't switch to keyboard
+    // glyphs/prompts when we receive keyboard input." The menu laser is mouse
+    // input to Prey, so without it every menu shows PC prompts and the
+    // inventory's gamepad item menu closes as it opens. It changes only which
+    // control scheme the menus follow, VR start sets it and VR stop puts it
+    // back, and it is not saved (no VF_DUMPTODISK).
+    "hud_forceControllerGlyphs",
     // **Added 2026-10-17 for the minimised desktop window**
     // (docs/DESKTOP-WINDOW-2026-10-17.md). Registered at 0x18281F5 with default 1,
     // no flags, and the help text "Pause the game whenever the window loses

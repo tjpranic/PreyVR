@@ -36,6 +36,8 @@ constexpr std::array<Action, kRoleCount> kActions{{
     {R::quickSlotRight, S::gameplay, K::button, "quick_slot_right", "Quick Slot Right", false},
     {R::quickSlotDown, S::gameplay, K::button, "quick_slot_down", "Quick Slot Down", false},
     {R::torch, S::gameplay, K::button, "torch", "Torch", false},
+    {R::wheelSuitRepair, S::gameplay, K::button, "wheel_suit_repair", "Suit Repair Kit, in the Wheel (Prey's LB)", false},
+    {R::wheelFood, S::gameplay, K::button, "wheel_food", "Food, in the Wheel (Prey's RB)", false},
     {R::navigate, S::menu, K::stick, "navigate", "Navigate", true},
     {R::navigateUp, S::menu, K::button, "navigate_up", "Navigate Up", false},
     {R::navigateDown, S::menu, K::button, "navigate_down", "Navigate Down", false},
@@ -47,6 +49,12 @@ constexpr std::array<Action, kRoleCount> kActions{{
     {R::secondary, S::menu, K::button, "secondary", "Prey's X Action (Equip...)", true},
     {R::tertiary, S::menu, K::button, "tertiary", "Prey's Y Action (Search, Eat...)", true},
     {R::exit, S::menu, K::button, "exit", "Close Menu", false},
+    {R::previousTab, S::menu, K::button, "previous_tab", "Previous Tab (Prey's LB)", false},
+    {R::nextTab, S::menu, K::button, "next_tab", "Next Tab (Prey's RB)", false},
+    {R::previousPage, S::menu, K::button, "previous_page", "Previous Page (Prey's LT)", false},
+    {R::nextPage, S::menu, K::button, "next_page", "Next Page (Prey's RT)", false},
+    {R::leftStickClick, S::menu, K::button, "left_stick_click", "Left Stick Click (Autosort)", false},
+    {R::rightStickClick, S::menu, K::button, "right_stick_click", "Right Stick Click (Drop, Split)", false},
 }};
 constexpr std::array<ActionSetInfo, static_cast<std::size_t>(S::count)> kSets{{
     {"common", "Hands and System"}, {"gameplay", "Gameplay"}, {"menus", "Menus"}}};
@@ -74,6 +82,8 @@ std::vector<Binding> Shared()
         {R::psychoscope, "/user/hand/right/input/thumbstick/click"},
         {R::navigate, "/user/hand/right/input/thumbstick"}, {R::scroll, "/user/hand/left/input/thumbstick"},
         {R::confirm, "/user/hand/right/input/a/click"}, {R::back, "/user/hand/right/input/b/click"},
+        // In menus the right stick's click is Prey's RS (drop, split).
+        {R::rightStickClick, "/user/hand/right/input/thumbstick/click"},
     };
 }
 
@@ -95,6 +105,8 @@ ControllerProfile Touch()
         {R::grab, "/user/hand/left/input/x/click"}, {R::secondary, "/user/hand/left/input/x/click"},
         {R::special, "/user/hand/left/input/y/click"}, {R::tertiary, "/user/hand/left/input/y/click"},
         {R::inventory, "/user/hand/left/input/thumbstick/click"},
+        // The TranScribe's click is Prey's LS (autosort) in menus; B closes them.
+        {R::leftStickClick, "/user/hand/left/input/thumbstick/click"},
         {R::pause, "/user/hand/left/input/menu/click"},
         // The thumb's resting places, for the finger shape.
         {R::thumbTouch, "/user/hand/left/input/x/touch"}, {R::thumbTouch, "/user/hand/left/input/y/touch"},
@@ -115,6 +127,9 @@ ControllerProfile Index()
         {R::grab, "/user/hand/left/input/a/click"}, {R::secondary, "/user/hand/left/input/a/click"},
         {R::special, "/user/hand/left/input/b/click"}, {R::tertiary, "/user/hand/left/input/b/click"},
         {R::inventory, "/user/hand/left/input/trackpad/force"},
+        // Its left stick's click is pause everywhere, so the trackpad press,
+        // the TranScribe in play, is Prey's LS (autosort) in menus.
+        {R::leftStickClick, "/user/hand/left/input/trackpad/force"},
         {R::pause, "/user/hand/left/input/thumbstick/click"},
         {R::thumbTouch, "/user/hand/left/input/a/touch"}, {R::thumbTouch, "/user/hand/left/input/b/touch"},
         {R::thumbTouch, "/user/hand/left/input/thumbstick/touch"}, {R::thumbTouch, "/user/hand/left/input/trackpad/touch"},
@@ -133,9 +148,12 @@ ControllerProfile Frame()
     // play and closing the menu in menus. The left stick's click sprints, as
     // on Prey's gamepad. Without this
     // profile SteamVR presents them as Touch and folds three buttons onto one:
-    // right X/Y onto B, and the D-pad onto left X (down) and Y (the rest). The
-    // right bumper holds the PC weapon wheel (Prey's bumpers lean, which VR
-    // does by itself); the left one is unbound.
+    // right X/Y onto B, and the D-pad onto left X (down) and Y (the rest). In
+    // play the bumpers are Prey's LB/RB only inside its weapon wheel (Y held):
+    // a suit repair kit and food. Outside it they send nothing -- Prey's
+    // bumpers lean, which VR does by itself. In menus the bumpers are Prey's
+    // LB/RB (tabs) and the grips its LT/RT (pages), so the tab prompts name the
+    // buttons; the stick clicks are its LS/RS.
     //
     // Valve renamed the profile in SteamVR 2.15.1; later runtimes still accept
     // the first name (vrclient_x64.dll knows both), so both are suggested.
@@ -143,10 +161,15 @@ ControllerProfile Frame()
             "XR_VALVE_frame_controller_interaction", With({
         {R::grab, "/user/hand/right/input/x/click"}, {R::secondary, "/user/hand/right/input/x/click"},
         {R::special, "/user/hand/right/input/y/click"}, {R::tertiary, "/user/hand/right/input/y/click"},
-        {R::weaponWheel, "/user/hand/right/input/bumper/click"},
+        {R::wheelSuitRepair, "/user/hand/left/input/bumper/click"},
+        {R::wheelFood, "/user/hand/right/input/bumper/click"},
         {R::pause, "/user/hand/right/input/menu/click"},
         {R::inventory, "/user/hand/left/input/view/click"}, {R::exit, "/user/hand/left/input/view/click"},
         {R::sprint, "/user/hand/left/input/thumbstick/click"},
+        {R::leftStickClick, "/user/hand/left/input/thumbstick/click"},
+        {R::previousTab, "/user/hand/left/input/bumper/click"}, {R::nextTab, "/user/hand/right/input/bumper/click"},
+        {R::previousPage, "/user/hand/left/input/squeeze/click"},
+        {R::nextPage, "/user/hand/right/input/squeeze/click"},
         {R::torch, "/user/hand/left/input/dpad_up/click"}, {R::navigateUp, "/user/hand/left/input/dpad_up/click"},
         {R::quickSlotDown, "/user/hand/left/input/dpad_down/click"},
         {R::navigateDown, "/user/hand/left/input/dpad_down/click"},

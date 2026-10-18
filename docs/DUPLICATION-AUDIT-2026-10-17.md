@@ -22,14 +22,15 @@ Line numbers are as of commit 8c07a51, before the section A fixes. Files those f
 - **2026-10-18, latest:** B2 and B3 were done; see their status notes.
   - Build passes, 77/77 ctest pass (one new test, `hook_install`), no new warnings.
   - PreyVR-15 passed in the headset; committed as `fc7b335`.
-- **2026-10-18, group 1:** B12 (most of it), D5, E1, E2 and E3 were done, uncommitted; see their status notes.
+- **2026-10-18, group 1:** B12 (most of it), D5, E1, E2 and E3 were done; see their status notes. Committed as `19edcd7`.
+- **2026-10-18, C:** the signed-off dead code was cut. PreyVR-17 passed in the headset; committed as `1d8bae9`.
   - Build passes with no new warnings; 81/81 ctest pass (the four VR scheme replays are new), and 12 runs in a row at `-j12` were clean.
   - Every unpinned `tools/re` verifier prints byte-identical output before and after.
   - Offline only: nothing here needs a headset run beyond the usual smoke check. PreyVR-16 passed that check in the headset.
 - **Decisions (user, 2026-10-18):**
   - **A9:** a malformed command value keeps falling back to a default; it is not refused. B9 keeps today's fallbacks.
   - **Engine calls:** guard them with SEH (the `CallX` style). B6's shared wrappers are guarded. NearFovOverride's unguarded call to the engine's original is a detour forwarding, not a wrapper, and is not changed.
-- **Not started:** B6–B11, C, D3, D4, E4, E5 and E7.
+- **Not started:** B6–B11, D3, D4, E4, E5 and E7.
 - **Receipt pins (checked 2026-10-18).** These files have their committed content pinned by a receipt; edit none of them:
   - `include/preyvr/{Equipment,NativeWrist,PsiMedkit,Psychoscope}Native.h`
   - `src/dll/NativeHudValue.h`
@@ -462,7 +463,7 @@ Left:
   - Publish-PreyVR051.
 - **Kept:** DualSceneStereo modes 1 and 2; the AimState, InteractionQuery and WrenchQuery leftovers; run-graphify.
 
-**Status 2026-10-18: all signed-off items cut, uncommitted.** About 3,300 lines net. Build passes with no new warnings, and 78/78 ctest pass (three tests went with their code: frame_clock, wrist_panel and depth_submission).
+**Status 2026-10-18: all signed-off items cut.** PreyVR-17 passed in the headset; committed as `1d8bae9`. About 3,300 lines net. Build passes with no new warnings, and 78/78 ctest pass (three tests went with their code: frame_clock, wrist_panel and depth_submission).
 - **CameraEditHook:** 2,134 → 850 lines, header 502 → 264.
   - Removed: A1 yaw edit, A3 double render, A4 second pass, A6 interpose (its `RenderWorld` hook was only ever installed when armed), A7 frame shape, the render-view probe, upstream and kept head rotation, the watchdog and the step trace.
   - The `CSystem::Render` hook keeps its live path unchanged: drains, lanes, the stereo edit with restore and verify, the render contract and the dual-eye build.
@@ -654,7 +655,7 @@ Left:
    - ~~B3 SafeMemory.h together with B2 HookInstall.h.~~ Done on 2026-10-18; headset-verified (PreyVR-15).
 3. ~~Build: D2 `preyvr_add_test`.~~ Done on 2026-10-18.
    - ~~Note: `tools/re/vr_scheme_review` (D5) already fails to link on its own.~~ Folded into the root build on 2026-10-18.
-4. ~~Prune dead code (C).~~ Signed off and cut on 2026-10-18, CameraEditHook experiments included; awaiting a headset run.
+4. ~~Prune dead code (C).~~ Signed off and cut on 2026-10-18, CameraEditHook experiments included; headset-verified (PreyVR-17).
 5. Tools: ~~E6~~ (done 2026-10-18), ~~then E1, E2 (unpinned scripts only) and E3~~ (done 2026-10-18, with B12 and D5).
 6. Larger refactors that need a headset run afterwards: B6, B7, B9, B10, B11.
 

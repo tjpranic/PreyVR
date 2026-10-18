@@ -34,6 +34,7 @@ struct BoundAction {
     // EActionActivationMode bits -- 1 on press, 2 on release, 4 on hold,
     // 8 always, 16 retriggerable.
     std::uint32_t activation = 0;
+    std::uintptr_t mapAddress = 0;   // the action map object, for ReadActionMapEnabled
 };
 
 class MemoryView {
@@ -47,6 +48,15 @@ public:
 // anything fails to check out; `out` is then empty.
 bool ReadBindings(const MemoryView& memory, std::uintptr_t moduleBase, const ActionMapLayout& layout,
                   std::vector<BoundAction>& out, std::string& why);
+// **Whether one action map is enabled now**, cheaply, for a map a walk found
+// (BoundAction::mapAddress): the manager and its vtables, the map's vtable,
+// its back-pointer to the manager and its name are checked again on every
+// read, so a map Prey has since freed or rebuilt fails instead of reading
+// stale memory as an answer. Prey switches maps by context: in play the
+// binding dump reads `player` enabled and `focusmode` disabled, and the weapon
+// wheel (focus mode) is expected to enable `focusmode` while it is open.
+bool ReadActionMapEnabled(const MemoryView& memory, std::uintptr_t moduleBase, const ActionMapLayout& layout,
+                          std::uintptr_t map, const std::string& name, bool& enabled, std::string& why);
 
 // CRC-32 (zlib's), as the manager keys its multimap by the lowercase key name.
 std::uint32_t Crc32(const std::string& text);

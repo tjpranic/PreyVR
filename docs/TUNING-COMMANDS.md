@@ -117,6 +117,7 @@ this session. "Menu only" means no command reaches it.
 | Interface | Menu up / down (`ui_offset_up`) | −45–45 degrees, + is up | 0 | `ui.offset <right> <up>` |
 | Interface | Text panel distance (`ui_text`) | 100–200 cm | 140 | `ui.text <100..200>` |
 | Interface | Laser hand (`pointer_hand`) | left (0), right (1), buttons only (2) | right | `ui.pointer <0..2>` |
+| Interface | Controller prompts (`controller_prompts`) | on/off | on | `ui.prompts <0\|1>` |
 | Interface | HUD style (`hud_layer`) | in the world (0), floating panel (1) | panel | `hud.layer <0\|1>` |
 | Interface | Reticle (`reticle_world`) | on the HUD (0), in the world (1) | world | `aim.world <0\|1>` |
 | Interface | Reticle size (`reticle_size`) | 50–200% | 100 | `aim.reticlesize <percent>` |
@@ -214,6 +215,7 @@ value report, as described above.
 | `ui.offset <right> <up>` | −90..90, −45..45 degrees | 0 0 | Moves the game menus around you on a cylinder, upright. Both values or neither. **Menu.** |
 | `ui.text` | 100–200 cm | 140 | Distance of notes, books, subtitles and tutorial cards. An open book or note moves to the new distance in the direction it opened. **Menu.** |
 | `ui.pointer` | 0 left, 1 right, 2 buttons only | 1 | Which hand's laser points at menus. **Menu.** |
+| `ui.prompts` | 0/1 | VR 1 | Game menus keep the controller's prompts under the laser: Prey's `hud_forceControllerGlyphs`, set and read back through the console. 0 puts Prey's 0 back. `applied=` is the value read back. **Menu.** |
 | `ui.panel` | 0 scene, 1 automatic, 2 force | 0 → VR 1 | Whether modal screens go to the floating panel. 2 is diagnostic. |
 | `ui.inventory` | 0/1 | 0 | Inventory and PDA on a see-through layer of their own. **Menu (Experimental).** |
 | `ui.stereo` | 0/1 | 0 | Depth for the inventory layer's parts. **Menu (Experimental).** |
@@ -247,7 +249,7 @@ value report, as described above.
 | `move.turn` / `move.fire` / `move.act` | 0/1 | 0 → VR 1 | Right-stick turning; right trigger fires; grip and face-button bindings. |
 | `move.all` | 0/1 | | Turns move, turn, fire and act on or off together. |
 | `move.firehold` | 0/1 | 1 | Holds the fire key while the trigger is held (GLOO, Disruptor). |
-| `move.bind <slot> <keyId>` | slot 0–12 | | Remaps a controller action's key: 0 interact, 1 inventory, 2 jump, 3 crouch, 4 wheel (Frame right bumper), 5 Prey's Y, 6 sprint, 7 psychoscope, 8–10 quick slots left/right/down, 11 torch, 12 psi. |
+| `move.bind <slot> <keyId>` | slot 0–14 | | Remaps a controller action's key: 0 interact, 1 inventory, 2 jump, 3 crouch, 4 PC wheel (unbound by default), 5 Prey's Y, 6 sprint, 7 psychoscope, 8–10 quick slots left/right/down, 11 torch, 12 psi, 13–14 the wheel's LB/RB (Frame bumpers, sent only while Prey's wheel is open). |
 | `input.post` | 0/1 | 0 → VR 1 | Lets the mod post input to the engine; every controller lane needs it. |
 | `input.force` | 0/1 | 0 | Bypasses the engine's posting check. Diagnostic. |
 | `input.key <keyId> [state] [valueMilli]` | | | Posts one raw input event. Diagnostic. |

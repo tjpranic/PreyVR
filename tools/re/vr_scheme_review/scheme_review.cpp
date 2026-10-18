@@ -11,6 +11,7 @@ struct Posted { int key; int value; };
 std::vector<Posted> posted;
 preyvr::dll::TrackingFrame tracked;
 bool focused = true;
+bool wheelOpen = false;   // Prey's weapon wheel (its focusmode map)
 int rejectedKey = 0;
 int failures = 0;
 
@@ -61,6 +62,7 @@ void NoteUseButton(bool, unsigned, bool, bool, unsigned) {}
 void RequestCarryRelease() {}
 void RequestDrawWeapon() {}
 void RequestUseTargetSuppression(bool) {}
+bool PreyWheelOpen() { return wheelOpen; }
 }
 
 void Check(bool ok, const char* name) {
@@ -70,6 +72,7 @@ void Check(bool ok, const char* name) {
 void Reset() {
     using namespace preyvr::dll;
     focused = true;
+    wheelOpen = false;
     rejectedKey = 0;
     tracked = {};
     posted.clear();
@@ -90,6 +93,10 @@ void Reset() {
 void Tick() {
     preyvr::dll::UpdateMoveLane();
     preyvr::dll::UpdateTurnAndFireLanes();
+}
+bool Sent(int key, int value) {
+    for (const auto& e : posted) { if (e.key == key && e.value == value) return true; }
+    return false;
 }
 bool ZeroFor(int key) {
     for (const auto& e : posted) { if (e.key == key && e.value == 0) return true; }
@@ -156,6 +163,28 @@ int main() {
     rejectedKey = locomotion::kKeyThumbLX; Tick();
     posted.clear(); rejectedKey = 0; Tick();
     Check(ZeroFor(locomotion::kKeyThumbLX), "refused neutralization is retried on the frame thread");
+
+    // **The Steam Frame's bumpers in play: Prey's LB/RB inside its wheel only.**
+    // Outside it Prey's bumpers lean, so they send nothing; a bumper held as
+    // the wheel opens waits for its release; the wheel closing lets it go.
+    Reset(); SetInteractionEnabled(1); Tick(); Tick();
+    posted.clear(); tracked.play.wheelSuitRepair = true; Tick();
+    Check(!Sent(input::kShoulderL, 1000), "the left bumper sends nothing outside Prey's wheel: no lean");
+    wheelOpen = true; posted.clear(); Tick();
+    Check(!Sent(input::kShoulderL, 1000), "held as the wheel opens, it waits for its release");
+    tracked.play.wheelSuitRepair = false; Tick(); posted.clear();
+    tracked.play.wheelSuitRepair = true; Tick();
+    Check(Sent(input::kShoulderL, 1000), "pressed in the wheel it is Prey's LB: a suit repair kit");
+    posted.clear(); wheelOpen = false; Tick();
+    Check(ZeroFor(input::kShoulderL), "the wheel closing with it held lets LB go");
+    tracked.play.wheelSuitRepair = false; Tick();
+    wheelOpen = true; Tick(); posted.clear();
+    tracked.play.wheelFood = true; Tick();
+    Check(Sent(input::kShoulderR, 1000) && !Sent(input::kMouse3, 1000),
+          "the right bumper in the wheel is Prey's RB (food), not the PC wheel");
+    tracked.play.wheelFood = false; posted.clear(); Tick();
+    Check(ZeroFor(input::kShoulderR), "and is let go");
+    SetInteractionEnabled(0); Tick();
 
     xrframe::FrameContract contract;
     contract.AllowSingleThreaded(true);

@@ -194,6 +194,10 @@ enum class MenuAction {
     NextPage,
     // The gamepad's Back, which Prey binds to menu_exit: the Steam Frame's View.
     Exit,
+    // The stick clicks, which Prey's menus bind: left autosort and centre the
+    // map, right drop, split a stack and reset the map's zoom.
+    LeftStick,
+    RightStick,
 };
 
 // A digital tap is two events: pressed, then released. Emitting only the press

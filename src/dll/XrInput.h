@@ -73,6 +73,7 @@ struct GameplayInput {
     bool special = false, weaponWheel = false;   // Prey's Y; the PC wheel
     bool sprint = false, psychoscope = false;
     bool quickSlotLeft = false, quickSlotRight = false, quickSlotDown = false, torch = false;
+    bool wheelSuitRepair = false, wheelFood = false;   // Prey's LB/RB, inside its wheel only
 };
 struct MenuInput {
     Navigation navigate{};   // the stick and navigation buttons, combined
@@ -80,6 +81,12 @@ struct MenuInput {
     bool confirm = false, back = false;
     bool secondary = false, tertiary = false;   // Prey's X and Y actions
     bool exit = false;
+    // Prey's LB/RB and LT/RT: the controller's tab and page buttons where it
+    // binds them (the Steam Frame's bumpers and grips); otherwise the grips are
+    // the tabs, and a page is also the trigger of the hand without the laser.
+    bool previousTab = false, nextTab = false, previousPage = false, nextPage = false;
+    bool leftStick = false, rightStick = false;   // the stick clicks
+    bool bothGrips = false;  // a two-handed hold, or the recenter chord: no tab or page
 };
 struct SystemInput {
     bool pause = false;  // tap: pause; hold: VR Options; with both grips: reset the view
