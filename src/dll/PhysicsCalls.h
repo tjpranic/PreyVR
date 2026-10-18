@@ -48,9 +48,10 @@ inline bool QueryDynamics(std::uintptr_t physics, Dynamics& out)
     return Finite(out.v) && Finite(out.w) && Finite(out.centre) && std::isfinite(out.mass);
 }
 
-// pe_action_set_velocity: type 10, ipart/partid unused (the whole entity),
-// v, w (x = the engine's "unused" NaN keeps the current spin),
-// bRotationAroundPivot 0 (about the centre of mass). It wakes a sleeping rigid body.
+// pe_action_set_velocity: type 10, ipart/partid unused (the whole entity; an
+// articulated body takes partid for one part's joint), v, w (x = the engine's
+// "unused" NaN keeps the current spin), bRotationAroundPivot 0 (about the centre
+// of mass). It wakes a sleeping rigid or articulated body.
 struct SetVelocityAction {
     int type = 10;
     int ipart = INT_MIN;

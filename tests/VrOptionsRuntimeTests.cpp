@@ -184,8 +184,9 @@ int main(){
  Check(!PhysicalMeleeEnabled(),"the physical wrench is off by default");
  set(options::PhysicalMelee,1);
  Check(PhysicalMeleeEnabled(),"physical wrench opt-in reaches consumer");
- Check(!PhysicalContactEnabled(),"physical contact is off by default");
- set(options::PhysicalContact,1);Check(PhysicalContactEnabled(),"physical contact opt-in reaches the contact lane");
+ Check(PhysicalContactEnabled(),"physical contact is on by default");
+ set(options::PhysicalContact,0);Check(!PhysicalContactEnabled(),"turning physical contact off reaches the contact lane");
+ set(options::PhysicalContact,1);Check(PhysicalContactEnabled(),"and on again");
  set(options::PushStrength,150);Check(PushStrength()==150,"push strength reaches the contact lane");
  Check(PsiTargetMode()==0&&!MedkitSlotEnabled(),"abilities start with native behavior");
  set(options::PsiTarget,1);Check(PsiTargetMode()==1,"head-directed psi reaches adapter");

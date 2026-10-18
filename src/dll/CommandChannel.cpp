@@ -597,6 +597,12 @@ bool ExecutePrompts(const std::vector<std::string>& args, std::ostringstream& ou
 bool ExecuteContact(const std::vector<std::string>& args, std::ostringstream& out)
 {
     if (args[0] != "contact") { return false; }
+    // contact log [0|1]: the per-event begin, end and push lines.
+    if (args.size() > 1 && args[1] == "log") {
+        int on = 1;
+        if (args.size() > 2) { ParseInt(args[2], on); }
+        SetContactEventLog(on != 0);
+    }
     out << "contact" << ContactReport();
     return true;
 }

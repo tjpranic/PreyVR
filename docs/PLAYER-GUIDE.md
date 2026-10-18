@@ -125,7 +125,10 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   the controller** (on by default: a free hand's thumb rests on a button or
   lifts, the index points or curls on the trigger, the other three close with
   the grip), the carry grip (hold, or press to toggle), hand or game grenade
-  throwing, and how hard thrown objects and grenades fly.
+  throwing, how hard thrown objects and grenades fly, and **Physical Contact**
+  with its push strength (on by default: your weapon and free hands push loose
+  objects and bodies; light ones keep up, heavy ones resist, friction lets you
+  drag them, a body moves limb by limb, and what you stand on is never pushed).
 - **Interface:** size, visible-area limit, panel curvature, controls guide, where
   the game's menus float (distance, left/right, up/down), the text panel's
   distance, which hand's laser points at menus, **controller prompts** (on by
@@ -154,9 +157,7 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   hand (on by default; off restores the game's carry in front of you), sticking
   charges to the surface you look at, long weapons held back toward the body,
   **Shots from the Muzzle**, **Scene Reticle**, the **Physical Wrench** with its
-  swing speed, **Physical Contact** with its push strength (your weapon and free hands push loose
-  objects: light ones keep up, heavy ones resist; friction lets you drag them), and the
-  inventory on a layer of its own, with optional depth.
+  swing speed, and the inventory on a layer of its own, with optional depth.
   **Shots from the Muzzle** makes every shot leave the weapon's muzzle along
   your controller's aim, so it lands where the barrel points at any distance,
   also from the hip or around a corner (otherwise the shot is aimed from your

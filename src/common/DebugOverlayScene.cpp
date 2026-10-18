@@ -295,6 +295,16 @@ void AddPhysical(Scene& scene, const Physical& p, unsigned mask)
             }
         }
     }
+    // The probe under the player's feet: orange over what they stand on (never
+    // pushed), grey over nothing.
+    if (p.foot && std::all_of(p.footBox.begin(), p.footBox.end(), [](Vec3 v) { return Finite(v); })) {
+        const Color color = p.standing ? kWarn : kMuted;
+        for (unsigned corner = 0; corner < 8; ++corner) {
+            for (unsigned bit = 1; bit < 8; bit <<= 1) {
+                if (!(corner & bit)) { scene.lines.push_back({p.footBox[corner + 1], p.footBox[(corner | bit) + 1], color, .0015f, 1.2f}); }
+            }
+        }
+    }
     // The contact lane's contacts: overlap filled cyan, sweep a yellow ring, a
     // body violet; each with its normal. The first few are labelled.
     unsigned labelled = 0;

@@ -82,6 +82,10 @@ struct ContactOverlayState {
     // The hands' boxes, right then left, when they push (physical::Bounds order).
     std::array<bool, 2> handBox{};
     std::array<std::array<Vec3, 9>, 2> hands{};
+    // The probe under the player's feet, when it ran; `standing` when it or the
+    // engine found something underfoot.
+    bool feet = false, standing = false;
+    std::array<Vec3, 9> feetBox{};
     struct Mark { Vec3 point{}, normal{}; float dist = 0; bool sweep = false, articulated = false; Vec3 push{}; bool pushed = false; };
     std::array<Mark, 16> marks{};
     unsigned count = 0;

@@ -162,9 +162,11 @@ void LayoutChecks(){
  for(unsigned i=0;i<Count;++i)Check(seen[i]==1,"every setting appears on exactly one tab");
  Check(recenter==1&&clear==1&&calibrate==1,"each button appears once");
  Check(MenuEntries(MenuPages()).empty(),"past the last tab there is nothing");
- for(const int e:{CarryHand,GrenadeDeploy,LongReach,MuzzleAim,PhysicalMelee,SwingSpeed,PhysicalContact,
-                  PushStrength,InventoryLayer,InventoryStereo,InventoryDepth})
+ for(const int e:{CarryHand,GrenadeDeploy,LongReach,MuzzleAim,PhysicalMelee,SwingSpeed,
+                  InventoryLayer,InventoryStereo,InventoryDepth})
   Check(Has(MenuEntries(MenuPages()-1),e),"features still being proven, and their tuning, on the experimental tab");
+ Check(Has(MenuEntries(1),PhysicalContact)&&Has(MenuEntries(1),PushStrength)&&Defaults()[PhysicalContact]==1,
+       "physical contact, proven, is on by default on the hands tab with its strength");
  Check(MenuEntries(0)[0]==Turn&&Has(MenuEntries(0),BodyFollow)&&Has(MenuEntries(0),BodyGlide),"comfort: turning first, body following");
  for(const int e:{UiDistance,UiOffsetRight,UiOffsetUp,UiText,PointerHand,HudLayer,ReticleWorld,ReticleSize,ReticleFallback})
   Check(Has(MenuEntries(2),e),"menu placement, the HUD and the reticle on the interface tab");

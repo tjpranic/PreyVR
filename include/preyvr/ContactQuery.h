@@ -23,6 +23,13 @@ struct BoxPrimitive {
 };
 static_assert(sizeof(BoxPrimitive) == 0x40 && offsetof(BoxPrimitive, oriented) == 0x24 &&
               offsetof(BoxPrimitive, centre) == 0x28 && offsetof(BoxPrimitive, half) == 0x34);
+// primitives::sphere (itype 4): centre +0x00 (the collide's sphere branch zeroes
+// and restores it), radius +0x0C.
+struct SpherePrimitive {
+    Vec3 centre{};
+    float radius = 0;
+};
+static_assert(sizeof(SpherePrimitive) == 0x10 && offsetof(SpherePrimitive, radius) == 0x0C);
 
 // An oriented box in world space: unit axes and half-extents along them.
 struct Box {

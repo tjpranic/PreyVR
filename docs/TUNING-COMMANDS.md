@@ -108,6 +108,8 @@ this session. "Menu only" means no command reaches it.
 | Hands | Grenade throw (`grenade_hand`) | game throw (0), hand throw (1) | hand | `grenade.hand <0\|1>` |
 | Hands | Object throw strength (`carry_throw_strength`) | 50–300 % | 140 | `carry.throw <gain> ...` (first value) |
 | Hands | Grenade throw strength (`grenade_throw_strength`) | 50–400 % | 130 | `grenade.throw <vrFactor> ...` (first value) |
+| Hands | Physical contact (`physical_contact`) | on/off | on | menu only (`contact` reports) |
+| Hands | Push strength (`push_strength`) | 25–200 % of 400 N | 100 | menu only |
 | Interface | Interface size (`ui_scale`) | 20–200 % | 100 | `ui.scale <20..200>` |
 | Interface | Visible-area limit (`ui_margin`) | 30–100 % | 72 | `ui.margin <30..100>` |
 | Interface | Panel curvature (`ui_curve`) | 0–60 degrees | 35 | `ui.curve <0..60>` |
@@ -142,8 +144,6 @@ this session. "Menu only" means no command reaches it.
 | Experimental | Shots from the muzzle (`muzzle_aim`) | on/off | off | `aim.shot <0\|1>` |
 | Experimental | Physical wrench (`physical_melee`) | on/off | off | menu only (`physical` reports) |
 | Experimental | Minimum swing speed (`swing_speed`) | 80–250 cm/s | 120 | menu only |
-| Experimental | Physical contact (`physical_contact`) | on/off | off | menu only (`contact` reports) |
-| Experimental | Push strength (`push_strength`) | 25–200 % of 400 N | 100 | menu only |
 | Experimental | Inventory layer (`inventory_layer`) | on/off | off | `ui.inventory <0\|1>` |
 | Experimental | Stereo inventory (`inventory_stereo`) | on/off | off | `ui.stereo <0\|1>` |
 | Experimental | Inventory depth (`inventory_depth`) | 0–100 % | 25 | `ui.depth <0..100>` |
@@ -372,7 +372,7 @@ value report, as described above.
 | `psi.target` | 0 original, 1 head, 2 left controller | 0 | Psi power aiming. **Menu.** |
 | `medkit.slot` | 0/1 | 0 | Left-hip medkit. **Menu.** |
 | `physical` | report | | Physical wrench state and the first refusing gate (`gate=`); set it in the menu. Also logged every 10 s when it changes. |
-| `contact` | report | | Physical contact: queries, objects per query, contacts by kind, begins/ends, pushes (`pushes`, `pushBegins`, `limited`, `sliding`, `pushFailed`, `dvMaxCms`, `push` = the push contracts passed), refusals, cost per frame (`usAvg`, `usMax`) and the first refusing gate. Also logged every 10 s when it changes. |
+| `contact [log [0\|1]]` | report | | Physical contact: queries, objects per query, contacts by kind, begins/ends, pushes (`pushes`, `pushBegins`, `limited`, `sliding`, `pushFailed`, `dvMaxCms`, `push` = the push contracts passed; corpses: `bodies` = the articulated contracts passed, `partPushes`, `hosted` = refused, a live character's skeleton; `immovable` = refused, the game gave it no mass; `standing` = skipped, the player stands on it; `ground` = the player's physics class, `living` once read). With `log 1`, `stand` and `stand_end` lines mark what the player starts and stops standing on (`via=feet` = the feet's samples found its top, `via=engine` = the engine's ground collider), refusals, cost per frame (`usAvg`, `usMax`) and the first refusing gate. Also logged every 10 s when it changes. `log 1` (or `log` alone) turns on the per-event `begin`, `end` and `push` lines, `log 0` off again (`log=`); off by default. |
 
 ### Stereo and rendering
 
