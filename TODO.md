@@ -1,7 +1,7 @@
 # TODO
 
 Interactibility:
-- Fine tune wrench combat: increase the distance the wrench can hit at and adjust how hard the swing has to be in order to be a heavy hit
+- Fine tune wrench combat: increase the distance the wrench can hit at.
 - Fine dextrous finger based interactions
 - Add functionality to allow me to rotate objects I'm carrying
 - Have weapons and hands stop against surfaces

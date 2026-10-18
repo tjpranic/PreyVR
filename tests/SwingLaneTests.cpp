@@ -358,8 +358,9 @@ int main()
     };
     const Vec3 headPoint{10.06f, 20.28f, 1};
 
-    Check(SwingLaneWanted() && FreeSwingEnabled() == 1 && SwingSpeed() == 120 && SwingEventLog() == 1,
-          "on by default, at 120 cm/s, its event lines on");
+    Check(SwingLaneWanted() && FreeSwingEnabled() == 1 && SwingSpeed() == 120 && HeavySwingSpeed() == 700 && SwingEventLog() == 0,
+          "on by default, at 120 cm/s and heavy from 700, its event lines off");
+    SetSwingEventLog(1);   // most checks below read the event lines
     listed = {&self, &carried, &selfBody, &selfHosted, &wall, &capsule, nullptr};
     still(1);
     Check(Logged("preyvr_swing gate result=0 rows=7+19+15 entitySystem=1 surfaces=1"), "the gate line names its rows and namers");
@@ -485,6 +486,40 @@ int main()
     Check(heavyCall && heavyFatigue, "the hit and its fatigue both told it is charged");
     Check(SwingRecentlyStruck(&crate) && SwingRecentlyStruck(&body) && !SwingRecentlyStruck(&glass) && handoffs.load() == 2,
           "struck props and bodies are the hit's to move for a moment");
+
+    // --- a higher heavy swing speed: the same swing is a normal hit ---
+    responses.clear();
+    still(20);
+    SetHeavySwingSpeed(900);
+    responses[&glass] = {true, true, true, headPoint, 140, 1};
+    swingAt(8.5f);
+    Check(Logged("preyvr_swing settings", "heavyCms=900 fullCms=1200") && Logged("strike", "surfaceName=mat_glass", "tier=normal scale=0.97"),
+          "Heavy Swing Speed at 9 m/s: an 8.5 m/s swing is Prey's normal hit, nearly whole");
+    // --- a minimum above the heavy speed: every strike heavy ---
+    responses.clear();
+    still(20);
+    SetSwingSpeed(800);
+    Check(SwingSpeed() == 700, "the minimum swing speed stops at 7 m/s");
+    SetHeavySwingSpeed(300);
+    responses[&glass] = {true, true, true, headPoint, 140, 1};
+    swingAt(7.5f);
+    Check(Logged("preyvr_swing settings", "minCms=700 heavyCms=700 fullCms=1000") &&
+          Logged("strike", "surfaceName=mat_glass", "tier=heavy scale=1.08"),
+          "a heavy speed under the minimum: the strike is heavy from the minimum on");
+    responses.clear();
+    still(20);
+    swingAt(6.5f);
+    Check(!Logged("speedCms=650", "result=struck"), "and under the minimum nothing strikes");
+    SetSwingSpeed(50);
+    Check(SwingSpeed() == 100, "nor below 1 m/s");
+    SetSwingSpeed(120);
+    SetHeavySwingSpeed(700);
+    responses.clear();
+    still(20);
+    listed = {&glass, &crate, &body};
+    responses[&glass] = {true, true, true, headPoint, 140, 1};
+    responses[&crate] = {false, false, true, headPoint, 131, 2};
+    responses[&body] = {true, false, false, headPoint, 131, 12};
     Check(pulses == strikes.load(), "every strike pulsed");
     Check(Logged("begin", "type=rigid", "entityId=42 class=ArkPhysicsProp name=Crate_1") && Logged("begin", "class=ArkPhysicsProp", "kind=head"),
           "an entity by class and name; the head's own sweep found the crate");

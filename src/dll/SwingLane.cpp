@@ -40,9 +40,11 @@ using swing::Decision;
 constexpr unsigned kMaxEntities = 64, kMaxTouches = 48, kLogLinesPerSecond = 40;
 constexpr std::uint64_t kFreshNs = 100000000ull;
 
-// The option (Free-Swing Wrench, on by default) and Minimum Swing Speed (cm/s).
-std::atomic<bool> enabled{true}, fault{false}, eventLog{true}, installed{false};
-std::atomic<unsigned> minimumCms{120};
+// The option (Free-Swing Wrench, on by default), Minimum and Heavy Swing Speed (cm/s).
+std::atomic<bool> enabled{true}, fault{false}, eventLog{false}, installed{false};
+std::atomic<unsigned> minimumCms{120}, heavyCms{700};
+// The charged hit's whole charge bonus comes this much faster than the heavy speed.
+constexpr float kFullBonusAbove = 3.0f;
 std::atomic<std::uint64_t> settingsGeneration{1};
 std::atomic<std::uint64_t> failed{0}, attacksBlocked{0}, substituted{0}, impulsesTurned{0}, collisionsTurned{0}, handoffs{0};
 std::atomic<std::uint64_t> frames{0}, queries{0}, refused{0}, overflows{0}, entities{0}, entitiesMax{0};
@@ -588,6 +590,9 @@ swing::StrikeSettings Settings()
 {
     swing::StrikeSettings s{};
     s.minSpeed = static_cast<float>(minimumCms.load()) * .01f;
+    // A heavy speed at or under the minimum makes every strike heavy.
+    s.heavySpeed = std::max(static_cast<float>(heavyCms.load()) * .01f, s.minSpeed);
+    s.fullSpeed = s.heavySpeed + kFullBonusAbove;
     return s;
 }
 bool LogBudget()
@@ -986,10 +991,16 @@ void SetFreeSwing(unsigned on)
 unsigned FreeSwingEnabled() { return enabled.load() ? 1u : 0u; }
 void SetSwingSpeed(unsigned cms)
 {
-    minimumCms = std::clamp(cms, 80u, 250u);
+    minimumCms = std::clamp(cms, 100u, 700u);
     ++settingsGeneration;
 }
 unsigned SwingSpeed() { return minimumCms.load(); }
+void SetHeavySwingSpeed(unsigned cms)
+{
+    heavyCms = std::clamp(cms, 300u, 1500u);
+    ++settingsGeneration;
+}
+unsigned HeavySwingSpeed() { return heavyCms.load(); }
 bool SwingRecentlyStruck(const void* collider)
 {
     if (!collider) { return false; }

@@ -117,8 +117,12 @@ void SettingsChecks(){
  Check(Defaults()[PushStrength]==100&&Valid(PushStrength,25)&&Valid(PushStrength,200)&&!Valid(PushStrength,250),
        "push strength, 25..200 percent");
  // Object Nudges, removed 2026-10-18: a file saved with them keeps everything else.
- Check(Parse("version=1\nphysical_melee=1\nphysical_contacts=1\nswing_speed=80\ncontact_strength=50\n",parsed,&seen)&&
-       !seen[FreeSwing]&&parsed[SwingSpeed]==80,"the nudge keys and the Physical Wrench's are retired, the swing speed kept");
+ Check(Parse("version=1\nphysical_melee=1\nphysical_contacts=1\nswing_speed=150\ncontact_strength=50\n",parsed,&seen)&&
+       !seen[FreeSwing]&&parsed[SwingSpeed]==150,"the nudge keys and the Physical Wrench's are retired, the swing speed kept");
+ Check(Valid(SwingSpeed,100)&&Valid(SwingSpeed,700)&&!Valid(SwingSpeed,90)&&!Valid(SwingSpeed,710)&&Defaults()[SwingSpeed]==120,
+       "the minimum swing speed: 1 to 7 m/s, 1.2 by default");
+ Check(Parse("version=1\nswing_speed=80\nhaptic_strength=35\n",parsed,&seen)&&parsed[SwingSpeed]==100&&parsed[HapticStrength]==35,
+       "a file saved at the old 80 still loads, the speed at the new minimum");
  Check(Defaults()[FreeSwing]==1,"the free-swing wrench is on by default");
  {const auto text=Serialize(parsed);
   Check(text.find("physical_contacts")==std::string::npos&&text.find("contact_strength")==std::string::npos,
@@ -163,11 +167,17 @@ void LayoutChecks(){
  for(unsigned i=0;i<Count;++i)Check(seen[i]==1,"every setting appears on exactly one tab");
  Check(recenter==1&&clear==1&&calibrate==1,"each button appears once");
  Check(MenuEntries(MenuPages()).empty(),"past the last tab there is nothing");
- for(const int e:{CarryHand,GrenadeDeploy,LongReach,MuzzleAim,FreeSwing,SwingSpeed,
+ for(const int e:{CarryHand,GrenadeDeploy,LongReach,MuzzleAim,
                   InventoryLayer,InventoryStereo,InventoryDepth})
   Check(Has(MenuEntries(MenuPages()-1),e),"features still being proven, and their tuning, on the experimental tab");
  Check(Has(MenuEntries(1),PhysicalContact)&&Has(MenuEntries(1),PushStrength)&&Defaults()[PhysicalContact]==1,
        "physical contact, proven, is on by default on the hands tab with its strength");
+ Check(Has(MenuEntries(1),FreeSwing)&&Has(MenuEntries(1),SwingSpeed)&&Has(MenuEntries(1),HeavySwingSpeed)&&
+       !Has(MenuEntries(MenuPages()-1),FreeSwing)&&Defaults()[FreeSwing]==1,
+       "the free-swing wrench, proven, is on by default on the hands tab with its two speeds");
+ Check(Defaults()[HeavySwingSpeed]==700&&Valid(HeavySwingSpeed,300)&&Valid(HeavySwingSpeed,1500)&&!Valid(HeavySwingSpeed,1550)&&
+       !Valid(HeavySwingSpeed,250)&&Display(HeavySwingSpeed,700)==L"700 CM/S",
+       "heavy swings from 7 m/s by default, 3 to 15 m/s");
  Check(MenuEntries(0)[0]==Turn&&Has(MenuEntries(0),BodyFollow)&&Has(MenuEntries(0),BodyGlide),"comfort: turning first, body following");
  for(const int e:{UiDistance,UiOffsetRight,UiOffsetUp,UiText,PointerHand,HudLayer,ReticleWorld,ReticleSize,ReticleFallback})
   Check(Has(MenuEntries(2),e),"menu placement, the HUD and the reticle on the interface tab");

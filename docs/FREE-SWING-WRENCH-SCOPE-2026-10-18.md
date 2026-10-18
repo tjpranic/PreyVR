@@ -1,8 +1,10 @@
 # Free-swing wrench: scope
 
-Status: **phase 2 (strikes) worn 2026-10-18 on PreyVR-38: works.** The wearer: "works
-fantastically", smacking things, breaking glass and fighting mimics. Phase 3 (polish)
-is next. Phase 0 (static contracts) is done. The user's four
+Status: **all phases done 2026-10-18.**
+- Phase 2 (strikes) was worn on PreyVR-38: "works fantastically", smacking things,
+  breaking glass and fighting mimics.
+- Phase 3 (polish) passed its regression run on PreyVR-39.
+- PreyVR-40 widens Minimum Swing Speed to 100–700 cm/s (see the end of "Phase 3"). Phase 0 (static contracts) is done. The user's four
 decisions are recorded under "Decisions". It replaces
 the Physical Wrench ([PHYSICAL-MELEE-2026-09-30.md](PHYSICAL-MELEE-2026-09-30.md))
 entirely. It builds on the physical contact lane
@@ -254,7 +256,7 @@ otherwise play the animation and hit ahead of the camera.
 | 0. Static contracts | **Done 2026-10-18** (below). | Offline bytes. | S |
 | 1. Strike detection, diagnostic only | **Worn 2026-10-18 on PreyVR-37: works** (below). The wrench query (`0x117`), speeds, locks and the line-of-sight ray. **No native call.** Log each would-be strike: type, vtable, foreign-data kind, surface name and breakability, speed, decision. Log once per equip the weapon's charge fields (`+0x524..+0x52C`), the component's fatigue and packages, and the impulse and mass stats. Overlay marks. | Headset: swing at a wall, glass, a prop, a corpse, a live enemy and the air. | M |
 | 2. Strikes | **Worn 2026-10-18 on PreyVR-38: works** (below). The direct component hit, the third hook, the speed tiers, stamina, the trigger block, the push hand-off. The old lane's gate, rays and attack hooks are removed. | Headset: damage, glass, sounds and decals, stamina use, knockback, one hit per pass, no faults. | M |
-| 3. Polish | Options on the Hands tab and their defaults, the player guide and tuning commands, quieter logs. | Headset regression. | S–M |
+| 3. Polish | **Regression passed 2026-10-18 on PreyVR-39** (below): the options on the Hands tab with a new Heavy Swing Speed, quieter logs, the player guide and tuning commands. | Headset regression. | S–M |
 
 Not in scope:
 - the wrench stopping at walls (no visual clamp);
@@ -701,7 +703,63 @@ break glass and fight mimics."
 - **Draining:** three full heavy hits drained the player.
 - `SwingNative.h` now says what the pair is.
 
-## Evidence
+## Phase 3: polish (2026-10-18, package PreyVR-39)
+
+**Heavy Swing Speed** (user request). In PreyVR-38, 33 of 54 strikes were heavy.
+- **The setting:** `heavy_swing_speed`, 300–1500 cm/s, default 700 (the old built-in
+  7 m/s). Prey's charged hit starts there.
+- **The charge bonus:** the whole bonus comes 3 m/s further on (10 m/s at the default).
+- **Raising it** keeps heavy hits for the hardest swings. The normal hit's 0.5–1 scale
+  then spans the wider range up to it.
+- The `settings` line logs `heavyCms` and `fullCms`.
+
+**The Hands tab.**
+- Free-Swing Wrench, Minimum Swing Speed and Heavy Swing Speed now follow Physical
+  Contact and Push Strength there. They are off the Experimental tab.
+- Free-Swing Wrench stays on by default.
+
+**Quieter logs.**
+- The per-event `begin`, `strike` and `swing` lines are off by default;
+  `swing log 1` turns them on.
+- The once-only lines (`gate`, `hooks`, `settings`, `wrench`, `self`) and the 10 s
+  report always run.
+
+**Docs:**
+- the player guide describes the wrench under Hands;
+- the tuning commands list the three settings there.
+
+**Tests** (`ctest` 85/85):
+- the options tests: the three on the Hands tab and not Experimental, the heavy
+  speed's default, range and display;
+- the runtime test: the setting reaches its lane;
+- the lane test: event lines off by default, and at Heavy Swing Speed 9 m/s an 8.5 m/s
+  swing is a normal hit at 0.97.
+- The options runtime test's search for a refused `swing_speed` now looks for the key
+  at a line's start, since `heavy_swing_speed` contains it.
+
+**Regression checklist** (PreyVR-39):
+1. **VR Options > Hands:** Free-Swing Wrench (on), Minimum Swing Speed (150 in your
+   file) and Heavy Swing Speed (700). The Experimental tab no longer lists them.
+2. **Hits:** a wall, glass, a prop and a mimic still hit as in PreyVR-38.
+3. **Heavy Swing Speed:** raise it (to 1000, say). Only your hardest swings should now
+   land the heavy, more knockback hit.
+4. **Pushing:** props still push with the wrench and your hands.
+5. The trigger still does nothing with the wrench out.
+
+The wearer confirmed it tested and working.
+
+**Wider minimum swing speed** (user request, package PreyVR-40).
+- **The range:** Minimum Swing Speed is now 100–700 cm/s (was 80–250), default still
+  120.
+- **Older files:** a file saved at 80 or 90 rises to 100 on load. Any other
+  out-of-range value would still reject the whole file, so the old floor is mapped
+  instead.
+- **Meeting the heavy speed:** the minimum can now reach Heavy Swing Speed (300 at its
+  lowest). A heavy speed at or under the minimum makes every strike heavy, from the
+  minimum on.
+- **Tests:** the options test covers the range and the old 80 loading. The lane test:
+  at minimum 7 m/s and heavy 3 m/s, a 7.5 m/s strike is heavy at 1.08, 6.5 m/s does not
+  strike, and the minimum stops at 1 and 7 m/s.
 
 ## Evidence
 

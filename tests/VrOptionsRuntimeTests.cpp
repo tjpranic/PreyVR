@@ -19,6 +19,7 @@ void SetFreeSwing(unsigned v){applied[options::FreeSwing]=v;}unsigned FreeSwingE
 void SetPhysicalContact(unsigned v){applied[options::PhysicalContact]=v;}unsigned PhysicalContactEnabled(){return applied[options::PhysicalContact];}
 void SetPushStrength(unsigned v){applied[options::PushStrength]=v;}unsigned PushStrength(){return applied[options::PushStrength];}
 void SetSwingSpeed(unsigned v){applied[options::SwingSpeed]=v;}unsigned SwingSpeed(){return applied[options::SwingSpeed];}
+void SetHeavySwingSpeed(unsigned v){applied[options::HeavySwingSpeed]=v;}unsigned HeavySwingSpeed(){return applied[options::HeavySwingSpeed];}
 void QueueHaptic(Hand,haptics::Event,const TrackingFrame&){}
 DWORD SetReticleInWorld(unsigned v){applied[options::ReticleWorld]=v;return 0;}
 unsigned ReticleInWorld(){return applied[options::ReticleWorld];}
@@ -184,6 +185,8 @@ int main(){
  Check(FreeSwingEnabled(),"the free-swing wrench is on by default");
  set(options::FreeSwing,0);
  Check(!FreeSwingEnabled(),"turning the free-swing wrench off reaches its lane");
+ Check(HeavySwingSpeed()==700,"heavy swings from 7 m/s by default");
+ set(options::HeavySwingSpeed,900);Check(HeavySwingSpeed()==900,"the heavy swing speed reaches its lane");
  Check(PhysicalContactEnabled(),"physical contact is on by default");
  set(options::PhysicalContact,0);Check(!PhysicalContactEnabled(),"turning physical contact off reaches the contact lane");
  set(options::PhysicalContact,1);Check(PhysicalContactEnabled(),"and on again");
@@ -229,7 +232,7 @@ int main(){
   Check(SwingSpeed()==swing&&SnapTurnDegrees()==turn,"a value the setting does not take changes nothing");
   const auto text=readFile();auto stored=options::Defaults();
   Check(options::Parse(text,stored)&&stored[options::HapticStrength]==35,"and the one taken is saved");
-  Check(text.find("swing_speed")==std::string::npos,"the refused one is not saved as a choice");}
+  Check(text.find("\nswing_speed=")==std::string::npos,"the refused one is not saved as a choice");}
  {// Every setting reaches its lane, reads back, and is saved like the rest.
   const std::pair<unsigned,int> chosen[]={
    {options::UiDistance,150},{options::UiOffsetRight,20},{options::UiOffsetUp,-10},{options::UiText,180},

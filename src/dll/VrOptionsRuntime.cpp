@@ -170,6 +170,7 @@ constexpr Wiring wiring[]={
  {options::HapticStrength,Set<SetHapticStrength>,Get<HapticStrength>},
  {options::FreeSwing,Set<SetFreeSwing>,Get<FreeSwingEnabled>},
  {options::SwingSpeed,Set<SetSwingSpeed>,Get<SwingSpeed>},
+ {options::HeavySwingSpeed,Set<SetHeavySwingSpeed>,Get<HeavySwingSpeed>},
  {options::PhysicalContact,Set<SetPhysicalContact>,Get<PhysicalContactEnabled>},
  {options::PushStrength,Set<SetPushStrength>,Get<PushStrength>},
  {options::PsiTarget,Set<SetPsiTargetMode>,Get<PsiTargetMode>},
