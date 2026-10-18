@@ -9,7 +9,7 @@ BASE=0x180000000
 def verify():
     image=Image(DEFAULT_MODULE);digest,at=image.sha256,image.at
     entries=native_rows(ROOT/'include/preyvr/SwingNative.h')
-    assert len(entries)==6
+    assert len(entries)==7
     relocs=image.relocations()
     checks=[]
     for rva,size,expected,name in entries:
@@ -121,6 +121,14 @@ def verify():
         "dispatch message: the class's name (+0x10)":(0x5618d2,'41ff5010'),
         "dispatch message: the entity's name (+0x78)":(0x5618e1,'41ff5078'),
         'the player singleton fetches actor 0x7777':(0x157c9ad,'ba77770000'),
+        "the wrench's attack passes its charge bonus to the fatigue setter (XMM2)":(0x16b05a3,'f30f10902c050000'),
+        'and its component (RCX)':(0x16b05ab,'488d88c8040000'),
+        'and its charged flag (DL)':(0x16b05b2,'0fb69031050000'),
+        'and calls the fatigue setter':(0x16b05b9,'e832fad0ff'),
+        'the setter keeps the charged flag from DL':(0x13c0009,'0fb6da'),
+        'and the bonus from XMM2':(0x13c000c,'0f28f2'),
+        'and the component from RCX':(0x13c000f,'488be9'),
+        "the hit reads the weapon's entity at +0x40":(0x13bf95d,'498b5e40'),
         "the component's fatigue setter writes +0x38 (phase 2)":(0x13c0058,'f30f114538'),
     }
     for name,(rva,code) in witnesses.items():

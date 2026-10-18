@@ -14,7 +14,8 @@ namespace sn = preyvr::swing::native;
 namespace pn = preyvr::physical::native;
 static_assert(contract::Gated(sn::Contracts,sn::CollisionEventBuilder)&&contract::Gated(sn::Contracts,sn::AddDeferredEvent)&&
               contract::Gated(sn::Contracts,sn::SendSignalPackage)&&contract::Gated(sn::Contracts,sn::StaminaAvailable)&&
-              contract::Gated(sn::Contracts,sn::StaminaCharge)&&contract::Gated(sn::Contracts,sn::GetSurfaceType));
+              contract::Gated(sn::Contracts,sn::StaminaCharge)&&contract::Gated(sn::Contracts,sn::GetSurfaceType)&&
+              contract::Gated(sn::Contracts,sn::FatigueSetter));
 // The hit itself, GetHits, the hit append and the impulse wrapper are the
 // physical-melee gate's rows; so are the attack the free swing blocks and WeaponHit.
 static_assert(contract::Gated(pn::Contracts,sn::ComponentHit)&&contract::Gated(pn::Contracts,pn::GetHits)&&

@@ -1,6 +1,8 @@
-// The free-swing wrench, phase 1: the production lane with Prey replaced at its
-// ABI boundary -- the broadphase, the per-entity box test, the physical entities'
-// interface, the entity system, the surface types, stamina and the scenery ray.
+// The free-swing wrench: the production lane with Prey replaced at its ABI
+// boundary -- the broadphase, the per-entity box test, the physical entities'
+// interface, the entity system, the surface types, stamina, the scenery ray, and
+// (phase 2) the hit, its fatigue setter, Prey's stamina check and the four hooks'
+// originals.
 #include "../src/dll/SwingLane.cpp"
 #include "TestSupport.h"
 #include <cstdlib>
@@ -137,7 +139,7 @@ int surfaceManager = 0;
 // The player (stamina at +0x678 then +0x88: two floats at +0x10) and the wrench
 // (its vtable, charge fields and component).
 alignas(8) unsigned char playerObject[0x800]{}, staminaObject[0x40]{}, wrench[0x600]{};
-Slot wrenchTable[4]{};
+Slot fakeWrenchTable[4]{};
 void SetStamina(float a, float b)
 {
     Put(staminaObject, sn::StaminaPair, &a, 4);
@@ -145,7 +147,7 @@ void SetStamina(float a, float b)
 }
 void MakeWrench()
 {
-    const auto table = reinterpret_cast<std::uintptr_t>(wrenchTable);
+    const auto table = reinterpret_cast<std::uintptr_t>(fakeWrenchTable);
     Put(wrench, 0, &table, 8);
     const float time = 0, full = .8f, bonus = .5f, fatigue = 12.5f;
     Put(wrench, sn::ChargeTime, &time, 4);
@@ -156,6 +158,71 @@ void MakeWrench()
     Put(wrench, sn::ComponentOffset + sn::FatiguePerHit, &fatigue, 4);
     const auto stamina = reinterpret_cast<std::uintptr_t>(staminaObject);
     Put(playerObject, sn::PlayerStamina + sn::StaminaPointer, &stamina, 8);
+    const std::uintptr_t weaponEntity = 0xe17;
+    Put(wrench, sn::WeaponEntity, &weaponEntity, 8);
+}
+
+// The strike's engine. The hit does what Prey's does with the hooks in place: asks
+// GetHits for its hits, pushes through the impulse wrapper, and builds the collision
+// with the weapon's entity. Each original records what it was given.
+struct HitCall { std::uintptr_t component = 0, weapon = 0; float angle = -1, scale = 0; bool charged = false; };
+std::vector<HitCall> hitCalls;
+std::vector<scene::Hit> hitsSeen;
+Vec3 impulseGiven{}, collisionGiven{};
+unsigned nativeGetHits = 0, nativeImpulses = 0, nativeCollisions = 0, nativeAttacks = 0, staminaChecks = 0;
+struct FatigueCall { std::uintptr_t component = 0; bool charged = false; float bonus = 0; };
+std::vector<FatigueCall> fatigueCalls;
+void __fastcall FakeAppend(void* vector, const scene::Hit* hit)
+{
+    auto* v = static_cast<HitVector*>(vector);
+    Check(!v->begin && !v->end && !v->capacity, "an empty engine vector at the append");
+    v->begin = new scene::Hit(*hit);
+    v->end = v->capacity = v->begin + 1;
+}
+HitVector* __fastcall FakeGetHits(std::uintptr_t, HitVector* out, std::uintptr_t, float) { ++nativeGetHits; *out = {}; return out; }
+void __fastcall FakeImpulse(void*, void*, const Vec3* d, int, std::uintptr_t, float, float, float) { ++nativeImpulses; impulseGiven = *d; }
+void __fastcall FakeBuilder(void*, void*, const Vec3* d, void*, void*, float, float, bool, short) { ++nativeCollisions; collisionGiven = *d; }
+bool __fastcall FakeAttack(std::uintptr_t, unsigned, const void*, int, float) { ++nativeAttacks; return true; }
+const Vec3 nativeDirection{0, 1, 0};
+int __fastcall FakeComponentHit(std::uintptr_t component, float angle, std::uintptr_t weapon, float scale, bool charged)
+{
+    hitCalls.push_back({component, weapon, angle, scale, charged});
+    HitVector v{};
+    GetHitsHook(component, &v, weapon, angle);
+    for (auto* h = v.begin; h != v.end; ++h) { hitsSeen.push_back(*h); }
+    delete v.begin;
+    void* entity = nullptr;
+    std::memcpy(&entity, reinterpret_cast<const void*>(weapon + sn::WeaponEntity), sizeof(entity));
+    ImpulseHook(nullptr, hitsSeen.empty() ? nullptr : hitsSeen.back().collider, &nativeDirection, 1, weapon, 1, 0, 100);
+    BuilderHook(nullptr, nullptr, &nativeDirection, entity, nullptr, 10, .2f, true, 3);
+    return 1;
+}
+void __fastcall FakeSetFatigue(std::uintptr_t component, bool charged, float bonus)
+{
+    fatigueCalls.push_back({component, charged, bonus});
+    const float fatigue = charged ? 25.0f : 12.5f;
+    std::memcpy(reinterpret_cast<void*>(component + sn::FatiguePerHit), &fatigue, 4);
+}
+bool __fastcall FakeStaminaAvailable(void* stamina)
+{
+    ++staminaChecks;
+    float a = 0, b = 0;
+    std::memcpy(&a, static_cast<const std::uint8_t*>(stamina) + sn::StaminaPair, 4);
+    std::memcpy(&b, static_cast<const std::uint8_t*>(stamina) + sn::StaminaPair + 4, 4);
+    return a != b;
+}
+bool installFails = false;
+unsigned installs = 0;
+bool FakeInstall(const Natives&)
+{
+    ++installs;
+    if (installFails) { return false; }
+    originalAttack = FakeAttack;
+    originalGetHits = FakeGetHits;
+    originalImpulse = FakeImpulse;
+    originalBuilder = FakeBuilder;
+    installed = true;
+    return true;
 }
 
 DWORD FakeResolve(const GameplayPoseFrame& frame, Natives& n)
@@ -166,13 +233,18 @@ DWORD FakeResolve(const GameplayPoseFrame& frame, Natives& n)
     n.carried = &carried;
     n.playerObject = frame.player;
     n.articulated = reinterpret_cast<std::uintptr_t>(bodyTable);
-    n.wrench = reinterpret_cast<std::uintptr_t>(wrenchTable);
+    n.wrench = reinterpret_cast<std::uintptr_t>(fakeWrenchTable);
     n.entitiesInBox = Broadphase;
     n.collide = FakeCollide;
     n.entitySystem = &entitySystem;
     n.surfaces = &surfaceManager;
     n.surfaceType = SurfaceOf;
     n.surfaceTypeVtable = reinterpret_cast<std::uintptr_t>(surfaceTypeTable);
+    n.componentHit = FakeComponentHit;
+    n.setFatigue = FakeSetFatigue;
+    n.staminaAvailable = FakeStaminaAvailable;
+    append = FakeAppend;
+    wrenchTable = n.wrench;
     return ERROR_SUCCESS;
 }
 
@@ -181,8 +253,7 @@ bool sightBlocked = false, sightRefused = false;
 unsigned sightRays = 0;
 void* sightSkip = nullptr;
 Vec3 sightEnd{};
-bool menu = false, haveBox = true, oldLane = false;
-unsigned speedCms = 120;
+bool menu = false, haveBox = true;
 WeaponBox weapon{};
 PhysicalOverlayState lastOverlay{};
 std::string lastResult;
@@ -204,13 +275,12 @@ void DebugOverlayPhysical(const GameplayPoseFrame&, const PhysicalOverlayState& 
     lastResult = s.contact && s.result ? s.result : "";
     ++overlays;
 }
-bool PhysicalInteractionsEnabled() { return oldLane; }
+bool EnsureMinHook() { return false; }
 void QueueHaptic(Hand hand, haptics::Event event, const TrackingFrame&)
 {
-    Check(hand == Hand::right && event == haptics::Event::WeaponStrike, "a would-be strike pulses the wrench hand");
+    Check(hand == Hand::right && event == haptics::Event::WeaponStrike, "a strike pulses the wrench hand");
     ++pulses;
 }
-unsigned SwingSpeed() { return speedCms; }
 bool QuerySceneryBetween(const GameplayPoseFrame&, Vec3, Vec3 b, void* skip, scene::Hit& hit)
 {
     ++sightRays;
@@ -245,6 +315,7 @@ int main()
     const void* playerPhysics = &self;
     Put(&selfHosted, cn::ArticulatedHost, &playerPhysics, 8);
     gResolve = FakeResolve;
+    gInstall = FakeInstall;
 
     // A wrench along +y from the grip: the handle 10 cm behind it, the head 34 cm
     // ahead. Tracking space is the world here (an identity map), so moving the
@@ -287,11 +358,13 @@ int main()
     };
     const Vec3 headPoint{10.06f, 20.28f, 1};
 
-    Check(SwingLaneWanted() && SwingEventLog() == 1, "the diagnostic runs, its event lines on");
+    Check(SwingLaneWanted() && FreeSwingEnabled() == 1 && SwingSpeed() == 120 && SwingEventLog() == 1,
+          "on by default, at 120 cm/s, its event lines on");
     listed = {&self, &carried, &selfBody, &selfHosted, &wall, &capsule, nullptr};
     still(1);
-    Check(Logged("preyvr_swing gate result=0 rows=6+19 entitySystem=1 surfaces=1"), "the gate line names its rows and namers");
-    Check(Logged("preyvr_swing settings minCms=120 heavyCms=700 fullCms=1000 minScale=0.50 lockMs=150"), "the settings");
+    Check(Logged("preyvr_swing gate result=0 rows=7+19+15 entitySystem=1 surfaces=1"), "the gate line names its rows and namers");
+    Check(Logged("preyvr_swing settings enabled=1 minCms=120 heavyCms=700 fullCms=1000 minScale=0.50 lockMs=150"), "the settings");
+    Check(installs == 1 && installed.load(), "the hooks go in once the wrench is out");
     Check(Logged("preyvr_swing wrench rig=1", "chargeFull=0.800 chargeBonus=0.500 charged=0 fatiguePerHit=12.500 dodge=0",
                  "packages=0x1111,0x2222,0x3333,0x4444"), "the wrench's own fields, once per equip");
     Check(objtypes == sn::StrikeObjects && prealloc == 64, "Prey's melee classes, into our own 64");
@@ -311,30 +384,62 @@ int main()
           Logged("begin", "entityId=none surface=131 surfaceName=mat_metal breakable=0 surfaceFlags=0x10", "decision=too_slow"),
           "the first touch: what it is, its surface by name, and the decision");
     Check(Count("preyvr_swing begin") == 1 && !Logged("preyvr_swing strike"), "one begin line per pass; a touch is no strike");
-    Check(sightRays == 0, "a touch asks no line of sight");
+    Check(sightRays == 0 && hitCalls.empty(), "a touch asks no line of sight and strikes nothing");
 
     // --- off it, then a swing at 3 m/s: a strike ---
     responses.erase(&wall);
     still(20);
     responses[&wall] = {true, true, true, headPoint, 131, 1};
+    wrench[sn::ComponentOffset + sn::DodgeFlag] = 1;
     swingAt(3.0f);
     Check(Logged("preyvr_swing strike entity=", "surfaceName=mat_metal",
-                 "result=would_strike tier=normal scale=0.66 stamina=100.0/30.0 sight=clear"), "a swing strikes, scaled by speed");
+                 "result=struck tier=normal scale=0.66 returned=1 fatigue=12.50 stamina=100.0/30.0->100.0/30.0 sight=clear"),
+          "a swing strikes, scaled by speed");
+    const auto component = reinterpret_cast<std::uintptr_t>(wrench) + sn::ComponentOffset;
+    Check(hitCalls.size() == 1 && hitCalls[0].component == component && hitCalls[0].weapon == reinterpret_cast<std::uintptr_t>(wrench) &&
+          hitCalls[0].angle == 0 && std::fabs(hitCalls[0].scale - .655f) < .01f && !hitCalls[0].charged,
+          "Prey's hit, called on the wrench's component, uncharged, at the strike's scale");
+    Check(fatigueCalls.size() == 1 && fatigueCalls[0].component == component && !fatigueCalls[0].charged && fatigueCalls[0].bonus == .5f,
+          "the fatigue setter first, as Prey's attack calls it: the component, uncharged, the wrench's bonus");
+    Check(wrench[sn::ComponentOffset + sn::DodgeFlag] == 0 && staminaChecks == 1, "the dodge flag cleared; Prey's stamina check asked");
+    Check(hitsSeen.size() == 1 && hitsSeen[0].collider == &wall && hitsSeen[0].surface == 131 && nativeGetHits == 0,
+          "GetHits answers with the contact, through the engine's append");
+    Check(nativeImpulses == 1 && impulseGiven.x < -.99f && nativeCollisions == 1 && collisionGiven.x > .99f,
+          "the impulse wrapper gets the swing's reverse (it negates), the collision the swing itself");
+    Check(!SwingRecentlyStruck(&wall), "scenery is not handed to anything");
     Check(pulses == 1, "and pulses the hand");
     Check(Logged("strike", "speedCms=300 approachCms=300"), "the speed at the contact, and into the surface");
     Check(sightRays == 1 && sightSkip == &wall && std::fabs(Length(Sub(sightEnd, headPoint)) - .02f) < 1e-3f,
           "the line of sight skips the target and stops 2 cm short");
-    Check(lastOverlay.contact && lastOverlay.acted && lastResult == "would_strike mat_metal 300cm/s" && lastOverlay.box &&
+    Check(lastOverlay.contact && lastOverlay.acted && lastResult == "struck mat_metal 300cm/s" && lastOverlay.box &&
           lastOverlay.swept, "the overlay marks it");
     swingAt(3.0f, 5);
-    Check(Count("result=would_strike") == 1 && strikes.load() == 1 && locked.load() == 5 && pulses == 1, "one strike per pass");
+    Check(Count("result=struck") == 1 && strikes.load() == 1 && locked.load() == 5 && pulses == 1 && hitCalls.size() == 1,
+          "one strike per pass");
     responses.erase(&wall);
     still(20);
     Check(Logged("preyvr_swing swing peakHeadCms=300 peakCentreCms=300", "contacts=1 strikes=1 end=still"),
           "the swing's own line once it stops");
     responses[&wall] = {true, true, true, headPoint, 131, 1};
     swingAt(3.0f);
-    Check(Count("result=would_strike") == 2, "off it for longer than the lock: the next pass strikes again");
+    Check(Count("result=struck") == 2 && hitCalls.size() == 2, "off it for longer than the lock: the next pass strikes again");
+
+    // --- outside a strike the hooks are Prey's ---
+    HitVector plain{};
+    GetHitsHook(component, &plain, reinterpret_cast<std::uintptr_t>(wrench), 0);
+    ImpulseHook(nullptr, nullptr, &nativeDirection, 1, reinterpret_cast<std::uintptr_t>(wrench), 1, 0, 100);
+    BuilderHook(nullptr, nullptr, &nativeDirection, nullptr, nullptr, 1, 1, true, 0);
+    Check(nativeGetHits == 1 && impulseGiven.y == 1 && collisionGiven.y == 1, "Prey's own queries and directions pass through");
+    const auto table = reinterpret_cast<std::uintptr_t>(fakeWrenchTable);
+    Check(!AttackHook(reinterpret_cast<std::uintptr_t>(wrench), 0, nullptr, 1, 1) && nativeAttacks == 0 && attacksBlocked.load() == 1,
+          "the trigger does nothing with the wrench out");
+    alignas(8) unsigned char pistol[0x600]{};
+    const std::uintptr_t otherTable = table + 8;
+    Put(pistol, 0, &otherTable, 8);
+    Check(AttackHook(reinterpret_cast<std::uintptr_t>(pistol), 0, nullptr, 1, 1) && nativeAttacks == 1, "other weapons attack as ever");
+    SetFreeSwing(0);
+    Check(AttackHook(reinterpret_cast<std::uintptr_t>(wrench), 0, nullptr, 1, 1) && nativeAttacks == 2, "the option off gives the trigger back");
+    SetFreeSwing(1);
 
     // --- refusals ---
     responses.erase(&wall);
@@ -355,11 +460,12 @@ int main()
     responses.erase(&wall);
     still(20);
     SetStamina(50, 50);
-    const auto raysBefore = sightRays;
+    const auto hitsBefore = hitCalls.size();
+    const auto checksBefore = staminaChecks;
     responses[&wall] = {true, true, true, headPoint, 131, 1};
-    swingAt(3.0f);
-    Check(Logged("result=drained", "stamina=50.0/50.0") && drained.load() == 1 && sightRays == raysBefore,
-          "out of stamina: no strike (Prey's rule), and no ray");
+    swingAt(3.0f, 4);
+    Check(Logged("result=drained", "stamina=50.0/50.0") && drained.load() == 1 && hitCalls.size() == hitsBefore &&
+          staminaChecks == checksBefore + 1, "out of stamina: Prey's check says no, nothing strikes, once a pass");
     SetStamina(100, 30);
 
     // --- what is struck ---
@@ -371,8 +477,15 @@ int main()
     responses[&body] = {true, false, false, headPoint, 131, 12};
     swingAt(8.5f);
     Check(Logged("begin", "surfaceName=mat_glass breakable=1 surfaceFlags=0x24"), "glass by its surface, breakable");
-    Check(Logged("strike", "surfaceName=mat_glass", "tier=heavy scale=1.25"), "a heavy swing: Prey's charged hit and half its bonus");
-    Check(pulses == strikes.load(), "every would-be strike pulsed");
+    Check(Logged("strike", "surfaceName=mat_glass", "tier=heavy scale=1.25") && Logged("strike", "surfaceName=mat_glass", "fatigue=25.00"),
+          "a heavy swing: Prey's charged hit and half its bonus, at the charged fatigue");
+    bool heavyCall = false, heavyFatigue = false;
+    for (const auto& c : hitCalls) { heavyCall |= c.charged && std::fabs(c.scale - 1.25f) < .01f; }
+    for (const auto& c : fatigueCalls) { heavyFatigue |= c.charged; }
+    Check(heavyCall && heavyFatigue, "the hit and its fatigue both told it is charged");
+    Check(SwingRecentlyStruck(&crate) && SwingRecentlyStruck(&body) && !SwingRecentlyStruck(&glass) && handoffs.load() == 2,
+          "struck props and bodies are the hit's to move for a moment");
+    Check(pulses == strikes.load(), "every strike pulsed");
     Check(Logged("begin", "type=rigid", "entityId=42 class=ArkPhysicsProp name=Crate_1") && Logged("begin", "class=ArkPhysicsProp", "kind=head"),
           "an entity by class and name; the head's own sweep found the crate");
     Check(headTouches.load() >= 1, "head touches counted");
@@ -399,11 +512,8 @@ int main()
     swingAt(3.0f);
     Check(overflows.load() == 1, "more objects than the buffer: refused");
     overflowCount = 0;
-    oldLane = true;
-    const auto overlaysBefore = overlays;
-    swingAt(3.0f);
-    Check(overlays == overlaysBefore, "the old Physical Wrench, when on, keeps its overlay");
-    oldLane = false;
+    Sleep(200);
+    Check(!SwingRecentlyStruck(&crate), "and then contact's again");
 
     // --- quiet logging ---
     responses.clear();
@@ -415,8 +525,27 @@ int main()
     swingAt(3.0f);
     Check(begins.load() == begunBefore + 1 && Count("preyvr_swing begin") == linesBefore, "event lines off: counted, not logged");
     const auto report = SwingReport();
-    Check(report.find(" wouldStrike=") != std::string::npos && report.find(" passes=") != std::string::npos &&
+    Check(report.find(" struck=") != std::string::npos && report.find(" hooks=1 attacksBlocked=1") != std::string::npos &&
+          report.find(" handoffs=2") != std::string::npos && report.find(" passes=") != std::string::npos &&
           report.find(" static=") != std::string::npos && report.find(" gate=open") != std::string::npos &&
           report.find(" log=0") != std::string::npos, "the report");
+
+    // --- not the wrench any more, then hooks that will not go in ---
+    SetSwingEventLog(1);
+    responses.clear();
+    still(20);
+    const std::uintptr_t notWrench = reinterpret_cast<std::uintptr_t>(fakeWrenchTable) + 16;
+    Put(wrench, 0, &notWrench, 8);
+    responses[&glass] = {true, true, true, headPoint, 140, 1};
+    swingAt(3.0f);
+    Check(Logged("result=failed", "why=not_wrench") && failed.load() == 1, "a weapon that is no longer the wrench is never struck with");
+    const auto wrenchVtable = reinterpret_cast<std::uintptr_t>(fakeWrenchTable);
+    Put(wrench, 0, &wrenchVtable, 8);
+    installed = false;
+    installFails = true;
+    swingAt(3.0f);
+    Check(fault.load() && Logged("preyvr_swing fault", "detail=hooks") && !SwingLaneWanted(),
+          "hooks that fail to go in: nothing strikes");
+    Check(AttackHook(reinterpret_cast<std::uintptr_t>(wrench), 0, nullptr, 1, 1), "and the trigger is Prey's again");
     std::cout << "swing_lane: " << lines.size() << " lines\n";
 }

@@ -156,8 +156,13 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
 - **Experimental**, features still being proven: physical carrying in the left
   hand (on by default; off restores the game's carry in front of you), sticking
   charges to the surface you look at, long weapons held back toward the body,
-  **Shots from the Muzzle**, **Scene Reticle**, the **Physical Wrench** with its
-  swing speed, and the inventory on a layer of its own, with optional depth.
+  **Shots from the Muzzle**, **Scene Reticle**, the **Free-Swing Wrench** (on by
+  default) with its minimum swing speed, and the inventory on a layer of its own,
+  with optional depth. With the **Free-Swing Wrench**, swing the wrench in real
+  life to hit what it touches: a harder swing hits harder, and the fastest swings
+  land Prey's charged hit. Prey's own damage, knockback, sounds, broken glass and
+  stamina apply; out of stamina it pushes but does not strike. Each hit buzzes the
+  controller. The attack button does nothing while the wrench is out.
   **Shots from the Muzzle** makes every shot leave the weapon's muzzle along
   your controller's aim, so it lands where the barrel points at any distance,
   also from the hip or around a corner (otherwise the shot is aimed from your

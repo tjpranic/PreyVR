@@ -3,8 +3,10 @@
 > **Object Nudges was removed on 2026-10-18** (see the last section). The rest of this
 > record describes the 09-30 design as built.
 >
-> **The Physical Wrench is being replaced** by the free-swing wrench: see
-> [FREE-SWING-WRENCH-SCOPE-2026-10-18.md](FREE-SWING-WRENCH-SCOPE-2026-10-18.md).
+> **The Physical Wrench was removed on 2026-10-18** and replaced by the free-swing
+> wrench: see [FREE-SWING-WRENCH-SCOPE-2026-10-18.md](FREE-SWING-WRENCH-SCOPE-2026-10-18.md)
+> (phase 2). Its option (`physical_melee`) is a retired key, its `physical` command is
+> gone, and only its weapon box remains (`PhysicalInteractions.cpp`).
 
 Status: implemented for the Steam target; **static and offline tests only**. No game, simulator, or headset run was performed for this batch. Both gameplay changes default off, under **VR Options → Physical**.
 

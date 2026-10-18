@@ -4,14 +4,17 @@
 #include <array>
 #include <cstdint>
 #include <string>
+// The weapon box (preyvr/PhysicalInteractions.h): the drawn weapon's bounds where
+// the hand holds it, for the contact lane (ContactLane.h) and the free-swing
+// wrench (SwingLane.h).
 namespace preyvr::dll {
 struct GameplayPoseFrame;
+// The animation takeover publishes the right hand's weapon each frame, while a
+// lane wants it.
 void PublishPhysicalWeapon(const GameplayPoseFrame&,const RigIdentity&,const animik::Location&,
                            Pose wristModel,const weaponrig::ContactGeometry&);
-void UpdatePhysicalInteractions(const GameplayPoseFrame&,bool allowed);
-bool PhysicalInteractionsEnabled();
-// The weapon box is wanted: by the wrench, by physical contact (ContactLane.h), or
-// by the free-swing wrench (SwingLane.h).
+// The weapon box is wanted: by physical contact (ContactLane.h), or by the
+// free-swing wrench (SwingLane.h).
 bool PhysicalGeometryWanted();
 // The latest published weapon box, any weapon, as world-space points (centre,
 // then corners; physical::Bounds) where it was at its own tracking sample.
@@ -30,7 +33,4 @@ struct WeaponBox {
     std::uintptr_t weapon=0;  // the weapon object the box is of
 };
 bool TryGetWeaponBox(WeaponBox&);
-void SetPhysicalMelee(unsigned);unsigned PhysicalMeleeEnabled();
-void SetSwingSpeed(unsigned);unsigned SwingSpeed(); // centimetres per second
-std::string PhysicalInteractionsReport();
 }

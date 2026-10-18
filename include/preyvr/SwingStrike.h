@@ -29,8 +29,9 @@ struct StrikeSettings {
 struct Tier { bool strike = false, heavy = false; float scale = 0; };
 Tier Classify(float speed, float chargeBonus, const StrikeSettings& settings);
 
-// What a contact did this frame, in the order the lane decides it.
-enum class Decision : std::uint8_t { strike, locked, tooSlow, drained, blocked };
+// What a contact did this frame, in the order the lane decides it. `failed`: a
+// strike was due and the hit could not be called (no hooks, not the wrench, a fault).
+enum class Decision : std::uint8_t { strike, locked, tooSlow, drained, blocked, failed };
 const char* DecisionName(Decision decision);
 
 // The speed of the contact point into the surface: positive when approaching.

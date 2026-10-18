@@ -15,7 +15,7 @@ namespace preyvr::lifecycle { void Log(std::string_view){} }
 namespace preyvr::dll {
 DWORD SetPsiTargetMode(unsigned v){applied[options::PsiTarget]=v;return 0;}unsigned PsiTargetMode(){return applied[options::PsiTarget];}
 DWORD SetMedkitSlot(unsigned v){applied[options::Medkit]=v;return 0;}unsigned MedkitSlotEnabled(){return applied[options::Medkit];}
-void SetPhysicalMelee(unsigned v){applied[options::PhysicalMelee]=v;}unsigned PhysicalMeleeEnabled(){return applied[options::PhysicalMelee];}
+void SetFreeSwing(unsigned v){applied[options::FreeSwing]=v;}unsigned FreeSwingEnabled(){return applied[options::FreeSwing];}
 void SetPhysicalContact(unsigned v){applied[options::PhysicalContact]=v;}unsigned PhysicalContactEnabled(){return applied[options::PhysicalContact];}
 void SetPushStrength(unsigned v){applied[options::PushStrength]=v;}unsigned PushStrength(){return applied[options::PushStrength];}
 void SetSwingSpeed(unsigned v){applied[options::SwingSpeed]=v;}unsigned SwingSpeed(){return applied[options::SwingSpeed];}
@@ -181,9 +181,9 @@ int main(){
  set(options::ReticleSize,150);Check(ReticleSizePercent()==150,"the reticle's size reaches the reticle lane");
  set(options::ReticleFallback,10500);Check(ReticleConvergenceMillimetres()==10500,"fallback setting retains sub-metre precision");
  set(options::Haptics,0);Check(!HapticsEnabled(),"haptics disable reaches XR adapter");
- Check(!PhysicalMeleeEnabled(),"the physical wrench is off by default");
- set(options::PhysicalMelee,1);
- Check(PhysicalMeleeEnabled(),"physical wrench opt-in reaches consumer");
+ Check(FreeSwingEnabled(),"the free-swing wrench is on by default");
+ set(options::FreeSwing,0);
+ Check(!FreeSwingEnabled(),"turning the free-swing wrench off reaches its lane");
  Check(PhysicalContactEnabled(),"physical contact is on by default");
  set(options::PhysicalContact,0);Check(!PhysicalContactEnabled(),"turning physical contact off reaches the contact lane");
  set(options::PhysicalContact,1);Check(PhysicalContactEnabled(),"and on again");

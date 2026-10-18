@@ -17,6 +17,9 @@ namespace preyvr::swing::native {
 // stats (+0x1A8) and one flag (+0x1A0, the critical test).
 inline constexpr std::uintptr_t ComponentHit=0x13BF730;
 inline constexpr std::size_t ComponentOffset=0x4C8;
+// The weapon's entity, which the hit reads at +0x40 and hands to the collision
+// builder as its weapon: how a hook tells the strike's own collision.
+inline constexpr std::size_t WeaponEntity=0x40;
 // The component's fields the hit reads: the damage package per kind of hit, the
 // fatigue a hit costs (times the damage scale), and the dodge flag. Prey's
 // SetParamClip animation event sets the flag from the target (0x13C0160); the hit
@@ -26,6 +29,13 @@ inline constexpr std::size_t PackageNormal=0x00,PackageCritical=0x08,PackageChar
 // The weapon's charge, as WeaponHit turns it into the hit's damage scale:
 // 1 + bonus * (1 - (full - min(time, full)) / full), with the charged flag passed on.
 inline constexpr std::size_t ChargeTime=0x524,ChargeFull=0x528,ChargeBonus=0x52C,ChargedFlag=0x531;
+// The fatigue a hit costs is set when Prey's attack starts: the component's
+// setter (RCX the component, DL charged, XMM2 the weapon's charge bonus) reads the
+// player's stat for that kind of hit (so neuromods change it), writes it to
+// FatiguePerHit and previews it on the HUD. The wrench calls it so (0x16B0590),
+// and the free strike calls it the same way before each hit; the hit then charges
+// damage scale * FatiguePerHit. Until it is called, a hit costs nothing.
+inline constexpr std::uintptr_t FatigueSetter=0x13BFFF0;
 // The artificial collision each hit sends. The builder fills a CryEngine
 // EventPhysCollision and, when `dispatch` is set, hands it to the physics world's
 // AddDeferredEvent (world slot +0x2E8) as a collision (type 2). That queues it
@@ -48,7 +58,9 @@ inline constexpr float CollisionSpeed=100.f;
 inline constexpr std::uintptr_t SendSignalPackage=0x1608860;
 // Stamina: the player (SceneQueryNative.h's singleton, the frame's player)
 // + PlayerStamina, then + StaminaPointer (the accessor 0x1587C20). Two floats at
-// StaminaPair: equal means drained. StaminaAvailable is the check Prey's attack
+// StaminaPair: the fatigue spent and its most (PreyVR-38: 0/100 rested, each hit
+// adding scale * FatiguePerHit; 100/100 drained); equal means drained.
+// StaminaAvailable is the check Prey's attack
 // makes first; it returns false when drained and sends the HUD "staminaDrained".
 // The hit charges fatigue through StaminaCharge.
 inline constexpr std::size_t PlayerStamina=0x678,StaminaPointer=0x88,StaminaPair=0x10;
@@ -88,5 +100,6 @@ inline constexpr Contract Contracts[]={
     {0x12618E0,67,0x831BC3C524B6DFE1ull}, // StaminaAvailable
     {0x1260D10,883,0xAF8F9157D603D559ull}, // StaminaCharge
     {0x24E270,115,0xBD3404C9870A68B5ull}, // GetSurfaceType
+    {0x13BFFF0,168,0xBDB70D7DA0358A98ull}, // FatigueSetter
 };
 }

@@ -295,6 +295,7 @@ bool CarryHoldingInHand() { return false; }
 bool TwoHandedAimHeld() { return foregrip; }
 bool MedkitZoneHasLeftHand() { return medkit; }
 bool PsiButtonHeld() { return psi; }
+bool SwingRecentlyStruck(const void*) { return false; }
 }
 
 int main()

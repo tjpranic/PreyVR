@@ -15,6 +15,7 @@
 #include "PhysicsCalls.h"
 #include "PsiMedkit.h"
 #include "SceneQuery.h"
+#include "SwingLane.h"
 #include "XrInput.h"
 #include "preyvr/AnimIk.h"
 #include "preyvr/ContactNative.h"
@@ -45,7 +46,7 @@ std::atomic<bool> enabled{true}, fault{false}, pushReady{false}, bodyReady{false
 std::atomic<unsigned> strength{100};
 std::atomic<std::uint64_t> settings{1};
 std::atomic<std::uint64_t> pushes{0}, pushBegins{0}, limitedPushes{0}, slidingPushes{0}, pushFailed{0}, dvMaxMm{0};
-std::atomic<std::uint64_t> partPushes{0}, hostedRefused{0}, immovableRefused{0}, standingSkipped{0};
+std::atomic<std::uint64_t> partPushes{0}, hostedRefused{0}, immovableRefused{0}, standingSkipped{0}, struckSkipped{0};
 std::atomic<std::uint64_t> queries{0}, refused{0}, overflows{0}, entities{0}, entitiesMax{0}, others{0};
 std::atomic<std::uint64_t> found{0}, overlaps{0}, sweeps{0}, begins{0}, ends{0}, dropped{0}, usTotal{0}, usMax{0};
 std::atomic<DWORD> error{0};
@@ -747,6 +748,8 @@ unsigned PushContacts(const GameplayPoseFrame& frame, const Natives& n, const Co
             if (OnTopOf(n, under, c.collider)) { Stand(under, c.collider, "feet"); }
         }
         if (under.Has(c.collider)) { ++standingSkipped; continue; }
+        // The wrench just struck it: the hit's impulse moves it (SwingLane.h).
+        if (SwingRecentlyStruck(c.collider)) { ++struckSkipped; continue; }
         contact::Body body{};
         float mass = 0;
         const auto read = part ? ReadPart(c.collider, c.hit.partId, body, mass) : ReadRigid(c.collider, body, mass);
@@ -998,7 +1001,8 @@ std::string ContactReport()
            " sliding=" + std::to_string(slidingPushes.load()) + " pushFailed=" + std::to_string(pushFailed.load()) +
            " bodies=" + std::to_string(bodyReady.load()) + " partPushes=" + std::to_string(partPushes.load()) +
            " hosted=" + std::to_string(hostedRefused.load()) + " immovable=" + std::to_string(immovableRefused.load()) +
-           " standing=" + std::to_string(standingSkipped.load()) + " ground=" + groundClass +
+           " standing=" + std::to_string(standingSkipped.load()) + " struck=" + std::to_string(struckSkipped.load()) +
+           " ground=" + groundClass +
            " log=" + std::to_string(eventLog.load()) +
            " dvMaxCms=" + std::to_string(dvMaxMm.load() / 10) + " droppedLines=" + std::to_string(dropped.load()) +
            " usAvg=" + std::to_string(q ? usTotal.load() / q : 0) + " usMax=" + std::to_string(usMax.load()) +

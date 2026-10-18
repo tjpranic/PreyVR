@@ -6,9 +6,11 @@
 #include "EngineAccess.h"
 #include "Haptics.h"
 #include "HeadTrackingHook.h"
+#include "HookInstall.h"
 #include "HudBridge.h"
 #include "InputPost.h"
 #include "Logger.h"
+#include "MinHookInit.h"
 #include "PhysicalInteractions.h"
 #include "SceneQuery.h"
 #include "preyvr/ContactNative.h"
@@ -32,12 +34,17 @@ namespace preyvr::dll {
 namespace {
 namespace cn = contact::native;
 namespace sn = swing::native;
+namespace pn = physical::native;
 using contact::Box;
 using swing::Decision;
 constexpr unsigned kMaxEntities = 64, kMaxTouches = 48, kLogLinesPerSecond = 40;
 constexpr std::uint64_t kFreshNs = 100000000ull;
 
-std::atomic<bool> enabled{true}, fault{false}, eventLog{true};
+// The option (Free-Swing Wrench, on by default) and Minimum Swing Speed (cm/s).
+std::atomic<bool> enabled{true}, fault{false}, eventLog{true}, installed{false};
+std::atomic<unsigned> minimumCms{120};
+std::atomic<std::uint64_t> settingsGeneration{1};
+std::atomic<std::uint64_t> failed{0}, attacksBlocked{0}, substituted{0}, impulsesTurned{0}, collisionsTurned{0}, handoffs{0};
 std::atomic<std::uint64_t> frames{0}, queries{0}, refused{0}, overflows{0}, entities{0}, entitiesMax{0};
 std::atomic<std::uint64_t> statics{0}, rigids{0}, bodies{0}, others{0}, touches{0}, headTouches{0}, begins{0};
 std::atomic<std::uint64_t> strikes{0}, heavies{0}, tooSlow{0}, locked{0}, drained{0}, blocked{0}, sightUnknown{0};
@@ -49,8 +56,14 @@ std::atomic<const char*> lastGate{"none"};
 using EntitiesInBox = int(__fastcall*)(std::uintptr_t, const Vec3*, const Vec3*, void***, int, int);
 using Collide = int(__fastcall*)(std::uintptr_t, void*, int, void*, const Vec3*, scene::Hit*, void*);
 using SurfaceTypeOf = void*(__fastcall*)(void*, int, const char*);
+// The strike's calls (SwingNative.h): the component's hit (RCX component, XMM1
+// angle, R8 weapon, XMM3 scale, a byte on the stack: charged), its fatigue setter
+// (RCX component, DL charged, XMM2 the charge bonus) and Prey's stamina check.
+using ComponentHit = int(__fastcall*)(std::uintptr_t, float, std::uintptr_t, float, bool);
+using FatigueSetter = void(__fastcall*)(std::uintptr_t, bool, float);
+using StaminaCheck = bool(__fastcall*)(void*);
 struct Natives {
-    std::uintptr_t world = 0, articulated = 0, wrench = 0, surfaceTypeVtable = 0;
+    std::uintptr_t base = 0, world = 0, articulated = 0, wrench = 0, surfaceTypeVtable = 0;
     void* player = nullptr;            // the player's own physics: never tested
     void* carried = nullptr;           // what the left hand carries: never tested
     std::uintptr_t playerObject = 0;   // the player (frame.player), for stamina
@@ -59,18 +72,26 @@ struct Natives {
     void* entitySystem = nullptr;      // for names; null when unreadable
     void* surfaces = nullptr;          // CSurfaceTypeManager, when its chain checks out
     SurfaceTypeOf surfaceType = nullptr;
+    ComponentHit componentHit = nullptr;
+    FatigueSetter setFatigue = nullptr;
+    StaminaCheck staminaAvailable = nullptr;
 };
 
 bool EngineThread() { return InputDrainThreadId() != 0 && InputDrainThreadId() == GetCurrentThreadId(); }
 void Log(const std::string& line) { lifecycle::Log("preyvr_swing " + line); }
 
-// Every function called through a named RVA is one the gate hashes.
+// Every function called or hooked through a named RVA is one the gate hashes.
 static_assert(contract::Gated(sn::Contracts, sn::GetSurfaceType) && contract::Gated(cn::Contracts, cn::GetEntitiesInBox) &&
-              contract::Gated(cn::Contracts, cn::CollideEntityWithPrimitive));
+              contract::Gated(cn::Contracts, cn::CollideEntityWithPrimitive) && contract::Gated(pn::Contracts, sn::ComponentHit) &&
+              contract::Gated(sn::Contracts, sn::FatigueSetter) && contract::Gated(sn::Contracts, sn::StaminaAvailable) &&
+              contract::Gated(sn::Contracts, sn::CollisionEventBuilder) && contract::Gated(pn::Contracts, pn::Attack) &&
+              contract::Gated(pn::Contracts, pn::GetHits) && contract::Gated(pn::Contracts, pn::AppendHit) &&
+              contract::Gated(pn::Contracts, pn::WeaponImpulse));
 bool GateBodies(std::uintptr_t base)
 {
     __try {
-        return contract::BodiesMatch(base, sn::Contracts) && contract::BodiesMatch(base, cn::Contracts);
+        return contract::BodiesMatch(base, sn::Contracts) && contract::BodiesMatch(base, cn::Contracts) &&
+               contract::BodiesMatch(base, pn::Contracts);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
@@ -94,6 +115,10 @@ void FindNamers(std::uintptr_t base, Natives& n)
         n.surfaces = nullptr;
     }
 }
+// The hooks' view of the engine (they get no Natives): the hit append and the wrench's vtable.
+using AppendHit = void(__fastcall*)(void*, const scene::Hit*);
+std::atomic<AppendHit> append{nullptr};
+std::atomic<std::uintptr_t> wrenchTable{0};
 bool gated = false;
 DWORD Resolve(const GameplayPoseFrame& frame, Natives& n)
 {
@@ -106,6 +131,7 @@ DWORD Resolve(const GameplayPoseFrame& frame, Natives& n)
         if (!GateBodies(base)) { return ERROR_BAD_EXE_FORMAT; }
         gated = true;
     }
+    n.base = base;
     n.world = world;
     n.player = player;
     n.carried = reinterpret_cast<void*>(CarriedPhysics());
@@ -114,6 +140,11 @@ DWORD Resolve(const GameplayPoseFrame& frame, Natives& n)
     n.wrench = base + physical::native::WrenchVtable;
     n.entitiesInBox = reinterpret_cast<EntitiesInBox>(base + cn::GetEntitiesInBox);
     n.collide = reinterpret_cast<Collide>(base + cn::CollideEntityWithPrimitive);
+    n.componentHit = reinterpret_cast<ComponentHit>(base + sn::ComponentHit);
+    n.setFatigue = reinterpret_cast<FatigueSetter>(base + sn::FatigueSetter);
+    n.staminaAvailable = reinterpret_cast<StaminaCheck>(base + sn::StaminaAvailable);
+    append = reinterpret_cast<AppendHit>(base + pn::AppendHit);
+    wrenchTable = n.wrench;
     FindNamers(base, n);
     return ERROR_SUCCESS;
 }
@@ -365,6 +396,172 @@ WrenchFields ReadWrench(const Natives& n, std::uintptr_t weapon)
     return w;
 }
 
+// --- the strike (SwingNative.h) ----------------------------------------------------
+// Prey's own hit, called without its attack: the component's hit, given the
+// wrench's contact as its hits. Four hooks make it the wrench's own: GetHits
+// answers with the contact; the impulse wrapper and the collision builder take
+// the swing's direction; and Prey's attack, with the wrench out, does nothing
+// (user decision 1).
+struct HitVector { scene::Hit* begin = nullptr; scene::Hit* end = nullptr; scene::Hit* capacity = nullptr; };
+using AttackFn = bool(__fastcall*)(std::uintptr_t, unsigned, const void*, int, float);
+using GetHitsFn = HitVector*(__fastcall*)(std::uintptr_t, HitVector*, std::uintptr_t, float);
+using ImpulseFn = void(__fastcall*)(void*, void*, const Vec3*, int, std::uintptr_t, float, float, float);
+using BuilderFn = void(__fastcall*)(void*, void*, const Vec3*, void*, void*, float, float, bool, short);
+std::atomic<AttackFn> originalAttack{nullptr};
+std::atomic<GetHitsFn> originalGetHits{nullptr};
+std::atomic<ImpulseFn> originalImpulse{nullptr};
+std::atomic<BuilderFn> originalBuilder{nullptr};
+// The strike in flight: set around the call to the hit on the input-drain thread,
+// and read by the hooks the hit reaches on the same thread. Nothing else matches it.
+struct Striking {
+    bool active = false;
+    std::uintptr_t weapon = 0;
+    const void* entity = nullptr;   // the weapon's entity, as the hit hands it to the builder
+    scene::Hit hit{};
+    Vec3 direction{}, reversed{};
+};
+thread_local Striking striking{};
+bool __fastcall AttackHook(std::uintptr_t weapon, unsigned id, const void* name, int activation, float value)
+{
+    const auto wrench = wrenchTable.load();
+    if (enabled.load() && !fault.load() && weapon && wrench && *reinterpret_cast<const std::uintptr_t*>(weapon) == wrench) {
+        ++attacksBlocked;
+        return false;
+    }
+    return originalAttack.load()(weapon, id, name, activation, value);
+}
+HitVector* __fastcall GetHitsHook(std::uintptr_t component, HitVector* out, std::uintptr_t weapon, float angle)
+{
+    if (striking.active && weapon == striking.weapon && component == weapon + sn::ComponentOffset) {
+        *out = {};
+        // The hit frees the vector: allocate it through the engine's own append.
+        append.load()(out, &striking.hit);
+        ++substituted;
+        return out;
+    }
+    return originalGetHits.load()(component, out, weapon, angle);
+}
+void __fastcall ImpulseHook(void* entity, void* collider, const Vec3* direction, int part, std::uintptr_t weapon, float force,
+                            float minMass, float maxMass)
+{
+    // The wrapper negates what it is given, so it is given the swing's reverse.
+    const bool ours = striking.active && weapon == striking.weapon;
+    if (ours) { ++impulsesTurned; }
+    originalImpulse.load()(entity, collider, ours ? &striking.reversed : direction, part, weapon, force, minMass, maxMass);
+}
+void __fastcall BuilderHook(void* event, void* material, const Vec3* direction, void* weapon, void* player, float mass, float radius,
+                            bool dispatch, short surface)
+{
+    const bool ours = striking.active && weapon == striking.entity;
+    if (ours) { ++collisionsTurned; }
+    originalBuilder.load()(event, material, ours ? &striking.direction : direction, weapon, player, mass, radius, dispatch, surface);
+}
+// The hooks go in before the query, so no collider pointer is held while MinHook
+// suspends threads. All four or none.
+bool Install(const Natives& n)
+{
+    if (installed.load()) { return true; }
+    if (!EnsureMinHook()) { return false; }
+    void* originals[4]{};
+    const hook::Spec hooks[] = {
+        {reinterpret_cast<void*>(n.base + pn::Attack), reinterpret_cast<void*>(AttackHook), &originals[0]},
+        {reinterpret_cast<void*>(n.base + pn::GetHits), reinterpret_cast<void*>(GetHitsHook), &originals[1]},
+        {reinterpret_cast<void*>(n.base + pn::WeaponImpulse), reinterpret_cast<void*>(ImpulseHook), &originals[2]},
+        {reinterpret_cast<void*>(n.base + sn::CollisionEventBuilder), reinterpret_cast<void*>(BuilderHook), &originals[3]}};
+    const auto result = hook::InstallAll(hooks, [&] {
+        originalAttack = reinterpret_cast<AttackFn>(originals[0]);
+        originalGetHits = reinterpret_cast<GetHitsFn>(originals[1]);
+        originalImpulse = reinterpret_cast<ImpulseFn>(originals[2]);
+        originalBuilder = reinterpret_cast<BuilderFn>(originals[3]);
+    });
+    if (!result) {
+        Log(std::string("hooks result=") + hook::StepName(result.step) + " status=" + std::to_string(result.status) +
+            " index=" + std::to_string(result.index));
+        return false;
+    }
+    installed = true;
+    Log("hooks result=0 count=4");
+    return true;
+}
+// Tests replace the installer here.
+bool (*gInstall)(const Natives&) = Install;
+
+// What a strike did.
+enum class Outcome : std::uint8_t { struck, drained, noStamina, notWrench, noHooks, fault };
+const char* OutcomeName(Outcome o)
+{
+    switch (o) {
+    case Outcome::struck: return "struck";
+    case Outcome::drained: return "drained";
+    case Outcome::noStamina: return "no_stamina";
+    case Outcome::notWrench: return "not_wrench";
+    case Outcome::noHooks: return "no_hooks";
+    case Outcome::fault: return "fault";
+    }
+    return "none";
+}
+struct StrikeResult { Outcome outcome = Outcome::fault; int returned = -1; float fatigue = NAN; DWORD code = 0; };
+// The strike: Prey's stamina check (drained, it flashes the HUD and nothing
+// strikes, Prey's rule), the fatigue setter as Prey's attack calls it, the dodge
+// flag cleared (no Prey clip is playing to have set it), then the hit with this
+// contact as its only hit. Plain data in and out: all inside __try.
+void Strike(const Natives& n, std::uintptr_t weapon, const scene::Hit& hit, Vec3 direction, const swing::Tier& tier, float bonus,
+            StrikeResult& r)
+{
+    r = {};
+    if (!installed.load()) {
+        r.outcome = Outcome::noHooks;
+        return;
+    }
+    __try {
+        if (!weapon || *reinterpret_cast<const std::uintptr_t*>(weapon) != n.wrench) {
+            r.outcome = Outcome::notWrench;
+            return;
+        }
+        void* stamina = nullptr;
+        if (n.playerObject) {
+            std::memcpy(&stamina, reinterpret_cast<const void*>(n.playerObject + sn::PlayerStamina + sn::StaminaPointer), sizeof(stamina));
+        }
+        if (!stamina) {
+            r.outcome = Outcome::noStamina;
+            return;
+        }
+        if (!n.staminaAvailable(stamina)) {
+            r.outcome = Outcome::drained;
+            return;
+        }
+        const auto component = weapon + sn::ComponentOffset;
+        n.setFatigue(component, tier.heavy, bonus);
+        std::memcpy(&r.fatigue, reinterpret_cast<const void*>(component + sn::FatiguePerHit), 4);
+        *reinterpret_cast<std::uint8_t*>(component + sn::DodgeFlag) = 0;
+        striking.weapon = weapon;
+        std::memcpy(&striking.entity, reinterpret_cast<const void*>(weapon + sn::WeaponEntity), sizeof(striking.entity));
+        striking.hit = hit;
+        striking.hit.next = nullptr;
+        striking.direction = direction;
+        striking.reversed = Scale(direction, -1);
+        striking.active = true;
+        r.returned = n.componentHit(component, 0.0f, weapon, tier.scale, tier.heavy);
+        striking.active = false;
+        r.outcome = Outcome::struck;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        striking.active = false;
+        r.outcome = Outcome::fault;
+        r.code = GetExceptionCode();
+    }
+}
+// A struck prop or body is the hit's to move for a moment: physical contact leaves
+// it alone (SwingRecentlyStruck), so a push does not overwrite the hit's impulse.
+constexpr std::uint64_t kHandOffNs = 150000000ull;
+struct HandOff { const void* collider = nullptr; std::uint64_t until = 0; };
+std::array<HandOff, 8> handOff{};
+unsigned handOffNext = 0;
+void HandOver(const void* collider, std::uint64_t now)
+{
+    handOff[handOffNext++ % handOff.size()] = {collider, now + kHandOffNs};
+    ++handoffs;
+}
+
 // --- the lane (input-drain thread) ----------------------------------------------
 // Last frame's sample: its reference-space points and grip, so this frame can map
 // them through its own world transform and see the arm's motion alone.
@@ -381,7 +578,8 @@ swing::Passes passes;
 struct Run { bool active = false; float head = 0, centre = 0, quiet = 0; unsigned frames = 0, contacts = 0, strikes = 0; };
 Run run;
 std::uint64_t loggedRig = 0, reportNs = 0, reportSum = 0, logSecondNs = 0;
-unsigned logLines = 0, seenSpeed = 0;
+unsigned logLines = 0;
+std::uint64_t seenSettings = 0;
 float chargeBonus = 0;
 const char* reportGate = nullptr;
 bool loggedGate = false, loggedSelf = false;
@@ -389,7 +587,7 @@ bool loggedGate = false, loggedSelf = false;
 swing::StrikeSettings Settings()
 {
     swing::StrikeSettings s{};
-    s.minSpeed = static_cast<float>(SwingSpeed()) * .01f;
+    s.minSpeed = static_cast<float>(minimumCms.load()) * .01f;
     return s;
 }
 bool LogBudget()
@@ -477,14 +675,14 @@ std::string lastText;   // the last decision, for the status line
 std::string Status(const char* gate)
 {
     const auto q = queries.load();
-    return std::string("swing (diagnostic)  gate ") + gate + "  strikes " + std::to_string(strikes.load()) + "  passes " +
+    return std::string("swing ") + (enabled.load() ? "on" : "off") + "  gate " + gate + "  strikes " + std::to_string(strikes.load()) + "  passes " +
            std::to_string(passes.Active()) + "  last " + (lastText.empty() ? "-" : lastText) + "  us avg " +
            std::to_string(q ? usTotal.load() / q : 0) + " max " + std::to_string(usMax.load());
 }
 void Publish(const GameplayPoseFrame& frame, const char* gate, const Box* box, const Box* before, bool fast, const Touch* mark,
              Decision decision, const std::string& label)
 {
-    if (!DebugOverlayWantsPhysical() || PhysicalInteractionsEnabled()) { return; }
+    if (!DebugOverlayWantsPhysical()) { return; }
     PhysicalOverlayState s{};
     s.gate = gate;
     s.open = !std::strcmp(gate, "open");
@@ -525,7 +723,8 @@ int Rank(Decision d)
 {
     switch (d) {
     case Decision::strike: return 4;
-    case Decision::blocked: return 3;
+    case Decision::blocked:
+    case Decision::failed: return 3;
     case Decision::drained: return 2;
     case Decision::tooSlow: return 1;
     default: return 0;
@@ -535,9 +734,9 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
 {
     MaybeReport();
     const auto settings = Settings();
-    if (SwingSpeed() != seenSpeed) {
-        seenSpeed = SwingSpeed();
-        Log("settings minCms=" + Cms(settings.minSpeed) + " heavyCms=" + Cms(settings.heavySpeed) + " fullCms=" +
+    if (settingsGeneration.load() != seenSettings) {
+        seenSettings = settingsGeneration.load();
+        Log("settings enabled=" + std::to_string(enabled.load()) + " minCms=" + Cms(settings.minSpeed) + " heavyCms=" + Cms(settings.heavySpeed) + " fullCms=" +
             Cms(settings.fullSpeed) + " minScale=" + Fixed(settings.minScale, 2) + " lockMs=" +
             std::to_string(std::lround(settings.lockSeconds * 1000)) + " log=" + std::to_string(eventLog.load()));
     }
@@ -604,8 +803,16 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
     if (!loggedGate) {
         loggedGate = true;
         Log("gate result=0 rows=" + std::to_string(std::size(sn::Contracts)) + "+" + std::to_string(std::size(cn::Contracts)) +
+            "+" + std::to_string(std::size(pn::Contracts)) +
             " entitySystem=" + std::to_string(natives.entitySystem != nullptr) +
             " surfaces=" + std::to_string(natives.surfaces != nullptr));
+    }
+    if (!installed.load() && !gInstall(natives)) {
+        // The trigger stays Prey's and nothing strikes.
+        fault = true;
+        error = ERROR_INVALID_FUNCTION;
+        Log("fault error=" + std::to_string(error.load()) + " detail=hooks");
+        return;
     }
     if (sample.rig != loggedRig) {
         loggedRig = sample.rig;
@@ -667,30 +874,43 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
             ++begunNow;
         }
         const auto tier = swing::Classify(speed, chargeBonus, settings);
-        Stamina stamina{};
+        Stamina stamina{}, staminaAfter{};
         Sight sight = Sight::unknown;
         scene::Hit blocker{};
         blocker.distance = -1;
+        StrikeResult struck{};
         Decision d = Decision::strike;
         if (pass && pass->struck) { d = Decision::locked; }
         else if (!tier.strike) { d = Decision::tooSlow; }
         else {
-            stamina = ReadStamina(natives);
-            if (stamina.read && stamina.drained) { d = Decision::drained; }
+            sight = LineOfSight(frame, t.hit.point, t.collider, blocker);
+            if (sight != Sight::clear) { d = Decision::blocked; }
             else {
-                sight = LineOfSight(frame, t.hit.point, t.collider, blocker);
-                if (sight != Sight::clear) { d = Decision::blocked; }
+                // Along the swing at the contact; a touch with no motion pushes into the surface.
+                const Vec3 direction = speed > .1f ? Scale(v, 1 / speed) : Scale(t.hit.normal, -1);
+                stamina = ReadStamina(natives);
+                Strike(natives, sample.weapon, t.hit, direction, tier, chargeBonus, struck);
+                staminaAfter = ReadStamina(natives);
+                d = struck.outcome == Outcome::struck ? Decision::strike
+                    : struck.outcome == Outcome::drained ? Decision::drained : Decision::failed;
+                if (struck.outcome == Outcome::fault) {
+                    fault = true;
+                    error = struck.code;
+                    Log("fault error=" + std::to_string(struck.code) + " detail=strike");
+                }
+                // One try per pass, whatever came of it.
+                if (pass) { pass->struck = true; }
             }
         }
         switch (d) {
         case Decision::strike:
             ++strikes;
             ++struckNow;
-            // So a swing can be felt to land: phase 2 strikes on exactly these.
             QueueHaptic(Hand::right, haptics::Event::WeaponStrike, frame.tracking);
             if (tier.heavy) { ++heavies; }
-            if (pass) { pass->struck = true; }
+            if (t.type != cn::TypeStatic) { HandOver(t.collider, now); }
             break;
+        case Decision::failed: ++failed; break;
         case Decision::locked: ++locked; break;
         case Decision::tooSlow: ++tooSlow; break;
         case Decision::drained: ++drained; break;
@@ -701,7 +921,8 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
         }
         // The strike line: each strike, and the first refusal of each kind in a pass.
         const std::uint8_t bit = static_cast<std::uint8_t>(1u << static_cast<unsigned>(d));
-        const bool note = d == Decision::strike || ((d == Decision::drained || d == Decision::blocked) && pass && !(pass->noted & bit));
+        const bool note = d == Decision::strike || d == Decision::failed ||
+                          ((d == Decision::drained || d == Decision::blocked) && pass && !(pass->noted & bit));
         if (pass) { pass->noted |= bit; }
         const auto* surface = Surface(natives, t.hit.surface);
         const std::string surfaceName = surface && surface->found ? surface->name : std::to_string(t.hit.surface);
@@ -725,7 +946,15 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
             if (tier.strike) {
                 line += std::string(" tier=") + (tier.heavy ? "heavy" : "normal") + " scale=" + Fixed(tier.scale, 2);
             }
-            if (stamina.read) { line += " stamina=" + Fixed(stamina.a, 1) + "/" + Fixed(stamina.b, 1); }
+            if (struck.outcome == Outcome::struck) {
+                line += " returned=" + std::to_string(struck.returned) + " fatigue=" + Fixed(struck.fatigue, 2);
+            } else if (d == Decision::failed) {
+                line += std::string(" why=") + OutcomeName(struck.outcome);
+            }
+            if (stamina.read) {
+                line += " stamina=" + Fixed(stamina.a, 1) + "/" + Fixed(stamina.b, 1);
+                if (staminaAfter.read) { line += "->" + Fixed(staminaAfter.a, 1) + "/" + Fixed(staminaAfter.b, 1); }
+            }
             if (d == Decision::blocked || d == Decision::strike) { line += std::string(" sight=") + SightName(sight); }
             if (d == Decision::blocked && blocker.distance >= 0) {
                 line += " blocker=" + Hex(reinterpret_cast<std::uintptr_t>(blocker.collider)) + " blockerSurface=" +
@@ -749,6 +978,27 @@ void UpdateSwingLane(const GameplayPoseFrame& frame, bool allowed)
     UpdateImpl(frame, allowed);
 }
 bool SwingLaneWanted() { return enabled.load() && !fault.load(); }
+void SetFreeSwing(unsigned on)
+{
+    enabled = on != 0;
+    ++settingsGeneration;
+}
+unsigned FreeSwingEnabled() { return enabled.load() ? 1u : 0u; }
+void SetSwingSpeed(unsigned cms)
+{
+    minimumCms = std::clamp(cms, 80u, 250u);
+    ++settingsGeneration;
+}
+unsigned SwingSpeed() { return minimumCms.load(); }
+bool SwingRecentlyStruck(const void* collider)
+{
+    if (!collider) { return false; }
+    const auto now = MonotonicNanoseconds();
+    for (const auto& h : handOff) {
+        if (h.collider == collider && now < h.until) { return true; }
+    }
+    return false;
+}
 void SetSwingEventLog(unsigned on) { eventLog = on != 0; }
 unsigned SwingEventLog() { return eventLog.load() ? 1u : 0u; }
 std::string SwingReport()
@@ -761,11 +1011,15 @@ std::string SwingReport()
            std::to_string(entitiesMax.load()) + " static=" + std::to_string(statics.load()) + " rigid=" +
            std::to_string(rigids.load()) + " articulated=" + std::to_string(bodies.load()) + " other=" +
            std::to_string(others.load()) + " self=" + std::to_string(selfSkipped.load()) + " touches=" + std::to_string(touches.load()) + " headTouches=" +
-           std::to_string(headTouches.load()) + " passes=" + std::to_string(begins.load()) + " wouldStrike=" +
-           std::to_string(strikes.load()) + " heavy=" + std::to_string(heavies.load()) + " tooSlow=" +
+           std::to_string(headTouches.load()) + " passes=" + std::to_string(begins.load()) + " struck=" +
+           std::to_string(strikes.load()) + " heavy=" + std::to_string(heavies.load()) + " failed=" +
+           std::to_string(failed.load()) + " tooSlow=" +
            std::to_string(tooSlow.load()) + " locked=" + std::to_string(locked.load()) + " drained=" +
            std::to_string(drained.load()) + " blocked=" + std::to_string(blocked.load()) + " sightUnknown=" +
-           std::to_string(sightUnknown.load()) + " swings=" + std::to_string(swings.load()) + " log=" +
+           std::to_string(sightUnknown.load()) + " swings=" + std::to_string(swings.load()) + " hooks=" +
+           std::to_string(installed.load()) + " attacksBlocked=" + std::to_string(attacksBlocked.load()) + " substituted=" +
+           std::to_string(substituted.load()) + " impulses=" + std::to_string(impulsesTurned.load()) + " collisions=" +
+           std::to_string(collisionsTurned.load()) + " handoffs=" + std::to_string(handoffs.load()) + " log=" +
            std::to_string(eventLog.load()) + " droppedLines=" + std::to_string(dropped.load()) + " usAvg=" +
            std::to_string(q ? usTotal.load() / q : 0) + " usMax=" + std::to_string(usMax.load()) + " error=" +
            std::to_string(error.load()) + " gate=" + lastGate.load();

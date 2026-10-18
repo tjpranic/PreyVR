@@ -2,6 +2,7 @@
 #include "SceneQuery.h"
 #include "PhysicalInteractions.h"
 #include "ContactLane.h"
+#include "SwingLane.h"
 #include "PsiMedkit.h"
 #include "Haptics.h"
 #include "ReticleFollow.h"
@@ -167,7 +168,7 @@ constexpr Wiring wiring[]={
  {options::ReticleFallback,Set<SetReticleConvergenceMillimetres>,Get<ReticleConvergenceMillimetres>},
  {options::Haptics,Set<SetHapticsEnabled>,Get<HapticsEnabled>},
  {options::HapticStrength,Set<SetHapticStrength>,Get<HapticStrength>},
- {options::PhysicalMelee,Set<SetPhysicalMelee>,Get<PhysicalMeleeEnabled>},
+ {options::FreeSwing,Set<SetFreeSwing>,Get<FreeSwingEnabled>},
  {options::SwingSpeed,Set<SetSwingSpeed>,Get<SwingSpeed>},
  {options::PhysicalContact,Set<SetPhysicalContact>,Get<PhysicalContactEnabled>},
  {options::PushStrength,Set<SetPushStrength>,Get<PushStrength>},

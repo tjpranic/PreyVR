@@ -44,11 +44,12 @@ Tier Classify(float speed, float chargeBonus, const StrikeSettings& s)
 const char* DecisionName(Decision decision)
 {
     switch (decision) {
-    case Decision::strike: return "would_strike";
+    case Decision::strike: return "struck";
     case Decision::locked: return "locked";
     case Decision::tooSlow: return "too_slow";
     case Decision::drained: return "drained";
     case Decision::blocked: return "blocked";
+    case Decision::failed: return "failed";
     }
     return "none";
 }

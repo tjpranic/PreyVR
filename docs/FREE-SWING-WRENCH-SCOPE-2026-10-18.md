@@ -1,8 +1,8 @@
 # Free-swing wrench: scope
 
-Status: **phase 1 (strike detection, diagnostic only) worn 2026-10-18 on PreyVR-37:
-it finds everything a strike needs, live enemies included** (see "Phase 1"). Next is
-phase 2, strikes. Phase 0 (static contracts) is done. The user's four
+Status: **phase 2 (strikes) worn 2026-10-18 on PreyVR-38: works.** The wearer: "works
+fantastically", smacking things, breaking glass and fighting mimics. Phase 3 (polish)
+is next. Phase 0 (static contracts) is done. The user's four
 decisions are recorded under "Decisions". It replaces
 the Physical Wrench ([PHYSICAL-MELEE-2026-09-30.md](PHYSICAL-MELEE-2026-09-30.md))
 entirely. It builds on the physical contact lane
@@ -253,7 +253,7 @@ otherwise play the animation and hit ahead of the camera.
 |---|---|---|---|
 | 0. Static contracts | **Done 2026-10-18** (below). | Offline bytes. | S |
 | 1. Strike detection, diagnostic only | **Worn 2026-10-18 on PreyVR-37: works** (below). The wrench query (`0x117`), speeds, locks and the line-of-sight ray. **No native call.** Log each would-be strike: type, vtable, foreign-data kind, surface name and breakability, speed, decision. Log once per equip the weapon's charge fields (`+0x524..+0x52C`), the component's fatigue and packages, and the impulse and mass stats. Overlay marks. | Headset: swing at a wall, glass, a prop, a corpse, a live enemy and the air. | M |
-| 2. Strikes | The direct component hit, the third hook, the speed tiers, stamina, the trigger block, the push hand-off. The old lane's gate, rays and attack hooks are removed. | Headset: damage, glass, sounds and decals, stamina use, knockback, one hit per pass, no faults. | M |
+| 2. Strikes | **Worn 2026-10-18 on PreyVR-38: works** (below). The direct component hit, the third hook, the speed tiers, stamina, the trigger block, the push hand-off. The old lane's gate, rays and attack hooks are removed. | Headset: damage, glass, sounds and decals, stamina use, knockback, one hit per pass, no faults. | M |
 | 3. Polish | Options on the Hands tab and their defaults, the player guide and tuning commands, quieter logs. | Headset regression. | S–M |
 
 Not in scope:
@@ -573,6 +573,135 @@ entity is `0x7777`.
 **Not exercised:** `blocked` (a reach through scenery) and `drained`.
 
 **Phase 1 is done:** the query, the decisions and the names are what phase 2 strikes on.
+
+## Phase 2: strikes (2026-10-18, package PreyVR-38)
+
+**What a strike is now.** Each contact the phase 1 rules strike (fast enough, the
+first of its pass, a clear line from the head) calls Prey's own hit.
+1. **Stamina:** Prey's check (`0x12618E0`). Drained, it flashes Prey's HUD and nothing
+   strikes (decision 2). The pass is spent either way: one try per pass.
+2. **Fatigue:** the fatigue setter (`0x13BFFF0`), as Prey's attack calls it, with the
+   heavy tier as "charged" and the wrench's own charge bonus. So the hit charges
+   Prey's own fatigue for that kind of hit, times the strike's scale (decision 4).
+3. **The dodge flag** (`+0x3F`) is cleared.
+4. **The hit:** the component's hit (`0x13BF730`) with angle 0, the weapon, the
+   strike's scale (0.5–1 normal, up to 1 + the bonus heavy) and charged = heavy.
+5. **The hooks it reaches:**
+   - **GetHits** answers with the one contact, allocated by the engine's own append.
+   - **The impulse wrapper** gets the swing's reverse; it negates it, so the push
+     follows the swing.
+   - **The collision builder** gets the swing's direction, so the 100 m/s collision
+     (sounds, sparks, decals, glass) follows the swing too. It is told apart by the
+     weapon's entity (`+0x40`).
+6. **Afterwards:** a strong pulse (`WeaponStrike`). A struck prop or body is left to
+   the hit for 150 ms: physical contact skips it (`struck=` in the contact report),
+   so a push cannot overwrite the knock.
+
+**The trigger:** Prey's attack (`0x16B1FD0`) does nothing with the wrench out while
+Free-Swing Wrench is on (decision 1); other weapons attack as ever. The four hooks go
+in together the first time the wrench is out, before that frame's query. If they fail,
+the lane stops and the trigger stays Prey's.
+
+**The option:** Free-Swing Wrench (`free_swing`), Experimental tab, **on by default**.
+Minimum Swing Speed (`swing_speed`) stays. `physical_melee` is a retired key.
+
+**Removed:**
+- The Physical Wrench: its gesture gate, nine rays, attack and animation-hit hooks, hit
+  ownership, options and the `physical` command.
+- What remains of `PhysicalInteractions.cpp` is the weapon box, now with its
+  tracking-space points, grip and weapon.
+- The physical layer of the overlay is the swing lane's alone.
+
+**Logs:**
+- `strike ... result=struck`, with `returned` (Prey's hit's return), `fatigue` (what the
+  setter put per unit of scale) and `stamina` before->after;
+- `result=failed why=not_wrench|no_hooks|no_stamina|fault`;
+- `hooks result=0 count=4` once;
+- in the report: `struck`, `failed`, `hooks`, `attacksBlocked`, `substituted`,
+  `impulses`, `collisions`, `handoffs`.
+
+**New contracts:**
+- the fatigue setter's row (7 rows in `SwingNative.h`);
+- its witnesses: the wrench's call (RCX the component, DL the charged flag, XMM2 the
+  bonus) and its own prologue;
+- the weapon's entity at `+0x40`.
+
+The verifier has 107 checks.
+
+**Tests** (`ctest` 85/85):
+- **`swing_lane`** drives the strike through fakes of the hit, the setter, the stamina
+  check and the hooks' originals:
+  - the hit is called once on the component, uncharged, at scale 0.66, after the setter
+    (uncharged, bonus 0.5) and with the dodge flag cleared;
+  - GetHits answers with the contact and never reaches Prey's;
+  - the impulse wrapper gets the reverse, the collision the swing;
+  - one strike per pass;
+  - outside a strike, all four pass through;
+  - the trigger does nothing with the wrench, works with another weapon or the option
+    off;
+  - drained: one stamina check, no hit;
+  - heavy: charged hit and charged fatigue (25), at scale 1.25;
+  - props and bodies handed to the hit for 150 ms, scenery not;
+  - not the wrench: `failed`;
+  - hooks that fail: the lane stops and the trigger is Prey's.
+- **`physical_runtime`** now tests the weapon box's publication.
+- **`physical_interactions`** tests its geometry and the scenery-only query.
+- The options tests cover `free_swing` on by default and `physical_melee` retired.
+
+**Headset checklist** (Experimental: Free-Swing Wrench on, its default; Debug overlay
+optional):
+1. **The trigger:** with the wrench out, press attack. Nothing should happen. Draw a gun:
+   it fires.
+2. **Scenery:** hit a wall and a table. You should hear Prey's hit sound and see sparks
+   or a decal, and feel a strong buzz. A gentle touch does nothing.
+3. **Glass:** a window. It should break.
+4. **Props:** a can or box should fly off along your swing, harder for a harder swing.
+5. **A mimic or other enemy:** it should take damage, react and die in a few hits. A
+   fast swing should hit noticeably harder. Note how many hits it takes.
+6. **A corpse:** it should be knocked along the swing.
+7. **Stamina:** watch the stamina bar drop with each hit. Drain it and swing: Prey's
+   stamina warning should flash, and nothing should strike.
+8. **Through a wall:** reach through thin scenery at something behind it. No strike.
+
+Tell me what happened for each. The log has a `strike` line per hit.
+
+### PreyVR-38 in the headset (2026-10-18, `player-20261018-202031`)
+
+The wearer: "The free swinging wrench works fantastically. I was able to smack things,
+break glass and fight mimics."
+
+**The log:**
+- **Strikes:** 54, 33 of them heavy. None failed, no faults.
+- **The hooks:** `hooks result=0 count=4`. Each strike went through all three in-hit
+  hooks (`substituted`, `impulses` and `collisions` all 54).
+- **The trigger** was pressed and blocked 26 times.
+- **What was struck:**
+  - mimics 15 times (`ArkMimic`), plus mimic limbs and giblets afterwards;
+  - concrete, wood and metal;
+  - glass: plain `mat_Glass`, a `GeomEntity` pane and the `ArkSceneWindow`;
+  - props, porcelain and GLOO;
+  - a workstation and its screen.
+- **Refusals:**
+  - `blocked`: 7 frames in 2 passes, both at invisible collision (`mat_nodraw`) with
+    scenery (surface 140) between it and the head;
+  - `drained`: 5 times, with stamina at `100.0/100.0`.
+- **Hand-offs:** 31 struck props and bodies were left to the hit. The contact lane
+  skipped 69 frames of pushes for them.
+- **Cost:** 2 µs a frame on average, 175 µs at most.
+
+**What Prey's hit returned:**
+- 1 for most strikes;
+- 2 for a living hostile;
+- 0 for glass, Prey's breakable-surface rule. Those strikes charged no stamina.
+
+**Stamina:**
+- **The pair:** the first float is the fatigue spent, the second its most (100).
+- **The cost:** the fatigue setter put 17.5 per hit, normal or charged. Each hit spent
+  scale × 17.5: 10 for a gentle normal hit, up to 35 for a full heavy one.
+- **Draining:** three full heavy hits drained the player.
+- `SwingNative.h` now says what the pair is.
+
+## Evidence
 
 ## Evidence
 

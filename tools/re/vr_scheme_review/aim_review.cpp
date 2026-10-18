@@ -62,7 +62,6 @@ void UpdateBodyEquipment(const GameplayPoseFrame&, bool) {}
 void UpdateCarryLane(const GameplayPoseFrame&, bool) {}
 void UpdateGrenadeLane(const GameplayPoseFrame&, bool) {}
 void UpdateInteractionLane(const GameplayPoseFrame&, bool) {}
-void UpdatePhysicalInteractions(const GameplayPoseFrame&, bool) {}
 void UpdateContactLane(const GameplayPoseFrame&, bool) {}
 void UpdateSwingLane(const GameplayPoseFrame&, bool) {}
 void UpdatePsiMedkit(const GameplayPoseFrame&, bool) {}

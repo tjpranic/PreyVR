@@ -296,8 +296,7 @@ void __fastcall UpdateCachedRayWithTakeover(void* player)
     UpdatePsiMedkit(frame,haveTracking&&gEnabled.load());
     UpdatePsychoscopeGesture(frame,haveTracking&&gEnabled.load());
     UpdateBodyEquipment(frame,haveTracking&&gEnabled.load());
-    UpdatePhysicalInteractions(frame,haveTracking&&gEnabled.load());
-    // Before contact: a strike will tell contact what not to push (phase 2).
+    // Before contact: a strike tells contact what not to push.
     UpdateSwingLane(frame,haveTracking&&gEnabled.load());
     UpdateContactLane(frame,haveTracking&&gEnabled.load());
     UpdateInteractionLane(frame,haveTracking&&gEnabled.load());

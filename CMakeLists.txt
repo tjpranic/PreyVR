@@ -454,7 +454,7 @@ if(PREYVR_BUILD_TESTS)
         preyvr_add_test(swing_lane tests/SwingLaneTests.cpp
             INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
             DEFS WIN32_LEAN_AND_MEAN NOMINMAX
-            LIBS preyvr_core)
+            LIBS preyvr_core minhook)
         preyvr_add_test(ui_pointer_dispatch tests/UiPointerTests.cpp TARGET preyvr_ui_pointer_tests
             INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
             DEFS WIN32_LEAN_AND_MEAN NOMINMAX)

@@ -74,6 +74,7 @@ int main()
     Check(passes.Touch(&many[Passes::kCapacity], 2000 * ms, .15f, begun) == nullptr, "a full table refuses a new pass");
     Check(passes.Touch(&many[Passes::kCapacity], 2200 * ms, .15f, begun) != nullptr && begun,
           "an ended pass makes room");
-    Check(std::string(DecisionName(Decision::strike)) == "would_strike", "phase 1 names its strikes as such");
+    Check(std::string(DecisionName(Decision::strike)) == "struck" && std::string(DecisionName(Decision::failed)) == "failed",
+          "phase 2 strikes for real");
     std::cout << "swing_strike: head, tiers and passes\n";
 }

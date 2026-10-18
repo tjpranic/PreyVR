@@ -39,8 +39,8 @@ constexpr Spec specs[]={
  {"reticle_fallback_mm",L"RETICLE FALLBACK DISTANCE",L"How far the crosshair sits when your aim hits nothing within 200 m.",10000,500,200000,500,U::metresInMm},
  {"haptics",L"CONTROLLER FEEDBACK",L"Short pulses for VR menu changes and attaching the support hand.",1,0,1,1},
  {"haptic_strength",L"FEEDBACK STRENGTH",L"Scale controller feedback intensity. Zero silences all pulses.",70,0,100,10,U::percent},
- {"physical_melee",L"PHYSICAL WRENCH",L"Swing the wrench to strike. Native stamina and attack recovery still apply.",0,0,1,1},
- {"swing_speed",L"MINIMUM SWING SPEED",L"Higher values require faster swings. Rest briefly between strikes.",120,80,250,10,U::cmPerSecond},
+ {"free_swing",L"FREE-SWING WRENCH",L"Swing the wrench to strike what it hits: harder swings hit harder, and Prey's damage, knockback and stamina apply. The attack button does nothing with the wrench out.",1,0,1,1},
+ {"swing_speed",L"MINIMUM SWING SPEED",L"How fast the wrench must move where it hits to strike. Slower touches only push.",120,80,250,10,U::cmPerSecond},
  {"physical_contact",L"PHYSICAL CONTACT",L"Your weapon and free hands push loose objects and bodies: light ones keep up, heavy ones resist. Shown in the debug overlay.",1,0,1,1},
  {"push_strength",L"PUSH STRENGTH",L"How hard your weapon and hands push. Light objects keep up either way; heavier ones move sooner with more.",100,25,200,25,U::percent},
  {"psi_target",L"PSYCHIC TARGETING",L"The left trigger casts the equipped power. Original aims it as Prey does; Head or Left Controller aim it with your head or left hand.",0,0,2,1,U::none,psiNames},
@@ -107,7 +107,7 @@ constexpr int feedback[]={Haptics,HapticStrength};
 constexpr int abilities[]={PsiTarget,Medkit,BeltHints};
 constexpr int setup[]={CalibratePosture,RecenterView,DebugOverlay};
 // Features still being proven, together with the settings that tune them.
-constexpr int experimental[]={CarryHand,GrenadeDeploy,LongReach,MuzzleAim,PhysicalMelee,SwingSpeed,
+constexpr int experimental[]={CarryHand,GrenadeDeploy,LongReach,MuzzleAim,FreeSwing,SwingSpeed,
     InventoryLayer,InventoryStereo,InventoryDepth};
 // CONTROLS holds no setting: the panel draws what each action is bound to there.
 constexpr unsigned kControlsPage=7;
@@ -184,8 +184,9 @@ bool Parse(std::string_view text,Values& result,Present* present){
   // Retired settings: skipped, so a file saved before they went still loads.
   // The next save leaves them out. scene_reticle: the world reticle runs the
   // scene query itself (reticle_world). physical_contacts, contact_strength:
-  // Object Nudges, removed 2026-10-18 for a redesign.
-  if(key=="scene_reticle"||key=="physical_contacts"||key=="contact_strength")continue;
+  // Object Nudges, removed 2026-10-18 for a redesign. physical_melee: the
+  // Physical Wrench, replaced by the free-swing wrench (free_swing) 2026-10-18.
+  if(key=="scene_reticle"||key=="physical_contacts"||key=="contact_strength"||key=="physical_melee")continue;
   unsigned i=0;for(;i<Count&&key!=specs[i].key;++i){}
   if(i==Count||seen[i]||!Valid(i,value))return false;
   parsed[i]=value;seen[i]=true;

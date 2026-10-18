@@ -988,8 +988,6 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
     } else if (verb == "medkit.slot") {
         const auto result=Valued(args)?SetMedkitSlot(arg(1,0)):0;
         out<<"medkit.slot result="<<result<<PsiMedkitReport();
-    } else if (verb == "physical") {
-        out<<"physical"<<PhysicalInteractionsReport();
     } else if (verb == "aim.scene") {
         if(Valued(args))SetSceneReticle(arg(1,0));
         out<<"aim.scene"<<SceneQueryReport();

@@ -118,7 +118,8 @@ void SettingsChecks(){
        "push strength, 25..200 percent");
  // Object Nudges, removed 2026-10-18: a file saved with them keeps everything else.
  Check(Parse("version=1\nphysical_melee=1\nphysical_contacts=1\nswing_speed=80\ncontact_strength=50\n",parsed,&seen)&&
-       parsed[PhysicalMelee]==1&&parsed[SwingSpeed]==80,"the nudge keys are retired, the wrench's kept");
+       !seen[FreeSwing]&&parsed[SwingSpeed]==80,"the nudge keys and the Physical Wrench's are retired, the swing speed kept");
+ Check(Defaults()[FreeSwing]==1,"the free-swing wrench is on by default");
  {const auto text=Serialize(parsed);
   Check(text.find("physical_contacts")==std::string::npos&&text.find("contact_strength")==std::string::npos,
         "and the next save leaves them out");}
@@ -162,7 +163,7 @@ void LayoutChecks(){
  for(unsigned i=0;i<Count;++i)Check(seen[i]==1,"every setting appears on exactly one tab");
  Check(recenter==1&&clear==1&&calibrate==1,"each button appears once");
  Check(MenuEntries(MenuPages()).empty(),"past the last tab there is nothing");
- for(const int e:{CarryHand,GrenadeDeploy,LongReach,MuzzleAim,PhysicalMelee,SwingSpeed,
+ for(const int e:{CarryHand,GrenadeDeploy,LongReach,MuzzleAim,FreeSwing,SwingSpeed,
                   InventoryLayer,InventoryStereo,InventoryDepth})
   Check(Has(MenuEntries(MenuPages()-1),e),"features still being proven, and their tuning, on the experimental tab");
  Check(Has(MenuEntries(1),PhysicalContact)&&Has(MenuEntries(1),PushStrength)&&Defaults()[PhysicalContact]==1,
