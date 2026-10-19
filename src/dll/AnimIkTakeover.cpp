@@ -459,6 +459,9 @@ struct PoseSettings {
     float stretch = 1.20f;      // reach limit over the rig's arm length (native solve allows 1.25)
     // The arm (arm.*, docs/ARM-POSE-2026-10-06.md): from the player's shoulder.
     unsigned armMode = 1;       // 0: the native arm, hung from the animated shoulder
+    // 1: the shoulder from the neck (armpose::ShoulderFromHead); 0: from the
+    // eyes, as before 2026-10-19 (arm.anchor, for A/B).
+    bool neckAnchor = true;
     armpose::Body body{};
     float torsoDeadzone = 35.0f * 3.14159265f / 180.0f;
     float torsoRelax = 0.6f;    // fraction per second towards the head's yaw
@@ -656,6 +659,7 @@ struct ArmPlan {
     Vec3 clavicleXr{}, targetXr{}, shoulderXr{};
     Vec3 shoulderModel{};
     float reachModel = 0.0f;    // the stretched arm's reach, model units
+    float reach = -1.0f;        // the player's wrist from this shoulder (m), before reach shaping
     bool goalSet = false;       // DriveHand wrote this wrist goal (model)
     Vec3 goal{};
     // arms.free: the wrist's rotation is set after the pass as well, with what
@@ -672,9 +676,15 @@ struct ArmStats {
     float handMoveCm[2]{};      // how far the native pass left the hand from its goal
     float scale[2]{};           // segment stretch applied
     bool straight[2]{};
+    float reachCm[2]{};         // the player's wrist from the shoulder, before reach shaping
     float torsoYawDeg = 0.0f, headYawDeg = 0.0f;
 };
 std::mutex gArmMutex;           // the torso filter, pole smoothing and stats
+// The longest reach since the last arm.report, per arm: hold the arms out
+// straight between two reports and it reads the player's arm length.
+float gReachMaxCm[2]{};
+// arm.length and the Arm Length option (VrOptions' arm_length): shoulder to wrist.
+constexpr int kArmLengthMinCm = 40, kArmLengthMaxCm = 70;
 armpose::TorsoYaw gTorsoYaw;
 std::uint64_t gTorsoNs = 0, gPoleNs[2]{};
 Vec3 gPole[2]{};
@@ -724,6 +734,7 @@ void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& locatio
     const Pose& head = frame.tracking.head;
     const float headYaw = armpose::HeadYaw(head.orientation);
     armpose::TorsoFrame torso;
+    float shoulderYaw = 0.0f;
     {
         std::lock_guard lock(gArmMutex);
         const std::uint64_t now = preyvr::timing::MonotonicNanoseconds();
@@ -741,8 +752,9 @@ void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& locatio
         const std::uint64_t longOwner = gLongGeneration.load(std::memory_order_relaxed);
         const float twist = longOwner != 0 && frame.weaponGeneration == longOwner && frame.twoHand.blend > 0.0f
             ? gLongTwistDeg.load(std::memory_order_relaxed) * 0.01745329f * frame.twoHand.blend : 0.0f;
-        torso = armpose::TorsoFromYaw(yaw - twist);
-        gArmStats.torsoYawDeg = (yaw - twist) * 57.29578f;
+        shoulderYaw = yaw - twist;
+        torso = armpose::TorsoFromYaw(shoulderYaw);
+        gArmStats.torsoYawDeg = shoulderYaw * 57.29578f;
         gArmStats.headYawDeg = headYaw * 57.29578f;
     }
     const armpose::Body& body = pose.body;
@@ -754,7 +766,9 @@ void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& locatio
         p.torso = torso;
         p.clavicleXr = map.ToXr(Vec3{clavicle.t[0], clavicle.t[1], clavicle.t[2]});
         const Vec3 animated = map.ToXr(Vec3{upper.t[0], upper.t[1], upper.t[2]});
-        p.targetXr = armpose::ShoulderTarget(head.position, torso, s == 0 ? 1 : -1, body);
+        // From the neck, the twist turning the shoulders about it.
+        p.targetXr = pose.neckAnchor ? armpose::ShoulderFromHead(head, shoulderYaw, s == 0 ? 1 : -1, body)
+                                     : armpose::ShoulderTarget(head.position, torso, s == 0 ? 1 : -1, body);
         p.shoulderXr = armpose::PlaceShoulder(p.clavicleXr, Dist3(animated, p.clavicleXr), p.targetXr,
                                               body.clavicleStretch);
         p.shoulderModel = map.ToModel(p.shoulderXr);
@@ -1186,6 +1200,7 @@ void DriveHand(unsigned int hand, std::uint8_t* relative, std::uint8_t* absolute
             const bool anatomical = posed && arm != nullptr && arm->valid;
             const Vec3 reachFrom = anatomical ? arm->shoulderModel : shoulder;
             const float limit = anatomical ? arm->reachModel : (posed ? reach * pose.stretch : reach);
+            if (anatomical) { arm->reach = Dist3(goalRaw, reachFrom) * location.s; }
             // Compress the player's reach into the character's BEFORE clamping,
             // so a longer-armed player keeps continuous motion instead of dead
             // travel at full extension.
@@ -1522,8 +1537,14 @@ void SolveArms(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsigned 
         stats.handMoveCm[s] = len(move) * location.s * 100.0f;
         stats.scale[s] = arm.scale;
         stats.straight[s] = arm.straight;
+        stats.reachCm[s] = p.reach >= 0.0f ? p.reach * 100.0f : 0.0f;
     }
     std::lock_guard lock(gArmMutex);
+    for (int s = 0; s < 2; ++s) {
+        if (stats.solved[s] && std::isfinite(stats.reachCm[s])) {
+            gReachMaxCm[s] = std::max(gReachMaxCm[s], stats.reachCm[s]);
+        }
+    }
     stats.torsoYawDeg = gArmStats.torsoYawDeg;
     stats.headYawDeg = gArmStats.headYawDeg;
     gArmStats = stats;
@@ -2201,6 +2222,10 @@ DWORD SetArmSetting(const std::string& what, const int* v, unsigned n)
     const auto mm = [](int x) { return x * 0.001f; };
     if (what == "mode" && n >= 1 && v[0] >= 0 && v[0] <= 1) {
         p.armMode = static_cast<unsigned>(v[0]);
+    } else if (what == "anchor" && n >= 1 && v[0] >= 0 && v[0] <= 1) {
+        p.neckAnchor = v[0] != 0;
+    } else if (what == "length" && n >= 1 && v[0] >= kArmLengthMinCm && v[0] <= kArmLengthMaxCm) {
+        b = armpose::WithArmLength(b, v[0] * 0.01f);
     } else if (what == "shoulder" && n >= 3 && std::abs(v[0]) <= 300 && v[1] >= 50 && v[1] <= 350 &&
                v[2] <= -50 && v[2] >= -450) {
         b.shoulderForward = mm(v[0]); b.shoulderOut = mm(v[1]); b.shoulderUp = mm(v[2]);
@@ -2240,21 +2265,35 @@ int TorsoDeadzoneDegrees()
     return static_cast<int>(std::lround(ReadPoseSettings().torsoDeadzone * 180.0f / 3.14159265f));
 }
 
+DWORD SetArmLengthCm(int cm)
+{
+    const int value[1] = {cm};
+    return SetArmSetting("length", value, 1) == 0 ? 0 : ERROR_INVALID_PARAMETER;
+}
+int ArmLengthCm() { return static_cast<int>(std::lround(armpose::ArmLength(ReadPoseSettings().body) * 100.0f)); }
+
 std::string ArmReport()
 {
     const PoseSettings p = ReadPoseSettings();
     ArmStats st;
+    float reachMax[2]{};
     {
         std::lock_guard lock(gArmMutex);
         st = gArmStats;
+        for (int s = 0; s < 2; ++s) {
+            reachMax[s] = gReachMaxCm[s];
+            gReachMaxCm[s] = 0.0f;
+        }
     }
     std::ostringstream out;
     out.imbue(std::locale::classic());
     out << std::fixed;
     out.precision(1);
     const armpose::Body& b = p.body;
-    out << " armMode=" << p.armMode << " shoulderMm=" << b.shoulderForward * 1000 << ',' << b.shoulderOut * 1000
+    out << " armMode=" << p.armMode << " anchor=" << (p.neckAnchor ? "neck" : "eyes")
+        << " shoulderMm=" << b.shoulderForward * 1000 << ',' << b.shoulderOut * 1000
         << ',' << b.shoulderUp * 1000 << " lenMm=" << b.upper * 1000 << ',' << b.fore * 1000
+        << " lengthCm=" << armpose::ArmLength(b) * 100
         << " clavStretch=" << b.clavicleStretch << " armStretch=" << b.armStretch << " knee=" << p.armKnee
         << " priorDeg=" << p.wrist.flexionSigmaDeg << ',' << p.wrist.deviationRestDeg << ','
         << p.wrist.deviationSigmaDeg << ',' << p.wrist.swivelSigmaDeg
@@ -2269,7 +2308,8 @@ std::string ArmReport()
         if (!st.solved[s]) { continue; }
         const Vec3 d = Sub(st.shoulder[s], st.target[s]);
         out << " shoulderToTargetCm" << t << '=' << std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z) * 100.0f
-            << " handMoveCm" << t << '=' << st.handMoveCm[s];
+            << " handMoveCm" << t << '=' << st.handMoveCm[s]
+            << " reachCm" << t << '=' << st.reachCm[s] << " reachMaxCm" << t << '=' << reachMax[s];
         out.precision(3);
         out << " scale" << t << '=' << st.scale[s];
         out.precision(1);

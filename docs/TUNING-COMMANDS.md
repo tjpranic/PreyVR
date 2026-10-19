@@ -104,6 +104,7 @@ this session. "Menu only" means no command reaches it.
 | Hands | Psychoscope gesture (`psychoscope`) | on/off | off | menu only |
 | Hands | Hands without a weapon (`arms_free`) | on/off | on | `arms.free <0\|1>` |
 | Hands | Fingers follow the controller (`finger_curl`) | on/off | on | menu only |
+| Hands | Arm length (`arm_length`) | 40–70 cm, shoulder to wrist | 56 | `arm.length <cm>` |
 | Hands | Carry (`carry_hold`) | press to toggle (0), hold to carry (1) | press to toggle | `carry.hold <0\|1>` |
 | Hands | Grenade throw (`grenade_hand`) | game throw (0), hand throw (1) | hand | `grenade.hand <0\|1>` |
 | Hands | Object throw strength (`carry_throw_strength`) | 50–300 % | 140 | `carry.throw <gain> ...` (first value) |
@@ -276,14 +277,16 @@ value report, as described above.
 |---|---|---|---|
 | `arm.torso <deg> <relax>` | 0–180, 0–10000 ‰/s | 35 600 | Torso yaw deadzone and settling, for the arms and the body together. **Menu** (Body turn deadzone). |
 | `arm.mode` | 0 native arm, 1 your shoulder | 1 | Where the arm is solved from. |
-| `arm.shoulder <fwd> <out> <up>` | mm | | The shoulder joint from the centre eye, in the torso's frame. |
+| `arm.anchor` | 0 the eyes, 1 the neck | 1 | Where the shoulder hangs from. The neck keeps it still when you look down or around; 0 is the behaviour before 2026-10-19, for A/B. |
+| `arm.shoulder <fwd> <out> <up>` | mm | | The shoulder joint from the centre eye, with the head level and facing the torso, in the torso's frame. |
 | `arm.len <upper> <fore>` | 150–450 mm | 285 275 | Drawn arm segments. |
+| `arm.length <cm>` | 40–70 | 56 | Both segments at once, shoulder to wrist, split as the defaults are. **Menu** (Arm length). |
 | `arm.stretch <clavicle> <arm>` | 0–500 ‰, 1000–1300 ‰ | 150 1100 | How far the clavicle and the arm may stretch. |
 | `arm.prior <flexSd> <devRest> <devSd> <swivelSd>` | degrees | 45 −8 12 25 | The elbow solver's priors. |
 | `arm.rom <flex> <ext> <radial> <ulnar>` | 10–120 degrees | 75 65 20 35 | The wrist's range of motion. |
 | `arm.hold <sd> <tauMs>` | 0–360, 0–1000 | 45 60 | Elbow smoothing over time. |
 | `arm.knee <permille>` | 500–1000 | 920 | Exact reach up to this fraction of the stretched arm. |
-| `arm.report` | report | | Arm settings and solver statistics. |
+| `arm.report` | report | | Arm settings and solver statistics. `reachCmR/L` is your wrist's distance from the shoulder now; `reachMaxCmR/L` the longest since the last `arm.*` command. Hold your arms out straight between two reports to read your arm length. |
 | `arms.free` | 0/1 | 0 → VR 1 | Hands at the controllers with no weapon drawn. **Menu.** |
 | `arms.draw` | action | | Asks the game to draw the last weapon. |
 | `arms.report` / `arms.att` / `arms.joints [name]` | report | | Holster state; the arms' attachments; joint positions. |

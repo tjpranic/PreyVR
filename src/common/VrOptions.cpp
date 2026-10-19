@@ -81,7 +81,9 @@ constexpr Spec specs[]={
  {"inventory_depth",L"INVENTORY DEPTH",L"How much depth Stereo Inventory gives.",25,0,100,5,U::percent},
  {"finger_curl",L"FINGERS FOLLOW THE CONTROLLER",L"A free hand's fingers follow yours: the thumb on a button, the index on the trigger, the rest with the grip.",1,0,1,1},
  {"aim_lasers",L"AIM LASERS",L"A laser from each hand to what it points at: where the right hand aims, and what the left hand can grab or use.",1,0,1,1},
- {"controller_prompts",L"CONTROLLER PROMPTS",L"Game menus show your controller's buttons while the laser points at them. Off: the laser switches them to mouse and keyboard.",1,0,1,1}
+ {"controller_prompts",L"CONTROLLER PROMPTS",L"Game menus show your controller's buttons while the laser points at them. Off: the laser switches them to mouse and keyboard.",1,0,1,1},
+ // The arm lane takes the same 40-70 (AnimIkTakeover's arm.length).
+ {"arm_length",L"ARM LENGTH",L"Your arm from shoulder to wrist. Lower it if your arms look bent when yours are straight; raise it if your hands stop short of the controllers.",56,40,70,1,U::cm}
 };
 static_assert(std::size(specs)==Count,"one Spec per Setting, in order");
 // Each default, name and choice belongs to its setting's range, one name per value.
@@ -98,7 +100,7 @@ static_assert(Consistent(),"every Spec describes its own range");
 // The panel's tabs. Each setting appears once, each button once.
 constexpr int comfort[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,StrafeSpeed,BackwardSpeed,
     BodyFollow,BodyTurnDeadzone,BodyStep,BodyGlide};
-constexpr int hands[]={AimLasers,TwoHand,GripToggle,SupportSnap,Psychoscope,ArmsFree,FingerCurl,CarryHold,GrenadeHand,
+constexpr int hands[]={AimLasers,TwoHand,GripToggle,SupportSnap,Psychoscope,ArmsFree,FingerCurl,ArmLength,CarryHold,GrenadeHand,
     CarryThrowStrength,GrenadeThrowStrength,PhysicalContact,PushStrength,FreeSwing,SwingSpeed,HeavySwingSpeed};
 constexpr int interface_[]={UiScale,UiMargin,UiCurve,UiGuide,UiDistance,UiOffsetRight,UiOffsetUp,UiText,
     PointerHand,ControllerPrompts,HudLayer,ReticleWorld,ReticleSize,ReticleFallback};

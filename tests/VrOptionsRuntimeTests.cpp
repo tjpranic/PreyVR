@@ -72,6 +72,7 @@ PREYVR_STUB(SetTextPanelDistanceCm,TextPanelDistanceCmValue,UiText,unsigned)
 PREYVR_STUB(SetMoveLaneDeadzone,MoveLaneDeadzone,MoveDeadzone,unsigned)
 PREYVR_STUB(SetTurnLaneDeadzone,TurnLaneDeadzone,TurnDeadzone,unsigned)
 PREYVR_STUB(SetTorsoDeadzone,TorsoDeadzoneDegrees,BodyTurnDeadzone,int)
+PREYVR_STUB(SetArmLengthCm,ArmLengthCm,ArmLength,int)
 PREYVR_STUB(SetAnimIkFreeArms,AnimIkFreeArms,ArmsFree,unsigned)
 PREYVR_STUB(SetAnimIkFingerCurl,AnimIkFingerCurl,FingerCurl,unsigned)
 PREYVR_STUB(SetAimLasers,AimLasersEnabled,AimLasers,unsigned)
@@ -243,7 +244,7 @@ int main(){
    {options::WristHover,50},{options::WristTilt,30},{options::CarryHand,0},{options::GrenadeDeploy,1},
    {options::LongReach,0},{options::InventoryLayer,1},{options::InventoryStereo,1},{options::InventoryDepth,50},
    {options::UiCurve,50},{options::DebugOverlay,1},{options::FingerCurl,0},{options::AimLasers,0},
-   {options::ControllerPrompts,0}};
+   {options::ControllerPrompts,0},{options::ArmLength,51}};
   VrOptionsUiResult result;
   for(const auto& [id,v]:chosen){options::Change change;change.setting=static_cast<int>(id);change.value=v;
    result.changes.push_back(change);}

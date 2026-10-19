@@ -70,8 +70,23 @@ struct TorsoYaw {
     void Reset() { valid = false; }
 };
 
-// Where the player's shoulder joint is.
+// Where the player's shoulder joint is, from the centre eye with the head level
+// and facing the torso.
 Vec3 ShoulderTarget(const Vec3& eye, const TorsoFrame& torso, Side side, const Body& body);
+
+// **The shoulder from the headset's pose.** Turning or tipping the head swings
+// the eyes about the neck by several centimetres, and the shoulders do not
+// move with them: looking down at the hands dropped an eye-anchored shoulder
+// 5-11 cm towards them and bent a straight arm by 20-45 degrees
+// (docs/TURN-LEAN-ARMS-2026-10-19.md). So the shoulder is placed from the eye
+// as it would be with the head level and facing the torso -- the neck model
+// room-scale follows (roomscale::FollowPoint). A lean still moves it.
+Vec3 ShoulderFromHead(const Pose& head, float torsoYaw, Side side, const Body& body);
+
+// The drawn arm's length, shoulder joint to wrist (m), and the same body with
+// its segments set to `metres`, split as the defaults are (28.5 : 27.5).
+float ArmLength(const Body& body);
+Body WithArmLength(Body body, float metres);
 
 // The clavicle's end: from its root towards `target`, at the clavicle's own
 // length stretched by at most `stretch` either way.

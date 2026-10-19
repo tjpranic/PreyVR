@@ -1,5 +1,7 @@
 #include "preyvr/ArmPose.h"
 
+#include "preyvr/RoomScale.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -78,6 +80,22 @@ Vec3 ShoulderTarget(const Vec3& eye, const TorsoFrame& torso, Side side, const B
     return Add(Add(Add(eye, Scale(torso.forward, body.shoulderForward)),
                    Scale(torso.right, static_cast<float>(side) * body.shoulderOut)),
                Scale(torso.up, body.shoulderUp));
+}
+
+Vec3 ShoulderFromHead(const Pose& head, float torsoYaw, Side side, const Body& body)
+{
+    return ShoulderTarget(roomscale::FollowPoint(head, torsoYaw), TorsoFromYaw(torsoYaw), side, body);
+}
+
+float ArmLength(const Body& body) { return body.upper + body.fore; }
+
+Body WithArmLength(Body body, float metres)
+{
+    const Body defaults{};
+    if (!(metres > 0.0f) || !std::isfinite(metres)) { return body; }
+    body.upper = metres * defaults.upper / ArmLength(defaults);
+    body.fore = metres - body.upper;
+    return body;
 }
 
 Vec3 PlaceShoulder(const Vec3& clavicleRoot, float clavicleLength, const Vec3& target, float stretch)

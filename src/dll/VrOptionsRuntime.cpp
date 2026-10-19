@@ -219,6 +219,7 @@ constexpr Wiring wiring[]={
  {options::FingerCurl,Set<SetAnimIkFingerCurl>,Get<AnimIkFingerCurl>},
  {options::AimLasers,Set<SetAimLasers>,Get<AimLasersEnabled>},
  {options::ControllerPrompts,Set<SetControllerPrompts>,Get<ControllerPromptsEnabled>},
+ {options::ArmLength,Set<SetArmLengthCm>,Get<ArmLengthCm>},
 };
 constexpr bool InSettingOrder(){
  for(unsigned i=0;i<std::size(wiring);++i)if(wiring[i].id!=i)return false;

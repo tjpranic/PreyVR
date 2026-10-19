@@ -124,7 +124,9 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   the optional psychoscope gesture, the hands without a weapon, **fingers follow
   the controller** (on by default: a free hand's thumb rests on a button or
   lifts, the index points or curls on the trigger, the other three close with
-  the grip), the carry grip (hold, or press to toggle), hand or game grenade
+  the grip), **arm length** (shoulder to wrist, 56 cm by default: lower it if
+  your arms look bent when yours are straight, raise it if your hands stop short
+  of the controllers), the carry grip (hold, or press to toggle), hand or game grenade
   throwing, how hard thrown objects and grenades fly, and **Physical Contact**
   with its push strength (on by default: your weapon and free hands push loose
   objects and bodies; light ones keep up, heavy ones resist, friction lets you

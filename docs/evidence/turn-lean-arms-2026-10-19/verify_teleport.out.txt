@@ -1,0 +1,13 @@
+0xb499d6 OK  f6473c20 test byte [rdi+3Ch],20h  (bRecalcBounds & 0x20 skips)
+0xb499f2 OK  f30f108bcc010000 movss xmm1,[rbx+1CCh]  (sizeCollider.z)
+0xb49a52 OK  e8 call 0xB49390 (release ground colliders)
+0xb49a57 OK  838bc002000001 or dword [rbx+2C0h],1  (bFlying)
+0xb49a5e OK  f683c002000008 test byte [rbx+2C0h],8
+0xb49a6f OK  3d77770000 cmp eax,7777h
+0xb49a76 OK  4889b36c010000 mov [rbx+16Ch],rsi  (vel.y,z = 0)
+0xb49a7d OK  89b368010000 mov [rbx+168h],esi   (vel.x = 0)
+0xb49a83 OK  89b3d0010000 mov [rbx+1D0h],esi   (smoothing offset = 0)
+call target 0xb49390
+constant 0x1D2C190 = 0.01
+living vtable +0x20 -> 0xb49610
+all OK

@@ -1,0 +1,6 @@
+Head turns about a fixed neck at 90 fps; real body never moves.
+physical turn 90 deg over 0.5 s              SetPos frames   29  moved  10.0 cm  during 0.32-1.93 s
+physical turn 180 deg over 1 s               SetPos frames   74  moved  22.5 cm  during 0.32-2.44 s
+physical turn 45 deg over 0.4 s              SetPos frames   16  moved   5.3 cm  during 1.06-4.04 s
+glance 30 deg held 2 s, back                 SetPos frames    0  moved   0.0 cm  during -
+glance 60 deg held 1 s, back                 SetPos frames   17  moved   5.9 cm  during 0.20-5.84 s

@@ -1,4 +1,5 @@
 #include "preyvr/ArmPose.h"
+#include "preyvr/RoomScale.h"
 #include "TestGeometry.h"
 #include "TestSupport.h"
 
@@ -77,6 +78,71 @@ void TestShoulder()
     const Vec3 limited = PlaceShoulder(root, 0.17f, far, 0.15f);
     Require(std::fabs(Dist(limited, root) - 0.17f * 1.15f) < 1e-4f, "beyond its stretch the clavicle stops");
     Require(std::fabs(limited.y - root.y) < 1e-4f && limited.x > root.x, "towards the target");
+}
+
+// The shoulder hangs from the neck: turning or tipping the head swings the eyes
+// about the neck by centimetres, and the shoulders not at all.
+void TestShoulderFromHead()
+{
+    const Body body;
+    const float torso = 20.0f * kDeg;
+    // Level and facing the torso, the head puts the shoulder where its eye does.
+    const Pose level{AboutY(torso), Vec3{0.1f, 1.6f, -0.2f}};
+    for (const Side side : {+1, -1}) {
+        const Vec3 fromEye = ShoulderTarget(level.position, TorsoFromYaw(torso), side, body);
+        Require(NearVec(ShoulderFromHead(level, torso, side, body), fromEye, 1e-4f),
+                "head level and facing the torso: the shoulder is where the eye puts it");
+    }
+    const Vec3 neck = Add(level.position, Rotate(level.orientation, roomscale::kNeckFromEye));
+    const Vec3 right = ShoulderFromHead(level, torso, +1, body);
+    const auto about = [&](const Quaternion& local) {
+        const Quaternion q = Multiply(level.orientation, local);
+        return Pose{q, Sub(neck, Rotate(q, roomscale::kNeckFromEye))};
+    };
+    for (const Quaternion local : {AboutX(-60.0f * kDeg), AboutX(-30.0f * kDeg), AboutX(25.0f * kDeg),
+                                   AboutY(30.0f * kDeg), AboutY(-45.0f * kDeg),
+                                   Multiply(AboutY(30.0f * kDeg), AboutX(-45.0f * kDeg))}) {
+        const Pose turned = about(local);
+        Require(Dist(turned.position, level.position) > 0.02f, "turning the head about the neck moves the eyes");
+        Require(NearVec(ShoulderFromHead(turned, torso, +1, body), right, 1e-4f),
+                "and leaves the shoulder where it was");
+    }
+    // What the arm did before: looking down 45 degrees dropped an eye-anchored
+    // shoulder about 8 cm, towards the hands.
+    const Pose down = about(AboutX(-45.0f * kDeg));
+    const Vec3 fromEye = ShoulderTarget(down.position, TorsoFromYaw(torso), +1, body);
+    Require(right.y - fromEye.y > 0.07f, "the eye-anchored shoulder dropped with the gaze");
+    // A lean moves the neck, and the shoulder goes with it.
+    const Vec3 lean{0.0f, -0.05f, -0.2f};
+    const Pose leaned{level.orientation, Add(level.position, lean)};
+    Require(NearVec(Sub(ShoulderFromHead(leaned, torso, +1, body), right), lean, 1e-4f), "a lean moves the shoulder");
+}
+
+void TestArmLength()
+{
+    const Body body;
+    Require(std::fabs(ArmLength(body) - 0.56f) < 1e-6f, "the default arm is 56 cm, shoulder to wrist");
+    const Body shorter = WithArmLength(body, 0.50f);
+    Require(std::fabs(ArmLength(shorter) - 0.50f) < 1e-6f &&
+                std::fabs(shorter.upper / shorter.fore - body.upper / body.fore) < 1e-5f,
+            "a new length keeps the segments' split");
+    Require(shorter.shoulderOut == body.shoulderOut && shorter.armStretch == body.armStretch,
+            "only the segments change");
+    Require(ArmLength(WithArmLength(body, -1.0f)) == ArmLength(body) &&
+                ArmLength(WithArmLength(body, std::nanf(""))) == ArmLength(body),
+            "a length that is no length changes nothing");
+    // A player's straight 50 cm arm: the default arm folds to fit it, an arm
+    // of the player's length lies straight.
+    const Vec3 shoulder{0.185f, 1.37f, 0.09f};
+    const Vec3 wrist{shoulder.x, shoulder.y, shoulder.z - 0.50f};
+    const auto offAxis = [&](const Body& b) {
+        const Vec3 elbow = SolveElbow(shoulder, wrist, b.upper, b.fore, Vec3{0, -1, 0}, b.armStretch).elbow;
+        return std::hypot(elbow.x - shoulder.x, elbow.y - shoulder.y);
+    };
+    // The solve keeps 0.5% slack, so a straight arm sits about 2.5 cm off the
+    // line (169 degrees); the default arm folds to 12.6 cm off it.
+    Require(offAxis(body) > 0.10f, "the default arm bends a 50 cm player's straight arm");
+    Require(offAxis(shorter) < 0.03f, "the player's own length draws it straight");
 }
 
 void TestElbow()
@@ -177,6 +243,8 @@ int main()
     TestHeadYaw();
     TestTorsoYaw();
     TestShoulder();
+    TestShoulderFromHead();
+    TestArmLength();
     TestElbow();
     TestWristAngles();
     TestElbowFollowsHand();

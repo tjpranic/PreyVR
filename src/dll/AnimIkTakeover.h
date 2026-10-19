@@ -132,8 +132,10 @@ DWORD SetHandPoseWeaponRoll(unsigned int enabled);
 DWORD SetHandPoseStretchPercent(int percent);
 // The arm from the player's shoulder (docs/ARM-POSE-2026-10-06.md), arm.<what>:
 //   mode 0|1                     native arm / player's shoulder (default 1)
+//   anchor 0|1                   shoulder from the eyes / from the neck (default 1)
 //   shoulder <fwd> <out> <up>    shoulder joint from the centre eye, torso frame, mm
 //   len <upper> <fore>           drawn segments, mm (default 285 275)
+//   length <cm>                  both segments, shoulder to wrist, 40-70 (default 56)
 //   stretch <clav> <arm>         permille the clavicle may stretch, arm stretch limit (150 1100)
 //   prior <flexSd> <devRest> <devSd> <swivelSd>  the elbow's MAP priors, degrees (45 -8 12 25)
 //   rom <flex> <ext> <radial> <ulnar>            the wrist's range of motion, degrees (75 65 20 35)
@@ -141,6 +143,11 @@ DWORD SetHandPoseStretchPercent(int percent);
 //   torso <deadzoneDeg> <relax>  torso yaw deadzone and relax per second, permille (35 600)
 //   knee <permille>              exact reach up to this fraction of the stretched arm (920)
 DWORD SetArmSetting(const std::string& what, const int* values, unsigned count);
+// arm.length alone, for the Arm Length option: shoulder to wrist, cm.
+DWORD SetArmLengthCm(int cm);
+int ArmLengthCm();
+// Also reports each arm's reach (the player's wrist from the shoulder) now and
+// at its longest since the last report, then starts that longest afresh.
 std::string ArmReport();
 // Settings, the measured error of each hand against the controller (palm
 // position, hand axes) and the grip pose relative to the aim pose.

@@ -188,6 +188,11 @@ void LayoutChecks(){
        "the reticle sits in the world by default");
  Check(std::wstring(MenuPageName(1))==L"HANDS"&&MenuEntries(1)[0]==AimLasers,
        "hands: the aim lasers first, apart from the interface tab's menu laser");
+ {const auto page=MenuEntries(1);const auto fingers=std::find(page.begin(),page.end(),FingerCurl);
+  Check(fingers!=page.end()&&fingers+1!=page.end()&&fingers[1]==ArmLength,"hands: the arm's length beside the fingers");}
+ Check(Defaults()[ArmLength]==56&&Valid(ArmLength,40)&&Valid(ArmLength,70)&&!Valid(ArmLength,39)&&!Valid(ArmLength,71)&&
+       Display(ArmLength,56)==L"56 CM",
+       "the arm is 56 cm by default, shoulder to wrist, 40 to 70");
  Check(MenuEntries(3)[0]==Holsters&&MenuEntries(3)[1]==ClearHolsterSlots&&MenuEntries(3)[2]==Wrist,
        "equipment: holsters, clearing them, then the wrist");
  Check(MenuEntries(6).size()==3&&MenuEntries(6)[0]==CalibratePosture&&MenuEntries(6)[1]==RecenterView&&
