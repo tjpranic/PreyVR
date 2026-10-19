@@ -3,6 +3,7 @@
 #include "TestGeometry.h"
 #include "TestSupport.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -189,11 +190,40 @@ void TestSweep()
     Require(AllowedLength(0.3f, rays, hits, s) == 0.0f, "a broken hit refuses the move");
 }
 
+// The stance test's verdict along a move: a desk edge 0.37 of the way along
+// stops the body short of it, never in it -- which the rays, passing above and
+// below a desk top, did not.
+void TestFitFraction()
+{
+    int calls = 0;
+    const auto clear = [&](float) { ++calls; return true; };
+    Require(FitFraction(clear, 6) == 1.0f && calls == 1, "a clear move is asked once and taken whole");
+    float asked = 0.0f;
+    const auto desk = [&](float k) { asked = std::max(asked, k <= 0.37f ? k : 0.0f); return k <= 0.37f; };
+    const float k = FitFraction(desk, 6);
+    Require(k <= 0.37f && k > 0.37f - 1.0f / 64.0f, "bisected to within 1/64 of the contact, on the clear side");
+    Require(asked == k, "the fraction taken is one that was found to fit");
+    Require(FitFraction([](float k) { return k == 0.0f; }, 6) == 0.0f, "touching already: no move");
+}
+
+// A body that is walking, falling or pushed keeps its motion through a move.
+void TestBodyMoving()
+{
+    Require(!BodyMoving({0, 0, 0}, {0, 0, 0}), "at rest");
+    Require(!BodyMoving({0.02f, 0, 0}, {0, 0.01f, 0}), "a settling crawl is rest");
+    Require(BodyMoving({0, 0, 0}, {0, 2.0f, 0}), "the stick asks to walk: moving, before the body has sped up");
+    Require(BodyMoving({1.5f, 0, 0}, {0, 0, 0}), "coasting to a stop: moving");
+    Require(BodyMoving({0, 0, -3.0f}, {0, 0, 0}), "falling: moving");
+    Require(BodyMoving({NAN, 0, 0}, {0, 0, 0}), "an unreadable velocity keeps the motion");
+}
+
 } // namespace
 
 int main()
 {
     TestShiftCancelsTheMove();
+    TestFitFraction();
+    TestBodyMoving();
     TestFollowPointIgnoresHeadRotation();
     TestWalkingNeverMovesTheView();
     TestNativeMovesAreNotAbsorbed();

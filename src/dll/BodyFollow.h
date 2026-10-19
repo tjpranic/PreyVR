@@ -59,6 +59,15 @@ int RoomScaleStopMm();
 int RoomScaleFollowMs();
 // The capsule radius the sweep assumes (not read from the engine).
 DWORD SetRoomScaleRadius(int radiusMm);
+// The living body's own physics (docs/TURN-LEAN-ARMS-2026-10-19.md, fixes 1
+// and 2; on by default): its stance test decides where the capsule fits before
+// it moves, and a move while it walks keeps its motion. 0: the 9 rays and the
+// entity's plain SetPos, as before.
+DWORD SetRoomScalePhysics(unsigned enabled);
+// 1: no room-scale move while the engine moves the capsule faster than
+// 0.25 m/s (stick walking, falling). 0 (default since 2026-10-19): the body
+// follows you then too, its moves keeping the walk's motion.
+DWORD SetRoomScaleStandAside(unsigned enabled);
 // Diagnostic: one swept, compensated move of the capsule relative to the
 // body's facing -- the body moves, the view must not. Deferred like the turn.
 DWORD RequestBodyNudge(int rightCm, int forwardCm, int delaySeconds = 5);

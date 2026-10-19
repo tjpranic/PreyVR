@@ -107,6 +107,13 @@ bool SweepRays(const Vec3& feet, const Vec3& move, const Settings& settings, Ray
     return true;
 }
 
+bool BodyMoving(const Vec3& velocity, const Vec3& requested)
+{
+    // A non-finite reading counts as moving: keeping the motion is the safe side.
+    return !Finite(velocity) || !Finite(requested) || Length(velocity) > kMovingSpeed ||
+           Length(requested) > kMovingSpeed;
+}
+
 float AllowedLength(float moveLength, const Rays& rays, const std::array<float, kRays>& hitDistances,
                     const Settings& settings)
 {

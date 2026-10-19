@@ -480,6 +480,14 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
             << BodyFollowReport();
     } else if (verb == "body.radius") {
         out << "body.radius result=" << (Valued(args) ? SetRoomScaleRadius(arg(1, 350)) : 0) << BodyFollowReport();
+    } else if (verb == "body.physics") {
+        // docs/TURN-LEAN-ARMS-2026-10-19.md: the living body's stance test and
+        // moves that keep its motion (1), or the rays and plain SetPos (0).
+        out << "body.physics result=" << (Valued(args) ? SetRoomScalePhysics(static_cast<unsigned>(arg(1, 1))) : 0)
+            << BodyFollowReport();
+    } else if (verb == "body.standaside") {
+        out << "body.standaside result="
+            << (Valued(args) ? SetRoomScaleStandAside(static_cast<unsigned>(arg(1, 1))) : 0) << BodyFollowReport();
     } else if (verb == "body.nudge") {
         // body.nudge <rightCm> <forwardCm> [delayS=5]: one swept move with the
         // origin -- the body moves, the view must not. Waits like body.turn.

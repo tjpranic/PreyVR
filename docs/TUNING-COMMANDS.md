@@ -170,7 +170,7 @@ A few rows behave differently from their commands:
 |---|---|---|---|
 | `body.torso <deg> <relax>` | 0–180, 0–10000 ‰/s | 35, 600 | The body's copy of the turn deadzone and how fast it settles. Use `arm.torso` to keep the arms in step. |
 | `body.zone <start> <stop> [followMs]` | start 5–500 mm, stop below start, follow ≤1000 ms | 30, 5, 50 | Room-scale: how far your head moves before the body follows, how close it brings it, how fast. The menu sets start and follow. |
-| `body.radius <mm>` | 100–600 | 350 | Capsule radius the room-scale wall sweep assumes. |
+| `body.radius <mm>` | 100–600 | 350 | Capsule radius for the ray sweep (`body.physics 0`, or the stance test's fallback). |
 | `body.level <0\|1>` | | 1 | Keeps the body's rotation level (no pitch or roll). |
 | `wrist.place <along> <hover> <width> <tilt>` | mm, mm, 40–300 mm, degrees | 75, 42, 125, 40 | Where the wrist card sits. Width is multiplied by the menu's wrist size. |
 | `wrist.gate <enterFacing> <exitFacing> <enterViewing> <exitViewing> [dwellMs]` | ‰ −1000..1000, 0–2000 ms | 500, 220, 820, 620, 80 | How squarely you must look at the wrist before the card shows. |
@@ -265,11 +265,13 @@ value report, as described above.
 | `body.roomscale` | 0/1 | 1 | The body walks with you across the room. **Menu** (turn and move). |
 | `body.zone <start> <stop> [followMs]` | see above | 30 5 50 | Room-scale start, stop and glide. **Menu** (start and glide). |
 | `body.torso <deg> <relax>` | | 35 600 | The body's turn deadzone only. |
-| `body.radius` | 100–600 mm | 350 | Wall-sweep capsule radius. |
+| `body.radius` | 100–600 mm | 350 | Capsule radius for the ray sweep, which `body.physics 0` uses and the stance test falls back to. |
+| `body.physics` | 0/1 | 1 | 1: before room-scale moves the body, the engine's own stance test checks it fits, and a move while you walk keeps your speed. 0: the 9-ray sweep and plain move from before 2026-10-19, for A/B. |
+| `body.standaside` | 0/1 | 0 | 0: the body follows your physical turns and steps while you stick-walk too, keeping your walking speed. 1: room-scale waits while the engine moves you faster than 0.25 m/s (stick walking, falling), as up to PreyVR-42. |
 | `body.level` | 0/1 | 1 | Level body rotation. |
 | `body.turn <deg> [delayS]` | ±1..180, 0–60 s | | Test: one body turn; the view must not turn. |
 | `body.nudge <rightCm> <fwdCm> [delayS]` | ±100 cm | | Test: one capsule move; the view must not move. |
-| `body.report` | report | | Body-follow and room-scale counters. |
+| `body.report` | report | | Body-follow and room-scale counters. Since 2026-10-19 also `keptMotion`/`restMoves` (moves while walking / at rest), `fitShortened`, `fitVertical`, `fitStartBlocked`, `stepSettling`, `pushOut`/`pushOutMaxMm` (times the engine pushed the body sideways out of something), `deferredBusy` (moves mid-walk that waited a frame for the physics to be idle) and `bodyLagMaxMm`. |
 
 ### Arms and hands (IK)
 

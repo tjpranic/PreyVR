@@ -15,8 +15,11 @@
 #include "preyvr/EngineMap.h"
 #include "preyvr/ArmPose.h"
 #include "preyvr/BodyFollow.h"
+#include "preyvr/ContactNative.h"
 #include "preyvr/LatestSnapshot.h"
+#include "preyvr/NativeContract.h"
 #include "preyvr/RoomScale.h"
+#include "preyvr/RoomScaleNative.h"
 
 #include <MinHook.h>
 
@@ -80,6 +83,22 @@ constexpr std::string_view kSetPosBody =
     "f30f1002458bd00f2e41387516f30f1042040f2e413c750bf30f1042080f2e41407424f20f10024183ca02f20f114138"
     "450fb6c18b4208418bd2894140488b0148ffa050030000c3";
 constexpr std::string_view kGetPosBody = "488d4138c3";
+
+// The player's living body (docs/TURN-LEAN-ARMS-2026-10-19.md, fixes 1 and 2),
+// through the physical entity's own slots and the bodies RoomScaleNative.h and
+// ContactNative.h pin:
+//  * before a move, its own stance test -- the 9 rays missed desk tops and
+//    corners, SetPos put the capsule inside them, and the engine's next step
+//    pushed it, and the view, back out;
+//  * a move while it is moving keeps its motion -- the entity's SetPos alone is
+//    the engine's teleport, which zeroed a walk's velocity. At rest that
+//    teleport is kept: it lets the next step settle the body on what is under it.
+// body.physics 0 restores the rays and the plain SetPos.
+namespace rn = roomscale::native;
+namespace cn = contact::native;
+constexpr int kFitIterations = 6;          // within 1/64 of a move from the first contact
+constexpr float kStepSettling = 0.001f;    // m of step-up smoothing: the body is climbing
+constexpr float kPushOut = 0.005f;         // m the engine moved a body nothing moved
 
 // Gameplay only. ArkPlayerCamera (+0x12A0): the mode UpdateView switches on
 // (+0x1A4: 0 is the ordinary camera; modes 1-3 write m_rotation themselves,
@@ -168,6 +187,14 @@ Counter gMoved{0}, gMovedMm{0}, gBlocked{0}, gSweepRefused{0}, gRoomBusy{0}, gPo
 Counter gNoPose{0}, gJumps{0}, gNudges{0}, gViewDrift{0}, gHeadOutEvents{0}, gHeadOutFrames{0}, gHeadHits{0};
 Counter gNativeMoving{0};
 std::atomic<int> gLastMoveMm{0}, gResidualMm{0}, gViewDriftMaxMm{0}, gNudgeDriftMaxMm{0};
+// The living body's physics (fixes 1 and 2). Standing aside while the engine
+// moves the capsule (body.standaside) is off by default: a move keeps the
+// walk's motion, so the body follows physical turns and steps mid-walk too.
+std::atomic<bool> gPhysicsAvailable{false}, gPhysics{true}, gStandAside{false}, gDimensionsLogged{false};
+std::atomic<std::uintptr_t> gLivingVtable{0};
+Counter gLivingUnread{0}, gFitChecks{0}, gFitShortened{0}, gFitVertical{0}, gFitStartBlocked{0};
+Counter gKeptMotion{0}, gRestMoves{0}, gStepSettling{0}, gPushOut{0}, gDeferredBusy{0};
+std::atomic<int> gPushOutMaxMm{0}, gBodyLagMaxMm{0};
 // Where SetPos left the entity, for the view of the same frame to read back;
 // and after a nudge, for the next views. Under gViewMutex.
 bool gMovedPending = false;
@@ -255,6 +282,157 @@ bool CallSetPos(SetPosFn set, void* entity, const Vec3* position)
     }
 }
 
+int Mm(float metres) { return std::isfinite(metres) ? static_cast<int>(std::lround(metres * 1000.0f)) : 0; }
+
+// --- the living body (fixes 1 and 2) -----------------------------------------
+
+// What the living body's movement is doing: its own velocity, the velocity
+// its movement asks for (pe_action_move), and camOffset, non-zero while a
+// step-up is being smoothed.
+struct Living {
+    Vec3 velocity{}, requested{}, stance{};
+};
+
+template <class Fn> Fn Slot(void* physics, std::size_t slot)
+{
+    return *reinterpret_cast<const Fn*>(*static_cast<const std::uintptr_t*>(physics) + slot);
+}
+
+bool ReadLiving(void* physics, Living& out)
+{
+    alignas(16) std::uint8_t status[0x100]{};
+    static_assert(cn::LivingStatusSize <= sizeof(status) && rn::LivingRequested + sizeof(Vec3) <= cn::LivingStatusSize);
+    const int type = cn::StatusLiving;
+    std::memcpy(status, &type, sizeof(type));
+    __try {
+        using GetStatusFn = int(__fastcall*)(void*, void*);
+        if (!Slot<GetStatusFn>(physics, cn::StatusSlot)(physics, status)) { return false; }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+    std::memcpy(&out.velocity, status + rn::LivingVelocity, sizeof(Vec3));
+    std::memcpy(&out.requested, status + rn::LivingRequested, sizeof(Vec3));
+    std::memcpy(&out.stance, status + cn::LivingCamOffset, sizeof(Vec3));
+    return true;
+}
+
+// pe_status_check_stance at `position` (null: where the body stands), with
+// the body's own rotation and collider. False when the call faulted; `fits` is
+// the verdict and `normal` the contact's normal when it does not.
+bool StanceFits(void* physics, const Vec3* position, bool& fits, Vec3& normal)
+{
+    alignas(16) std::uint8_t check[rn::StanceBytes]{};
+    const int type = rn::StatusCheckStance;
+    const std::uint32_t unusedFloat = rn::UnusedFloat, unusedInt = rn::UnusedInt;
+    std::memcpy(check, &type, sizeof(type));
+    if (position != nullptr) {
+        std::memcpy(check + rn::StancePosition, position, sizeof(Vec3));
+    } else {
+        std::memcpy(check + rn::StancePosition, &unusedFloat, sizeof(unusedFloat));
+    }
+    std::memcpy(check + rn::StanceRotationW, &unusedFloat, sizeof(unusedFloat));
+    std::memcpy(check + rn::StanceSize, &unusedFloat, sizeof(unusedFloat));
+    std::memcpy(check + rn::StanceHeight, &unusedFloat, sizeof(unusedFloat));
+    std::memcpy(check + rn::StanceCapsule, &unusedInt, sizeof(unusedInt));
+    // dirUnproj (+0x30) stays zero, so the test writes the contact's normal there.
+    __try {
+        using GetStatusFn = int(__fastcall*)(void*, void*);
+        fits = Slot<GetStatusFn>(physics, cn::StatusSlot)(physics, check) != 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+    std::memcpy(&normal, check + rn::StanceDirection, sizeof(Vec3));
+    return true;
+}
+
+// pe_params_pos with the position alone and bRecalcBounds 0x21: the body
+// moves, its bounds with it, and keeps its velocity, ground and airborne state.
+// The entity's SetPos that follows sends the same position, which no longer
+// moves it, so the engine's teleport is skipped as well.
+bool SetPositionKeepingMotion(void* physics, const Vec3& position)
+{
+    alignas(16) std::uint8_t params[rn::PosBytes]{};   // zero: no matrices, no grid OBB
+    const int type = rn::ParamsPos, recalcBounds = rn::RecalcBoundsKeepMotion;
+    const std::uint32_t unusedFloat = rn::UnusedFloat, unusedInt = rn::UnusedInt;
+    std::memcpy(params, &type, sizeof(type));
+    std::memcpy(params + rn::PosPosition, &position, sizeof(position));
+    std::memcpy(params + rn::PosRotationW, &unusedFloat, sizeof(unusedFloat));
+    std::memcpy(params + rn::PosScale, &unusedFloat, sizeof(unusedFloat));
+    std::memcpy(params + rn::PosSimClass, &unusedInt, sizeof(unusedInt));
+    std::memcpy(params + rn::PosRecalcBounds, &recalcBounds, sizeof(recalcBounds));
+    __try {
+        // bThreadSafe 0, as the entity's own physics proxy calls it: queued
+        // while the body is being stepped, in order with that call.
+        using SetParamsFn = int(__fastcall*)(void*, const void*, int);
+        Slot<SetParamsFn>(physics, rn::SetParamsSlot)(physics, params, 0);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+    return true;
+}
+
+// pe_player_dimensions (type 1) into `dims` (ContactNative.h's layout).
+bool ReadDimensions(void* physics, std::uint8_t* dims)
+{
+    const int type = cn::ParamsPlayerDimensions;
+    std::memcpy(dims, &type, sizeof(type));
+    __try {
+        using GetParamsFn = int(__fastcall*)(void*, void*);
+        return Slot<GetParamsFn>(physics, cn::ParamsSlot)(physics, dims) != 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+// Whether a SetParams on the body applies at once rather than queued behind a
+// physics step: the change request's own test (RoomScaleNative.h), from the
+// game thread -- the world's step lock, +0x57B0 and its lock all clear, and
+// nothing queued for the body.
+bool PhysicsIdle(std::uintptr_t world, void* physics)
+{
+    std::uint32_t stepLock = 1, stepBusy = 1, worldLock = 1, queued = rn::EntityQueuedUnit;
+    void* const w = reinterpret_cast<void*>(world);
+    return world != 0 && ReadAt(w, rn::WorldStepLock, stepLock) && ReadAt(w, rn::WorldStepBusy, stepBusy) &&
+           ReadAt(w, rn::WorldLock, worldLock) && ReadAt(physics, rn::EntityQueued, queued) && stepLock == 0 &&
+           stepBusy == 0 && worldLock == 0 && queued < rn::EntityQueuedUnit;
+}
+
+// The living body's collider, once: where its bottom is decides which steps a
+// physical step can take without the stance test refusing them.
+void LogDimensions(void* physics)
+{
+    if (gDimensionsLogged.exchange(true)) { return; }
+    alignas(16) std::uint8_t dims[0x80]{};
+    static_assert(cn::DimensionsBytes <= sizeof(dims));
+    if (!ReadDimensions(physics, dims)) {
+        Log("result=unread detail=room_scale_dimensions");
+        return;
+    }
+    // heightPivot +0x04, sizeCollider +0x0C (radius, -, half-height),
+    // heightCollider +0x18, bUseCapsule +0x34 (ContactNative.h).
+    float pivot = 0, size[3]{}, height = 0;
+    int capsule = 0;
+    std::memcpy(&pivot, dims + cn::DimensionsPivot, sizeof(pivot));
+    std::memcpy(size, dims + cn::DimensionsSize, sizeof(size));
+    std::memcpy(&height, dims + 0x18, sizeof(height));
+    std::memcpy(&capsule, dims + 0x34, sizeof(capsule));
+    const float bottom = height - pivot - size[2] - (capsule ? size[0] : 0.0f);
+    std::ostringstream line;
+    line << "result=0 detail=room_scale_dimensions radiusMm=" << Mm(size[0]) << " halfHeightMm=" << Mm(size[2])
+         << " heightColliderMm=" << Mm(height) << " pivotMm=" << Mm(pivot) << " capsule=" << capsule
+         << " bottomMm=" << Mm(bottom);
+    Log(line.str());
+}
+
+// A fault in a living-body call: room-scale drops back to the rays and the
+// plain SetPos for the rest of the process.
+void PhysicsFault(const char* where)
+{
+    if (gPhysicsAvailable.exchange(false)) {
+        Log(std::string("result=fault detail=room_scale_physics_") + where + " fallback=rays_and_setpos");
+    }
+}
+
 // The player's entity, when it is the concrete CEntity the pair was verified on.
 void* PlayerEntity(void* player)
 {
@@ -266,8 +444,6 @@ void* PlayerEntity(void* player)
     }
     return entity;
 }
-
-int Mm(float metres) { return std::isfinite(metres) ? static_cast<int>(std::lround(metres * 1000.0f)) : 0; }
 
 roomscale::Settings RoomSettings()
 {
@@ -365,10 +541,52 @@ int Turn(void* player, float torso, float requested, bool toTorso)
     return result;
 }
 
-// Moves the player's capsule -- towards the head, or by `nudge` -- swept for
-// walls first, and the origin with it by exactly what SetPos applied.
+// How far along `move` the capsule standing at `feet` may go, by the living
+// body's own stance test: the whole move, the largest part of it that fits,
+// or nothing. False when the test cannot decide -- it faulted, or the body
+// already overlaps something where it stands (what the test counts and the
+// engine's step ignores, perhaps) -- and the caller sweeps the rays instead.
+bool FitAlong(void* physics, const Vec3& feet, const Vec3& move, float& fraction, bool& vertical)
+{
+    bool startFits = false;
+    Vec3 normal{};
+    if (!StanceFits(physics, nullptr, startFits, normal)) {
+        PhysicsFault("stance_test");
+        return false;
+    }
+    if (!startFits) {
+        gFitStartBlocked.fetch_add(1, std::memory_order_relaxed);
+        return false;
+    }
+    bool faulted = false;
+    vertical = false;
+    fraction = roomscale::FitFraction([&](float f) {
+        const Vec3 at{feet.x + move.x * f, feet.y + move.y * f, feet.z};
+        bool fits = false;
+        Vec3 contact{};
+        if (faulted || !StanceFits(physics, &at, fits, contact)) {
+            faulted = true;
+            return false;
+        }
+        // A contact above or below -- a step under the capsule's bottom, or a
+        // low ceiling -- rather than a wall: counted, so a refused staircase
+        // shows in body.report (fitVertical).
+        if (!fits && std::fabs(contact.z) > 0.7f) { vertical = true; }
+        return fits;
+    }, kFitIterations);
+    if (faulted) {
+        PhysicsFault("stance_test");
+        return false;
+    }
+    gFitChecks.fetch_add(1, std::memory_order_relaxed);
+    return true;
+}
+
+// Moves the player's capsule -- towards the head, or by `nudge` -- where it
+// fits (the living body's stance test, or the rays without it), and the origin
+// with it by exactly what SetPos applied. `physics` is the living body, or null.
 int Move(void* player, const GameplayPoseFrame& pose, float playSpaceYaw, const Pose& head, float dt,
-         const Vec3* nudge, float& residual)
+         const Vec3* nudge, std::uintptr_t world, void* physics, const Living& living, float& residual)
 {
     residual = std::numeric_limits<float>::quiet_NaN();
     void* const entity = PlayerEntity(player);
@@ -389,27 +607,71 @@ int Move(void* player, const GameplayPoseFrame& pose, float playSpaceYaw, const 
         if (nudge == nullptr && gRoomFollower.Jumped()) { gJumps.fetch_add(1, std::memory_order_relaxed); }
         const float length = std::hypot(move.x, move.y);
         if (!(length > 1e-5f)) { return std::nullopt; }
+        // Climbing a step, the body's position is still being smoothed up to
+        // it: wait the moment that takes rather than test or move it mid-way.
+        if (physics != nullptr && Length(living.stance) > kStepSettling) {
+            gStepSettling.fetch_add(1, std::memory_order_relaxed);
+            return std::nullopt;
+        }
         Vec3 feet{};
         if (!CallGetPos(get, entity, feet)) {
             Fault("get_pos");
             return std::nullopt;
         }
-        roomscale::Rays rays{};
-        if (!roomscale::SweepRays(feet, move, settings, rays)) { return std::nullopt; }
-        std::array<float, roomscale::kRays> hits{};
-        for (std::size_t i = 0; i < rays.size(); ++i) {
-            scene::Hit hit{};
-            if (!QuerySegment(pose, rays[i].from, rays[i].to, hit)) {
-                sweepRefused = true;   // no move without a sweep
+        // A body that is moving keeps its motion (fix 1). It is moved from
+        // where its physics has it now, and only while a SetParams applies at
+        // once: one queued behind a physics step would put it back where it was
+        // before that step, undoing the walk's own movement. Otherwise the move
+        // waits a frame. At rest the entity's SetPos alone, whose teleport lets
+        // the next step settle the body on what is under it.
+        const bool moving = physics != nullptr && roomscale::BodyMoving(living.velocity, living.requested);
+        Vec3 base = feet;
+        if (moving) {
+            Vec3 body{};
+            if (!PhysicsIdle(world, physics) || !ReadAt(physics, rn::BodyPosition, body) || !Finite(body)) {
+                gDeferredBusy.fetch_add(1, std::memory_order_relaxed);
                 return std::nullopt;
             }
-            hits[i] = hit.distance;
+            StoreMax(gBodyLagMaxMm, Mm(std::hypot(body.x - feet.x, body.y - feet.y)));
+            base = body;
         }
-        const float allowed = roomscale::AllowedLength(length, rays, hits, settings);
-        if (allowed < length) { blocked = true; }
+        float allowed = length;
+        float fraction = 1.0f;
+        bool vertical = false;
+        if (physics != nullptr && FitAlong(physics, base, move, fraction, vertical)) {
+            allowed = fraction * length;
+            if (fraction < 1.0f) {
+                blocked = true;
+                gFitShortened.fetch_add(1, std::memory_order_relaxed);
+                if (vertical) { gFitVertical.fetch_add(1, std::memory_order_relaxed); }
+            }
+        } else {
+            roomscale::Rays rays{};
+            if (!roomscale::SweepRays(base, move, settings, rays)) { return std::nullopt; }
+            std::array<float, roomscale::kRays> hits{};
+            for (std::size_t i = 0; i < rays.size(); ++i) {
+                scene::Hit hit{};
+                if (!QuerySegment(pose, rays[i].from, rays[i].to, hit)) {
+                    sweepRefused = true;   // no move without a sweep
+                    return std::nullopt;
+                }
+                hits[i] = hit.distance;
+            }
+            allowed = roomscale::AllowedLength(length, rays, hits, settings);
+            if (allowed < length) { blocked = true; }
+        }
         if (allowed < 1e-4f) { return std::nullopt; }
         const float k = allowed / length;
-        const Vec3 target{feet.x + move.x * k, feet.y + move.y * k, feet.z};
+        const Vec3 target{base.x + move.x * k, base.y + move.y * k, base.z};
+        if (moving) {
+            if (SetPositionKeepingMotion(physics, target)) {
+                gKeptMotion.fetch_add(1, std::memory_order_relaxed);
+            } else {
+                PhysicsFault("set_params");
+            }
+        } else if (physics != nullptr) {
+            gRestMoves.fetch_add(1, std::memory_order_relaxed);
+        }
         if (!CallSetPos(set, entity, &target)) {
             Fault("set_pos");
             return std::nullopt;
@@ -419,7 +681,9 @@ int Move(void* player, const GameplayPoseFrame& pose, float playSpaceYaw, const 
             return std::nullopt;
         }
         // Horizontal only: height stays the view's and the engine's business.
-        applied = {movedTo.x - feet.x, movedTo.y - feet.y, 0.0f};
+        // From `base`: if the entity was behind its physics, catching that up is
+        // the walk's own movement, which the view shows rather than cancels.
+        applied = {movedTo.x - base.x, movedTo.y - base.y, 0.0f};
         gLastFeet = movedTo;   // our move is not the engine's
         residual = std::hypot(offset.x - applied.x, offset.y - applied.y);
         return applied;
@@ -579,8 +843,26 @@ void Tick(void* player)
         return;
     }
     float residual = std::numeric_limits<float>::quiet_NaN();
-    // The engine is moving the capsule: leave it be. A SetPos while the stick
-    // walks the player stalled the walk (second headset run).
+    // The player's living body, for the moves below (fixes 1 and 2).
+    void* physics = nullptr;
+    std::uintptr_t world = 0;
+    Living living{};
+    if (gPhysicsAvailable.load(std::memory_order_acquire) && gPhysics.load(std::memory_order_acquire)) {
+        std::uintptr_t table = 0;
+        void* candidate = nullptr;
+        if (SceneQueryWorld(pose, world, candidate) == ERROR_SUCCESS && candidate != nullptr &&
+            ReadAt(candidate, 0, table) && table == gLivingVtable.load(std::memory_order_relaxed) &&
+            ReadLiving(candidate, living)) {
+            physics = candidate;
+            LogDimensions(physics);
+        } else {
+            gLivingUnread.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
+    // The engine is moving the capsule: leave it be (body.standaside). A
+    // SetPos while the stick walked the player stalled the walk (second
+    // headset run); with the living body's moves keeping its motion, standing
+    // aside is a choice rather than a cure.
     bool nativeMoving = false;
     if (void* const entity = PlayerEntity(player)) {
         Vec3 feet{};
@@ -591,15 +873,23 @@ void Tick(void* player)
                                                   (feet.y - gLastFeet.y) * (feet.y - gLastFeet.y) +
                                                   (feet.z - gLastFeet.z) * (feet.z - gLastFeet.z));
                 nativeMoving = travelled > kNativeMovingSpeed * seconds;
+                // Moved sideways with nothing moving it -- at rest, no walk
+                // asked for, and our own moves taken out (gLastFeet is where
+                // SetPos left it): the engine pushing it out of something.
+                const float sideways = std::hypot(feet.x - gLastFeet.x, feet.y - gLastFeet.y);
+                if (physics != nullptr && sideways > kPushOut &&
+                    !roomscale::BodyMoving(living.velocity, living.requested)) {
+                    gPushOut.fetch_add(1, std::memory_order_relaxed);
+                    StoreMax(gPushOutMaxMm, Mm(sideways));
+                }
             }
             gLastFeet = feet;
             gLastFeetNs = now;
         }
     }
-    if (nativeMoving) {
-        gNativeMoving.fetch_add(1, std::memory_order_relaxed);
-        gRoomFollower.Reset();
-    }
+    const bool standAside = nativeMoving && gStandAside.load(std::memory_order_relaxed);
+    if (nativeMoving) { gNativeMoving.fetch_add(1, std::memory_order_relaxed); }
+    if (standAside) { gRoomFollower.Reset(); }
     // The body follows the neck, not the eyes.
     const Pose followHead{frame.head.orientation, roomscale::FollowPoint(frame.head, torso)};
     if (nudgeDue) {
@@ -614,11 +904,11 @@ void Tick(void* player)
             const float c = std::cos(*yaw), sn = std::sin(*yaw);
             // A yaw of t sends +X to (cos t, sin t) and +Y to (-sin t, cos t).
             const Vec3 move{right * c - forward * sn, right * sn + forward * c, 0.0f};
-            Move(player, pose, playSpaceYaw, followHead, dt, &move, residual);
+            Move(player, pose, playSpaceYaw, followHead, dt, &move, world, physics, living, residual);
         }
     }
     if (roomScale) {
-        if (!nativeMoving) { Move(player, pose, playSpaceYaw, followHead, dt, nullptr, residual); }
+        if (!standAside) { Move(player, pose, playSpaceYaw, followHead, dt, nullptr, world, physics, living, residual); }
         HeadCheck(player, pose, residual);
     } else {
         gRoomFollower.Reset();
@@ -637,6 +927,33 @@ void __fastcall PlayerUpdateDetour(void* player, void* context, int slot)
     Tick(player);
     const PlayerUpdateFn original = gOriginal.load(std::memory_order_acquire);
     if (original != nullptr) { original(player, context, slot); }
+}
+
+// The living body's calls (fixes 1 and 2): the bodies RoomScaleNative.h pins,
+// the living and base GetStatus and GetParams rows ContactNative.h pins, and
+// the living vtable's SetParams, GetStatus and GetParams slots.
+static_assert(contract::Gated(rn::Contracts, rn::LivingSetParams) &&
+              contract::Gated(rn::Contracts, rn::PhysicalSetParams) &&
+              contract::Gated(rn::Contracts, rn::LivingStanceOverlap) &&
+              contract::Gated(rn::Contracts, rn::PhysicsProxyXForm) &&
+              contract::Gated(rn::Contracts, rn::PhysicsChangeRequest));
+static_assert(contract::Gated(cn::Contracts, cn::LivingGetStatus) && contract::Gated(cn::Contracts, cn::StaticGetStatus) &&
+              contract::Gated(cn::Contracts, cn::LivingGetParams) && contract::Gated(cn::Contracts, cn::StaticGetParams));
+bool GatePhysics(std::uintptr_t base)
+{
+    __try {
+        if (!contract::BodiesMatch(base, rn::Contracts)) { return false; }
+        for (const auto& row : cn::Contracts) {
+            const bool living = row.rva == cn::LivingGetStatus || row.rva == cn::StaticGetStatus ||
+                                row.rva == cn::LivingGetParams || row.rva == cn::StaticGetParams;
+            if (living && !contract::BodyMatches(base, row)) { return false; }
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+    return SlotIs(base, cn::LivingVtable, rn::SetParamsSlot / 8, rn::LivingSetParams) &&
+           SlotIs(base, cn::LivingVtable, cn::StatusSlot / 8, cn::LivingGetStatus) &&
+           SlotIs(base, cn::LivingVtable, cn::ParamsSlot / 8, cn::LivingGetParams);
 }
 
 DWORD Install()
@@ -674,6 +991,12 @@ DWORD Install()
         gGetPos.store(reinterpret_cast<GetPosFn>(base + kGetPosRva), std::memory_order_release);
         gEntityVtable.store(base + kEntityVtableRva, std::memory_order_release);
         gRoomAvailable.store(true, std::memory_order_release);
+        if (GatePhysics(base)) {
+            gLivingVtable.store(base + cn::LivingVtable, std::memory_order_release);
+            gPhysicsAvailable.store(true, std::memory_order_release);
+        } else {
+            Log("result=unavailable detail=room_scale_physics fallback=rays_and_setpos");
+        }
     }
     gSet.store(reinterpret_cast<SetViewRotationFn>(base + kSetViewRotationRva), std::memory_order_release);
     gGet.store(reinterpret_cast<GetViewRotationFn>(base + kGetViewRotationRva), std::memory_order_release);
@@ -686,7 +1009,8 @@ DWORD Install()
     }
     gInstalled.store(true, std::memory_order_release);
     Log(std::string("result=0 detail=hook_installed target=ArkPlayer::Update setter=0x1584CC0 roomScale=") +
-        (gRoomAvailable.load() ? "available" : "unavailable"));
+        (gRoomAvailable.load() ? "available" : "unavailable") +
+        " physics=" + (gPhysicsAvailable.load() ? "available" : "unavailable"));
     return 0;
 }
 
@@ -697,9 +1021,13 @@ void ResetStats()
                        &gIkBetween, &gIkAfterView, &gIkAfterRender, &gStepFollowed, &gStepIdle, &gMoved,
                        &gMovedMm, &gBlocked, &gSweepRefused, &gRoomBusy, &gPositionOff, &gNoView, &gNoPose,
                        &gJumps, &gNudges, &gViewDrift, &gHeadOutEvents, &gHeadOutFrames, &gHeadHits,
-                       &gNativeMoving}) {
+                       &gNativeMoving, &gLivingUnread, &gFitChecks, &gFitShortened, &gFitVertical,
+                       &gFitStartBlocked, &gKeptMotion, &gRestMoves, &gStepSettling, &gPushOut,
+                       &gDeferredBusy}) {
         c->store(0, std::memory_order_relaxed);
     }
+    gPushOutMaxMm.store(0, std::memory_order_relaxed);
+    gBodyLagMaxMm.store(0, std::memory_order_relaxed);
     gReadbackMaxMdeg.store(0, std::memory_order_relaxed);
     gStepFollowedMaxMdeg.store(0, std::memory_order_relaxed);
     gStepIdleMaxMdeg.store(0, std::memory_order_relaxed);
@@ -778,6 +1106,24 @@ DWORD SetRoomScaleZone(int startMm, int stopMm, int followMs)
 int RoomScaleStartMm() { return gStartMm.load(std::memory_order_relaxed); }
 int RoomScaleStopMm() { return gStopMm.load(std::memory_order_relaxed); }
 int RoomScaleFollowMs() { return gFollowMs.load(std::memory_order_relaxed); }
+
+DWORD SetRoomScalePhysics(unsigned enabled)
+{
+    if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
+    if ((enabled != 0) != gPhysics.load()) { ResetStats(); }
+    gPhysics.store(enabled != 0, std::memory_order_release);
+    Log(std::string("result=0 detail=room_scale_physics value=") + (enabled ? "1" : "0") +
+        " available=" + (gPhysicsAvailable.load() ? "1" : "0"));
+    return 0;
+}
+
+DWORD SetRoomScaleStandAside(unsigned enabled)
+{
+    if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
+    gStandAside.store(enabled != 0, std::memory_order_release);
+    Log(std::string("result=0 detail=stand_aside value=") + (enabled ? "1" : "0"));
+    return 0;
+}
 
 DWORD SetRoomScaleRadius(int radiusMm)
 {
@@ -944,7 +1290,15 @@ std::string BodyFollowReport()
         << " pendingTurnDeg=" << gTurnRequestMdeg.load() / 1000 << " pendingNudge=" << gNudgePending.load()
         << " headOut=" << BodyHeadOut() << " headOutEvents=" << gHeadOutEvents.load()
         << " headOutFrames=" << gHeadOutFrames.load() << " headHits=" << gHeadHits.load()
-        << " fadeFrames=" << XrFadeFrames() << " nativeMoving=" << gNativeMoving.load();
+        << " fadeFrames=" << XrFadeFrames() << " nativeMoving=" << gNativeMoving.load()
+        << " standAside=" << gStandAside.load() << " physics=" << gPhysics.load()
+        << " physicsAvailable=" << gPhysicsAvailable.load() << " livingUnread=" << gLivingUnread.load()
+        << " fitChecks=" << gFitChecks.load() << " fitShortened=" << gFitShortened.load()
+        << " fitVertical=" << gFitVertical.load() << " fitStartBlocked=" << gFitStartBlocked.load()
+        << " keptMotion=" << gKeptMotion.load() << " restMoves=" << gRestMoves.load()
+        << " stepSettling=" << gStepSettling.load() << " pushOut=" << gPushOut.load()
+        << " pushOutMaxMm=" << gPushOutMaxMm.load() << " deferredBusy=" << gDeferredBusy.load()
+        << " bodyLagMaxMm=" << gBodyLagMaxMm.load();
     return out.str();
 }
 

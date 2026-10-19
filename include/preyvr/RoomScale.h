@@ -87,4 +87,29 @@ bool SweepRays(const Vec3& feet, const Vec3& move, const Settings& settings, Ray
 float AllowedLength(float moveLength, const Rays& rays, const std::array<float, kRays>& hitDistances,
                     const Settings& settings);
 
+// **How much of a move fits** (docs/TURN-LEAN-ARMS-2026-10-19.md, fix 2): the
+// largest fraction of it whose end `fits(fraction)` -- the living body's own
+// stance test -- for a body that fits where it stands. The whole move when its
+// end fits; otherwise bisected `iterations` times, so within 2^-iterations of
+// the first contact. The body is never put where it overlaps something, so the
+// engine never pushes it back out.
+template <class Fits> float FitFraction(Fits&& fits, int iterations)
+{
+    if (fits(1.0f)) { return 1.0f; }
+    float clear = 0.0f, blocked = 1.0f;
+    for (int i = 0; i < iterations; ++i) {
+        const float mid = 0.5f * (clear + blocked);
+        (fits(mid) ? clear : blocked) = mid;
+    }
+    return clear;
+}
+
+// **Whether the body is moving** -- walking, falling or pushed: its own
+// velocity or the velocity its movement asks for is more than a crawl. A
+// room-scale move must then keep that motion (fix 1). At rest the engine's
+// teleport costs nothing and lets the next physics step settle the body on
+// what is under it, which a move that keeps its motion would not.
+inline constexpr float kMovingSpeed = 0.05f;   // m/s
+bool BodyMoving(const Vec3& velocity, const Vec3& requested);
+
 } // namespace preyvr::roomscale
