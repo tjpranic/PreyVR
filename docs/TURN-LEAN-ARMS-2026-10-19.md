@@ -544,6 +544,67 @@ The lean-pitch hook for fix 4 is not built yet.
 4. **Check nothing else moved.** Turning the head alone does not move the shoulders, and
    two-handed long weapons still reach the foregrip.
 
+### 5b. The torso follows the neck up and down (2026-10-19)
+
+**Reported by the wearer.** Calibrate seated, then stand: the shoulders rose with the neck (fix 5)
+while the torso stayed at the calibrated height. Room-scale follows only horizontally.
+
+**Live facts** (tuner, 2026-10-19):
+- `arms.joints spine` names the spine:
+  - `spine1_jnt` (6) at 1.044 m;
+  - `spine2_jnt` (29) at 1.166 m;
+  - `spine3_jnt` (30) at 1.309 m;
+  - `spine4_jnt` (32) at 1.423 m;
+  - `neck_jnt` (34) at 1.530 m, 10.6 cm behind the model's origin.
+  
+  Room-scale puts that origin about 8 cm in front of the player's neck, so the rig's neck already
+  lands within about 3 cm of the player's horizontally.
+- `arms.att` puts `#camera` on joint 98, with `vr_headset`, `flashlight` and `psychoscope_light`:
+  the head. The game's eye comes from that attachment (`0x1489010`), so moving joint 98 would move
+  the game's eye, and the view would count the player's height twice.
+
+**What was built (`AnimIkTakeover.cpp`, `armpose`):**
+- **The lift.** The lift is the neck's rise since calibration: the view's vertical head offset
+  (`cameraCentre − nativeEye`), less what tipping the head moved the eye (`LevelEyeHeight`).
+  It is limited to 40 cm up and 15 cm down (`TorsoLift`).
+- **Which joints move, read once per rig.**
+  - The four spine joints, by name.
+  - The joint `#camera` rides, read from the character's attachments (`AttachmentJoint`, shared
+    with `arms.att`).
+  - Every joint's parent, from the joint table.
+  - From those, each joint takes the share of its nearest spine ancestor (`LiftClasses`), and the
+    camera's joint and everything under it take none.
+  - The rig logs `detail=torso_lift spine= base= camera= lifted=`.
+- **Shares.** Each spine joint's share follows its height above spine1's parent (`LiftShares`):
+  spine1 about 20%, rising to spine4's whole. So the stretch spreads over the waist and lower back
+  rather than one joint.
+- **Order.**
+  - Planned before the native pass, so the collarbones are placed from the lifted torso.
+  - Applied to the absolute pose after the pass, before the fingers and the arm solve, so the
+    arms are solved from the raised shoulders to the same hand goals.
+  - The hands stay on the controllers.
+- **Switch.** `arm.lift 0|1 [upMm [downMm]]`; on by default.
+
+**Tests (`arm_pose`):**
+- Tipping the head does not change the lift.
+- The limits hold.
+- A Prey-shaped hierarchy gives the right share per joint: the camera's subtree stays, a helper
+  under spine2 takes spine2's share, and a leg takes none.
+- A cyclic parent table lifts nothing.
+- Prey's measured heights share upwards.
+
+`ctest` 85/85. Not yet worn.
+
+**Headset checklist:**
+1. **The case reported.** Calibrate seated (Setup → Calibrate Posture), then stand up and look
+   down. The chest and shoulders rise together, the waist stretches, and the hands stay on the
+   controllers.
+2. **The view does not move with it.** Nothing jumps or drifts when standing up. `arm.report`
+   shows `liftReady=1` and `cameraJoint=98`.
+3. **Compare.** `arm.lift 0` brings back the shrug.
+4. **Everyday play is unchanged.** Calibrated standing, `liftMm` stays within a few centimetres,
+   and a weapon held in both hands still meets the foregrip.
+
 ### Order
 
 | Step | What | Fixes |

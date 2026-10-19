@@ -88,6 +88,37 @@ Vec3 ShoulderFromHead(const Pose& head, float torsoYaw, Side side, const Body& b
 float ArmLength(const Body& body);
 Body WithArmLength(Body body, float metres);
 
+// --- the torso follows the neck up and down -------------------------------------
+//
+// The shoulders hang from the player's neck (ShoulderFromHead), but the body
+// stays at the height the view was calibrated at: calibrate seated and stand
+// up, and the shoulders rose off a torso that did not. So after the native pass
+// the rig's upper body is lifted with the neck, and the waist stretches:
+// spine1-4 by a share that grows up the spine, everything above spine4 (the
+// neck, the collarbones, the arms) by all of it. The joint that carries the
+// game's #camera, and what hangs from it, never moves: the game's eye comes
+// from it, and the view already has the player's height.
+
+// How high the player's eye would be with the head level: the neck's height
+// plus the eye's, so tipping the head moves it not at all. Tracking space.
+float LevelEyeHeight(const Pose& head);
+
+// The lift (m, up positive): the neck's rise since calibration, `neckRise`,
+// within `-down`..`up`.
+float TorsoLift(float neckRise, float up, float down);
+
+// Which share of the lift each joint takes: 0 for one that stays (outside the
+// spine, or the camera joint and below it), k (1-4) for one whose nearest spine
+// ancestor (or itself) is spine k, from the joints' parents (-1 for none).
+// `spine` holds spine1-4's indices; `camera` the camera joint (-1: none).
+inline constexpr int kSpineJoints = 4;
+void LiftClasses(const int* parent, int count, const int spine[kSpineJoints], int camera, signed char* classes);
+
+// Each spine joint's share of the lift, from its height along the lift
+// (`heights`, spine1-4) above the spine's base (`base`, spine1's parent):
+// rising up the spine, spine4's whole. False when the spine does not rise.
+bool LiftShares(float base, const float heights[kSpineJoints], float shares[kSpineJoints]);
+
 // The clavicle's end: from its root towards `target`, at the clavicle's own
 // length stretched by at most `stretch` either way.
 Vec3 PlaceShoulder(const Vec3& clavicleRoot, float clavicleLength, const Vec3& target, float stretch);

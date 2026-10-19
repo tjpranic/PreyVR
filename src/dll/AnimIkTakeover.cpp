@@ -7,6 +7,7 @@
 
 #include "HandRigTakeover.h"
 #include "AimTakeover.h"
+#include "ArmsLane.h"
 #include "BodyFollow.h"
 #include "WeaponAttachment.h"
 #include "CarryLane.h"
@@ -462,6 +463,10 @@ struct PoseSettings {
     // 1: the shoulder from the neck (armpose::ShoulderFromHead); 0: from the
     // eyes, as before 2026-10-19 (arm.anchor, for A/B).
     bool neckAnchor = true;
+    // The torso follows the neck up and down, the waist stretching, within
+    // liftUp above and liftDown below calibration (arm.lift; armpose::TorsoLift).
+    bool torsoLift = true;
+    float liftUp = 0.40f, liftDown = 0.15f;
     armpose::Body body{};
     float torsoDeadzone = 35.0f * 3.14159265f / 180.0f;
     float torsoRelax = 0.6f;    // fraction per second towards the head's yaw
@@ -489,8 +494,18 @@ struct HandRig {
     // Carried rigidly with the upper arm (top, twist, muscle) and the forearm (twist).
     int upperChild[2][3]{{-1, -1, -1}, {-1, -1, -1}};
     int lowerTwist[2]{-1, -1};
+    // The torso's lift (armpose::LiftClasses): spine1-4, spine1's parent, the
+    // joint carrying the game's #camera, and each joint's share class.
+    bool liftReady = false;
+    int spine[armpose::kSpineJoints]{-1, -1, -1, -1};
+    int spineBase = -1, camera = -1;
+    std::array<signed char, kMaxJoints> liftClass{};
 };
 HandRig gHandRig;
+// The torso's lift, for arm.report: the last lift, and the rig's readiness and camera joint.
+std::atomic<int> gLiftMm{0};   // the last lift, for arm.report
+std::atomic<bool> gLiftReady{false};
+std::atomic<int> gLiftCamera{-1};
 
 
 // Per callback: what the drive decided for the fingers, consumed around the
@@ -552,7 +567,46 @@ int ParentOf(const std::uint8_t* skeleton, int index)
 
 // Under gIkMutex. Names identify the joints; the joint table's parent field
 // must agree with the expected chain or the hand is left alone.
-void BuildHandRig(std::uint8_t* skeleton, unsigned jointCount, std::uint8_t* relative, unsigned poseCount)
+// The torso's lift on this rig: spine1-4 by name, spine1's parent, the joint
+// the character's #camera attachment rides (never moved: the game's eye), and
+// every joint's share class from the joint table's parents. Not ready unless
+// all of them read.
+void BuildTorsoLift(HandRig& rig, const std::uint8_t* skeleton, unsigned jointCount, unsigned poseCount,
+                    std::uintptr_t character)
+{
+    static constexpr const char* kSpineNames[armpose::kSpineJoints] = {"spine1_jnt", "spine2_jnt", "spine3_jnt",
+                                                                        "spine4_jnt"};
+    const unsigned count = std::min({jointCount, poseCount, kMaxJoints});
+    bool ok = count > 0;
+    for (int k = 0; k < armpose::kSpineJoints && ok; ++k) {
+        rig.spine[k] = JointIndexByName(skeleton, jointCount, kSpineNames[k]);
+        ok = rig.spine[k] >= 0 && static_cast<unsigned>(rig.spine[k]) < count;
+    }
+    std::array<int, kMaxJoints> parent{};
+    for (unsigned j = 0; j < count && ok; ++j) {
+        parent[j] = ParentOf(skeleton, static_cast<int>(j));
+        ok = parent[j] >= -1 && parent[j] < static_cast<int>(count);
+    }
+    rig.camera = AttachmentJoint(character, "#camera");
+    if (ok) {
+        rig.spineBase = parent[static_cast<std::size_t>(rig.spine[0])];
+        armpose::LiftClasses(parent.data(), static_cast<int>(count), rig.spine, rig.camera, rig.liftClass.data());
+    }
+    rig.liftReady = ok && rig.spineBase >= 0;
+    gLiftReady.store(rig.liftReady, std::memory_order_relaxed);
+    gLiftCamera.store(rig.camera, std::memory_order_relaxed);
+    int lifted = 0;
+    for (unsigned j = 0; j < count; ++j) { lifted += rig.liftClass[j] > 0 ? 1 : 0; }
+    char line[192];
+    std::snprintf(line, sizeof(line),
+        "result=%d detail=torso_lift spine=%d,%d,%d,%d base=%d camera=%d lifted=%d",
+        rig.liftReady ? 0 : 1, rig.spine[0], rig.spine[1], rig.spine[2], rig.spine[3], rig.spineBase, rig.camera,
+        lifted);
+    Log(line);
+}
+
+void BuildHandRig(std::uint8_t* skeleton, unsigned jointCount, std::uint8_t* relative, unsigned poseCount,
+                  std::uintptr_t character)
 {
     HandRig rig{};
     rig.skeleton = reinterpret_cast<std::uintptr_t>(skeleton);
@@ -598,6 +652,7 @@ void BuildHandRig(std::uint8_t* skeleton, unsigned jointCount, std::uint8_t* rel
         rig.upperChild[s][2] = armJoint((p + "upperArmMuscle_jnt").c_str());
         rig.lowerTwist[s] = armJoint((p + "lowerArmTwist_jnt").c_str());
     }
+    BuildTorsoLift(rig, skeleton, jointCount, poseCount, character);
     gHandRig = rig;
     char line[256];
     std::snprintf(line, sizeof(line),
@@ -669,6 +724,20 @@ struct ArmPlan {
     Quaternion rotation{};
 };
 
+// The torso's lift this frame: planned before the native pass (so the arms are
+// placed from the lifted torso), applied to the absolute pose after it.
+struct TorsoLiftPlan {
+    bool apply = false;
+    Vec3 model{};                                  // the whole lift, model units
+    float shares[armpose::kSpineJoints]{};         // spine1-4's part of it
+    Vec3 Of(const HandRig& rig, int joint) const
+    {
+        if (!apply || joint < 0 || static_cast<unsigned>(joint) >= kMaxJoints) { return {}; }
+        const int k = rig.liftClass[static_cast<std::size_t>(joint)];
+        return k > 0 ? Scale(model, shares[k - 1]) : Vec3{};
+    }
+};
+
 // What the last solve did, for arm.report and pose.marks.
 struct ArmStats {
     bool solved[2]{};
@@ -724,13 +793,52 @@ bool ArmAnchor(const GameplayPoseFrame& frame, Vec3& anchor)
 
 float Dist3(Vec3 a, Vec3 b) { return Length(Sub(a, b)); }
 
-// Before the native pass, under gIkMutex: the torso and each shoulder.
-void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& location, std::uint8_t* absolute,
-                 unsigned count, const PoseSettings& pose, ArmPlan plan[2])
+// The torso's lift (armpose::TorsoLift): how far the player's neck has risen
+// since calibration -- the head offset the view applies (cameraCentre less the
+// game's eye, vertical), less what tipping the head moved the eye -- along the
+// world's up in model space, shared up the spine by the joints' heights.
+TorsoLiftPlan PlanTorsoLift(const GameplayPoseFrame& frame, const animik::Location& location,
+                            const std::uint8_t* absolute, unsigned count, const PoseSettings& pose)
 {
+    TorsoLiftPlan lift{};
+    if (!pose.torsoLift || !gHandRig.liftReady || !frame.cameraCentreValid) {
+        gLiftMm.store(0, std::memory_order_relaxed);
+        return lift;
+    }
+    const Pose& head = frame.tracking.head;
+    const float rise = (frame.cameraCentre.z - frame.nativeEye.z) + (armpose::LevelEyeHeight(head) - head.position.y);
+    const float metres = armpose::TorsoLift(rise, pose.liftUp, pose.liftDown);
+    const Vec3 up = Sub(animik::WorldToModel(location, Add(frame.nativeEye, Vec3{0, 0, 1})),
+                        animik::WorldToModel(location, frame.nativeEye));
+    const float upLength = Length(up);
+    if (!(upLength > 1e-6f) || !std::isfinite(upLength)) { return lift; }
+    const Vec3 unit = Scale(up, 1.0f / upLength);
+    const auto height = [&](int joint, float& out) {
+        QuatT j{};
+        if (!ReadQuatT(const_cast<std::uint8_t*>(absolute), count, joint, j)) { return false; }
+        out = Dot(Vec3{j.t[0], j.t[1], j.t[2]}, unit);
+        return std::isfinite(out);
+    };
+    float base = 0.0f, heights[armpose::kSpineJoints]{};
+    bool read = height(gHandRig.spineBase, base);
+    for (int k = 0; k < armpose::kSpineJoints && read; ++k) { read = height(gHandRig.spine[k], heights[k]); }
+    if (!read || !armpose::LiftShares(base, heights, lift.shares)) { return lift; }
+    lift.model = Scale(up, metres);
+    lift.apply = true;
+    gLiftMm.store(static_cast<int>(std::lround(metres * 1000.0f)), std::memory_order_relaxed);
+    return lift;
+}
+
+// Before the native pass, under gIkMutex: the torso and each shoulder, and the
+// torso's lift (applied after the pass; the shoulders are placed on it now).
+void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& location, std::uint8_t* absolute,
+                 unsigned count, const PoseSettings& pose, ArmPlan plan[2], TorsoLiftPlan& lift)
+{
+    lift = {};
     if (pose.mode != 1 || pose.armMode == 0 || gHandRig.skeleton != gRigSkeleton.load()) { return; }
     XrMap map{&frame, {}, location};
     if (!ArmAnchor(frame, map.anchor) || !(location.s > 1e-4f)) { return; }
+    lift = PlanTorsoLift(frame, location, absolute, count, pose);
     const Pose& head = frame.tracking.head;
     const float headYaw = armpose::HeadYaw(head.orientation);
     armpose::TorsoFrame torso;
@@ -764,8 +872,11 @@ void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& locatio
             !ReadQuatT(absolute, count, gHandRig.upperArm[s], upper)) { continue; }
         ArmPlan& p = plan[s];
         p.torso = torso;
-        p.clavicleXr = map.ToXr(Vec3{clavicle.t[0], clavicle.t[1], clavicle.t[2]});
-        const Vec3 animated = map.ToXr(Vec3{upper.t[0], upper.t[1], upper.t[2]});
+        // Where the lift will put them.
+        p.clavicleXr = map.ToXr(Add(Vec3{clavicle.t[0], clavicle.t[1], clavicle.t[2]},
+                                    lift.Of(gHandRig, gHandRig.clavicle[s])));
+        const Vec3 animated = map.ToXr(Add(Vec3{upper.t[0], upper.t[1], upper.t[2]},
+                                           lift.Of(gHandRig, gHandRig.upperArm[s])));
         // From the neck, the twist turning the shoulders about it.
         p.targetXr = pose.neckAnchor ? armpose::ShoulderFromHead(head, shoulderYaw, s == 0 ? 1 : -1, body)
                                      : armpose::ShoulderTarget(head.position, torso, s == 0 ? 1 : -1, body);
@@ -1422,6 +1533,24 @@ void CarryChild(std::uint8_t* absolute, unsigned count, int child, const QuatT& 
     WriteQuatT(absolute, count, child, Multiply(parentNew, localQ), Add(parentNewT, Rotate(parentNew, local)));
 }
 
+// After the native pass, before the arms: the torso and all it carries, up
+// (or down) by each joint's share of the lift. The camera's joint stays.
+void ApplyTorsoLift(std::uint8_t* absolute, unsigned count, const HandRig& rig, const TorsoLiftPlan& lift)
+{
+    if (!lift.apply || rig.skeleton != gRigSkeleton.load()) { return; }
+    const unsigned joints = std::min(count, kMaxJoints);
+    for (unsigned j = 0; j < joints; ++j) {
+        const Vec3 by = lift.Of(rig, static_cast<int>(j));
+        if (by.x == 0.0f && by.y == 0.0f && by.z == 0.0f) { continue; }
+        QuatT a{};
+        if (!ReadQuatT(absolute, count, static_cast<int>(j), a)) { return; }
+        const float t[3] = {a.t[0] + by.x, a.t[1] + by.y, a.t[2] + by.z};
+        if (!WriteFloatsGuarded(absolute + static_cast<std::size_t>(j) * kQuatTStride + 4 * sizeof(float), t, 3)) {
+            return;
+        }
+    }
+}
+
 void SolveArms(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsigned count,
                const animik::Location& location, const HandRig& rig, const ArmPlan plan[2],
                const PoseSettings& pose)
@@ -1733,6 +1862,7 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
     FingerPlan fingerPlan{};
     FingerPlan rightFingers{};
     ArmPlan armPlan[2]{};
+    TorsoLiftPlan liftPlan{};
     PoseSettings ownedSettings{};
     std::uint8_t* ownedRelative = nullptr;
     std::uint8_t* ownedAbsolute = nullptr;
@@ -1793,10 +1923,11 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
                     const std::uintptr_t skeleton = gRigSkeleton.load();
                     if (skeleton != 0 && gHandRig.skeleton != skeleton) {
                         BuildHandRig(reinterpret_cast<std::uint8_t*>(skeleton), gRigJoints.load(),
-                                     static_cast<std::uint8_t*>(relative), static_cast<unsigned>(poseCount));
+                                     static_cast<std::uint8_t*>(relative), static_cast<unsigned>(poseCount),
+                                     owner.character);
                     }
                     PrepareArms(frame, location, static_cast<std::uint8_t*>(absolute),
-                                static_cast<unsigned>(poseCount), poseSettings, armPlan);
+                                static_cast<unsigned>(poseCount), poseSettings, armPlan, liftPlan);
                     armPlan[0].forceRotation = armPlan[1].forceRotation = free;
                     // The hand that holds a carried object closes around it.
                     {
@@ -1900,6 +2031,8 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
         original(character, params);
     }
     if (ownedAbsolute != nullptr) {
+        // First the torso, so the fingers and the arms below are placed on it.
+        ApplyTorsoLift(ownedAbsolute, ownedCount, ownedHandRig, liftPlan);
         if (fingerPlan.apply) { PropagateFingers(ownedRelative, ownedAbsolute, ownedCount, ownedHandRig); }
         if (rightFingers.apply) { PropagateFingers(ownedRelative, ownedAbsolute, ownedCount, ownedHandRig, 0); }
         SolveArms(frame, ownedAbsolute, ownedCount, ownedLocation, ownedHandRig, armPlan, ownedSettings);
@@ -2224,6 +2357,11 @@ DWORD SetArmSetting(const std::string& what, const int* v, unsigned n)
         p.armMode = static_cast<unsigned>(v[0]);
     } else if (what == "anchor" && n >= 1 && v[0] >= 0 && v[0] <= 1) {
         p.neckAnchor = v[0] != 0;
+    } else if (what == "lift" && n >= 1 && v[0] >= 0 && v[0] <= 1 && (n < 2 || (v[1] >= 0 && v[1] <= 600)) &&
+               (n < 3 || (v[2] >= 0 && v[2] <= 400))) {
+        p.torsoLift = v[0] != 0;
+        if (n >= 2) { p.liftUp = mm(v[1]); }
+        if (n >= 3) { p.liftDown = mm(v[2]); }
     } else if (what == "length" && n >= 1 && v[0] >= kArmLengthMinCm && v[0] <= kArmLengthMaxCm) {
         b = armpose::WithArmLength(b, v[0] * 0.01f);
     } else if (what == "shoulder" && n >= 3 && std::abs(v[0]) <= 300 && v[1] >= 50 && v[1] <= 350 &&
@@ -2294,6 +2432,10 @@ std::string ArmReport()
         << " shoulderMm=" << b.shoulderForward * 1000 << ',' << b.shoulderOut * 1000
         << ',' << b.shoulderUp * 1000 << " lenMm=" << b.upper * 1000 << ',' << b.fore * 1000
         << " lengthCm=" << armpose::ArmLength(b) * 100
+        << " lift=" << p.torsoLift << " liftLimitsMm=" << p.liftUp * 1000 << ',' << p.liftDown * 1000
+        << " liftMm=" << gLiftMm.load(std::memory_order_relaxed)
+        << " liftReady=" << gLiftReady.load(std::memory_order_relaxed)
+        << " cameraJoint=" << gLiftCamera.load(std::memory_order_relaxed)
         << " clavStretch=" << b.clavicleStretch << " armStretch=" << b.armStretch << " knee=" << p.armKnee
         << " priorDeg=" << p.wrist.flexionSigmaDeg << ',' << p.wrist.deviationRestDeg << ','
         << p.wrist.deviationSigmaDeg << ',' << p.wrist.swivelSigmaDeg

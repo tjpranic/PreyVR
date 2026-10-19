@@ -2,9 +2,7 @@
 
 ## Known Bugs:
 - Access violation that causes a crash. Seems to be due to a use-after-free camera related bug. Have got instrumentation in place to catch it. See CameraCullWatch.cpp.
-- The movement stop on turn issue still exists, not as bad as it did before, but it still needs to be addressed
-- Physically leaning is a bit wonky, it seems that the game's collision detection happens against the player's character model and causes the player to be move back a bit to resolve the contact
-- The hand animation plays when taking the wrench out and it causes the right hand to spin. It should be removed.
+- The hand animation plays when taking the wrench out and it causes the right hand to spin. The animation should not play.
 - The game doesn't render loading screens, it just shows a black screen instead.
 
 ## VR Options Menu:
@@ -24,10 +22,9 @@
 - Fine dextrous finger based interactions
 - Add functionality to allow me to rotate objects I'm carrying
 - Have weapons and hands stop against surfaces
+- Have the player body bend at the waist so I can lean over desks/railings
+- An option to not render the body and only render the hands like in Half Life Alyx?
+- Physical crouching?
 
-## Polishing:
-- The player torso should be anchored to the next such that it moves with the player and the waist should stretch instead. Right now, if I play sitting down and then stand up, the torso doesn't move but the shoulders do move (up) as they are anchored to the neck. This normally wouldn't occur during actual gameplay, but it would be a tiny visual improvement over the current functionality.
-
-## Known issues that I'm not fixing:
-- Controller Prompts option doesn't seem to apply sometimes.
-    This is due to the game's naturally poor Steam Input implementation fighting with the different input types. Disabling Steam Input seems to fix it.
+## UI:
+- Controller Prompts option doesn't seem to apply sometimes. This is partly due to the game's naturally poor Steam Input implementation fighting with the different input types. Disabling Steam Input seems to help, but this issue is a WAY more annoying than I thought and a proper fix should be sought.

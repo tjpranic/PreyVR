@@ -2,8 +2,10 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // The first-person arms when no weapon is drawn (holstered, carrying).
@@ -22,5 +24,10 @@ std::string ArmsReport();
 
 // arms.* and mem.* verbs; false if the verb is not one of them.
 bool ExecuteArmsCommand(const std::vector<std::string>& args, std::ostringstream& out);
+
+// The joint the character's attachment `name` is bound to (arms.att's list:
+// the attachment manager's array at character+0x38, the joint at +0x15C), or
+// -1. Reads only, guarded; any thread.
+int AttachmentJoint(std::uint64_t character, std::string_view name);
 
 }  // namespace preyvr::dll

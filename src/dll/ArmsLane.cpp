@@ -205,6 +205,20 @@ void UpdateArmsLane(const GameplayPoseFrame& frame, bool valid)
     Log("result=" + std::to_string(result) + " detail=draw weapon=" + std::to_string(state.last));
 }
 
+int AttachmentJoint(std::uint64_t character, std::string_view name)
+{
+    AttachmentList list{};
+    if (!ReadAttachments(character, list)) { return -1; }
+    for (unsigned i = 0; i < list.count; ++i) {
+        std::uint64_t namePtr = 0;
+        int joint = -1;
+        if (Copy(list.items[i] + 0x10, &namePtr, 8) && ReadText(namePtr) == name && Copy(list.items[i] + 0x15C, &joint, 4)) {
+            return joint;
+        }
+    }
+    return -1;
+}
+
 std::string ArmsReport()
 {
     std::ostringstream out;

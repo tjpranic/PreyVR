@@ -136,6 +136,8 @@ DWORD SetHandPoseStretchPercent(int percent);
 //   shoulder <fwd> <out> <up>    shoulder joint from the centre eye, torso frame, mm
 //   len <upper> <fore>           drawn segments, mm (default 285 275)
 //   length <cm>                  both segments, shoulder to wrist, 40-70 (default 56)
+//   lift 0|1 [upMm [downMm]]     the torso follows the neck up and down, the waist
+//                                stretching, within up/down of calibration (1 400 150)
 //   stretch <clav> <arm>         permille the clavicle may stretch, arm stretch limit (150 1100)
 //   prior <flexSd> <devRest> <devSd> <swivelSd>  the elbow's MAP priors, degrees (45 -8 12 25)
 //   rom <flex> <ext> <radial> <ulnar>            the wrist's range of motion, degrees (75 65 20 35)
