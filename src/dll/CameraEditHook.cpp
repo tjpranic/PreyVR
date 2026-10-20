@@ -13,6 +13,7 @@
 #include "MoveLane.h"
 #include "BindingDump.h"
 #include "BodyFollow.h"
+#include "ControllerPrompts.h"
 
 #include "HeadTrackingHook.h"
 
@@ -362,6 +363,9 @@ void __fastcall RenderWithCameraEdit(void* system)
     // else would race the queue it feeds.
     UpdateMoveLane();
     UpdateTurnAndFireLanes();
+    // After every lane that posts this frame, so it checks the scheme this
+    // frame's events left; on the main thread, as the scheme's listeners need.
+    ServiceControllerPromptsFrame();
     ServiceBindingDump();
 
     if (!stereoArmed || system == nullptr) {

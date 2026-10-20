@@ -2,6 +2,24 @@
 
 Only confirmed or explicitly provisional build-specific locations belong here. Prefer a signature plus validation recipe over an RVA alone.
 
+### Controller-prompts scheme guard — 2026-10-19
+
+No R-number. Static only: the guard has not run in a headset yet. Supported
+Steam hash; `tools/re/verify_controller_prompts.py` checks every row.
+`src/dll/ControllerPrompts.cpp` compares its four spans in memory before its
+first read. Why and how in
+[controller prompts](CONTROLLER-PROMPTS-2026-10-18.md#scheme-guard-2026-10-19).
+
+| RVA / field | Purpose and constraint |
+| --- | --- |
+| global `0x2C16840` (`gGame`) `+0x1A8` | CUIManager, stored at `0x16FE604` between its constructor `0x182BA40` and `CUIManager::Init` `0x182C1C0`. Lives for the process. |
+| CUIManager `+0x28` / `+0x2C` | Current control scheme (1/2 keyboard and mouse, 3 Xbox pad, 4 PlayStation, 5 Steam Controller), which every prompt lookup reads (`0x166ED90`, `0x166EB70`); last input device, read only by player look input `0x158E780`. |
+| `0x182D7D0` (span 26 bytes; store `0x182D806`) | Scheme setter `(ui, scheme)`: returns when `[ui+0x28]` already equals it, else stores it and notifies the listeners at `ui+0x40` and the UI event `OnControlSchemeChanged`. Its only callers are `CUIManager::Init`, the tracker and the cvar callback. |
+| `0x1726630` (whole, 0x5D bytes) | `hud_forceControllerGlyphs` change callback: when set and the scheme is 1/2, scheme 5 if input vtable `+0x1A8` (`0x9D6750`) finds a device whose `+0xD8` is true, else 3. |
+| `0x182D43C` (30 bytes) | Tracker `0x182D3A0` keyboard/mouse branch: `[0x2C16830]+0x924` (the cvar) gates its call with 2. Its pad branch calls with 3 (`0x182D40C`), and `0x182D436` skips mouse events in scheme 5. |
+| `0x1720516`-`0x172054E` | Registration of `hud_forceControllerGlyphs` at `gGameCVars+0x924`: default 0, callback `0x1726630`. |
+| Steam device vtable `0x1D5C050` `+0xD8` -> `0xACF540` | `mov al,1; ret`: always "Steam Controller". The mouse's (`0x1D5CC38`) is `xor al,al`. Input init `0x9D1940` creates the Steam device whenever Steamworks starts, Steam Input on or off, and then no XInput devices. |
+
 ### Window-focus static additions — 2026-10-17
 
 No R-number. All of it ran in the accepted headset run (`player-20261017-101027`):
@@ -2521,7 +2539,8 @@ right down, 5 to right up and 10 to the wheel. `0x182D3A0` broadcasts scheme 2
 for device 0/1 through `0x182D7D0` unless `gGameCVars+0x924`
 (`hud_forceControllerGlyphs`) is set, and 3/4/5 for XInput (`+0x920` is
 `hud_playstationContext`). The cvar's change callback `0x1726630` moves a
-scheme of 1/2 to 3 (5 with a Steam controller). DaniellePDA's scheme listener
+scheme of 1/2 to 3 (5 with a Steam controller -- in the Steam build that is
+always, see the 2026-10-19 section). DaniellePDA's scheme listener
 is `0x1639E00`. ArkInventoryUI `0x162B010` registers `inventoryRightClick`
 `0x162D4E0` and `inventorySetHL` `0x162D600`. The PDA inventory page's
 constructor `0x164A090` writes vtables `0x1E67328`, `0x1E67368` (+0x18, the

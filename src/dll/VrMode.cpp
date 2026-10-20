@@ -241,7 +241,7 @@ void TickVrMode() {
         // The floating HUD by default; VR Options' HUD style can turn it off.
         if(SetHudLayerEnabled(1)!=0)Log("hud_layer=unavailable native_hud=retained");
         // The menus keep the controller's prompts under the laser
-        // (ControllerPrompts.h); VR Options' Controller Prompts can turn it off.
+        // (ControllerPrompts.h); VR Options' Force Controller Prompts can turn it off.
         SetControllerPrompts(1);
         // Saved VR Options choices last, so they win over the defaults above
         // (an F11 restart included).

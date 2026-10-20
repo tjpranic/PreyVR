@@ -115,6 +115,36 @@ the reset:
 Compare a VR run against a flat run, with the mod injected and VR off. The watch
 runs in both.
 
+## Field results, 2026-10-19 (60 runs since the watch went in)
+
+- **Normal play:** at every reset the occlusion queue is empty (`pendingResets=0`).
+- **The trigger:** the cull consumer can fall a whole frame behind, and stays behind
+  for the rest of the session. In all 15 runs where this happened, it began 2–3 ms
+  after `xr_session result=refused detail=dual_first_eye_not_held`. That line is
+  logged when a VR-panel menu closes on a frame where the main thread published a
+  both-eyes contract but the render thread had no doubled scene. It never began any
+  other way.
+  - 25 of 150 panel closes were refused. Open duration does not separate refused
+    closes from clean ones.
+  - The refusal only marks the bad frame. The Sep-10 crashes predate dual stereo.
+- **Each refusal adds a frame.**
+  - After one refusal the queued items belong to the previous pool (`previous`).
+  - After a second, they belong to the pool being reset (`stale`). Seen in
+    17-190713, 17-192755 and 18-180109: up to 1.5 M stale items per session.
+- **Doomed items occurred without a crash** in two-refusal runs: 1,163
+  (17-192755) and 1,362 (18-180109). The Oct-17 crash run also had two refusals,
+  21:13:31 and 21:15:38, the second 17 s before the crash.
+- **Instrument flaws:**
+  - `type:0` items (the consumer's end markers) carry no camera, so `outside`
+    counts are false positives.
+  - Those false events used up the logging budget, so no doomed event was logged
+    in detail.
+- **Not yet known:** how the bad transition frame shifts the culler. A probe
+  should log, around each panel close, every `CSystem::Render`, `RT_RenderScene`
+  (doubled or not), `RT_EndFrame`, `PrepareOcclusion` and `EndOcclusion`.
+- **Reproduce:** open and close VR-panel menus until the log shows a refusal; a
+  second refusal leaves the culler two frames behind.
+
 ## Verification
 
 - Offline: `cull_camera_watch` CTest builds fake engine, pool, page and queue memory.

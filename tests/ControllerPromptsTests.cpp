@@ -1,7 +1,8 @@
-// Exercise the production controller-prompts lane and its handshake with the
-// shared verified console slot, without loading Prey. Including this TU exposes
-// its internals to this test only.
+// Exercise the production controller-prompts lane, its handshake with the shared
+// verified console slot and its frame check of Prey's scheme, without loading
+// Prey. Including this TU exposes its internals to this test only.
 #include "../src/dll/ControllerPrompts.cpp"
+#include <cstring>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -40,10 +41,19 @@ bool Logged(const char* text)
     return false;
 }
 bool Reports(const char* text) { return ControllerPromptsReport().find(text) != std::string::npos; }
+std::vector<int> gSetCalls;
 void Reset()
 {
     gWanted = gApplied = gSending = gFailed = -1;
     gCount = 0;
+    gNextReapply = gCorrectedLogged = gNextCorrectionLog = gNextCorrection = 0;
+    gGuardLogged = false;
+    gEnforce = false;
+    gGuard = kGuardUnchecked;
+    gForceSeen = -1;
+    gLastStray = -1;
+    gCorrected = 0;
+    gSetCalls.clear();
     gQueued.clear();
     gLines.clear();
     gQueueResult = 0;
@@ -166,6 +176,196 @@ void TestRefusedQueueIsLogged()
     ServiceControllerPrompts();
     Require(gQueued.size() == 1, "a new request tries again");
 }
+
+// Prey's setter as far as the frame check sees it: it stores the scheme.
+void __fastcall FakeSetScheme(void* ui, int scheme)
+{
+    gSetCalls.push_back(scheme);
+    std::memcpy(static_cast<std::uint8_t*>(ui) + kUiScheme, &scheme, sizeof(scheme));
+}
+void __fastcall FaultingSetScheme(void*, int) { RaiseException(EXCEPTION_ACCESS_VIOLATION, 0, 0, nullptr); }
+
+// A PreyDll-sized reservation with only the touched pages committed: the
+// setter, callback and tracker spans, and the two globals, which point at this
+// test's CGame, CUIManager and game cvars.
+struct Image {
+    static constexpr std::size_t kSize = 0x2D00000;
+    std::uintptr_t base = 0;
+    std::vector<std::uint8_t> game = std::vector<std::uint8_t>(kGameUiManager + 8, 0);
+    std::vector<std::uint8_t> ui = std::vector<std::uint8_t>(kUiScheme + 4, 0);
+    std::vector<std::uint8_t> cvars = std::vector<std::uint8_t>(kForceGlyphs + 4, 0);
+
+    Image()
+    {
+        base = reinterpret_cast<std::uintptr_t>(VirtualAlloc(nullptr, kSize, MEM_RESERVE, PAGE_NOACCESS));
+        Require(base != 0, "the fake image is reserved");
+        for (const std::uintptr_t rva : {kSetSchemeRva, kGlyphCallbackRva, kTrackerForceRva, kGameRva}) {
+            Require(VirtualAlloc(reinterpret_cast<void*>((base + rva) & ~std::uintptr_t{0xFFF}), 0x1000, MEM_COMMIT,
+                                 PAGE_READWRITE) != nullptr, "a fake image page is committed");
+        }
+        Put(kSetSchemeRva, kSetSchemeCode, sizeof(kSetSchemeCode));
+        Put(kSetSchemeStoreRva, kSetSchemeStoreCode, sizeof(kSetSchemeStoreCode));
+        Put(kGlyphCallbackRva, kGlyphCallbackCode, sizeof(kGlyphCallbackCode));
+        Put(kTrackerForceRva, kTrackerForceCode, sizeof(kTrackerForceCode));
+        const auto pointer = [this](std::uintptr_t at, const void* to) {
+            const auto value = reinterpret_cast<std::uintptr_t>(to);
+            std::memcpy(reinterpret_cast<void*>(at), &value, sizeof(value));
+        };
+        pointer(base + kGameRva, game.data());
+        pointer(base + kGameCVarsRva, cvars.data());
+        pointer(reinterpret_cast<std::uintptr_t>(game.data()) + kGameUiManager, ui.data());
+        Scheme(2);
+        Force(1);
+    }
+    ~Image() { VirtualFree(reinterpret_cast<void*>(base), 0, MEM_RELEASE); }
+    void Put(std::uintptr_t rva, const std::uint8_t* bytes, std::size_t size)
+    {
+        std::memcpy(reinterpret_cast<void*>(base + rva), bytes, size);
+    }
+    void Scheme(int value) { std::memcpy(ui.data() + kUiScheme, &value, sizeof(value)); }
+    int Scheme() const
+    {
+        int value = 0;
+        std::memcpy(&value, ui.data() + kUiScheme, sizeof(value));
+        return value;
+    }
+    void Force(int value) { std::memcpy(cvars.data() + kForceGlyphs, &value, sizeof(value)); }
+    void Frame(unsigned long long now, SetSchemeFn setScheme = FakeSetScheme) { ServiceFrame(base, setScheme, now); }
+};
+
+// On, queued and read back: the state VR start leaves.
+void Enforce(unsigned long long now)
+{
+    SetControllerPrompts(1);
+    ServiceLane(now);
+    Complete(0);
+    ServiceLane(now);
+}
+
+void TestGuardWaitsForTheAppliedCvar()
+{
+    Reset();
+    Image image;
+    image.Scheme(5); // the callback's pick: Prey's Steam device always answers
+    image.Frame(1000);
+    Require(gSetCalls.empty(), "nothing is touched while the lane has not set the cvar");
+    SetControllerPrompts(1);
+    ServiceLane(1000);
+    image.Frame(1000);
+    Require(gSetCalls.empty(), "nor while the 1 is still in the console slot");
+    Complete(0);
+    ServiceLane(1000);
+    image.Frame(1000);
+    Require(gSetCalls.size() == 1 && gSetCalls[0] == 3 && image.Scheme() == 3,
+        "once it is read back, the Steam Controller's scheme goes to the pad's");
+    image.Frame(2000);
+    Require(gSetCalls.size() == 1, "and a pad scheme is left alone");
+    ServiceLane(2000);
+    Require(Logged("scheme_guard corrected=1 from=5 to=3"), "the correction is logged");
+    Require(Reports("guard=on") && Reports("corrected=1") && Reports("lastFrom=5"), "and reported");
+}
+
+void TestOnlyKeyboardMouseAndSteamSchemesMove()
+{
+    Reset();
+    Image image;
+    Enforce(0);
+    unsigned long long now = 1000;
+    for (const int scheme : {1, 2, 5}) {
+        image.Scheme(scheme);
+        image.Frame(now += 1000);
+        Require(image.Scheme() == 3, "a keyboard, mouse or Steam Controller scheme goes to the pad's");
+    }
+    for (const int scheme : {3, 4, 0, 6}) {
+        image.Scheme(scheme);
+        image.Frame(now += 1000);
+        Require(image.Scheme() == scheme, "the pads' schemes, and values this check does not know, stay");
+    }
+    Require(gSetCalls.size() == 3, "three corrections, no more");
+}
+
+void TestCorrectionsAreSpaced()
+{
+    Reset();
+    Image image;
+    Enforce(0);
+    image.Scheme(5);
+    image.Frame(1000);
+    image.Scheme(5); // a device that keeps choosing its own scheme
+    image.Frame(1050);
+    Require(gSetCalls.size() == 1, "a scheme put back is not put back again within the interval");
+    image.Frame(1100);
+    Require(gSetCalls.size() == 2 && image.Scheme() == 3, "and is after it");
+}
+
+void TestClearedCvarIsSetAgain()
+{
+    Reset();
+    Image image;
+    Enforce(0);
+    image.Force(0); // something other than this lane cleared it
+    image.Scheme(2);
+    image.Frame(1000);
+    Require(gSetCalls.empty(), "the scheme is not moved while the cvar is clear: the laser would move it back");
+    ServiceLane(1000);
+    Require(Logged("force_controller_glyphs=0 detail=cleared_outside_lane reapplying=1"), "the clearing is logged");
+    Require(gQueued.size() == 2 && gQueued[1] == "hud_forceControllerGlyphs 1", "and the cvar is set again");
+    image.Frame(1000);
+    Require(gSetCalls.empty(), "the check waits for the readback");
+    image.Force(1); // the console set it
+    Complete(0);
+    ServiceLane(1000);
+    image.Frame(1000);
+    Require(gSetCalls.size() == 1 && image.Scheme() == 3, "then puts the scheme back");
+    image.Force(0);
+    image.Frame(1100);
+    ServiceLane(1100);
+    Require(gQueued.size() == 2, "a clearing again within the second waits");
+    ServiceLane(2000);
+    Require(gQueued.size() == 3, "then the cvar is set again");
+}
+
+void TestOffStopsTheGuardAtOnce()
+{
+    Reset();
+    Image image;
+    Enforce(0);
+    SetControllerPrompts(0);
+    image.Scheme(2);
+    image.Frame(1000);
+    Require(gSetCalls.empty(), "with the option off the laser's mouse scheme stays, before the next tick");
+}
+
+void TestMismatchedCodeRefuses()
+{
+    Reset();
+    Image image;
+    const std::uint8_t other = 0xCC;
+    image.Put(kGlyphCallbackRva + 0x1C, &other, 1); // another build's callback
+    Enforce(0);
+    image.Scheme(5);
+    image.Frame(1000);
+    Require(gSetCalls.empty(), "nothing is called when any span differs");
+    ServiceLane(1000);
+    ServiceLane(2000);
+    Require(Logged("scheme_guard result=refused detail=code_mismatch") && Reports("guard=refused"),
+        "the refusal is logged and reported");
+    Require(gLines.size() == 2, "once, beside the readback");
+}
+
+void TestSetterFaultDisarms()
+{
+    Reset();
+    Image image;
+    Enforce(0);
+    image.Scheme(5);
+    image.Frame(1000, FaultingSetScheme);
+    image.Frame(2000);
+    Require(gSetCalls.empty(), "a fault in the setter disarms the check");
+    ServiceLane(2000);
+    Require(Logged("scheme_guard result=failed detail=setter_fault disarmed=1") && Reports("guard=faulted"),
+        "and is logged");
+}
 } // namespace
 
 int main()
@@ -178,6 +378,13 @@ int main()
     TestChangeOfMindWhileSending();
     TestFailedReadbackIsNotRetried();
     TestRefusedQueueIsLogged();
-    std::cout << "controller prompts: refusal, frames, readback, busy slot, restore and failures passed\n";
+    TestGuardWaitsForTheAppliedCvar();
+    TestOnlyKeyboardMouseAndSteamSchemesMove();
+    TestCorrectionsAreSpaced();
+    TestClearedCvarIsSetAgain();
+    TestOffStopsTheGuardAtOnce();
+    TestMismatchedCodeRefuses();
+    TestSetterFaultDisarms();
+    std::cout << "controller prompts: refusal, frames, readback, busy slot, restore, failures and scheme guard passed\n";
     return 0;
 }
