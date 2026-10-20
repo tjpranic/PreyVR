@@ -4036,3 +4036,27 @@ the dump ran on the main menu's first frame; it now waits for two seconds of pla
   as `detail=bound`), so it follows SteamVR rebinding.
 
 Details and checklist: [CONTROLS-2026-10-17.md](CONTROLS-2026-10-17.md).
+
+## 2026-10-20 — Cull watch fixed; a frame probe for the transition frame
+
+The 2026-10-19 field results showed the cull lag that precedes the crash. It
+starts on a VR-panel close marked by `dual_first_eye_not_held`, and each such
+refusal adds one frame.
+
+The watch now:
+- classifies only octree items, so end markers no longer read as `outside`;
+- gives doomed resets their own logging budget;
+- infers the pool on resets that clear an empty pool;
+- logs each lag-depth change (0 none, 1 previous, 2 stale, 3 dangling).
+
+A new read-only frame probe records the main thread, the render thread and the
+cull consumer job (`0x23F1B0`, its only hook of its own). Around every refusal
+and lag change, plus three control panel closes, it writes 8 frames before and
+12 after. It shares `CreateGeneralPassRenderingInfo` with PassCameraProbe's hook
+rather than adding a second detour.
+
+Offline only:
+- 86/86 tests pass;
+- the gate verifier passes against the supported image.
+
+Package PreyVR-47. See [the crash notes](CULL-CAMERA-CRASH-2026-10-17.md#the-frame-probe-2026-10-20).

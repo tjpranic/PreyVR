@@ -8,6 +8,7 @@
 #include "Bootstrap.h"
 #include "ConsoleBridgeWin32.h"
 #include "FrameCaptureWin32.h"
+#include "FrameProbe.h"
 #include "Logger.h"
 #include "XrSessionHost.h"
 #include "preyvr/FrameObserver.h"
@@ -39,6 +40,8 @@ bool gHookCreated = false;
 void __fastcall ObserveEndRendererScene(void* renderer)
 {
     const ULONGLONG count = gFrameCount.fetch_add(1, std::memory_order_relaxed) + 1;
+    // Ahead of the XR frame, so its panel and refusal records follow it.
+    ProbeRecord(ProbeStep::endFrame, static_cast<std::uint32_t>(count));
     gLastRenderer.store(renderer, std::memory_order_relaxed);
     if (count == 1) {
         gFirstThreadId.store(GetCurrentThreadId(), std::memory_order_relaxed);

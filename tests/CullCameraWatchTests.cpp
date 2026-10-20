@@ -17,6 +17,16 @@ namespace preyvr::dll {
 DWORD gPinned = 0;
 DWORD ModulePinStatus() { return gPinned; }
 bool EnsureMinHook() { return false; }
+// The frame probe, as the watch drives it.
+struct ProbeCall {
+    ProbeStep step;
+    std::uint32_t a, b, c, d;
+};
+std::vector<ProbeCall> gProbeCalls;
+void ProbeRecord(ProbeStep step, std::uint32_t a, std::uint32_t b, std::uint32_t c, std::uint32_t d)
+{
+    gProbeCalls.push_back({step, a, b, c, d});
+}
 } // namespace preyvr::dll
 
 namespace {
@@ -91,19 +101,32 @@ struct Fixture {
         gEnabled.store(true);
         gNextSummary.store(~0ull);
     }
-    // Queues `cameras` starting at the consumer's index `read`.
+    // Queues octree items with `cameras` starting at the consumer's index `read`.
     void Queue(unsigned read, std::initializer_list<std::uintptr_t> cameras)
     {
         unsigned k = 0;
         for (const std::uintptr_t camera : cameras) {
-            const unsigned slot = (read + k) % kRing;
-            Put(items, slot * kItemSize + kItemType, 1u);
-            Put(items, slot * kItemSize + kItemNode, std::uintptr_t{0x1000} + k);
-            Put(items, slot * kItemSize + kItemCamera, camera);
-            ++k;
+            Item(read, k++, kItemOctree, camera);
         }
         Put(manager, kQueue + kQueueRead, read);
         Put(manager, kQueue + kQueueWrite, read + k);
+    }
+    // Queues items of any type: {type, camera}.
+    void QueueTyped(unsigned read, std::initializer_list<std::pair<unsigned, std::uintptr_t>> entries)
+    {
+        unsigned k = 0;
+        for (const auto& [type, camera] : entries) {
+            Item(read, k++, type, camera);
+        }
+        Put(manager, kQueue + kQueueRead, read);
+        Put(manager, kQueue + kQueueWrite, read + k);
+    }
+    void Item(unsigned read, unsigned k, unsigned type, std::uintptr_t camera)
+    {
+        const unsigned slot = (read + k) % kRing;
+        Put(items, slot * kItemSize + kItemType, type);
+        Put(items, slot * kItemSize + kItemNode, std::uintptr_t{0x1000} + k);
+        Put(items, slot * kItemSize + kItemCamera, camera);
     }
     void Run() { ObserveCameraReset(engine.data()); }
 
@@ -136,9 +159,14 @@ void ResetCounters()
                           &gPagesTruncated, &gQueueUnread, &gInconsistent, &gScanFaults, &gPendingResets,
                           &gStaleResets, &gStaleItems, &gDoomedResets, &gDoomedItems, &gOutsideResets,
                           &gOutsideItems, &gNullItems, &gPreviousItems, &gEvents, &gSuppressed, &gBaseline,
-                          &gOffThread}) {
+                          &gOffThread, &gMarkerItems, &gOtherTypeItems, &gInferredResets, &gDoomedLogged,
+                          &gStaleEvents, &gDepthChanges}) {
         counter->store(0);
     }
+    for (auto& count : gAtDepth) count.store(0);
+    gDepth.store(kDepthNone);
+    gDepthMax.store(kDepthNone);
+    gProbeCalls.clear();
     gPendingMax.store(0);
     gMaxPages.store(0);
     gMaxOverflowCameras.store(0);
@@ -191,9 +219,9 @@ void TestStaleAndDoomedItems()
     Require(gDoomedResets == 1 && gDoomedItems == 3, "and the storage was freed");
     Require(gPreviousItems == 1 && gOutsideItems == 1 && gOutsideResets == 1 && gNullItems == 1,
             "other pool, outside and null are told apart");
-    Require(gEvents == 1, "one event");
+    Require(gEvents == 1 && gDoomedLogged == 1, "one event, logged as doomed");
     const std::string line = LastLine();
-    Require(line.find("detail=event") != std::string::npos && line.find("stale=3 doomed=3") != std::string::npos &&
+    Require(line.find("detail=doomed") != std::string::npos && line.find("stale=3 doomed=3") != std::string::npos &&
                 line.find("staleInOverflow=1") != std::string::npos && line.find("previous=1") != std::string::npos &&
                 line.find("outside=1 null=1") != std::string::npos,
             "event line carries the classification");
@@ -351,6 +379,122 @@ void TestGate()
     VirtualFree(image, 0, MEM_RELEASE);
 }
 
+void TestItemTypes()
+{
+    ResetCounters();
+    Fixture f;
+    // A batch's end marker and a type-2 item carry no camera at +0x38, whatever
+    // their bytes say (the false "outside" of 2026-10-18).
+    f.QueueTyped(0, {{kItemOctree, At(f.primary0, 0)}, {kItemMarker, 0xAB1A5ED150ull}, {2u, 0x1234ull}});
+    f.Run();
+    Require(gMarkerItems == 1 && gOtherTypeItems == 1 && gOutsideItems == 0 && gStaleItems == 1,
+            "only octree items are classified");
+    Require(LastLine().find("markers=1 otherTypes=1") != std::string::npos, "the event line counts the rest");
+}
+
+void TestIdleResetInference()
+{
+    ResetCounters();
+    Fixture f(false);
+    // Pool 0 registered nothing since its last reset; pool 1 holds the frame in
+    // flight. The reset changes nothing, yet pool 0 is the one it reclaims.
+    Put(f.engine, kPoolFirst + kPoolCount, 0);
+    f.Queue(0, {At(f.primary0, 0), At(f.primary1, 0)});
+    f.Run();
+    Require(gIdle == 1 && gInferredResets == 1, "an idle reset is told by the empty pool");
+    Require(gStaleItems == 1 && gPreviousItems == 1 && gDepth == kDepthStale, "and its items are classified");
+    Require(LastLine().find("reset=pool0") != std::string::npos && LastLine().find("inferred=1") != std::string::npos,
+            "logged as inferred");
+
+    ResetCounters();
+    Fixture both(false);
+    Put(both.engine, kPoolFirst + kPoolCount, 0);
+    Put(both.engine, kPoolFirst + kPoolStride + kPoolCount, 0);
+    both.Queue(0, {At(both.primary1, 0)});
+    both.Run();
+    Require(gInferredResets == 0 && gStaleItems == 0 && gAtDepth[1] == 0 && gDepth == kDepthNone,
+            "two empty pools: nothing inferred, the depth unknown and left as it was");
+}
+
+void TestLagDepth()
+{
+    ResetCounters();
+    Fixture f(false);
+    const auto run = [&](std::initializer_list<std::uintptr_t> cameras, int pool0Count) {
+        f.Queue(0, cameras);
+        Put(f.engine, kPoolFirst + kPoolCount, pool0Count);
+        f.Run();
+    };
+    run({}, 3);                     // nothing queued: depth 0, as it starts
+    run({At(f.primary1, 0)}, 3);    // last frame's: 1
+    run({At(f.primary1, 0)}, 3);    // unchanged
+    run({At(f.primary0, 0)}, 3);    // the reset pool's: 2
+    run({0x26100000000ull}, 3);     // neither: 3
+    run({}, 3);                     // drained: 0
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> changes;
+    for (const auto& call : gProbeCalls) {
+        if (call.step == ProbeStep::lagChange) changes.emplace_back(call.a, call.b);
+    }
+    Require(changes == std::vector<std::pair<std::uint32_t, std::uint32_t>>{{1, 0}, {2, 1}, {3, 2}, {0, 3}},
+            "every change of depth opens a probe window");
+    std::size_t lines = 0;
+    for (const auto& line : gLines) lines += line.find("detail=lag ") != std::string::npos ? 1 : 0;
+    Require(lines == 4 && gDepthChanges == 4 && Logged("detail=lag depth=2 was=1 change=2"), "and is logged");
+    Require(gAtDepth[0] == 2 && gAtDepth[1] == 2 && gAtDepth[2] == 1 && gAtDepth[3] == 1 && gDepthMax == 3,
+            "resets are counted by depth");
+    const std::string report = CullCameraWatchReport();
+    Require(report.find(" depth=0 depthMax=3 depthChanges=4 atDepth=2/2/1/1") != std::string::npos,
+            "the report carries the depth");
+}
+
+void TestDoomedBudget()
+{
+    ResetCounters();
+    Fixture f;
+    // Exhaust the stale budget with count-only resets of pool 1 (pool 0 idle,
+    // without its page, so only pool 1 reads as reset)...
+    Put(f.engine, kPoolFirst + kPoolOverflow, std::uintptr_t{0});
+    for (unsigned i = 0; i < 100; ++i) {
+        f.Queue(i % kRing, {At(f.primary1, 0)});
+        Put(f.engine, kPoolFirst + kPoolCount, 0);
+        Put(f.engine, kPoolFirst + kPoolStride + kPoolCount, 2);
+        gOriginal.store(&Fixture::FakeResetPool1);
+        f.Run();
+    }
+    Require(gStaleEvents == 100 && gSuppressed == 100 - kEventsLogged, "stale events past the budget are dropped");
+    // ...then a reset that frees what is still queued is logged regardless.
+    gOriginal.store(&Fixture::FakeReset);
+    Put(f.engine, kPoolFirst + kPoolOverflow, At(f.page));
+    Put(f.engine, kPoolFirst + kPoolCount, 6);
+    f.Queue(0, {At(f.pageCameras, 0)});
+    f.Run();
+    Require(gDoomedResets == 1 && gDoomedLogged == 1 && LastLine().find("detail=doomed") != std::string::npos,
+            "a doomed reset has its own budget");
+}
+
+void TestTicks()
+{
+    ResetCounters();
+    Fixture f;
+    f.Queue(3, {At(f.primary1, 0), At(f.primary1, 0)});
+    f.Run();
+    gEnabled.store(false);
+    f.Run();
+    gEnabled.store(true);
+    std::vector<ProbeCall> ticks;
+    for (const auto& call : gProbeCalls) {
+        if (call.step == ProbeStep::tick) ticks.push_back(call);
+    }
+    Require(ticks.size() == 2, "every reset is a probe tick, observed or not");
+    Require(ticks[0].a == kDepthPrevious && ticks[0].b == 2 && ticks[0].c == 5 && ticks[0].d == 3,
+            "an observed tick carries depth, pending and the queue");
+    Require(ticks[1].a == kLagUnknown && ticks[1].c == 5 && ticks[1].d == 3, "a passed-through one only the queue");
+    std::uint32_t write = 0, read = 0;
+    Require(CullQueueIndices(write, read) && write == 5 && read == 3, "queue indices for the probe");
+    gObjManagerSlot.store(0);
+    Require(!CullQueueIndices(write, read) && write == 0 && read == 0, "none without CObjManager");
+}
+
 void TestCommands()
 {
     ResetCounters();
@@ -388,6 +532,11 @@ int main()
     TestOffThreadAndBounds();
     TestBaselineAndSummary();
     TestGate();
+    TestItemTypes();
+    TestIdleResetInference();
+    TestLagDepth();
+    TestDoomedBudget();
+    TestTicks();
     TestCommands();
     std::cout << "cull camera watch tests passed\n";
     return 0;

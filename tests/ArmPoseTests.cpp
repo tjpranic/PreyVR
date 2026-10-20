@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 
 using namespace preyvr;
 using namespace preyvr::armpose;
@@ -161,6 +162,9 @@ void TestTorsoLift()
     Require(TorsoLift(0.45f, 0.40f, 0.15f) == 0.40f && TorsoLift(-0.4f, 0.40f, 0.15f) == -0.15f &&
                 TorsoLift(0.1f, 0.40f, 0.15f) == 0.1f && TorsoLift(std::nanf(""), 0.4f, 0.15f) == 0.0f,
             "the lift is the neck's rise, within its limits");
+    const float none = std::numeric_limits<float>::infinity();
+    Require(TorsoLift(0.6f, none, none) == 0.6f && TorsoLift(-0.5f, none, none) == -0.5f,
+            "with no limits the torso follows the neck all the way");
 
     // A rig shaped like Prey's 101-joint one: root 0 -> hips 1 -> spine1 2 ->
     // spine2 3 -> spine3 4 -> spine4 5 -> neck 6 -> head 7 (the camera) -> headEnd 8;

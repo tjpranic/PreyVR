@@ -79,8 +79,18 @@ An exact-bytes gate (8 spans plus the vtable slot) guards every offset it reads.
 `tools/re/verify_cull_camera_watch.py <PreyDll.dll>` checks that gate against the
 binary.
 
-Each queued item's camera is classified against the pools as they were just before
-the reset:
+Only octree items (type 1) are classified; their camera at `+0x38` is the one
+the render-content job is given. Type 0 is a batch's end marker and types 2 and 3
+take other branches, so those are only counted (`markers`, `otherTypes`). Before
+2026-10-20 they were classified too, and every end marker showed up as a false
+`outside`.
+
+A reset can change nothing: the pool it clears may have registered nothing since
+its last reset (the first frame after a menu). When exactly one pool is empty,
+that pool is the one being reset (`inferred=1`).
+
+Each octree item's camera is classified against the pools as they were just
+before the reset:
 
 | Field | Meaning |
 |---|---|
@@ -93,10 +103,21 @@ the reset:
 ### Log lines (`preyvr_cull_watch` in PreyVR.log)
 
 - `detail=hook_installed … mutation=none`: the watch is live.
+- `detail=doomed`: a reset that freed cameras still queued. It has its own
+  budget (the first 64, then one in 64), so stale events cannot crowd it out.
 - `detail=event`: `stale`, `outside` or an unreadable queue. The first 64 are
   logged, then one in 512. The line carries both pools before→after, the queue
   indices and the oldest stale/outside item (`node`, `camera`, `age` = position
   from the read index).
+- `detail=lag depth=N was=M`: the lag depth changed (the first 64 changes, then
+  one in 64). Each change also opens a frame-probe window. The depth is how many
+  frame starts the oldest queued octree item has crossed:
+  - 0: nothing queued;
+  - 1: last frame's items (`previous`);
+  - 2: the reset pool's items (`stale`);
+  - 3: items in neither pool (`outside`, already dangling).
+  `summary` adds `depth`, `depthMax`, `depthChanges` and `atDepth` (resets at
+  each depth).
 - `detail=pending_at_reset`: the first 8 resets that had items queued but no
   event, as a baseline.
 - `detail=first_freeing_reset`: the first reset that freed pool storage.
@@ -114,6 +135,63 @@ the reset:
 
 Compare a VR run against a flat run, with the mod injected and VR off. The watch
 runs in both.
+
+## The frame probe (2026-10-20)
+
+`src/dll/FrameProbe.cpp` records every frame step of the main thread, the render
+thread and the cull consumer job into a lock-free ring.
+
+**Triggers.** Each of these opens a window:
+- a VR-panel close (`panel_close`);
+- a first-eye refusal (`first_eye_refused`);
+- a lag-depth change (`lag_change`).
+
+Triggers that follow while a window is open join it.
+
+**Windows.** A window runs from 8 frame starts before its trigger to 12 after,
+extended by later triggers to at most 60. The command worker writes it to the
+log, off the game threads:
+- every window with a refusal or a lag change, up to 16 a session;
+- the first 3 plain panel closes, as the control;
+- a window still open after 2 s is written with what it has.
+
+`cull.probe 0|1` switches recording. `PREYVR_FRAME_PROBE=0` leaves it out.
+
+**The recorded steps, each with the queue's write/read where it applies:**
+
+| Step | Thread | Seam |
+|---|---|---|
+| `tick` | main | the pool reset (the watch's hook), with the depth and pending |
+| `render_enter` / `render_exit` | main | `CSystem::Render` calling the original (CameraEditHook) |
+| `pass_created` | any | `CreateGeneralPassRenderingInfo` (PassCameraProbe's hook, shared). Frame ids, caller RVA, flags |
+| `consumer_enter` / `consumer_exit` | job | the consumer job `0x23F1B0`, the probe's own read-only hook. The consumer's frame ids |
+| `scene_enter` / `scene_exit` | render | top-level `RT_RenderScene`, outcome `single`, `doubled`, `build_miss`, `refused` or `no_teardown` |
+| `end_frame` | render | `RT_EndFrame` (frame observer) |
+| `panel_open` / `panel_close`, `first_eye_refused` | render | the XR frame |
+| `lag_change` | main | the watch |
+
+**Lines.** Each window starts with a header,
+`preyvr_frame_probe window=N kinds=… control=0|1 events=…`. Each event line is
+`w=N ±µs <thread> <step> <args>`:
+- the time is relative to the trigger;
+- the thread is `M` (main), `R` (render), or `J<id>` (a job or other thread);
+- the trigger's own line ends in `<trigger`.
+
+The window ends with `window=N end lost=…`.
+
+**What to look for in a refusal window:**
+- Which frame the main thread rendered: the `pass_created` frame id, between
+  `render_enter`/`render_exit`.
+- Whether the render thread drew a scene for it: `scene_exit` before the
+  `end_frame` that refused.
+- Whether that frame's consumer run finished before the next `tick`: compare
+  the consumer frame id with the pass frame id, and the queue read index with
+  the write index.
+
+The first window that shows the consumer starting a frame late, beside a control
+window that does not, names the step that went wrong. An `outcome=no_teardown` or
+a missing `scene_exit` on the refused frame points at the render thread. A
+consumer run that the main thread overtook points at the engine's frame pacing.
 
 ## Field results, 2026-10-19 (60 runs since the watch went in)
 
@@ -134,7 +212,7 @@ runs in both.
 - **Doomed items occurred without a crash** in two-refusal runs: 1,163
   (17-192755) and 1,362 (18-180109). The Oct-17 crash run also had two refusals,
   21:13:31 and 21:15:38, the second 17 s before the crash.
-- **Instrument flaws:**
+- **Instrument flaws, fixed 2026-10-20:**
   - `type:0` items (the consumer's end markers) carry no camera, so `outside`
     counts are false positives.
   - Those false events used up the logging budget, so no doomed event was logged
@@ -154,3 +232,14 @@ runs in both.
   refuses another.
 - **Not yet run in the game.** The cost per reset is a few hundred bytes of reads,
   plus a scan only when items are queued, but it is unmeasured.
+- 2026-10-20, offline:
+  - `cull_camera_watch` adds item types, idle-reset inference, the depth
+    sequence 0→1→2→3→0, the doomed budget and probe ticks.
+  - `frame_probe` covers window bounds, the control and refusal quotas, merged
+    and capped triggers, ring overwrite, the timeout, thread tags, both seams'
+    records and the commands.
+  - The verifier also checks the consumer job's bytes, its call into the gated
+    consumer loop, and both hook entries.
+  - The full suite passes (86 tests).
+  - The watch's per-reset cost is unchanged, and the probe adds about a dozen
+    ring writes a frame. **Not yet run in the game.**

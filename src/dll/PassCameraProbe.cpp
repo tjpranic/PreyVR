@@ -4,12 +4,14 @@
 #include "AtomicMax.h"
 
 #include "CameraEditHook.h"
+#include "FrameProbe.h"
 #include "Logger.h"
 #include "preyvr/CameraEdit.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/StereoCamera.h"
 
 #include <MinHook.h>
+#include <intrin.h>
 
 #include <atomic>
 #include <cmath>
@@ -91,7 +93,11 @@ void* __fastcall CreateGeneralPassObserved(
         }
     }
     const CreateGeneralPassFn original = gOriginal.load(std::memory_order_acquire);
-    return original != nullptr ? original(out, camera, flags, aux) : nullptr;
+    void* const result = original != nullptr ? original(out, camera, flags, aux) : nullptr;
+    // After the original, which is what writes the frame ids; a no-op unless
+    // the frame probe is recording.
+    ProbePassCreated(out, flags, _ReturnAddress());
+    return result;
 }
 
 bool EnsureHook()
@@ -128,6 +134,11 @@ bool EnsureHook()
 }
 
 } // namespace
+
+bool EnsurePassCreationHook()
+{
+    return EnsureHook();
+}
 
 DWORD SetPassCameraProbeEnabled(unsigned int enabled)
 {

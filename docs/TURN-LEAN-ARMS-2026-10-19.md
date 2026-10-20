@@ -566,7 +566,9 @@ while the torso stayed at the calibrated height. Room-scale follows only horizon
 **What was built (`AnimIkTakeover.cpp`, `armpose`):**
 - **The lift.** The lift is the neck's rise since calibration: the view's vertical head offset
   (`cameraCentre − nativeEye`), less what tipping the head moved the eye (`LevelEyeHeight`).
-  It is limited to 40 cm up and 15 cm down (`TorsoLift`).
+  It was limited to 40 cm up and 15 cm down at first; since 2026-10-20 it is unlimited by default
+  (worn OK in PreyVR-44, then uncapped at the wearer's request). `arm.lift 1 <upMm> <downMm>` can still
+  set limits (`TorsoLift`).
 - **Which joints move, read once per rig.**
   - The four spine joints, by name.
   - The joint `#camera` rides, read from the character's attachments (`AttachmentJoint`, shared
@@ -593,7 +595,7 @@ while the torso stayed at the calibrated height. Room-scale follows only horizon
 - A cyclic parent table lifts nothing.
 - Prey's measured heights share upwards.
 
-`ctest` 85/85. Not yet worn.
+`ctest` 85/85. Worn OK in PreyVR-44 (committed as `7088229`).
 
 **Headset checklist:**
 1. **The case reported.** Calibrate seated (Setup → Calibrate Posture), then stand up and look

@@ -35,6 +35,7 @@
 #include <sstream>
 #include <atomic>
 #include <cmath>
+#include <limits>
 #include <cstring>
 #include <span>
 #include <string>
@@ -449,6 +450,13 @@ bool ReadAlignmentMemory(void*, std::uintptr_t address, void* output, std::size_
 //     arm the native solve may lengthen by pose.stretch -- instead of the
 //     original 65% linear compression, which moved every hand off its
 //     controller even at rest.
+// arm.lift's limits when none is set: the torso follows the neck all the way.
+constexpr float kNoLiftLimit = std::numeric_limits<float>::infinity();
+std::string LiftLimitText(float metres)
+{
+    return std::isfinite(metres) ? std::to_string(static_cast<int>(std::lround(metres * 1000.0f))) : "none";
+}
+
 struct PoseSettings {
     unsigned mode = 1;          // 0 original, 1 hand pose
     float curl = 1.0f;          // relaxed flexion scale
@@ -463,10 +471,10 @@ struct PoseSettings {
     // 1: the shoulder from the neck (armpose::ShoulderFromHead); 0: from the
     // eyes, as before 2026-10-19 (arm.anchor, for A/B).
     bool neckAnchor = true;
-    // The torso follows the neck up and down, the waist stretching, within
-    // liftUp above and liftDown below calibration (arm.lift; armpose::TorsoLift).
+    // The torso follows the neck up and down, the waist stretching (arm.lift;
+    // armpose::TorsoLift). Uncapped by default; arm.lift can set limits.
     bool torsoLift = true;
-    float liftUp = 0.40f, liftDown = 0.15f;
+    float liftUp = kNoLiftLimit, liftDown = kNoLiftLimit;
     armpose::Body body{};
     float torsoDeadzone = 35.0f * 3.14159265f / 180.0f;
     float torsoRelax = 0.6f;    // fraction per second towards the head's yaw
@@ -2360,8 +2368,9 @@ DWORD SetArmSetting(const std::string& what, const int* v, unsigned n)
     } else if (what == "lift" && n >= 1 && v[0] >= 0 && v[0] <= 1 && (n < 2 || (v[1] >= 0 && v[1] <= 600)) &&
                (n < 3 || (v[2] >= 0 && v[2] <= 400))) {
         p.torsoLift = v[0] != 0;
-        if (n >= 2) { p.liftUp = mm(v[1]); }
-        if (n >= 3) { p.liftDown = mm(v[2]); }
+        // 0: no limit that way.
+        if (n >= 2) { p.liftUp = v[1] > 0 ? mm(v[1]) : kNoLiftLimit; }
+        if (n >= 3) { p.liftDown = v[2] > 0 ? mm(v[2]) : kNoLiftLimit; }
     } else if (what == "length" && n >= 1 && v[0] >= kArmLengthMinCm && v[0] <= kArmLengthMaxCm) {
         b = armpose::WithArmLength(b, v[0] * 0.01f);
     } else if (what == "shoulder" && n >= 3 && std::abs(v[0]) <= 300 && v[1] >= 50 && v[1] <= 350 &&
@@ -2432,7 +2441,7 @@ std::string ArmReport()
         << " shoulderMm=" << b.shoulderForward * 1000 << ',' << b.shoulderOut * 1000
         << ',' << b.shoulderUp * 1000 << " lenMm=" << b.upper * 1000 << ',' << b.fore * 1000
         << " lengthCm=" << armpose::ArmLength(b) * 100
-        << " lift=" << p.torsoLift << " liftLimitsMm=" << p.liftUp * 1000 << ',' << p.liftDown * 1000
+        << " lift=" << p.torsoLift << " liftLimitsMm=" << LiftLimitText(p.liftUp) << ',' << LiftLimitText(p.liftDown)
         << " liftMm=" << gLiftMm.load(std::memory_order_relaxed)
         << " liftReady=" << gLiftReady.load(std::memory_order_relaxed)
         << " cameraJoint=" << gLiftCamera.load(std::memory_order_relaxed)

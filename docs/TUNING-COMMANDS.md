@@ -283,7 +283,7 @@ value report, as described above.
 | `arm.shoulder <fwd> <out> <up>` | mm | | The shoulder joint from the centre eye, with the head level and facing the torso, in the torso's frame. |
 | `arm.len <upper> <fore>` | 150–450 mm | 285 275 | Drawn arm segments. |
 | `arm.length <cm>` | 40–70 | 56 | Both segments at once, shoulder to wrist, split as the defaults are. **Menu** (Arm length). |
-| `arm.lift <0\|1> [upMm [downMm]]` | 0–600, 0–400 mm | 1 400 150 | The torso follows your neck up and down (stand up after calibrating seated), the waist stretching, within up/down of the calibrated height. The joint carrying the game's camera never moves. `arm.report` gives `liftMm`, `liftReady` and `cameraJoint`. |
+| `arm.lift <0\|1> [upMm [downMm]]` | 0–600, 0–400 mm (0 = no limit) | 1, no limits | The torso follows your neck up and down (stand up after calibrating seated), the waist stretching. Optional limits on how far above or below the calibrated height it follows. The joint carrying the game's camera never moves. `arm.report` gives `liftMm`, `liftReady` and `cameraJoint`. |
 | `arm.stretch <clavicle> <arm>` | 0–500 ‰, 1000–1300 ‰ | 150 1100 | How far the clavicle and the arm may stretch. |
 | `arm.prior <flexSd> <devRest> <devSd> <swivelSd>` | degrees | 45 −8 12 25 | The elbow solver's priors. |
 | `arm.rom <flex> <ext> <radial> <ulnar>` | 10–120 degrees | 75 65 20 35 | The wrist's range of motion. |
@@ -411,6 +411,7 @@ value report, as described above.
 | `dbg.lasers [0\|1]` | The aim lasers (rays + hits, 129) for this session, apart from `dbg.draw`. **Menu** (Hands > Aim lasers; on at VR start). |
 | `dbg.report`, `dbg.marks` | Overlay counters and primitive positions. |
 | `cull.report`, `cull.watch [0\|1]` | Read-only watch on the engine's pass-camera reset, for the job-worker crash at `PreyDll+0x27EC40`. On from startup, VR or not; `PREYVR_CULL_WATCH=0` before launch leaves it out. Its `preyvr_cull_watch` lines in PreyVR.log are what to send with a crash. |
+| `cull.probe [0\|1]` | Read-only frame-step recorder for the same crash. Around VR-menu closes, first-eye refusals and cull-lag changes, it writes the main thread's, render thread's and cull job's steps as `preyvr_frame_probe` lines. On from startup; `PREYVR_FRAME_PROBE=0` before launch leaves it out. |
 | `capture [tag]`, `capture.hud [tag]`, `capture.inventory [tag]` | One frame of what the headset receives, to a file. Stalls the GPU once. |
 | `console <command ...>`, or an allowlisted name alone | An engine console command through the fail-closed allowlist. |
 | `mem.peek`, `mem.scan`, `mem.deep`, `mem.watch`, `mem.hits`, `mem.stack`, `mem.str` | Memory inspection and hardware breakpoints. Research only. |

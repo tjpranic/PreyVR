@@ -18,6 +18,8 @@
 #include "HeadTrackingHook.h"
 
 #include "FrameCaptureWin32.h"
+#include "CullCameraWatch.h"
+#include "FrameProbe.h"
 #include "Logger.h"
 #include "preyvr/CameraEdit.h"
 #include "preyvr/EngineMap.h"
@@ -344,7 +346,14 @@ void __fastcall RenderWithCameraEdit(void* system)
         // One record per native render, including refusals and flat/menu frames.
         // A missing record would shift every subsequent image's metadata.
         if(gStereoIpd.load()>0.f) eyehandoff::Publish(renderContract);
+        // The frame probe's main-thread bracket around the world render
+        // (FrameProbe.h): whether the cull queue drained inside it.
+        std::uint32_t write = 0, read = 0;
+        CullQueueIndices(write, read);
+        ProbeRecord(ProbeStep::renderEnter, 0, 0, write, read);
         original(target);
+        CullQueueIndices(write, read);
+        ProbeRecord(ProbeStep::renderExit, 0, 0, write, read);
     };
 
     const bool stereoArmed = gStereoIpd.load(std::memory_order_acquire) > 0.0f;

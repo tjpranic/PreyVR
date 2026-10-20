@@ -13,6 +13,7 @@
 #include "CameraEditHook.h"
 #include "ConsoleBridgeWin32.h"
 #include "CullCameraWatch.h"
+#include "FrameProbe.h"
 #include "FocusHold.h"
 #include "ControllerPrompts.h"
 #include "HotkeyBridge.h"
@@ -676,6 +677,9 @@ bool ExecuteDualCommand(const std::vector<std::string>& args, std::ostringstream
     } else if (verb == "cull.watch") {
         out << "cull.watch result=" << (Valued(args) ? SetCullCameraWatch(arg(1, 1)) : 0)
             << CullCameraWatchReport();
+    } else if (verb == "cull.probe") {
+        // The frame-step recorder around panel closes and cull-lag changes (FrameProbe.h).
+        out << "cull.probe result=" << (Valued(args) ? SetFrameProbe(arg(1, 1)) : 0) << FrameProbeReport();
     } else if (verb == "window.hold") {
         // docs/DESKTOP-WINDOW-2026-10-17.md: Prey runs as though focused. The
         // launcher sends 1 and minimises the window once state=held is logged.
@@ -1355,7 +1359,9 @@ DWORD WINAPI PollThread(LPVOID)
         "\" results=\"" + results.string() + "\"");
     while (gRunning.load(std::memory_order_acquire)) {
         // Once, as soon as the module is pinned: VR or not (CullCameraWatch.h).
+        // The probe also writes its finished windows here, off the game threads.
         ServiceCullCameraWatch();
+        ServiceFrameProbe();
         TickVrMode();
         ServiceVrOptions();
         ServiceFocusHold();

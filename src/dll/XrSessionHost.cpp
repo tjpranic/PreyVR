@@ -5,6 +5,7 @@
 #include "preyvr/FrustumCoverage.h"
 
 #include "Logger.h"
+#include "FrameProbe.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/XrFrameContract.h"
 #include "preyvr/XrHold.h"
@@ -1254,6 +1255,9 @@ bool SubmitStereoPair(
         // left one is exactly the cross-time pair this route exists to remove.
         if (!dualFirstHeld) {
             const auto refused = gDualPairsRefused.fetch_add(1, std::memory_order_relaxed) + 1;
+            // Every one, whatever the log throttle: it marks the frame the cull
+            // lag starts on (docs/CULL-CAMERA-CRASH-2026-10-17.md).
+            ProbeRecord(ProbeStep::firstEyeRefused, static_cast<std::uint32_t>(refused));
             if (refused <= 4 || refused % 300 == 0) {
                 Log("result=refused detail=dual_first_eye_not_held refused=" + std::to_string(refused));
             }
@@ -1906,6 +1910,7 @@ void ServiceXrFrame(void* renderer)
         gHost.menuAnchor.reset(); // a game menu opening is placed afresh, in front of the wearer
         gHost.eyeImageValid[0]=gHost.eyeImageValid[1]=false;
         gHost.panelWasActive=wantPanel;
+        ProbeRecord(wantPanel?ProbeStep::panelOpen:ProbeStep::panelClose);
         Log(std::string("result=0 detail=ui_panel active=")+(wantPanel?"1":"0"));
     }
     const auto reference=HeadTrackingReferenceGeneration();

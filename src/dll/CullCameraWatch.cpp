@@ -1,4 +1,5 @@
 #include "CullCameraWatch.h"
+#include "FrameProbe.h"
 #include "SafeMemory.h"
 #include "HookInstall.h"
 #include "Bootstrap.h"
@@ -40,8 +41,12 @@ constexpr std::uintptr_t kCameraSize = 0x240;
 constexpr std::uintptr_t kQueue = 0x400, kQueueBuffer = 0x00, kQueueCapacity = 0x08;
 constexpr std::uintptr_t kQueueWrite = 0x10, kQueueRead = 0x40;
 // Item: type +0x00, COctreeNode* +0x08, camera +0x38 -- the pointer 0x23ED73
-// copies into the render-content job's SRenderingPassInfo+0x18.
+// copies into the render-content job's SRenderingPassInfo+0x18. Only type 1 (an
+// octree node) takes that path. Type 0 is the batch's end marker, which ends the
+// consumer's loop; types 2 and 3 take other branches. None of those uses +0x38
+// as a camera, so only type 1 is classified.
 constexpr std::uintptr_t kItemSize = 0x40, kItemType = 0x00, kItemNode = 0x08, kItemCamera = 0x38;
+constexpr unsigned kItemMarker = 0, kItemOctree = 1;
 // The second queue (+0x480, 0x50-byte items, the one the main thread was
 // blocked pushing into at the crash). Recorded raw: which index is the write
 // side has not been established.
@@ -113,9 +118,14 @@ constexpr std::array<CodeSpan, 8> kCode{{
 constexpr unsigned kMaxPages = 64;
 // Every queued item is classified up to this many; the gate's queue holds 4096.
 constexpr unsigned kMaxScan = 0x10000;
-// Bounded telemetry: the first events in full, then one in kEventStride.
+// Bounded telemetry: the first events in full, then one in kEventStride. Doomed
+// resets have their own budget, so a run of stale ones cannot crowd them out.
 constexpr unsigned long long kEventsLogged = 64, kEventStride = 512, kBaselineLogged = 8;
+constexpr unsigned long long kDoomedLogged = 64, kDoomedStride = 64;
+constexpr unsigned long long kLagLogged = 64, kLagStride = 64;
 constexpr unsigned long long kSummaryMs = 60000;
+// Lag depths (CullCameraWatch.h).
+constexpr unsigned kDepthNone = 0, kDepthPrevious = 1, kDepthStale = 2, kDepthDangling = 3, kDepths = 4;
 
 struct Range {
     std::uintptr_t begin = 0, end = 0;
@@ -136,7 +146,7 @@ struct Queue {
     std::uintptr_t buffer = 0;
     unsigned capacity = 0, write = 0, readIndex = 0, pending = 0, scanned = 0;
     unsigned q2Capacity = 0, q2A = 0, q2B = 0;
-    unsigned nullCamera = 0, outside = 0;
+    unsigned nullCamera = 0, outside = 0, markers = 0, otherTypes = 0;
     unsigned inPool[2]{}, inOverflow[2]{};
     Sample oldestIn[2]{}, oldestOutside{};
 };
@@ -159,6 +169,10 @@ std::atomic<unsigned long long> gPendingResets{0}, gStaleResets{0}, gStaleItems{
 std::atomic<unsigned long long> gDoomedResets{0}, gDoomedItems{0};
 std::atomic<unsigned long long> gOutsideResets{0}, gOutsideItems{0}, gNullItems{0}, gPreviousItems{0};
 std::atomic<unsigned long long> gEvents{0}, gSuppressed{0}, gBaseline{0}, gOffThread{0};
+std::atomic<unsigned long long> gMarkerItems{0}, gOtherTypeItems{0}, gInferredResets{0};
+std::atomic<unsigned long long> gDoomedLogged{0}, gStaleEvents{0}, gDepthChanges{0};
+std::array<std::atomic<unsigned long long>, kDepths> gAtDepth{};
+std::atomic<unsigned> gDepth{kDepthNone}, gDepthMax{kDepthNone};
 std::atomic<unsigned> gPendingMax{0}, gMaxPages{0}, gMaxOverflowCameras{0};
 std::atomic<DWORD> gFirstThread{0}, gLastThread{0};
 std::atomic<bool> gLoggedFirstFreeing{false};
@@ -269,8 +283,13 @@ void ReadQueue(std::uintptr_t managerSlot, const Pool (&pools)[2], Queue& out)
             const unsigned index = out.readIndex + k;
             const std::uintptr_t item =
                 out.buffer + static_cast<std::uintptr_t>(index % out.capacity) * kItemSize;
-            const std::uintptr_t camera = *reinterpret_cast<const std::uintptr_t*>(item + kItemCamera);
             ++out.scanned;
+            const unsigned type = *reinterpret_cast<const unsigned*>(item + kItemType);
+            if (type != kItemOctree) {
+                ++(type == kItemMarker ? out.markers : out.otherTypes);
+                continue;
+            }
+            const std::uintptr_t camera = *reinterpret_cast<const std::uintptr_t*>(item + kItemCamera);
             if (camera == 0) {
                 ++out.nullCamera;
                 continue;
@@ -297,7 +316,7 @@ void ReadQueue(std::uintptr_t managerSlot, const Pool (&pools)[2], Queue& out)
                 oldest->camera = camera;
                 oldest->age = k;
                 oldest->node = *reinterpret_cast<const std::uintptr_t*>(item + kItemNode);
-                oldest->type = *reinterpret_cast<const unsigned*>(item + kItemType);
+                oldest->type = type;
             }
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -339,9 +358,45 @@ void AppendSample(std::ostringstream& line, const char* name, const Sample& samp
          << ",type:" << sample.type << ",age:" << sample.age;
 }
 
+bool Empty(const Pool& pool)
+{
+    return pool.read && pool.count == 0 && pool.overflow == 0;
+}
+
+// How many frame starts the oldest queued octree item has crossed, for the pool
+// `reset` this reset reclaims; kLagUnknown when that cannot be told.
+unsigned LagDepth(const Queue& queue, int reset)
+{
+    if (!queue.read || queue.inconsistent || queue.scanFault) return kLagUnknown;
+    if (queue.outside != 0) return kDepthDangling;
+    if (reset < 0) return queue.inPool[0] + queue.inPool[1] == 0 ? kDepthNone : kLagUnknown;
+    if (queue.inPool[reset] != 0) return kDepthStale;
+    return queue.inPool[1 - reset] != 0 ? kDepthPrevious : kDepthNone;
+}
+
+void NoteDepth(unsigned depth, int reset, const Queue& queue, unsigned stale, unsigned previous)
+{
+    if (depth == kLagUnknown) return;
+    gAtDepth[depth].fetch_add(1, std::memory_order_relaxed);
+    StoreMax(gDepthMax, depth);
+    const unsigned was = gDepth.exchange(depth, std::memory_order_relaxed);
+    if (was == depth) return;
+    const auto changes = gDepthChanges.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (changes <= kLagLogged || changes % kLagStride == 0) {
+        std::ostringstream line;
+        line << "detail=lag depth=" << depth << " was=" << was << " change=" << changes
+             << " reset=" << (reset < 0 ? "none" : reset == 0 ? "pool0" : "pool1") << " pending=" << queue.pending
+             << " stale=" << stale << " previous=" << previous << " outside=" << queue.outside
+             << " markers=" << queue.markers << " queue=" << queue.write << '/' << queue.readIndex;
+        Log(line.str());
+    }
+    ProbeRecord(ProbeStep::lagChange, depth, was, queue.pending);
+}
+
 // After the original: which pool it reset, whether that freed storage, and
-// where the cameras of the items that were still queued pointed.
-void Conclude(void* engine, const Before& before)
+// where the cameras of the items that were still queued pointed. Returns the lag
+// depth, or kLagUnknown.
+unsigned Conclude(void* engine, const Before& before)
 {
     gObserved.fetch_add(1, std::memory_order_relaxed);
     const auto address = reinterpret_cast<std::uintptr_t>(engine);
@@ -362,6 +417,18 @@ void Conclude(void* engine, const Before& before)
             }
         }
     }
+    if (reset < 0) gIdle.fetch_add(1, std::memory_order_relaxed);
+    // A reset of a pool that registered nothing since its last one changes
+    // nothing to tell it by. When exactly one pool was empty, that is the one --
+    // the other holds the frame in flight -- and an item pointing into its
+    // storage is a camera from before its previous reset: stale. This is the
+    // first frame after a menu, where the lag begins.
+    bool inferred = false;
+    if (reset < 0 && Empty(before.pools[0]) != Empty(before.pools[1])) {
+        reset = Empty(before.pools[0]) ? 0 : 1;
+        inferred = true;
+        gInferredResets.fetch_add(1, std::memory_order_relaxed);
+    }
     // 0x212680 reallocates the primary array, and frees it and every page,
     // only when the pool had overflow pages. Without them the storage stays and
     // is only reused by the next registrations.
@@ -372,7 +439,6 @@ void Conclude(void* engine, const Before& before)
     const unsigned previous = reset >= 0 ? queue.inPool[1 - reset] : 0;
     const unsigned doomed = freed ? stale : 0;
 
-    if (reset < 0) gIdle.fetch_add(1, std::memory_order_relaxed);
     if (ambiguous) gAmbiguous.fetch_add(1, std::memory_order_relaxed);
     if (freed) gFreeing.fetch_add(1, std::memory_order_relaxed);
     for (const Pool& pool : before.pools) {
@@ -401,6 +467,11 @@ void Conclude(void* engine, const Before& before)
     }
     gNullItems.fetch_add(queue.nullCamera, std::memory_order_relaxed);
     gPreviousItems.fetch_add(previous, std::memory_order_relaxed);
+    gMarkerItems.fetch_add(queue.markers, std::memory_order_relaxed);
+    gOtherTypeItems.fetch_add(queue.otherTypes, std::memory_order_relaxed);
+    // Logged ahead of the event line, so the event stays last for its reset.
+    const unsigned depth = LagDepth(queue, reset);
+    NoteDepth(depth, reset, queue, stale, previous);
 
     const DWORD thread = GetCurrentThreadId();
     DWORD first = 0;
@@ -415,8 +486,17 @@ void Conclude(void* engine, const Before& before)
     bool log = false;
     const char* detail = "event";
     if (event) {
-        const auto n = gEvents.fetch_add(1, std::memory_order_relaxed) + 1;
-        log = n <= kEventsLogged || n % kEventStride == 0;
+        gEvents.fetch_add(1, std::memory_order_relaxed);
+        if (doomed != 0) {
+            // gDoomedResets already counts this one.
+            const auto n = gDoomedResets.load(std::memory_order_relaxed);
+            log = n <= kDoomedLogged || n % kDoomedStride == 0;
+            detail = "doomed";
+            if (log) gDoomedLogged.fetch_add(1, std::memory_order_relaxed);
+        } else {
+            const auto n = gStaleEvents.fetch_add(1, std::memory_order_relaxed) + 1;
+            log = n <= kEventsLogged || n % kEventStride == 0;
+        }
         if (!log) gSuppressed.fetch_add(1, std::memory_order_relaxed);
     } else if (queue.pending != 0 && gBaseline.fetch_add(1, std::memory_order_relaxed) < kBaselineLogged) {
         // Whether items are queued at a reset at all, on a frame where none is stale.
@@ -433,7 +513,11 @@ void Conclude(void* engine, const Before& before)
              << " freed=" << (freed ? 1 : 0) << " pending=" << queue.pending << " scanned=" << queue.scanned
              << " stale=" << stale << " doomed=" << doomed << " staleInOverflow="
              << (reset >= 0 ? queue.inOverflow[reset] : 0) << " previous=" << previous
-             << " outside=" << queue.outside << " null=" << queue.nullCamera
+             << " outside=" << queue.outside << " null=" << queue.nullCamera << " markers=" << queue.markers
+             << " otherTypes=" << queue.otherTypes << " depth=";
+        if (depth == kLagUnknown) line << '?';
+        else line << depth;
+        line << " inferred=" << (inferred ? 1 : 0)
              << " inconsistent=" << (queue.inconsistent ? 1 : 0) << " scanFault=" << (queue.scanFault ? 1 : 0)
              << " thread=" << thread << " pool0=";
         AppendPool(line, before.pools[0], after[0]);
@@ -452,6 +536,15 @@ void Conclude(void* engine, const Before& before)
     if (now >= next && gNextSummary.compare_exchange_strong(next, now + kSummaryMs, std::memory_order_relaxed)) {
         Log("summary" + CullCameraWatchReport());
     }
+    return depth;
+}
+
+// The frame start, for the frame probe's clock: every reset, observed or not.
+void RecordTick(unsigned depth, unsigned pending)
+{
+    std::uint32_t write = 0, read = 0;
+    CullQueueIndices(write, read);
+    ProbeRecord(ProbeStep::tick, depth, pending, write, read);
 }
 
 void __fastcall ObserveCameraReset(void* engine)
@@ -462,15 +555,15 @@ void __fastcall ObserveCameraReset(void* engine)
     }
     if (!gEnabled.load(std::memory_order_acquire)) {
         original(engine);
+        RecordTick(kLagUnknown, 0);
         return;
     }
     gResets.fetch_add(1, std::memory_order_relaxed);
     Before before{};
     const bool captured = Capture(engine, before);
     original(engine);
-    if (captured) {
-        Conclude(engine, before);
-    }
+    const unsigned depth = captured ? Conclude(engine, before) : kLagUnknown;
+    RecordTick(depth, captured ? before.queue.pending : 0);
 }
 
 DWORD Install()
@@ -570,7 +663,26 @@ std::string CullCameraWatchReport()
         << " pagesTruncated=" << n(gPagesTruncated) << " unreadable=" << n(gUnreadable)
         << " wrongReceiver=" << n(gWrongReceiver) << " ambiguous=" << n(gAmbiguous)
         << " thread=" << gFirstThread.load() << " offThread=" << n(gOffThread)
-        << " events=" << n(gEvents) << " suppressed=" << n(gSuppressed);
+        << " events=" << n(gEvents) << " suppressed=" << n(gSuppressed) << " doomedLogged=" << n(gDoomedLogged)
+        << " depth=" << gDepth.load() << " depthMax=" << gDepthMax.load() << " depthChanges=" << n(gDepthChanges)
+        << " atDepth=" << n(gAtDepth[0]) << '/' << n(gAtDepth[1]) << '/' << n(gAtDepth[2]) << '/' << n(gAtDepth[3])
+        << " markerItems=" << n(gMarkerItems) << " otherTypeItems=" << n(gOtherTypeItems)
+        << " inferredResets=" << n(gInferredResets);
     return out.str();
+}
+
+bool CullQueueIndices(std::uint32_t& write, std::uint32_t& read)
+{
+    write = read = 0;
+    const std::uintptr_t slot = gObjManagerSlot.load(std::memory_order_acquire);
+    std::uintptr_t manager = 0;
+    std::uint32_t w = 0, r = 0;
+    if (slot == 0 || !SafeRead(slot, manager) || manager == 0 ||
+        !SafeRead(manager + kQueue + kQueueWrite, w) || !SafeRead(manager + kQueue + kQueueRead, r)) {
+        return false;
+    }
+    write = w;
+    read = r;
+    return true;
 }
 } // namespace preyvr::dll

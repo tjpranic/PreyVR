@@ -7,6 +7,7 @@
 #include "FrameCaptureWin32.h"
 #include "XrSessionHost.h"
 #include "FrameObserverHook.h"
+#include "FrameProbe.h"
 #include "Logger.h"
 #include "MinHookInit.h"
 #include "preyvr/EngineMap.h"
@@ -389,6 +390,36 @@ void __fastcall ClearDetour(void* view)
     gClear.load(std::memory_order_acquire)(view);
 }
 
+// The frame probe's render-thread scene step (FrameProbe.h): one record in and
+// one out per top-level submission, the outcome read from the counters every
+// path below already keeps, so no exit can be missed.
+class SceneProbe {
+public:
+    SceneProbe(bool topLevel, int type)
+        : top_(topLevel), type_(static_cast<std::uint32_t>(type)), singles_(gSingles.load()),
+          doubled_(gDoubled.load()), misses_(gHeadsetBuildMisses.load()), refused_(gRefused.load())
+    {
+        if (top_) ProbeRecord(ProbeStep::sceneEnter, type_);
+    }
+    ~SceneProbe()
+    {
+        if (!top_) return;
+        const ProbeScene outcome = gDoubled.load() != doubled_ ? ProbeScene::doubled
+            : gHeadsetBuildMisses.load() != misses_ ? ProbeScene::buildMiss
+            : gRefused.load() != refused_ ? ProbeScene::refused
+            : gSingles.load() != singles_ ? ProbeScene::single
+            : ProbeScene::noTeardown;
+        ProbeRecord(ProbeStep::sceneExit, static_cast<std::uint32_t>(outcome), type_);
+    }
+    SceneProbe(const SceneProbe&) = delete;
+    SceneProbe& operator=(const SceneProbe&) = delete;
+
+private:
+    bool top_;
+    std::uint32_t type_;
+    unsigned long long singles_, doubled_, misses_, refused_;
+};
+
 void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* threadInfo,
                                   void* renderFunc)
 {
@@ -421,6 +452,7 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
     const bool doubleIt = topLevel &&
         (((mode == 1 || mode == 2) && gBudget.load(std::memory_order_acquire) > 0) ||
          (mode == 3 && DualStereoContractEnabled() && SyntheticStereoIpdMetres() > 0.0f));
+    const SceneProbe sceneProbe(topLevel, type);
     ++tDepth;
     if (!doubleIt) {
         const auto start = topLevel ? QpcMicros() : 0;

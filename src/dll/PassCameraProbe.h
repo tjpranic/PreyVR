@@ -35,6 +35,11 @@ namespace preyvr::dll {
 
 DWORD SetPassCameraProbeEnabled(unsigned int enabled);
 
+// Installs the read-only R-071 hook without enabling the comparison. The frame
+// probe shares it (ProbePassCreated): MinHook allows one detour per target, so
+// this lane stays the only owner of CreateGeneralPassRenderingInfo.
+bool EnsurePassCreationHook();
+
 unsigned long long PassCameraSamples();
 
 // Samples where the pass camera's forward axis matched what the camera edit

@@ -1,6 +1,7 @@
 #pragma once
 #include <windows.h>
 
+#include <cstdint>
 #include <string>
 
 namespace preyvr::dll {
@@ -14,6 +15,11 @@ namespace preyvr::dll {
 // The hook calls the original unchanged and only reads, before and after it:
 // both pools, the cull queue's indices, and the camera of every item still queued.
 //
+// The lag depth is how many frame starts the oldest queued octree item has
+// crossed: 0 none queued, 1 last frame's (other pool), 2 the reset pool's
+// (stale), 3 in neither pool (already dangling). Each change is logged and opens
+// a FrameProbe window.
+//
 // Started by the command worker once the module is pinned, VR or not, so a flat
 // run can be compared with a VR one. PREYVR_CULL_WATCH=0 leaves it uninstalled.
 void ServiceCullCameraWatch();
@@ -22,4 +28,7 @@ void ServiceCullCameraWatch();
 DWORD SetCullCameraWatch(unsigned int enabled);
 // The counters, as cull.report and the minute summary print them.
 std::string CullCameraWatchReport();
+// The occlusion queue's write and read indices now, for the frame probe.
+// False (both 0) before the watch is installed or while CObjManager is absent.
+bool CullQueueIndices(std::uint32_t& write, std::uint32_t& read);
 } // namespace preyvr::dll
