@@ -37,6 +37,8 @@
 #include "PhysicalInteractions.h"
 #include "ContactLane.h"
 #include "SwingLane.h"
+#include "WrenchDraw.h"
+#include "WrenchSound.h"
 #include "PsiMedkit.h"
 #include "Haptics.h"
 #include "HudBridge.h"
@@ -629,6 +631,33 @@ bool ExecuteSwing(const std::vector<std::string>& args, std::ostringstream& out)
     return true;
 }
 
+// docs/WRENCH-DRAW-ANIMATION-2026-10-20.md: wrench.draw [0|1]. 1 (default) takes
+// the wrench out and puts it away without Prey's draw and stow animations; 0 plays
+// them again.
+// wrench.sound [play 0|1] [capture 0|1]: the draw's sound after a skip (default 1),
+// and the capture that found it (WrenchSound.h; default 0, while on the draw plays).
+bool ExecuteWrenchDraw(const std::vector<std::string>& args, std::ostringstream& out)
+{
+    if (args[0] == "wrench.sound") {
+        for (std::size_t i = 1; i + 1 < args.size(); i += 2) {
+            int on = 1;
+            ParseInt(args[i + 1], on);
+            if (args[i] == "capture") { SetWrenchSoundCapture(on != 0); }
+            else if (args[i] == "play") { SetWrenchSoundPlay(on != 0); }
+        }
+        out << "wrench.sound result=0" << WrenchSoundReport();
+        return true;
+    }
+    if (args[0] != "wrench.draw") { return false; }
+    if (args.size() > 1) {
+        int on = 1;
+        ParseInt(args[1], on);
+        SetWrenchDrawSkip(on != 0);
+    }
+    out << "wrench.draw result=0" << WrenchDrawReport();
+    return true;
+}
+
 // Rung 1b, the RT_RenderScene double submission (DualSceneStereo.h). Kept out
 // of Execute's chain for the same C1061 reason as ExecutePose.
 bool ExecuteDualCommand(const std::vector<std::string>& args, std::ostringstream& out)
@@ -711,7 +740,8 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
 
     if (ExecutePose(args, out) || ExecuteCarryCommand(args, out) || ExecuteGrenadeCommand(args, out) || ExecuteArmsCommand(args, out) ||
         ExecuteWristCommand(args, out) || ExecuteDualCommand(args, out) || ExecuteReticle(args, out) ||
-        ExecutePrompts(args, out) || ExecuteContact(args, out) || ExecuteSwing(args, out)) {
+        ExecutePrompts(args, out) || ExecuteContact(args, out) || ExecuteSwing(args, out) ||
+        ExecuteWrenchDraw(args, out)) {
         return;
     }
     if (verb == "vr.options") {

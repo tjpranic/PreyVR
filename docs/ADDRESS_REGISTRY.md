@@ -2,6 +2,30 @@
 
 Only confirmed or explicitly provisional build-specific locations belong here. Prefer a signature plus validation recipe over an RVA alone.
 
+### Wrench draw — 2026-10-20
+
+No R-number. The skip is worn OK (PreyVR-49, 2026-10-20); the sound capture ran (PreyVR-50); the
+draw sound replay is worn OK (PreyVR-51); the stow skip is worn OK (PreyVR-52). Supported Steam hash;
+`tools/re/verify_wrench_draw.py` checks every row (130 checks).
+`src/dll/WrenchDraw.cpp` compares its nine bodies, EquipmentNative.h's SelectItem
+and lookup, and five vtable slots in memory before hooking. Why and how in
+[the wrench draw notes](WRENCH-DRAW-ANIMATION-2026-10-20.md).
+
+| RVA / field | Purpose and constraint |
+| --- | --- |
+| `0x1699800` (whole, `0x4B6` bytes) | Shared `OnEquip`, weapon vtable `+8` (wrench `0x1E92F00`, base `0x1E6C640`). Its tail (`0x1699BCF`-`0x1699C81`) builds the select action and plays it: fragment table `weapon+0x470` `+0xC4` (`Wpn_Select`, flag 1), or `+0xCC` (`Wpn_Pickup`, flag 0) when the item is not in the component's list (`+0x80`) and global `[0x2C16830]+0xE5C` > 0. |
+| `0x169A5B0` (whole, `0x75` bytes) | `PlayAction(weapon, IAction**, float)`: the float to `+0x54`, `1.0` to `+0x58`, queue on the controller's `+0x90` unless the fragment `+0x38` is -1, then `--[action+0x50]` and the action's `+0xD0` at <= 0. Detoured (MinHook; entry `40 53 48 83 EC 30`). |
+| `0x169D6F0` / `0x169D420`; vtable `0x1E6D698` | The select action (0x90 bytes), built only by OnEquip: item id `+0x80`, select flag `+0x88`, fragment `+0x38`, refcount `+0x50`. Enter `+0x10` = `0x169D8D0`, Exit `+0x20` = `0x169DBD0`, release `+0xD0` = `0x12BC380`. |
+| `0x169D8D0` / `0x169DBD0` | Enter: a select only, the weapon's `+0x100`. Exit: the weapon's `+0x110`. Both find the weapon with `0x16A5650(id)`. |
+| `0x1692E60` / `0x1692F50` / `0x1692E70` | Weapon `+0x100` (`[w+0x48B] = 0`); `+0x110` (first-pickup bookkeeping, then a tail jump to `+0x108`); `+0x108` (`player+0x992 = 0` when this is the current weapon, `[w+0x48B] = 1`, `+0xB0`, release `+0x2D8`). |
+| `0x12748D0` (EquipmentNative.h) | SelectItem: `call [rax+8]` (OnEquip) at `0x1274A12`, then `mov [rbx+0x58],edi` (the current id) at `0x1274A22`. So the finish waits a frame. |
+| `0x17392F0` (whole, 61 bytes); `0x169A000` (whole, `0x334`) | The stow. The wrench's OnUnequip (its vtable `+0x10`; `(weapon, animate)`) cancels its charge (`+0x90`) and calls the shared OnUnequip `0x169A000` with the same `animate`. With a fragment table (`+0x470`) and not lowered (`+0x2C9` clear): animating, the stow action (`0x169D790`, vtable `0x1E6D770`, fragment `+0xC8` `Wpn_Unselect`) through PlayAction; not, Stow `0x16924E0` and the HUD `"empty"` at once (needs the hand attachment `+0x2B0`). The stow action's Exit `0x169DCA0` does the same Stow and "empty". Lowered and animating: a lower (`+0xE8`) then the stow (`0x169D5C0`, vtable `0x1E6DE30`, whose Exit also calls SelectDone). Stow: detach, the equipment (`player+0x14B8`) `+0x5C` = `+0x58`, `+0x58` = 0, `+0x78` = 0. `0x17392F0` detoured: animate becomes 0 for the wrench when not lowered. Its sound: `Play_Player_Unequip` (`0xE06723D1`), a PlaySound clip at the stow fragment's start. |
+| `0x1637940` | Fills the weapon fragment table by name: `+0xC0` `unholster_select`, `+0xC4` `Wpn_Select`, `+0xC8` `Wpn_Unselect`, `+0xCC` `Wpn_Pickup`, `+0x124` `Wpn_Idle`. |
+| `0x3AE460` (whole, `0x14D` bytes) | Mannequin `PlaySound` clip OnEnter `(clip, blend, duration, params)`: clip entity `+0x08`; params start trigger `+0x08`, stop `+0x10` (char*), joint CRC `+0x18`, fire-and-forget `+0x20`, sound flags `+0x28`. Resolves by name through `gEnv->pAudioSystem` (`0x224DA50`) `+0x40`, plays via `0x3AEBE0` (context `+0x18` proxy, `+0xD8`). Hooked by the sound capture. |
+| `0xD72300` / `0xD59F40` | `CAudioSystem` (vtable `0x1D8EE30`, built by `0xD71580`, stored at env `+0xD0` at `0xD74B76`) `+0x40` GetAudioTriggerID: `this+0x2E8`, then the ATL lookup. Id = `~CRC32` (standard table `0x1C8AE40`) of the lowercased name, written when the trigger exists. `0xD59F40` hooked by the capture. |
+| `0x911F40` | `CEntityAudioProxy` (vtable `0x1D31A30`) `+0xD8` ExecuteTrigger `(id, lipSync, proxyLocalId, callbacks)`; `+0xE0` StopTrigger `0x913D90`; entity `+0x40`. Lua `ExecuteAudioTrigger` `0x940B90` gets the proxy with IEntity `+0x210` (type 3). Hooked by the capture. |
+| entity system `0x224DA38` `+0x70`; IEntity `+0x200` | The replay's way to the player's audio proxy: GetEntity(id) (OnEquip's lookup at `0x169B482`), then GetProxy(3) (Lua StopAudioTrigger at `0x960FCE`); the proxy's vtable must be `0x1D31A30`. The draw's sound (capture, run `player-20261020-203533`): `Play_Player_Arm_Wrench` (`0x446C5BFD`) and `Play_switch_weapon` (`0x364DA6FE`), PlaySound clips on the player 11-13 ms into the draw, proxy 1, callback info `{0, 0, 0, 1}` (the clip's static at `0x2423D78`). |
+
 ### Loading screen — 2026-10-20
 
 No R-number. Static, plus one runtime observation: run `player-20261020-181530`

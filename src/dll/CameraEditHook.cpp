@@ -14,6 +14,7 @@
 #include "BindingDump.h"
 #include "BodyFollow.h"
 #include "ControllerPrompts.h"
+#include "WrenchDraw.h"
 
 #include "HeadTrackingHook.h"
 
@@ -376,6 +377,8 @@ void __fastcall RenderWithCameraEdit(void* system)
     // frame's events left; on the main thread, as the scheme's listeners need.
     ServiceControllerPromptsFrame();
     ServiceBindingDump();
+    // The wrench's skipped draws finish here, a frame on (WrenchDraw.h).
+    ServiceWrenchDrawFrame();
 
     if (!stereoArmed || system == nullptr) {
         if (original != nullptr) {

@@ -238,6 +238,8 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/CarryLane.cpp
         src/dll/ContactLane.cpp
         src/dll/SwingLane.cpp
+        src/dll/WrenchDraw.cpp
+        src/dll/WrenchSound.cpp
         src/dll/GrenadeLane.cpp
         src/dll/ArmsLane.cpp
         src/dll/SlotFeedback.cpp
@@ -417,6 +419,7 @@ if(PREYVR_BUILD_TESTS)
     preyvr_add_test(contact_native tests/ContactNativeTests.cpp)
     preyvr_add_test(swing_native tests/SwingNativeTests.cpp)
     preyvr_add_test(swing_strike tests/SwingStrikeTests.cpp)
+    preyvr_add_test(wrench_draw_native tests/WrenchDrawNativeTests.cpp)
     preyvr_add_test(contact_query tests/ContactQueryTests.cpp)
     preyvr_add_test(psi_medkit_contracts tests/PsiMedkitTests.cpp TARGET preyvr_psi_medkit_tests)
     preyvr_add_test(frustum_coverage tests/FrustumCoverageTests.cpp)
@@ -454,6 +457,14 @@ if(PREYVR_BUILD_TESTS)
             DEFS WIN32_LEAN_AND_MEAN NOMINMAX
             LIBS preyvr_core)
         preyvr_add_test(swing_lane tests/SwingLaneTests.cpp
+            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            LIBS preyvr_core minhook)
+        preyvr_add_test(wrench_draw tests/WrenchDrawTests.cpp
+            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            LIBS preyvr_core minhook)
+        preyvr_add_test(wrench_sound tests/WrenchSoundTests.cpp
             INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
             DEFS WIN32_LEAN_AND_MEAN NOMINMAX
             LIBS preyvr_core minhook)
