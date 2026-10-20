@@ -29,6 +29,7 @@
 #include "FocusHold.h"
 #include "ControllerPrompts.h"
 #include "InventoryPointerCapture.h"
+#include "LoadingScreen.h"
 #include "preyvr/DebugOverlayScene.h"
 #include "preyvr/LatestSnapshot.h"
 #include <algorithm>
@@ -138,6 +139,10 @@ void TickVrMode() {
         // fatal: a failure here leaves the first event to install it, as before.
         if(const auto capture=EnsureInventoryPointerCapture())
             Log("inventory_capture=deferred result="+std::to_string(capture));
+        // The loading screen's present (LoadingScreen.h), here for the same
+        // reason. Not fatal: without it loads show the frame from before them.
+        if(const auto loading=EnsureLoadingScreenHook())
+            Log("loading_screen=unavailable result="+std::to_string(loading));
         firstFrame=XrSubmittedFrameCount();
         if(XrSessionStatusValue()!=1) {
             SetXrPreferSrgbFormat(1);

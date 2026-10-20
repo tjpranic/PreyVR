@@ -2,6 +2,23 @@
 
 Only confirmed or explicitly provisional build-specific locations belong here. Prefer a signature plus validation recipe over an RVA alone.
 
+### Loading screen — 2026-10-20
+
+No R-number. Static, plus one runtime observation: run `player-20261020-181530`
+logged a 10.4 s stall with no `RT_EndFrame` while the desktop showed the loading
+screen. The hook has not run in a headset yet. Supported Steam hash;
+`tools/re/verify_loading_screen.py` checks every row. `src/dll/LoadingScreen.cpp`
+compares its two spans and the vtable slot in memory before hooking. Why and how
+in [the loading-screen notes](LOADING-SCREEN-2026-10-20.md).
+
+| RVA / field | Purpose and constraint |
+| --- | --- |
+| `0xF7E820` (span `0x69` bytes) | Renderer vtable `0x1DD2E08` `+0x8E0`: the loading loop's present, `void(CD3D9Renderer*, int frameId)`. Profiler marker, buffer-bank release, then `Present` on `+0xAE88` (slot `0x40`), as `RT_EndFrame` does at `0xF7E48A`. Nothing before the `Present` draws. Detoured (MinHook; entry `48 89 5C 24 08`). |
+| `0xFE96F0` | `SRenderThread::Run`. While `+0xA0` (the video-thread mode) is set it loops until mode 4: vtable `+0x8D8` (frameId), callback `+0x00` LoadtimeUpdate(dt), `EnterCriticalSection(+0x18)`, `+0x8E8`(0), callback `+0x08` LoadtimeRender, `+0x8E0`(frameId) at `0xFE99B7` (span `0xFE9981`, `0x45` bytes; its only caller), `LeaveCriticalSection`, `+0xA48` (`0xF7CD10`, the `sys_MaxFPS` limiter, `Sleep(1)` outside the lock). `0xFEF450` starts `RenderLoadingThread` first. |
+| `0xFE9D0A` / `0xFE9A1E` | `ProcessCommands` case 8: with `+0xA0` set, flag `+0x44` instead of calling `+0x8D0` (`RT_EndFrame`). After the loop: one `RT_EndFrame` if flagged. `+0x18` is also taken there, at `0xFEA0B2` and `0xFEA8F9`. |
+| `0x2D8810` / `0x2D40A1` | FlashUI loadtime start: with `gfx_loadtimethread` (default 1, `0x247FD38`) and `r_MultiThreaded` > 0, `pRenderer` `+0x768` (or `+0x778`) with the callback at FlashUI `+0x30`. With the cvar 0, `0x2D0D20` renders through `pSystem` `RenderBegin`/`RenderEnd` (`+0x50`/`+0x58`) on each loading-progress event instead. |
+| `0x1CB49E0` | `"DanielleLoadingScreen"`, the FlashUI element `pFlashUI` (`0x224DAD0`) `+0x60` returns for `0x357330`, `0x357770`, `0x35A5F0` (`loadingProgress`, `loadingStop`). HudBridge's menu predicate asked for `"LoadingScreen"`, which never resolved. |
+
 ### Controller-prompts scheme guard — 2026-10-19
 
 No R-number. Static only: the guard has not run in a headset yet. Supported

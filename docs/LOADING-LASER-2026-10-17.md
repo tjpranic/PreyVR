@@ -14,8 +14,14 @@ Every XR frame comes from `ServiceXrFrame`, which runs inside Prey's
 `RT_EndFrame` (FrameObserverHook). That includes the controller sync, the beam and
 cursor quads, and `xrEndFrame`. While Prey loads it renders few frames or none, so
 the mod submits none. The compositor reshows the last frame, reprojected for the
-head, so the world and the loading panel look right. The beam is a world-locked
-quad, though, so it stays where it was.
+head, so the world looks right. The beam is a world-locked quad, though, so it
+stays where it was.
+
+**Corrected 2026-10-20:** this said the loading panel looked right too. It never
+reached the headset: Prey draws the loading screen in a loop of its own and
+presents it without `RT_EndFrame`, so hold frames showed the frame from before
+the load, black when loading from a menu. Cause and fix:
+[the loading-screen notes](LOADING-SCREEN-2026-10-20.md).
 
 ## The fix: hold frames
 

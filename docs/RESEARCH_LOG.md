@@ -4060,3 +4060,28 @@ Offline only:
 - the gate verifier passes against the supported image.
 
 Package PreyVR-47. See [the crash notes](CULL-CAMERA-CRASH-2026-10-17.md#the-frame-probe-2026-10-20).
+
+## 2026-10-20 — Black loading screens: cause and fix
+
+With `gfx_loadtimethread 1`, Prey's render thread draws the loading screen in a
+loop of its own (`0xFE96F0`). The loop presents through renderer vtable `+0x8E0`
+(`0xF7E820`), and `RT_EndFrame`, where every XR frame is made, is deferred until
+the loop ends. Hold frames therefore showed the frame from before the load. Run
+`player-20261020-181530`: a 10.4 s stall with no `RT_EndFrame` while the desktop
+showed the screen.
+
+The fix:
+- a detour on that present copies the backbuffer without waiting (it runs inside
+  the loop's lock, which `RenderLoadingThread` shares);
+- hold frames upload the copy into the menu panel's image and show it, with the
+  laser.
+
+Also fixed: the menu predicate asked for `"LoadingScreen"` where Prey's element is
+`"DanielleLoadingScreen"`; the loading-laser notes said the loading panel looked
+right.
+
+Offline only:
+- 86/86 tests pass;
+- `verify_loading_screen.py` passes against the supported image.
+
+Package PreyVR-48. See [the loading-screen notes](LOADING-SCREEN-2026-10-20.md).

@@ -252,6 +252,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/CullCameraWatch.cpp
         src/dll/FrameProbe.cpp
         src/dll/FocusHold.cpp
+        src/dll/LoadingScreen.cpp
         src/dll/ControllerPrompts.cpp
         src/dll/DebugWatch.cpp
         src/dll/DllMain.cpp

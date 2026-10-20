@@ -525,7 +525,9 @@ constexpr const char* kMenuElements[] = {
     "DanielleSaveLoad",
     "DaniellePDA",               // native lookups: 0x1378C80, 0x14B7FC0
     "DanielleInventoryExternal", // native inventoryClose consumer: 0x161BF70
-    "LoadingScreen",             // target string RVA 0x1CB49E0
+    // Prey's own lookups (0x357330, 0x35A5F0) use the full name; "LoadingScreen"
+    // never resolved. Its movie was never drawn over gameplay in 87 logged runs.
+    "DanielleLoadingScreen",     // target string RVA 0x1CB49E0
     "DanielleDialog",            // native modal dispatcher 0x1632857
     "DanielleDialogInGame",
 };

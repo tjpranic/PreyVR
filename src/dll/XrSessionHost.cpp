@@ -17,6 +17,7 @@
 #include "UiPointer.h"
 #include "HudLayer.h"
 #include "InventorySwapchain.h"
+#include "LoadingScreen.h"
 #include "VrOptionsLayer.h"
 #include "VrOptionsRuntime.h"
 #include "BodyEquipment.h"
@@ -117,6 +118,15 @@ std::once_flag gHoldThreadStarted;
 constexpr auto kHoldYieldTimeout=std::chrono::milliseconds(40);
 constexpr DWORD kHoldPollMs=5;
 constexpr std::uint64_t kHoldLogStallNs=250000000ull;
+// **The loading screen** (docs/LOADING-SCREEN-2026-10-20.md). Prey draws it in a
+// loop of its own on the render thread, presented without RT_EndFrame, so no XR
+// frame is made from it. That loop's present is detoured (LoadingScreen.h): the
+// render thread copies the backbuffer into Host::loadingImage there, never
+// waiting, and hold frames upload the copy into the menu panel's image and show
+// it. gLoadingCaptured counts this load's copies, 0 when none has been made since
+// Prey's last ordinary frame; only the render thread and teardown write it.
+std::atomic<unsigned long long> gLoadingCaptured{0};
+std::atomic<unsigned long long> gLoadingCaptures{0}, gLoadingUploads{0}, gLoadingFrames{0}, gLoadingLoads{0};
 
 // **Prey's render thread takes gMutex here, and waits only for a hold frame in
 // flight.** That frame ends within a display period, and none starts after it,
@@ -326,6 +336,13 @@ struct Host {
     FrameLayerSet heldLayers;
     HeldPointer heldPointer;
     bool heldValid=false;
+    // The loading screen (gLoadingCaptured): the render thread's copy of Prey's
+    // backbuffer, created and released on that thread; which capture the menu
+    // panel's image holds (0 none this load); this load's uploads and the hold
+    // frames that showed it.
+    ID3D11Texture2D* loadingImage=nullptr;
+    bool loadingRefused=false;
+    unsigned long long loadingUploaded=0, loadingUploads=0, loadingFrames=0;
 };
 
 Host gHost;
@@ -868,6 +885,8 @@ void Teardown()
     ReleaseDebugOverlay();   // its render target views hold the eye images
     gDualOverlayOpen.store(false, std::memory_order_release);
     if (gHost.heldTargetView != nullptr) gHost.heldTargetView->Release();
+    if (gHost.loadingImage != nullptr) gHost.loadingImage->Release();
+    gLoadingCaptured.store(0, std::memory_order_release);
     for (auto*& image : gHost.eyeImage) {
         if (image != nullptr) {
             image->Release();
@@ -1348,6 +1367,186 @@ bool SubmitStereoPair(
     return true;
 }
 
+// Whether the game menu's panel must be fitted again: none yet, the curve
+// changed, or a recenter has completed since it was placed.
+bool MenuPanelsStale(float curve, unsigned long long reference)
+{
+    return !gHost.menuPanel || curve!=gHost.panelAngle || (reference%2==0 && reference!=gHost.panelReference);
+}
+
+// **The game menu's panel**, and the guide card under it when that is on,
+// fitted from the shared menu anchor (Host::menuAnchor). Prey's frames, and hold
+// frames showing the loading screen; under gMutex.
+void PlaceMenuPanels(const Pose& head, const XrView (&views)[2], unsigned long long reference, float curve)
+{
+    const auto& anchor=MenuAnchorFor(head,views,reference);
+    const auto& upright=anchor.upright;
+    const auto& optical=anchor.eyes;
+    const float aspect=static_cast<float>(gHost.width)/static_cast<float>(gHost.height);
+    constexpr float guideRatio=static_cast<float>(kGuideHeight)/kGuideWidth;
+    constexpr float gapRatio=.015f;
+    const float margin=UiFitMargin();
+    const bool wantGuide=gUiGuide.load(std::memory_order_relaxed);
+    // Without the card the menu is fitted on its own aspect, so the height
+    // the card and its gap used to reserve goes back to the menu instead of
+    // being left empty -- which is the whole point of switching it off.
+    const float stackAspect=wantGuide?1/(1/aspect+guideRatio+gapRatio):aspect;
+    // **Upright, at eye level, facing the wearer square-on**, ui.distance
+    // ahead of the way the face was turned when the anchor was taken (on
+    // opening, not now: a setting change re-places the menu from the same
+    // anchor). Fitted from the head itself the menu followed its pitch and
+    // roll: opened while looking down, it came out low, tilted and rolled.
+    // The anchor's eyes are levelled so the fit sizes it for a level gaze,
+    // which also keeps a menu opened while looking down from failing the
+    // corner test (UiPanel.h). The stack's centre is what sits at eye
+    // level: with the guide card on, the menu rides half the card above it.
+    const float distance=static_cast<float>(gUiDistanceCm.load(std::memory_order_relaxed))*.01f;
+    auto layout=ui::FitPanel(upright,optical,stackAspect,distance,
+        static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f,margin);
+    if(layout) {
+        gHost.menuPanel.reset();gHost.guidePanel.reset();
+        for(int attempt=0;attempt<80;++attempt) {
+            auto menu=*layout,guide=*layout;
+            menu.height=menu.width/aspect;
+            guide.height=guide.width*guideRatio;
+            const float gap=menu.width*gapRatio;
+            if(wantGuide) {
+                menu.pose=Compose(layout->pose,Pose{{},{0,(guide.height+gap)*.5f,0}});
+                guide.pose=Compose(layout->pose,Pose{{},{0,-(menu.height+gap)*.5f,0}});
+            } else {
+                menu.pose=layout->pose;
+            }
+            if(ui::SurfaceVisible({menu,curve},optical,margin)&&
+               (!wantGuide||ui::SurfaceVisible({guide,0},optical,margin))) {
+                gHost.menuPanel=menu;
+                if(wantGuide)gHost.guidePanel=guide;
+                break;
+            }
+            layout->width*=.95f;layout->height*=.95f;
+        }
+    }
+    // ui.offset carries the fitted stack around the head as one piece. After
+    // the fit, not before: the fit sizes for straight ahead, and an offset
+    // view would shrink or refuse a panel the wearer chose to put aside.
+    const int offsetRight=gUiOffsetRight.load(std::memory_order_relaxed);
+    const int offsetUp=gUiOffsetUp.load(std::memory_order_relaxed);
+    if(gHost.menuPanel && (offsetRight || offsetUp)) {
+        const float right=static_cast<float>(offsetRight)*.01745329252f,up=static_cast<float>(offsetUp)*.01745329252f;
+        gHost.menuPanel->pose=ui::AroundHead(upright,gHost.menuPanel->pose,right,up);
+        if(gHost.guidePanel)gHost.guidePanel->pose=ui::AroundHead(upright,gHost.guidePanel->pose,right,up);
+    }
+    gHost.panelReference=reference;
+    gHost.panelAngle=curve;
+    ++gHost.surfaceSerial;
+    Log("ui_surface angle_degrees="+std::to_string(curve*57.2957795f)+" distance_m="+std::to_string(distance)+
+        " offset_degrees="+std::to_string(offsetRight)+","+std::to_string(offsetUp)+
+        " placed="+(gHost.menuPanel?"1":"0"));
+}
+
+// The game menu's panel as a quad of the whole of `swapchain`'s first slice,
+// and as the cylinder it is shown on when curved (surface.angle > 0).
+void FillMenuLayers(XrCompositionLayerQuad& quad, XrCompositionLayerCylinderKHR& cylinder, const ui::Surface& surface,
+                    XrSwapchain swapchain, XrCompositionLayerFlags flags)
+{
+    const auto& p=surface.panel;
+    quad.space=gHost.space;
+    quad.eyeVisibility=XR_EYE_VISIBILITY_BOTH;
+    quad.layerFlags=flags;
+    quad.pose={{p.pose.orientation.x,p.pose.orientation.y,p.pose.orientation.z,p.pose.orientation.w},
+               {p.pose.position.x,p.pose.position.y,p.pose.position.z}};
+    quad.size={p.width,p.height};
+    quad.subImage.swapchain=swapchain;
+    quad.subImage.imageArrayIndex=0;
+    quad.subImage.imageRect={{0,0},{static_cast<int>(gHost.width),static_cast<int>(gHost.height)}};
+    if(surface.angle>0) {
+        const auto axis=ui::CylinderAxis(surface);
+        cylinder.space=quad.space;cylinder.eyeVisibility=XR_EYE_VISIBILITY_BOTH;
+        cylinder.subImage=quad.subImage;
+        cylinder.layerFlags=flags;
+        cylinder.pose={{axis.orientation.x,axis.orientation.y,axis.orientation.z,axis.orientation.w},
+            {axis.position.x,axis.position.y,axis.position.z}};
+        cylinder.radius=surface.panel.width/surface.angle;
+        cylinder.centralAngle=surface.angle;
+        cylinder.aspectRatio=surface.panel.width/surface.panel.height;
+    }
+}
+
+// A capture of this load waits to be shown. Under gMutex.
+bool LoadingScreenWaiting()
+{
+    return gLoadingCaptured.load(std::memory_order_acquire)!=0 && gHost.loadingImage!=nullptr;
+}
+
+// **The loading screen goes on the game menu's panel**: where the menu was, if
+// one was up when the load began (loading a save from a menu); else placed now
+// in front of the wearer, as a menu opening is, and kept as the menu's, so a
+// menu up when the load ends ("press any key") stays where the screen was.
+// Hold thread, under gMutex.
+bool PlaceLoadingPanel(const XrView (&views)[2])
+{
+    if(!gHost.panelWasActive) {
+        gHost.menuPanel.reset();gHost.guidePanel.reset();gHost.menuAnchor.reset();
+        gHost.panelWasActive=true;
+        Log("result=0 detail=ui_panel active=1 reason=loading_screen");
+    }
+    const auto reference=HeadTrackingReferenceGeneration();
+    const float curve=gHost.cylinderSupported?static_cast<float>(gUiCurveDegrees.load())*.01745329252f:0;
+    if(MenuPanelsStale(curve,reference))
+        PlaceMenuPanels(stereo::CyclopsPose(PoseOf(views[0].pose),PoseOf(views[1].pose)),views,reference,curve);
+    return gHost.menuPanel.has_value();
+}
+
+// **The latest capture into the menu panel's image**: slice 0 of the session's
+// swapchain, which the panel shows whole. A D3D11 copy on the hold thread, which
+// the multithread protection hold frames need covers, as it covers the runtime's
+// own use of Prey's context there. True when the panel's image holds a capture
+// of this load. Hold thread, under gMutex.
+bool UploadLoadingScreen()
+{
+    const auto captured=gLoadingCaptured.load(std::memory_order_acquire);
+    if(captured==gHost.loadingUploaded)return true;
+    std::uint32_t index=0;
+    XrSwapchainImageAcquireInfo acquire{XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
+    if(XR_FAILED(xrAcquireSwapchainImage(gHost.swapchain,&acquire,&index)))return gHost.loadingUploaded!=0;
+    XrSwapchainImageWaitInfo wait{XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
+    wait.timeout=XR_INFINITE_DURATION;
+    if(XR_FAILED(xrWaitSwapchainImage(gHost.swapchain,&wait))) {gStopRequested.store(true);return false;}
+    bool copied=false;
+    if(index<gHost.images.size()) {
+        ID3D11DeviceContext* context=nullptr;
+        gHost.device->GetImmediateContext(&context);
+        if(context!=nullptr) {
+            context->CopySubresourceRegion(gHost.images[index],D3D11CalcSubresource(0,0,1),0,0,0,
+                                           gHost.loadingImage,0,nullptr);
+            context->Release();
+            copied=true;
+        }
+    }
+    XrSwapchainImageReleaseInfo release{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
+    if(XR_FAILED(xrReleaseSwapchainImage(gHost.swapchain,&release))) {gStopRequested.store(true);return false;}
+    if(copied) {
+        gHost.loadingUploaded=captured;
+        ++gHost.loadingUploads;
+        gLoadingUploads.fetch_add(1,std::memory_order_relaxed);
+    }
+    return gHost.loadingUploaded!=0;
+}
+
+// **Prey's frames are back**: the loading loop has ended. From here the menu
+// panel's image is Prey's again, so a frame held from before the load, whose
+// images were overwritten by the screen, is not submitted again. Render thread,
+// under gMutex.
+void EndLoadingScreen()
+{
+    const auto captured=gLoadingCaptured.exchange(0,std::memory_order_acq_rel);
+    if(captured==0)return;
+    if(gHost.loadingUploads!=0)gHost.heldValid=false;
+    gLoadingLoads.fetch_add(1,std::memory_order_relaxed);
+    Log("loading_screen ended captures="+std::to_string(captured)+" uploads="+std::to_string(gHost.loadingUploads)+
+        " frames="+std::to_string(gHost.loadingFrames));
+    gHost.loadingUploaded=gHost.loadingUploads=gHost.loadingFrames=0;
+}
+
 void PumpEvents()
 {
     XrEventDataBuffer event{XR_TYPE_EVENT_DATA_BUFFER};
@@ -1472,17 +1671,28 @@ bool ServiceHoldFrame()
         (viewState.viewStateFlags&XR_VIEW_STATE_ORIENTATION_VALID_BIT)!=0;
     if(contracted)gHost.contract.OnViewsLocated(frameState.predictedDisplayTime,haveViews,haveViews);
 
-    FrameLayerSet set=gHost.heldLayers;
+    // **The loading screen** (CaptureXrLoadingScreen): while Prey's loading loop
+    // runs, its latest image on the game menu's panel in place of the frame held
+    // from before the load, with nothing behind it, and the laser on it.
+    const bool loading=LoadingScreenWaiting() && haveViews && PlaceLoadingPanel(views) && UploadLoadingScreen();
+    FrameLayerSet set=loading?FrameLayerSet{}:gHost.heldLayers;
+    HeldPointer heldPointer=gHost.heldPointer;
+    if(loading) {
+        heldPointer={true,ui::Surface{*gHost.menuPanel,gHost.panelAngle}};
+        FillMenuLayers(set.menu,set.menuCylinder,heldPointer.surface,gHost.swapchain,0);
+        set.shown.menu=true;
+        set.shown.menuCylinder=heldPointer.surface.angle>0;
+    }
     set.shown.beam=set.shown.cursor=false;
     const auto hand=UiPointerHand();
-    if(haveViews && gHost.heldPointer.active && gHost.pointerReady && hand<2) {
+    if(haveViews && heldPointer.active && gHost.pointerReady && hand<2) {
         UiPointerVisual pointer;
         if(LocateHeldPointer(gHost.session,gHost.space,frameState.predictedDisplayTime,static_cast<Hand>(hand),
                              pointer.aim,pointer.pressed)) {
             pointer.active=true;
-            pointer.hit=ui::Intersect(gHost.heldPointer.surface,pointer.aim);
+            pointer.hit=ui::Intersect(heldPointer.surface,pointer.aim);
             const auto head=stereo::CyclopsPose(PoseOf(views[0].pose),PoseOf(views[1].pose));
-            FillPointerLayers(pointer,gHost.heldPointer.surface,head.position,set.cursor,set.beam,
+            FillPointerLayers(pointer,heldPointer.surface,head.position,set.cursor,set.beam,
                               set.shown.cursor,set.shown.beam);
         }
     }
@@ -1492,7 +1702,9 @@ bool ServiceHoldFrame()
         return false;
     }
     const bool begun=contracted && gHost.contract.OnBegun()==xrframe::Result::ok;
-    const bool show=!spaceChanging && frameState.shouldRender!=XR_FALSE;
+    // Without the screen there is only the held frame, and there may be none: a
+    // capture that could not be shown yet.
+    const bool show=!spaceChanging && frameState.shouldRender!=XR_FALSE && (loading || gHost.heldValid);
     const auto layers=set.Ordered();
     XrFrameEndInfo endInfo{XR_TYPE_FRAME_END_INFO};
     endInfo.displayTime=frameState.predictedDisplayTime;
@@ -1501,7 +1713,13 @@ bool ServiceHoldFrame()
     endInfo.layers=show?layers.data():nullptr;
     const auto endResult=xrEndFrame(gHost.session,&endInfo);
     if(!begun || gHost.contract.OnSubmitted(thread)!=xrframe::Result::ok)gHost.contract.Reset();
-    return XR_SUCCEEDED(endResult) && show;
+    const bool submitted=XR_SUCCEEDED(endResult) && show;
+    if(submitted && loading) {
+        if(gHost.loadingFrames++==0)Log("loading_screen shown captures="+std::to_string(gLoadingCaptured.load())+
+            " curved="+(set.shown.menuCylinder?"1":"0"));
+        gLoadingFrames.fetch_add(1,std::memory_order_relaxed);
+    }
+    return submitted;
 }
 
 // The hold thread, started with the first session and idle without one.
@@ -1520,9 +1738,10 @@ DWORD WINAPI HoldThread(LPVOID)
         std::unique_lock lock(gMutex,std::try_to_lock);
         if(!lock.owns_lock())continue;
         // Again under the lock: Prey's frame may have been stamped meanwhile.
+        // With nothing held, a loading screen waiting is still something to show.
         if(MonotonicNanoseconds()-gLastServiceNs.load(std::memory_order_acquire)<threshold ||
            !gHoldActive.load(std::memory_order_acquire) || !gHost.started || !gHost.sessionBegun ||
-           gStopRequested.load(std::memory_order_acquire) || !gHost.heldValid)continue;
+           gStopRequested.load(std::memory_order_acquire) || (!gHost.heldValid && !LoadingScreenWaiting()))continue;
         gHoldInFrame.store(true,std::memory_order_release);
         const bool submitted=ServiceHoldFrame();
         gHoldInFrame.store(false,std::memory_order_release);
@@ -1727,6 +1946,7 @@ void ServiceXrFrame(void* renderer)
         return;
     }
     ApplyHoldProtection();
+    EndLoadingScreen();
 
     if (gStopRequested.load(std::memory_order_acquire)) {
         if(!gStopAcknowledged.load(std::memory_order_acquire))return;
@@ -1919,70 +2139,7 @@ void ServiceXrFrame(void* renderer)
     const bool planarInventory=(InventoryStereoEnabled() && HudInventoryIsOpen()) || inventoryRightTexture;
     const float curve=gHost.cylinderSupported && !planarInventory?
         static_cast<float>(gUiCurveDegrees.load())*.01745329252f:0;
-    if (wantPanel && (!gHost.menuPanel || curve!=gHost.panelAngle || (reference%2==0 && reference!=gHost.panelReference))) {
-        const auto& anchor=MenuAnchorFor(inputHead,views,reference);
-        const auto& upright=anchor.upright;
-        const auto& optical=anchor.eyes;
-        const float aspect=static_cast<float>(gHost.width)/static_cast<float>(gHost.height);
-        constexpr float guideRatio=static_cast<float>(kGuideHeight)/kGuideWidth;
-        constexpr float gapRatio=.015f;
-        const float margin=UiFitMargin();
-        const bool wantGuide=gUiGuide.load(std::memory_order_relaxed);
-        // Without the card the menu is fitted on its own aspect, so the height
-        // the card and its gap used to reserve goes back to the menu instead of
-        // being left empty -- which is the whole point of switching it off.
-        const float stackAspect=wantGuide?1/(1/aspect+guideRatio+gapRatio):aspect;
-        // **Upright, at eye level, facing the wearer square-on**, ui.distance
-        // ahead of the way the face was turned when the anchor was taken (on
-        // opening, not now: a setting change re-places the menu from the same
-        // anchor). Fitted from the head itself the menu followed its pitch and
-        // roll: opened while looking down, it came out low, tilted and rolled.
-        // The anchor's eyes are levelled so the fit sizes it for a level gaze,
-        // which also keeps a menu opened while looking down from failing the
-        // corner test (UiPanel.h). The stack's centre is what sits at eye
-        // level: with the guide card on, the menu rides half the card above it.
-        const float distance=static_cast<float>(gUiDistanceCm.load(std::memory_order_relaxed))*.01f;
-        auto layout=ui::FitPanel(upright,optical,stackAspect,distance,
-            static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f,margin);
-        if(layout) {
-            gHost.menuPanel.reset();gHost.guidePanel.reset();
-            for(int attempt=0;attempt<80;++attempt) {
-                auto menu=*layout,guide=*layout;
-                menu.height=menu.width/aspect;
-                guide.height=guide.width*guideRatio;
-                const float gap=menu.width*gapRatio;
-                if(wantGuide) {
-                    menu.pose=Compose(layout->pose,Pose{{},{0,(guide.height+gap)*.5f,0}});
-                    guide.pose=Compose(layout->pose,Pose{{},{0,-(menu.height+gap)*.5f,0}});
-                } else {
-                    menu.pose=layout->pose;
-                }
-                if(ui::SurfaceVisible({menu,curve},optical,margin)&&
-                   (!wantGuide||ui::SurfaceVisible({guide,0},optical,margin))) {
-                    gHost.menuPanel=menu;
-                    if(wantGuide)gHost.guidePanel=guide;
-                    break;
-                }
-                layout->width*=.95f;layout->height*=.95f;
-            }
-        }
-        // ui.offset carries the fitted stack around the head as one piece. After
-        // the fit, not before: the fit sizes for straight ahead, and an offset
-        // view would shrink or refuse a panel the wearer chose to put aside.
-        const int offsetRight=gUiOffsetRight.load(std::memory_order_relaxed);
-        const int offsetUp=gUiOffsetUp.load(std::memory_order_relaxed);
-        if(gHost.menuPanel && (offsetRight || offsetUp)) {
-            const float right=static_cast<float>(offsetRight)*.01745329252f,up=static_cast<float>(offsetUp)*.01745329252f;
-            gHost.menuPanel->pose=ui::AroundHead(upright,gHost.menuPanel->pose,right,up);
-            if(gHost.guidePanel)gHost.guidePanel->pose=ui::AroundHead(upright,gHost.guidePanel->pose,right,up);
-        }
-        gHost.panelReference=reference;
-        gHost.panelAngle=curve;
-        ++gHost.surfaceSerial;
-        Log("ui_surface angle_degrees="+std::to_string(curve*57.2957795f)+" distance_m="+std::to_string(distance)+
-            " offset_degrees="+std::to_string(offsetRight)+","+std::to_string(offsetUp)+
-            " placed="+(gHost.menuPanel?"1":"0"));
-    }
+    if (wantPanel && MenuPanelsStale(curve,reference)) PlaceMenuPanels(inputHead,views,reference,curve);
     const bool panelActive=wantPanel && gHost.menuPanel.has_value();
     if(panelActive && !gHost.guideAttempted) {
         gHost.guideAttempted=true;
@@ -2218,41 +2375,22 @@ void ServiceXrFrame(void* renderer)
     layer.views = projViews;
     XrCompositionLayerQuad panelLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
     XrCompositionLayerQuad rightPanelLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
-    if (panelActive) {
-        const auto& p=*gHost.menuPanel;
-        panelLayer.space=gHost.space;
-        panelLayer.eyeVisibility=XR_EYE_VISIBILITY_BOTH;
-        panelLayer.pose={{p.pose.orientation.x,p.pose.orientation.y,p.pose.orientation.z,p.pose.orientation.w},
-                         {p.pose.position.x,p.pose.position.y,p.pose.position.z}};
-        panelLayer.size={p.width,p.height};
-        panelLayer.subImage.swapchain=inventorySubmitted?gHost.inventorySwapchain->Handle():gHost.swapchain;
-        if(inventorySubmitted)panelLayer.layerFlags=XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-        panelLayer.subImage.imageArrayIndex=0;
-        panelLayer.subImage.imageRect={{0,0},{static_cast<int>(gHost.width),static_cast<int>(gHost.height)}};
-        if(inventoryStereoSubmitted) {
-            rightPanelLayer=panelLayer;
-            panelLayer.eyeVisibility=XR_EYE_VISIBILITY_LEFT;
-            rightPanelLayer.eyeVisibility=XR_EYE_VISIBILITY_RIGHT;
-            rightPanelLayer.subImage.swapchain=gHost.inventoryRightSwapchain->Handle();
-        }
-    }
     XrCompositionLayerQuad guideLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
     XrCompositionLayerCylinderKHR cylinderLayer{XR_TYPE_COMPOSITION_LAYER_CYLINDER_KHR};
     ui::Surface surface{};
     if(panelActive) {
         // The prototype's disparity and pointer mapping are defined on a plane.
-        // Do not wrap stereo imagery onto a cylinder with a different geometry.
+        // Do not wrap stereo imagery onto a cylinder with a different geometry
+        // (the curve is 0 while the planar inventory is up).
         surface={*gHost.menuPanel,gHost.panelAngle};
-        if(surface.angle>0) {
-            const auto axis=ui::CylinderAxis(surface);
-            cylinderLayer.space=panelLayer.space;cylinderLayer.eyeVisibility=XR_EYE_VISIBILITY_BOTH;
-            cylinderLayer.subImage=panelLayer.subImage;
-            cylinderLayer.layerFlags=panelLayer.layerFlags;
-            cylinderLayer.pose={{axis.orientation.x,axis.orientation.y,axis.orientation.z,axis.orientation.w},
-                {axis.position.x,axis.position.y,axis.position.z}};
-            cylinderLayer.radius=surface.panel.width/surface.angle;
-            cylinderLayer.centralAngle=surface.angle;
-            cylinderLayer.aspectRatio=surface.panel.width/surface.panel.height;
+        FillMenuLayers(panelLayer,cylinderLayer,surface,
+                       inventorySubmitted?gHost.inventorySwapchain->Handle():gHost.swapchain,
+                       inventorySubmitted?XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT:0);
+        if(inventoryStereoSubmitted) {
+            rightPanelLayer=panelLayer;
+            panelLayer.eyeVisibility=XR_EYE_VISIBILITY_LEFT;
+            rightPanelLayer.eyeVisibility=XR_EYE_VISIBILITY_RIGHT;
+            rightPanelLayer.subImage.swapchain=gHost.inventoryRightSwapchain->Handle();
         }
         if(rendered)EnsurePointerTexture();
     }
@@ -2942,7 +3080,12 @@ std::string XrHoldReport()
         << " thresholdMs=" << gHoldThresholdMs.load() << " frames=" << gHoldFrames.load()
         << " stalls=" << gHoldStalls.load() << " lastStallMs=" << ms(gHoldLastStallNs)
         << " longestStallMs=" << ms(gHoldLongestStallNs) << " renderWaits=" << gHoldRenderWaits.load()
-        << " renderWaitMisses=" << gHoldRenderWaitMisses.load() << " refusal=" << gHoldRefusal.load();
+        << " renderWaitMisses=" << gHoldRenderWaitMisses.load() << " refusal=" << gHoldRefusal.load()
+        // The loading screen: the loading loop's presents, the copies taken
+        // there, uploads into the menu panel, hold frames showing it, loads ended.
+        << " loadingPresents=" << LoadingScreenPresentCount() << " loadingCaptures=" << gLoadingCaptures.load()
+        << " loadingUploads=" << gLoadingUploads.load() << " loadingFrames=" << gLoadingFrames.load()
+        << " loadingLoads=" << gLoadingLoads.load();
     return out.str();
 }
 
@@ -3077,6 +3220,72 @@ DWORD XrResolutionChain(XrResolution field)
 
 unsigned long long EyeContractsPublishedCount() { return gEyeContractsPublished.load(std::memory_order_relaxed); }
 unsigned long long EyeContractsRefusedCount() { return gEyeContractsRefused.load(std::memory_order_relaxed); }
+
+void CaptureXrLoadingScreen(void* renderer)
+{
+    if (renderer == nullptr ||
+        gStatus.load(std::memory_order_acquire) != static_cast<DWORD>(XrSessionStatus::running) ||
+        !gHoldActive.load(std::memory_order_acquire) || gStopRequested.load(std::memory_order_acquire)) {
+        return;
+    }
+    // Prey's render thread, inside the loading loop's lock, so nothing here
+    // waits. It reads only what stays fixed while the session runs, and its own
+    // image, which only this thread creates and releases (Teardown runs here
+    // too). The hold thread reads that image under gMutex, so it is created
+    // under gMutex, taken only if free.
+    if (!gHost.started || gHost.device == nullptr || gHost.loadingRefused) return;
+    IDXGISwapChain* swapChain = *reinterpret_cast<IDXGISwapChain**>(
+        reinterpret_cast<std::uintptr_t>(renderer) + engine::RendererLayout::swapchain);
+    ID3D11Texture2D* backBuffer = nullptr;
+    if (swapChain == nullptr ||
+        FAILED(swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&backBuffer))) ||
+        backBuffer == nullptr) {
+        return;
+    }
+    D3D11_TEXTURE2D_DESC desc{};
+    backBuffer->GetDesc(&desc);
+    // Same size gate as Prey's frames: the panel shows the whole of an image
+    // the backbuffer's size.
+    if (desc.Width == gHost.width && desc.Height == gHost.height) {
+        if (gHost.loadingImage == nullptr) {
+            std::unique_lock lock(gMutex, std::try_to_lock);
+            if (lock.owns_lock()) {
+                D3D11_TEXTURE2D_DESC copy = desc;
+                copy.Usage = D3D11_USAGE_DEFAULT;
+                copy.BindFlags = 0;
+                copy.CPUAccessFlags = 0;
+                copy.MiscFlags = 0;
+                if (FAILED(gHost.device->CreateTexture2D(&copy, nullptr, &gHost.loadingImage))) {
+                    gHost.loadingImage = nullptr;
+                    gHost.loadingRefused = true;
+                    Log("loading_screen result=failed step=create_image format=" + std::to_string(desc.Format));
+                }
+            }
+        }
+        if (gHost.loadingImage != nullptr) {
+            ID3D11DeviceContext* context = nullptr;
+            gHost.device->GetImmediateContext(&context);
+            if (context != nullptr) {
+                context->CopyResource(gHost.loadingImage, backBuffer);
+                context->Release();
+                // After the copy is issued: a hold frame that reads the count
+                // copies from the image after it.
+                gLoadingCaptures.fetch_add(1, std::memory_order_relaxed);
+                if (gLoadingCaptured.fetch_add(1, std::memory_order_acq_rel) == 0) {
+                    Log("loading_screen captured size=" + std::to_string(desc.Width) + "x" +
+                        std::to_string(desc.Height) + " format=" + std::to_string(desc.Format));
+                }
+            }
+        }
+    } else {
+        static bool resizedLogged = false; // render thread only
+        if (!resizedLogged) {
+            resizedLogged = true;
+            Log("loading_screen result=refused detail=backbuffer_resized");
+        }
+    }
+    backBuffer->Release();
+}
 
 bool HoldDualFirstEye(void* renderer)
 {

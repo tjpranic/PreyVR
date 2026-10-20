@@ -401,7 +401,7 @@ value report, as described above.
 | `xr.frustum` | 0/1 | 0 | Renders the runtime's frustum. Prototype; leave off. |
 | `xr.runtime <manifest>` / `xr.start` | | | Runtime choice before start; start the session. |
 | `xr.timing [0\|1] [hz]` / `xr.resolution` / `xr.coverage` | | | Frame timing, resolution chain, frustum coverage. |
-| `xr.hold [0\|1] [ms]` | 0/1, 30..2000 | 1, 100 | Frames from the mod while Prey renders none (a load), so the laser follows the hand. 0 turns them off along with the D3D11 multithread protection they need, for a performance comparison with `xr.timing`. `ms` is how late Prey's frame must be first. Not kept. |
+| `xr.hold [0\|1] [ms]` | 0/1, 30..2000 | 1, 100 | Frames from the mod while Prey renders none (a load), so the laser follows the hand and Prey's loading screen shows on the menu panel (docs/LOADING-SCREEN-2026-10-20.md). 0 turns them off along with the D3D11 multithread protection they need, for a performance comparison with `xr.timing`; loads then show the frame from before them. `ms` is how late Prey's frame must be first. The report's `loading*` fields count the loading loop's presents, the copies taken there, uploads to the panel, frames that showed it and loads ended. Not kept. |
 
 ### Diagnostics and legacy lanes
 

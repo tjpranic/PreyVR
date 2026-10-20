@@ -247,6 +247,13 @@ DWORD SetXrTimingEnabled(unsigned int enabled, unsigned int displayHz);
 // the render thread on its next frame. 87 for a bad value.
 DWORD SetXrHold(unsigned int enabled, unsigned int thresholdMs);
 std::string XrHoldReport();
+// **The loading screen** (docs/LOADING-SCREEN-2026-10-20.md). Prey's render
+// thread, from LoadingScreen's detour, just before Prey's loading loop presents:
+// copies the backbuffer, which holds the loading screen, for hold frames to show
+// on the menu panel. Never waits: it runs inside the loop's lock, which Prey's
+// loading thread also takes. Needs hold frames on (xr.hold); returns on one
+// atomic load without a session.
+void CaptureXrLoadingScreen(void* renderer);
 std::string XrTimingReport();
 
 // The frustum the RUNTIME asked for, in radians, for one eye. False before

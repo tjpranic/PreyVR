@@ -2,7 +2,7 @@
 
 ## TODO
 
-### Immersion:
+### Immersion
 - Fine dextrous finger controls
 - Rotatable carried objects
 - Weapons and hands don't stop against surfaces
@@ -15,20 +15,16 @@
 - Hand animation plays when taking the wrench out
     It causes the right hand to spin. The animation should not play.
 
-### UI:
-- The game doesn't render loading screens
-    It just shows a black screen instead.
-
-### HUD:
+### HUD
 - Psi energy shows on wrist before installing first neuromod
 - Some UI elements still only display at the periphery of vision
     It makes them hard to see. They need to be moved a little closer in.
 
-### VR Options Menu:
+### VR Options Menu
 - Have bindings section let you change your bindings
 - Audit every option and rework and/or remove and/or consolidate as many as needed
 
-### Melee Combat:
+### Melee Combat
 - Adjustable wrench bounding box
     Add in an adjustable wrench bounding box lengthening system that only registers hits against enemies. Essentially, an additional bounding box would be added to the wrench, but it would be longer and only used to find collisions with enemies. This would preserve existing correct physical interaction between wrench/hands and objects, but allow for smoother feeling combat.
 - Two-handed wrench
@@ -46,3 +42,5 @@
 
 ### UI
 - Controller Prompts option doesn't seem to apply sometimes
+- The game doesn't render loading screens
+    It just shows a black screen instead.
