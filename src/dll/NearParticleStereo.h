@@ -9,14 +9,20 @@
 // native contract are in preyvr/NearParticles.h; measurements in
 // docs/NEAR-PARTICLES-2026-10-07.md.
 //
-// Two hooks, both prologue-gated and only active for DrawNear particles whose
-// pass camera is a stereo eye CameraEditHook built:
-//   - `SParticleVertexContext::Init` (0x1AFF70), geometry builder: the context's
-//     camera becomes that eye's cyclops before Init and RenderGeometry use it,
-//     and the Q-Beam's inner beam (a flat-screen bridge authored behind the
-//     muzzle) is mirrored ahead of it (near.fxbridge);
+// Three hooks, all prologue-gated and only active for DrawNear particles in a
+// stereo frame:
+//   - `SParticleVertexContext::Init` (0x1AFF70), geometry builder: when the
+//     context's camera is a stereo eye CameraEditHook built, it becomes that
+//     eye's cyclops before Init and RenderGeometry use it. With both eyes from
+//     one frame the context already carries the cyclops (the frame's head
+//     camera). Either way the Q-Beam's inner beam (a flat-screen bridge authored
+//     behind the muzzle) is mirrored ahead of it (near.fxbridge);
 //   - `CParticle::GetRenderMatrix` (0x1AF210), sprite callers: the world-space
-//     vertex moves by the eye offset.
+//     vertex moves by the eye offset (alternating eyes: one eye per frame);
+//   - `CREParticle::mfDraw` (0xF32070): with both eyes from one frame the
+//     vertices are shared by the two submissions, so instead a DrawNear sprite
+//     draw inside an eye's submission gets the near projection without
+//     NearViewStereo's eye offset (the renderer already subtracts the eye).
 // On by default with the near-pass stereo; `near.fx 0` restores the native
 // behaviour for A/B in the same session, PREYVR_NEAR_FX=0 leaves it unhooked.
 namespace preyvr::dll {

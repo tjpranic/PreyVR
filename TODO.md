@@ -11,6 +11,8 @@
     Add in a two-handed wrench mode that automatically triggers heavy wrench attacks. One handed mode would always be a light attack. This would replace the speed based light/heavy attack system.
 - Immersive reloading
     Right now it just plays the animation. It would be better to allow the player to physically attach and detach weapon ammunition.
+- Shot from muzzle laser shows skewed
+    The game naturally skews the aim laser when it comes from the muzzle. It should be straightened.
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -39,8 +41,6 @@
 - Psi energy shows on wrist before installing first neuromod
 - Some UI elements still only display at the periphery of vision
     It makes them hard to see. They need to be moved a little closer in.
-- Objective markers don't display at the proper depth
-    They need to be at the depth they appear at in the world. Repair markers (and possibly enemy detection markers) also affected. Another one is the stun gun max charge effect.
 - The hand lasers start outside of player hands
     They seem to begin out of nowhere. Something like a fade in along the length (like when the laser fades out in menus when it's not hitting a surface) would make them look a bit nicer.
 
@@ -67,6 +67,10 @@
     It just shows a black screen instead.
 
 ### Immersion
+- Objective markers don't display at the proper depth
+    They need to be at the depth they appear at in the world. Repair markers (and possibly enemy detection markers) also affected.
+- Stun gun max charge effect at the wrong depth
+    Q-Beam has a similar issue
 - Weapons and hands don't stop against surfaces
     They now stop at fixed scenery and at heavy (Heavy Objects setting, 10 kg) or immovable loose objects, which slide when pressed. See docs/SURFACE-STOP-SCOPE-2026-10-21.md.
 - Hand animation plays when taking the wrench out

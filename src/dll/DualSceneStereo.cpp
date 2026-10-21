@@ -718,6 +718,13 @@ DWORD EnsureHooks()
 
 } // namespace
 
+bool DualEyeSubmissionActive()
+{
+    const int step = gStep.load(std::memory_order_acquire);
+    return (step == static_cast<int>(Step::first) || step == static_cast<int>(Step::second)) &&
+           gMode.load(std::memory_order_acquire) >= 2;
+}
+
 DWORD SetDualSceneObserve(unsigned int enabled)
 {
     if (enabled != 0) {

@@ -93,6 +93,11 @@ struct BuiltEye {
 // matches, which a caller must treat as "refuse", never as "assume the latest".
 bool FindBuiltEyeByPosition(const float position[3], BuiltEye& out);
 unsigned long long BuiltEyeLookupMissCount();
+// True when `position` is the camera of a recent both-eyes frame: the head
+// camera the engine prepares it from, left on the frame before either eye is
+// built. Content built from it then (DrawNear particle geometry) is relative to
+// the cyclops already.
+bool IsDualFrameCentre(const float position[3]);
 
 // **Rung 1b: both eyes in one frame.** With this set and stereo armed, the
 // camera hook stops alternating eyes: the frame keeps the head camera (so the

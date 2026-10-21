@@ -154,6 +154,50 @@ The "gate 64" (HUD) seen before was a mock artefact: `-Shot` captures freeze fra
 menu state goes stale (>200 ms) and the hold releases by design. Measure holds with
 `aim.twohand`/`aim.beam`, not across a capture.
 
+## 5. Both eyes from one frame (2026-10-21)
+
+**Regression.** Since 2026-10-10 VR renders both eyes from one game frame
+([STEREO-DUAL-SUBMISSION-2026-10-10.md](STEREO-DUAL-SUBMISSION-2026-10-10.md)). The game thread
+prepares the frame once, from the head, and the render thread submits it twice. Sections 1 and 2
+found their eye by matching the vertex context's camera against an eye record, and that camera is
+now the head, so neither fired. A 2026-10-17 run counted `nearFxSpriteVerts=227/0/227` (seen /
+moved / no eye). The wearer's TODO of 2026-10-21 named it: "the stun gun max charge effect" was at
+the wrong depth. Static only (Ghidra and capstone over the Steam DLL):
+
+- **Sprites.** The vertices are built once per frame. The `ComputeVertices` jobs are kicked by the
+  3D engine (`0x1001C60`) from the pass camera, the head, and synced on the render thread before
+  either submission. Both submissions draw the same buffer, so the vertex can no longer be moved
+  per eye. Nothing on the CPU subtracts a camera from a sprite (`GetRenderMatrix` and
+  `SetVertices` write world space). The per-view constants carry the render camera, the eye, at
+  payload `+0x19C/+0x1AC/+0x1BC` and the near VP at `+0x90`. The near VP is the one NearViewStereo
+  edits, and that is what doubles the parallax (inferred from section 1's measurement; the shaders
+  are encrypted).
+- **Fix: `CREParticle::mfDraw` `0xF32070`.** Every particle sprite render item is drawn through it.
+  For a DrawNear one (current render object `renderer+0x4708`, flags `+0x40` bit 23, FOB_NEAREST,
+  as `mfPrepare` tests at `0x100236D`) inside an eye's submission:
+  1. NearViewStereo leaves the near VP unedited for that draw.
+  2. The per-view constants are marked dirty with the engine's own `0xF1B100`, which
+     RT_SetCameraInfo ends with. mfDraw's first act, FX_Commit (`0xF320D4`), then re-packs them
+     (`0xF0DBB0` → `0xF19960` → `0xFB5230` → `0xFB57A0`).
+  3. After the draw they are marked dirty again, so the next draw gets the edit back.
+
+  The sprite is drawn at `(world − eye) · M0`, which is the weapon's own `(camera-space − d) · M0`.
+  DrawNear geometry, the weapon and ordinary particles never pass through mfDraw. Before calling
+  `0xF1B100`, its bytes are checked: both loads must be the renderer pointer, and both ORs exact.
+- **Geometry.** `RenderGeometry` subtracts the head, which is the cyclops, so it is already right.
+  The Q-Beam bridge was inside the eye branch and was lost too. CameraEditHook now records each
+  both-eyes frame's head camera (`IsDualFrameCentre`), and a DrawNear geometry context built from
+  it gets the bridge alone.
+
+Counters (`near.fx`):
+- `nearFxSpriteDraws=inEye/kept/packsUnedited`
+- a fifth field per builder, `frameCentre`
+- `nearFxHooks` has a third digit, for the draw hook
+
+`near.fx 0` is the A/B; the alternating-eye path is unchanged. Tests: `KeepNearProjection`, and the
+near-pass model's both-eyes case (the glow has the coil's parallax). **Headset, 2026-10-21
+(PreyVR-56): confirmed fixed by the wearer.**
+
 ## Commands
 
 | Command | Effect |

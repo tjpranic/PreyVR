@@ -10,6 +10,7 @@
 #include "HeadTrackingHook.h"
 #include "NearViewStereo.h"
 #include "NearParticleStereo.h"
+#include "MarkerStereo.h"
 #include "DualSceneStereo.h"
 #include "DualOverlay.h"
 #include "NearFovOverride.h"
@@ -211,6 +212,8 @@ void TickVrMode() {
         // DrawNear particles in the weapon's camera space (preyvr/NearParticles.h).
         // Not fatal: without the hook they keep the native double parallax.
         EnsureNearParticleStereo();
+        // World markers at the depth they mark (MarkerStereo.h). Not fatal either.
+        EnsureMarkerDepth();
         if(SetMoveLaneMode(2)!=0 || SetTurnLaneEnabled(1)!=0 || SetFireLaneEnabled(1)!=0 ||
             SetInteractionEnabled(1)!=0 || SetAimTakeoverEnabled(1)!=0 ||
             SetReticleFollowEnabled(1)!=0 || SetReticleDispatchEnabled(1)!=0 ||
@@ -266,7 +269,7 @@ void TickVrMode() {
             nextStatusReport=GetTickCount64()+kStatusReportMs;
             // The same text dual.report and hud.layer answer with.
             Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
-                " } body={"+BodyFollowReport()+" } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } focus={"+
+                " } body={"+BodyFollowReport()+" } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" focus={"+
                 FocusHoldReport()+" } hold={"+XrHoldReport()+" } prompts={"+ControllerPromptsReport()+" }");
         }
         const auto owner=AnimIkOwnerGeneration();

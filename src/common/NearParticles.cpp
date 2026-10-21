@@ -19,6 +19,11 @@ Builder BuilderFromReturnRva(std::uint32_t rva)
     }
 }
 
+bool KeepNearProjection(bool enabled, bool perEyeSubmission, std::uint32_t objectFlags)
+{
+    return enabled && perEyeSubmission && (objectFlags & kObjectNearest) != 0;
+}
+
 const char* BuilderName(Builder builder)
 {
     switch (builder) {

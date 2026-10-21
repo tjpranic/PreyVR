@@ -238,8 +238,10 @@ the body mesh in VR. Investigated, with a native seam and a design, in
 - One 2-frame pose jump at a runtime tracking-space change (above). The mod could
   handle `XrEventDataReferenceSpaceChangePending` explicitly.
 - The near particles (`NearParticleStereo`) look the eye up from the game-thread
-  camera, which is now the head, so draw-near sprites fall back to native parallax.
-  Not reported by the wearer; not checked.
+  camera, which is now the head, so draw-near sprites fell back to native parallax
+  and the Q-Beam bridge stopped. Reported 2026-10-21 (the stun gun's charge glow);
+  fixed at draw time, confirmed in the headset 2026-10-21
+  ([NEAR-PARTICLES section 5](NEAR-PARTICLES-2026-10-07.md#5-both-eyes-from-one-frame-2026-10-21)).
 
 ## Not established
 

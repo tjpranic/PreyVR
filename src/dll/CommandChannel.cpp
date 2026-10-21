@@ -27,6 +27,7 @@
 #include "DualSceneStereo.h"
 #include "DualOverlay.h"
 #include "NearParticleStereo.h"
+#include "MarkerStereo.h"
 #include "RenderFrame.h"
 #include "ReticleFollow.h"
 #include "SceneQuery.h"
@@ -557,6 +558,19 @@ bool ExecutePose(const std::vector<std::string>& args, std::ostringstream& out)
     } else if (verb == "near.fxbridge") {
         out << "near.fxbridge result=" << (Valued(args) ? SetNearParticleBridge(static_cast<unsigned>(arg(1, 1))) : 0)
             << " " << NearParticleStereoReport();
+    } else if (verb == "markers.depth") {
+        // Bare `markers.depth` only reports. 1 = world markers at the depth they
+        // mark (default), 0 = where Prey draws them, for A/B.
+        DWORD result = 0;
+        if (Valued(args)) {
+            const int value = arg(1, -1);
+            result = value == 0 || value == 1 ? SetMarkerDepth(static_cast<unsigned>(value)) : ERROR_INVALID_PARAMETER;
+        }
+        out << "markers.depth result=" << result << " " << MarkerDepthReport();
+    } else if (verb == "markers.size") {
+        // Marker Size for this session (VR Options saves it): 50..200 percent.
+        const DWORD result = Valued(args) ? SetMarkerSizePercent(static_cast<unsigned>(arg(1, 100))) : 0;
+        out << "markers.size result=" << result << " " << MarkerDepthReport();
     } else if (verb == "near.fxhide") {
         out << "near.fxhide result=" << (Valued(args) ? SetNearParticleHide(static_cast<unsigned>(arg(1, 1))) : 0)
             << NoValue(args);

@@ -78,6 +78,11 @@ DWORD SetDualSceneIpdMillimetres(unsigned int millimetres);
 // stall as any frame capture, so never during a timing measurement.
 DWORD RequestDualSceneCapture(unsigned int tag);
 
+// True while one of a doubled frame's two submissions is rendering with its own
+// eye camera (mode 2 or 3). What was prepared once for the frame -- particle
+// sprite vertices, from the head -- is drawn by both.
+bool DualEyeSubmissionActive();
+
 // Counters, timings and the in-flight step, in key=value form. Safe to call from
 // any thread, including while the render thread is stuck inside a submission.
 std::string DualSceneReport();

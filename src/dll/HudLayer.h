@@ -73,6 +73,12 @@ HudPartImage TakeHudPart(HudPart part);
 // own draw until the XR session restarts.
 void RefuseHudPart(HudPart part, const char* reason);
 void ResetHudParts(); // render-thread session teardown
+// A number in a movie by path (e.g. "_root.ar_mc.ar.12._x"), read or written
+// through the movie root's own GetVariable/SetVariable. Render thread, inside
+// that movie's display callback only. False when the path does not resolve or
+// is not a number.
+bool HudMovieNumber(void* root,const char* path,double& value);
+bool SetHudMovieNumber(void* root,const char* path,double value);
 // hud.var / hud.setvar (diagnostics): queued, run in the next gameplay HUD
 // display callback. The report lists each path's value after the operation.
 DWORD QueueHudVariable(const std::string& path,bool set,double value);

@@ -78,6 +78,9 @@ std::atomic<unsigned long long> gNoProvenance{0};
 // Thread-local because re-entrancy is by definition on one stack; separate
 // render jobs carry their own view info and do not share this pointer.
 thread_local void* tEditing = nullptr;
+// SetNearViewEditSuppressed: one particle draw on this thread packs unedited.
+thread_local bool tSuppressed = false;
+std::atomic<unsigned long long> gSuppressed{0};
 
 // --- the cross-thread double-offset (H-022) ---------------------------------
 //
@@ -238,6 +241,11 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
 {
     const PackViewInfoFn original = gOriginal.load(std::memory_order_acquire);
     if (!gEnabled.load(std::memory_order_acquire) || viewInfo == nullptr) {
+        return original != nullptr ? original(owner, viewInfo, third, fourth) : nullptr;
+    }
+
+    if (tSuppressed) {
+        gSuppressed.fetch_add(1, std::memory_order_relaxed);
         return original != nullptr ? original(owner, viewInfo, third, fourth) : nullptr;
     }
 
@@ -430,6 +438,8 @@ unsigned long long NearViewNoEyeCount() { return gNoEye.load(std::memory_order_r
 unsigned long long NearViewReenteredCount() { return gReentered.load(std::memory_order_relaxed); }
 unsigned long long NearViewAlreadyOffsetCount() { return gAlreadyOffset.load(std::memory_order_relaxed); }
 unsigned long long NearViewNoProvenanceCount() { return gNoProvenance.load(std::memory_order_relaxed); }
+void SetNearViewEditSuppressed(bool suppressed) { tSuppressed = suppressed; }
+unsigned long long NearViewSuppressedCount() { return gSuppressed.load(std::memory_order_relaxed); }
 
 DWORD ArmNearViewLineage(unsigned int enabled)
 {

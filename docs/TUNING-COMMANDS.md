@@ -130,6 +130,7 @@ this session. "Menu only" means no command reaches it.
 | Interface | Reticle (`reticle_world`) | on the HUD (0), in the world (1) | world | `aim.world <0\|1>` |
 | Interface | Reticle size (`reticle_size`) | 50–200% | 100 | `aim.reticlesize <percent>` |
 | Interface | Reticle fallback distance (`reticle_fallback_mm`) | 500–200000 mm | 10000 | `aim.reticleconverge <mm>` |
+| Interface | Marker size (`marker_size`) | 50–200% | 100 | `markers.size <percent>` |
 | Equipment | Body holsters (`holsters`) | on/off | off | menu only |
 | Equipment | Wrist status (`wrist`) | on/off | on | menu only |
 | Equipment | Wrist display size (`wrist_size`) | 80–140 % | 100 | menu only |
@@ -400,6 +401,8 @@ value report, as described above.
 | `near.follow` / `near.fov` | 0/1; 0 or 11–1789 decidegrees | 1; follows | The weapon pass's field of view. An explicit `near.fov` stops following. |
 | `near.fx` / `near.fxbridge` | 0/1 | 1 | Weapon-space stereo for near particles; the Q-Beam bridge. |
 | `near.fxhide` / `near.zero` / `near.lineage` / `near.dump` | | 0 | Test switches. |
+| `markers.depth` | 0/1 | 1 | World markers (objectives, repair, danger, enemy awareness, points of interest) at the depth they mark. Bare: report. |
+| `markers.size` | 50–200 % | 100 | Marker Size for this session; VR Options saves it. |
 | `xr.mirrorfov` | 50–400 % | 100 | Field declared for flat-mirror frames (no eye pair). |
 | `xr.native` / `xr.srgb` / `xr.submit` | 0/1 | 0 → VR 1 | Native projection; sRGB swapchain (before start only); per-eye submission. |
 | `xr.stereo [ipdMm] [halfFov]` | 45–85 (0 off), 20–70 | | Fixed-IPD camera stereo, over the runtime's IPD. |

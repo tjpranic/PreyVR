@@ -7,6 +7,7 @@
 #include "PsiMedkit.h"
 #include "Haptics.h"
 #include "ReticleFollow.h"
+#include "MarkerStereo.h"
 #include "AimTakeover.h"
 #include "BodyEquipment.h"
 #include "BodyFollow.h"
@@ -167,6 +168,7 @@ constexpr Wiring wiring[]={
  {options::ReticleWorld,Set<SetReticleInWorld>,Get<ReticleInWorld>},
  {options::ReticleSize,Set<SetReticleSizePercent>,Get<ReticleSizePercent>},
  {options::ReticleFallback,Set<SetReticleConvergenceMillimetres>,Get<ReticleConvergenceMillimetres>},
+ {options::MarkerSize,Set<SetMarkerSizePercent>,Get<MarkerSizePercent>},
  {options::Haptics,Set<SetHapticsEnabled>,Get<HapticsEnabled>},
  {options::HapticStrength,Set<SetHapticStrength>,Get<HapticStrength>},
  {options::FreeSwing,Set<SetFreeSwing>,Get<FreeSwingEnabled>},

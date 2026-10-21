@@ -85,6 +85,16 @@ std::array<BuiltEye, kBuiltEyeSlots> gBuiltEyes{};
 std::atomic<unsigned long long> gBuiltEyeSerial{0};
 std::atomic<unsigned long long> gBuiltEyeCount{0};
 std::atomic<unsigned long long> gBuiltEyeMisses{0};
+// The head cameras of recent both-eyes frames, the camera the engine prepares
+// those frames from (IsDualFrameCentre). Written on the main thread before the
+// frame renders; a few frames deep for the 3D engine's jobs.
+struct FrameCentre {
+    float position[3];
+    unsigned long long serial;
+};
+constexpr unsigned int kFrameCentreSlots = 8;
+std::array<FrameCentre, kFrameCentreSlots> gFrameCentres{};
+std::atomic<unsigned long long> gFrameCentreCount{0};
 std::atomic<int> gEyeLock{-1};   // -1 = alternate
 // Rung 1b. When set, the stereo branch leaves the head camera on the frame and
 // publishes a both-eyes contract; the render thread submits the frame twice and
@@ -256,6 +266,15 @@ void PublishBuiltEye(const stereo::Matrix34& m, const stereo::Matrix34& centre, 
     gBuiltEyeCount.store(record.serial, std::memory_order_release);
 }
 
+void PublishFrameCentre(const stereo::Matrix34& m)
+{
+    const unsigned long long serial = gFrameCentreCount.load(std::memory_order_relaxed) + 1;
+    FrameCentre& slot = gFrameCentres[serial % kFrameCentreSlots];
+    slot.position[0] = m[3]; slot.position[1] = m[7]; slot.position[2] = m[11];
+    slot.serial = serial;
+    gFrameCentreCount.store(serial, std::memory_order_release);
+}
+
 bool BuildSyntheticEye(
     std::array<std::uint8_t, cameraedit::kCameraSize>& edited,
     int eye,
@@ -424,7 +443,8 @@ void __fastcall RenderWithCameraEdit(void* system)
     const bool haveRenderHead=ConsumeHeadRenderPose(edited.data(),renderHead,
         renderContract.displayTime,renderContract.reference,renderContract.spaceEpoch);
     bool built = false;
-    if (gDualStereo.load(std::memory_order_acquire)) {
+    const bool dualFrame = gDualStereo.load(std::memory_order_acquire);
+    if (dualFrame) {
         // Rung 1b: both eyes in this frame. The engine culls and prepares the
         // frame from the head camera, left exactly as it is; the render thread
         // submits it twice and builds, publishes and draws each eye there
@@ -502,6 +522,11 @@ void __fastcall RenderWithCameraEdit(void* system)
     }
 
     std::memcpy(camera, edited.data(), cameraedit::kCameraSize);
+    // The camera this both-eyes frame is prepared from, so DrawNear particle
+    // geometry built from it can be told apart (IsDualFrameCentre).
+    if (dualFrame) {
+        PublishFrameCentre(stereo::ReadMatrix(edited));
+    }
 
     UpdateAimReticleForRender();
 
@@ -628,6 +653,24 @@ bool FindBuiltEyeByPosition(const float position[3], BuiltEye& out)
         if (serial == 1) { break; }
     }
     gBuiltEyeMisses.fetch_add(1, std::memory_order_relaxed);
+    return false;
+}
+
+bool IsDualFrameCentre(const float position[3])
+{
+    const unsigned long long newest = gFrameCentreCount.load(std::memory_order_acquire);
+    // Same tolerance as FindBuiltEyeByPosition: a by-value copy of the camera.
+    constexpr float kTolerance = 1e-4f;
+    const unsigned long long oldest = newest > kFrameCentreSlots ? newest - kFrameCentreSlots + 1 : 1;
+    for (unsigned long long serial = newest; serial >= oldest && serial != 0; --serial) {
+        const FrameCentre& candidate = gFrameCentres[serial % kFrameCentreSlots];
+        if (candidate.serial == serial &&
+            std::fabs(candidate.position[0] - position[0]) <= kTolerance &&
+            std::fabs(candidate.position[1] - position[1]) <= kTolerance &&
+            std::fabs(candidate.position[2] - position[2]) <= kTolerance) {
+            return true;
+        }
+    }
     return false;
 }
 

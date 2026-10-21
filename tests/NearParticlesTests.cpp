@@ -73,7 +73,7 @@ void TestNearPassModel()
     const Vec3 coilLocal{.05f, .5f, -.2f};  // 0.5 m in front, a little right, below the eye
     const Vec3 coilWorld = Add(centre, coilLocal);  // where the game puts the effect's emitter
     const float f = 587.f;                         // mock compositor focal length, px
-    float weaponX[2]{}, nativeX[2]{}, fixedX[2]{};
+    float weaponX[2]{}, nativeX[2]{}, fixedX[2]{}, bothEyesX[2]{};
     for (int eye = 0; eye < 2; ++eye) {
         const Vec3 shift = Scale(right, eye == 0 ? -half : half);
         const Vec3 eyeCamera = Add(centre, shift);
@@ -85,12 +85,23 @@ void TestNearPassModel()
         Vec3 origin{};
         Require(CameraSpaceOrigin(eyeCamera, {eyeCamera, centre}, origin), "eye resolves");
         const Vec3 fixed = Sub(Sub(coilWorld, origin), shift);
+        // Both eyes from one frame: the sprite vertex is built once from the head
+        // and not moved; the renderer still subtracts the eye camera, and the near
+        // projection is left unedited for this draw (KeepNearProjection).
+        Vec3 unmoved{};
+        Require(!EyeOffset(centre, {eyeCamera, centre}, unmoved), "a head-camera context matches no eye");
+        const Vec3 bothEyes = Sub(coilWorld, eyeCamera);
         weaponX[eye] = f * weapon.x / weapon.y;
         nativeX[eye] = f * native.x / native.y;
         fixedX[eye] = f * fixed.x / fixed.y;
+        bothEyesX[eye] = f * bothEyes.x / bothEyes.y;
         Require(Near(fixed.x, weapon.x) && Near(fixed.y, weapon.y) && Near(fixed.z, weapon.z),
                 "the fixed glow sits exactly on the coil in each eye");
+        Require(Near(bothEyes.x, weapon.x) && Near(bothEyes.y, weapon.y) && Near(bothEyes.z, weapon.z),
+                "both eyes from one frame: the unedited projection puts the glow on the coil in each eye");
     }
+    Require(Near(bothEyesX[0] - bothEyesX[1], weaponX[0] - weaponX[1], .001f),
+            "both eyes from one frame: the glow has the coil's parallax");
     const float weaponDisparity = weaponX[0] - weaponX[1];
     const float nativeDisparity = nativeX[0] - nativeX[1];
     const float fixedDisparity = fixedX[0] - fixedX[1];
@@ -101,6 +112,19 @@ void TestNearPassModel()
     Require(Near(fixedDisparity, weaponDisparity, .001f), "fixed: the glow has the coil's parallax");
     // Seen depth of the native glow: disparity doubles, depth halves.
     Require(Near(f * 2 * half / nativeDisparity, .25f, 1e-4f), "native glow appears at half the coil's distance");
+}
+
+// Which particle draws keep the near projection unedited: DrawNear (FOB_NEAREST,
+// bit 23) inside a per-eye submission, with near.fx on.
+void TestKeepNearProjection()
+{
+    Require(kObjectNearest == 1u << 23, "FOB_NEAREST is bit 23 (mfPrepare: shr 0x17, test 1)");
+    Require(KeepNearProjection(true, true, kObjectNearest), "a DrawNear sprite in an eye's submission");
+    Require(KeepNearProjection(true, true, kObjectNearest | 0x80000000u | 0x1u), "other flag bits do not matter");
+    Require(!KeepNearProjection(true, true, 0x80000000u | 0x1u), "a world particle keeps the edit it never had");
+    Require(!KeepNearProjection(true, false, kObjectNearest),
+            "outside a both-eyes submission (alternating eyes): the vertex fix applies instead");
+    Require(!KeepNearProjection(false, true, kObjectNearest), "near.fx 0: native");
 }
 
 // The Q-Beam's inner beam (PlayerWeapons.xml InnerBeam_00, PositionOffset
@@ -135,6 +159,7 @@ int main()
     TestOrigin();
     TestSpriteOffset();
     TestBridgeShift();
+    TestKeepNearProjection();
     TestNearPassModel();
     std::cout << "near_particles: all tests passed\n";
     return 0;

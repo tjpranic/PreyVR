@@ -187,8 +187,11 @@ void LayoutChecks(){
        !Valid(HeavySwingSpeed,250)&&Display(HeavySwingSpeed,700)==L"700 CM/S",
        "heavy swings from 7 m/s by default, 3 to 15 m/s");
  Check(MenuEntries(0)[0]==Turn&&Has(MenuEntries(0),BodyFollow)&&Has(MenuEntries(0),BodyGlide),"comfort: turning first, body following");
- for(const int e:{UiDistance,UiOffsetRight,UiOffsetUp,UiText,PointerHand,HudLayer,ReticleWorld,ReticleSize,ReticleFallback})
-  Check(Has(MenuEntries(2),e),"menu placement, the HUD and the reticle on the interface tab");
+ for(const int e:{UiDistance,UiOffsetRight,UiOffsetUp,UiText,PointerHand,HudLayer,ReticleWorld,ReticleSize,ReticleFallback,MarkerSize})
+  Check(Has(MenuEntries(2),e),"menu placement, the HUD, the reticle and the markers on the interface tab");
+ Check(Defaults()[MarkerSize]==100&&Valid(MarkerSize,50)&&Valid(MarkerSize,200)&&!Valid(MarkerSize,40)&&!Valid(MarkerSize,210)&&
+       std::string(Describe(MarkerSize).key)=="marker_size"&&Display(MarkerSize,150)==L"150%",
+       "marker size: Prey's size by default, half to double");
  {const auto page=MenuEntries(2);const auto laser=std::find(page.begin(),page.end(),PointerHand);
   Check(laser!=page.end()&&laser+1!=page.end()&&laser[1]==ControllerPrompts,
         "the menus' prompts sit under the laser hand that switches them");}

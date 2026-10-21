@@ -32,6 +32,8 @@ unsigned HapticsEnabled(){return applied[options::Haptics];}
 void SetHapticStrength(unsigned v){applied[options::HapticStrength]=v;}
 unsigned HapticStrength(){return applied[options::HapticStrength];}
 DWORD SetReticleConvergenceMillimetres(unsigned v){applied[options::ReticleFallback]=v;return 0;}
+DWORD SetMarkerSizePercent(unsigned v){applied[options::MarkerSize]=v;return 0;}
+unsigned MarkerSizePercent(){return applied[options::MarkerSize];}
 DWORD ReticleConvergenceMillimetres(){return applied[options::ReticleFallback];}
 void ClearHolsters(){++holsterClears;}
 DWORD SetDebugOverlay(unsigned v){applied[options::DebugOverlay]=v?1:0;return 0;}
@@ -183,6 +185,7 @@ int main(){
  Check(holsterClears==clearBefore+1,"clear holsters invokes its own action");
  set(options::ReticleWorld,0);Check(ReticleInWorld()==0,"the reticle on the HUD reaches the reticle lane");
  set(options::ReticleSize,150);Check(ReticleSizePercent()==150,"the reticle's size reaches the reticle lane");
+ set(options::MarkerSize,170);Check(MarkerSizePercent()==170,"the marker size reaches the markers");
  set(options::ReticleFallback,10500);Check(ReticleConvergenceMillimetres()==10500,"fallback setting retains sub-metre precision");
  set(options::Haptics,0);Check(!HapticsEnabled(),"haptics disable reaches XR adapter");
  Check(FreeSwingEnabled(),"the free-swing wrench is on by default");

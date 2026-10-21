@@ -37,6 +37,7 @@ constexpr Spec specs[]={
  {"reticle_world",L"RETICLE",L"In the world: the crosshair sits on what you aim at, so it stays sharp when you look there. On the HUD: on the floating HUD panel. Needs the HUD on its floating panel.",1,0,1,1,U::none,reticleNames},
  {"reticle_size",L"RETICLE SIZE",L"The crosshair in the world, against its size on the HUD.",100,50,200,10,U::percent},
  {"reticle_fallback_mm",L"RETICLE FALLBACK DISTANCE",L"How far the crosshair sits when your aim hits nothing within 200 m.",10000,500,200000,500,U::metresInMm},
+ {"marker_size",L"MARKER SIZE",L"The markers in the world: objectives, repair and danger icons, enemy awareness and points of interest.",100,50,200,10,U::percent},
  {"haptics",L"CONTROLLER FEEDBACK",L"Short pulses for VR menu changes and attaching the support hand.",1,0,1,1},
  {"haptic_strength",L"FEEDBACK STRENGTH",L"Scale controller feedback intensity. Zero silences all pulses.",70,0,100,10,U::percent},
  {"free_swing",L"FREE-SWING WRENCH",L"Swing the wrench to strike what it hits: harder swings hit harder, and Prey's damage, knockback and stamina apply. The attack button does nothing with the wrench out.",1,0,1,1},
@@ -105,7 +106,7 @@ constexpr int comfort[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,S
 constexpr int hands[]={AimLasers,TwoHand,GripToggle,SupportSnap,Psychoscope,ArmsFree,FingerCurl,ArmLength,CarryHold,GrenadeHand,
     CarryThrowStrength,GrenadeThrowStrength,SurfaceStop,HeavyMass,PhysicalContact,PushStrength,FreeSwing,SwingSpeed,HeavySwingSpeed};
 constexpr int interface_[]={UiScale,UiMargin,UiCurve,UiGuide,UiDistance,UiOffsetRight,UiOffsetUp,UiText,
-    PointerHand,ControllerPrompts,HudLayer,ReticleWorld,ReticleSize,ReticleFallback};
+    PointerHand,ControllerPrompts,HudLayer,ReticleWorld,ReticleSize,ReticleFallback,MarkerSize};
 constexpr int equipment[]={Holsters,ClearHolsterSlots,Wrist,WristSize,WristOnHud,WristTick,WristAlong,WristHover,
     WristTilt};
 constexpr int feedback[]={Haptics,HapticStrength};

@@ -82,6 +82,15 @@ unsigned long long NearViewAlreadyOffsetCount();
 // reaching the render thread, not that the offset is wrong.
 unsigned long long NearViewNoProvenanceCount();
 
+// **One draw without the edit**, on the calling thread only: while set, the
+// packer forwards the near VP unedited. For DrawNear particle sprites in a
+// both-eyes frame, whose renderer already subtracts the eye camera
+// (preyvr/NearParticles.h, KeepNearProjection); NearParticleStereo marks the
+// per-view constants dirty on both sides so they re-pack for that draw alone.
+void SetNearViewEditSuppressed(bool suppressed);
+// Packer calls forwarded unedited because of it.
+unsigned long long NearViewSuppressedCount();
+
 // Records the distinct view-info pointers the near hook edits and the
 // translation row it FOUND on each before editing. A second pointer whose found
 // row already differs by the half-IPD is a copy of an edited matrix, which is

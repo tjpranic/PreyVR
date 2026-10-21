@@ -8,6 +8,7 @@
 #include "HudBridge.h"
 #include "XrSessionHost.h"
 #include "InventorySwapchain.h"
+#include "MarkerStereo.h"
 #include "WristLane.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/LatestSnapshot.h"
@@ -136,6 +137,8 @@ thread_local ID3D11DepthStencilView* redrawFromDepth=nullptr;
 thread_local ID3D11RenderTargetView* redrawTarget=nullptr;
 thread_local ID3D11DepthStencilView* redrawDepthView=nullptr;
 thread_local bool redrawn=false;
+// The movie being redrawn is DanielleMarkers: its markers move per eye (MarkerStereo.h).
+thread_local bool redrawMarkers=false;
 Capture redrawDepth; // the stencil the native draw started from; depth fields only
 Capture inventoryRight;
 Capture nativeWrist;
@@ -600,11 +603,15 @@ void RedrawDisplay(void* root) {
         ComPtr<ID3D11Resource> source;redrawFromDepth->GetResource(&source);
         redrawContext->CopyResource(redrawDepth.depth.Get(),source.Get());
     }
+    // The native draw is the frame's own backbuffer: the second submission's eye.
+    if(redrawMarkers){BeginMarkerEyes(root);ApplyMarkerEye(root,1);}
     originalDisplay(root);
     activeContext=redrawContext;originalDestination=redrawFrom;originalDepth=redrawFromDepth;
     activeTarget=redrawTarget;activeDepthView=redrawDepthView;
     originalTargets(redrawContext,1,&activeTarget,activeDepthView);
+    if(redrawMarkers)ApplyMarkerEye(root,0);
     originalDisplay(root);
+    if(redrawMarkers)RestoreMarkerEyes(root);
     activeContext=nullptr;originalDestination=nullptr;originalDepth=nullptr;
     activeTarget=nullptr;activeDepthView=nullptr;
     originalTargets(redrawContext,1,&redrawFrom,redrawFromDepth);
@@ -838,16 +845,18 @@ bool RedrawIntoHeldEye(void* proxy,bool release,std::uintptr_t address) {
     void* root=held?InventoryRoot(proxy,PreyBase()):nullptr;
     if(held && !root)refusal="movie_root";
     if(root && native.ds && !EnsureDepthCopy(native.device,native.ds,redrawDepth)){root=nullptr;refusal="depth_copy";}
-    if(!root) {NoteFlashOverlay(NameOf(address).c_str(),false,refusal);return false;}
+    const std::string name=NameOf(address);
+    if(!root) {NoteFlashOverlay(name.c_str(),false,refusal);return false;}
     redrawRoot=root;redrawContext=native.context.Get();redrawFrom=native.saved[0];redrawFromDepth=native.ds;
     redrawTarget=held;redrawDepthView=native.ds?redrawDepth.depthView.Get():nullptr;redrawn=false;
+    redrawMarkers=name=="DanielleMarkers";
     originalFlash(proxy,release);
     const bool drew=redrawn;
     redrawRoot=nullptr;redrawContext=nullptr;redrawFrom=nullptr;redrawFromDepth=nullptr;
-    redrawTarget=nullptr;redrawDepthView=nullptr;redrawn=false;
+    redrawTarget=nullptr;redrawDepthView=nullptr;redrawn=false;redrawMarkers=false;
     // As the captures do: the callback ends with the targets it was entered with.
     originalTargets(native.context.Get(),8,native.saved.data(),native.ds);
-    NoteFlashOverlay(NameOf(address).c_str(),drew,drew?nullptr:"no_display");
+    NoteFlashOverlay(name.c_str(),drew,drew?nullptr:"no_display");
     return true;
 }
 void __fastcall CaptureFlash(void* proxy,bool release) {
@@ -1126,6 +1135,16 @@ DWORD QueueHudVariable(const std::string& path,bool set,double value){
     varPending.push_back({path,set,value});varWanted=true;return 0;
 }
 std::string HudVariableReport(){std::lock_guard lock(varMutex);return varLast;}
+bool HudMovieNumber(void* root,const char* path,double& value){
+    NativeHudValue v{};
+    NativeHudApi api{root,PreyBase()};
+    if(!root || !GetValueGuarded(root,api.base,path,v))return false;
+    if((v.type&0x3F)!=3){api.Release(v);return false;} // only a plain number has nothing to release
+    std::memcpy(&value,&v.payload,sizeof(value));return std::isfinite(value);
+}
+bool SetHudMovieNumber(void* root,const char* path,double value){
+    return root && std::isfinite(value) && SetNumberGuarded(root,PreyBase(),path,value);
+}
 void ResetNativeWristCapture(){
     wristRequest=0;nativeWrist={};wristFault=false;wristInstallAttempted=false;
 }

@@ -108,6 +108,7 @@ add_library(preyvr_core STATIC
     src/common/DebugOverlayScene.cpp
     src/common/ShotRay.cpp
     src/common/NearParticles.cpp
+    src/common/MarkerDepth.cpp
     src/common/WeaponRigAlignment.cpp
     src/common/CameraEdit.cpp
     src/common/ConsolePolicy.cpp
@@ -276,6 +277,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/NearFovOverride.cpp
         src/dll/NearViewStereo.cpp
         src/dll/NearParticleStereo.cpp
+        src/dll/MarkerStereo.cpp
         src/dll/DualSceneStereo.cpp
         src/dll/DualOverlay.cpp
         src/dll/RenderFrame.cpp
@@ -411,6 +413,7 @@ if(PREYVR_BUILD_TESTS)
     preyvr_add_test(debug_draw tests/DebugDrawTests.cpp)
     preyvr_add_test(shot_ray tests/ShotRayTests.cpp)
     preyvr_add_test(near_particles tests/NearParticlesTests.cpp)
+    preyvr_add_test(marker_depth tests/MarkerDepthTests.cpp)
     preyvr_add_test(hand_carry tests/HandCarryTests.cpp)
     preyvr_add_test(grenade_throw tests/GrenadeThrowTests.cpp)
     preyvr_add_test(wrist_holo tests/WristHoloTests.cpp)

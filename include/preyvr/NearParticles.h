@@ -71,6 +71,44 @@ enum class Builder : std::uint8_t { Unknown, Sprites, Geometry, Other };
 Builder BuilderFromReturnRva(std::uint32_t rva);
 const char* BuilderName(Builder builder);
 
+// --- both eyes from one frame (2026-10-21) ----------------------------------
+//
+// With both eyes rendered from one game frame (DualSceneStereo mode 3) the game
+// thread prepares the frame once, from the head, and the render thread submits
+// it twice, once per eye. The vertex contexts then carry the HEAD camera, so no
+// eye record matches either seam above:
+//   - geometry: RenderGeometry subtracts the head, the cyclops, which is already
+//     the weapon's convention -- nothing to correct. Only the Q-Beam bridge
+//     (below) still has to be applied; its context camera is recognised as the
+//     frame's centre (CameraEditHook IsDualFrameCentre).
+//   - sprites: the vertices are built once (ComputeVertices jobs, kicked by the
+//     3D engine before either submission) and both submissions draw the same
+//     buffer, so they cannot be moved per eye. The renderer's own
+//     `vertex - eye camera` is already exact per eye; what doubles the parallax
+//     is NearViewStereo's eye offset on the near view-projection, which the
+//     sprites' shader shares with the weapon. So a DrawNear sprite drawn inside a
+//     per-eye submission gets the near VP UNEDITED: (world - eye) * M0, which is
+//     the weapon's own (camera-space - d) * M0.
+//
+// `CREParticle::mfDraw(this, CShader*, SShaderPass*)` 0xF32070 draws every
+// particle sprite render item (its only vtable reference is 0x1DD99B0; DrawNear
+// geometry is drawn as meshes, not through it). Its first act is FX_Commit
+// (call 0xF320D4), which re-packs the per-view constants only when 0xF1B100
+// has marked them dirty: FX_Commit 0xF0DBB0 -> 0xF19960 -> 0xFB5230, which
+// builds a fresh view-info and packs it with 0xFB57A0 (NearViewStereo's seam).
+// The current render object is renderer+0x4708; bit 23 of its +0x40 dword is
+// FOB_NEAREST, set from bDrawNear (mfPrepare 0x1002180 tests it at 0x100236D).
+inline constexpr std::uint32_t kParticleDrawRva = 0xF32070;
+inline constexpr std::uint32_t kMarkViewConstantsDirtyRva = 0xF1B100;
+inline constexpr std::size_t kRendererCurrentObject = 0x4708;
+inline constexpr std::size_t kObjectFlags = 0x40;
+inline constexpr std::uint32_t kObjectNearest = 0x800000;
+
+// Whether a particle sprite draw keeps the near view-projection unedited: near.fx
+// on, inside a per-eye submission of a both-eyes frame, and a nearest (DrawNear)
+// render object.
+bool KeepNearProjection(bool enabled, bool perEyeSubmission, std::uint32_t objectFlags);
+
 // One stereo eye as CameraEditHook built it: where its camera ended up and the
 // cyclops camera it was offset from.
 struct EyeCamera {
