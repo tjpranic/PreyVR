@@ -9,8 +9,12 @@ Status, 2026-10-21: the step that puts the culler behind is found ([The
 handshake](#the-handshake-2026-10-21)): a frame that draws the world without
 its occlusion prepare leaves its cull batch queued for good. The same lag is
 the likely cause of a "parts of the world flash" glitch. A guard that makes the
-missing prepare is built ([The guard](#the-guard-2026-10-21)), offline only.
-Which of the prepare's tests failed on that frame is still inferred.
+missing prepare is built ([The guard](#the-guard-2026-10-21)).
+
+In its first headset run it caught the transition frame and the culler never
+fell behind ([Field result](#field-result-2026-10-21-preyvr-55)). The prepare
+was skipped by the `gEnv+0x2AB` no-world flag the pause menu sets, not by the
+camera. What clears that flag inside the gap is not identified.
 
 ## Symptom
 
@@ -282,26 +286,32 @@ batch waits for the next frame's run.
 `CSystem::Render` draws the world only under the last two tests, and draws a
 black 800×600 image otherwise. That black image is the
 `dual_overlay image rect=0,0,800,600 argb=0xff000000` seen at startup. The two
-read the camera at different points of the frame. If it reaches a world
-position between them, the prepare is skipped and the render is not: an
-orphaned batch.
+read the flag and the camera at different points of the frame. If either
+changes between steps 1 and 3, the prepare is skipped and the render is not:
+an orphaned batch.
 
-**Inferred, not yet observed:**
-- that the camera (or the `gEnv` flag) is what changed between steps 1 and 3 on
-  that frame;
-- what changed it.
+**Observed 2026-10-21 ([Field result](#field-result-2026-10-21-preyvr-55)):**
+- On every pause-menu frame the camera was at a world position.
+- The prepare was skipped by the `gEnv+0x2AB` flag (`gates=r-c`), which keeps
+  the world from being drawn while the menu is up.
+- On the frame the menu closed, the flag was still set at step 1 and clear by
+  step 3, about 4 ms later.
+- The camera test (`skippedOrigin`) fails only at startup, before the first
+  load.
 
-PreyVR's input drain sits inside that gap and the UI update is beside it. The
-drain moved into the `CSystem::Render` detour on 2026-09-06, before the
-September crashes, and nobody reports this crash in unmodded Prey. The run
-cannot tell these apart; the observation below records it.
+**Not identified:** what clears the flag inside that gap. PreyVR's input drain
+sits inside it, and the UI update is beside it. The drain moved into the
+`CSystem::Render` detour on 2026-09-06, before the September crashes, and
+nobody reports this crash in unmodded Prey. The logs cannot tell these apart.
 
 **The visible effect (inferred).** At depth 1, each frame's world content is
 culled with the previous frame's camera and drawn with the current one. What
 just came into view is missing for one frame: a sliver at the edge on a head
 turn, a wide wedge on a 45° snap turn. At depth 2 the cameras are recycled
 pool slots, so the frustum used is some other camera of the frame. Depth 2 plus
-a freeing reset is the crash.
+a freeing reset is the crash. In the guarded field run the lag never began and
+the user saw no flashing. That is consistent with this, though one run does not
+prove it.
 
 ## The guard (2026-10-21)
 
@@ -333,9 +343,10 @@ then pairs whichever side comes first.
 
 **Lines (`preyvr_cull_prepare`):**
 - `detail=installed … hooked=1 epsilon=0.05`.
-- `detail=kick n=… state=4->1 lastPrepare=skipped_origin camera=x,y,z`. The first
-  32 are logged, then one in 256. `lastPrepare` is what the engine's own
-  `PrepareOcclusion` decided since the previous render: `ran`, `skipped_*`, or
+- `detail=kick n=… state=4->1 lastPrepare=skipped_no_world camera=x,y,z`. The
+  first 32 are logged, then one in 256. `lastPrepare` is what the engine's own
+  `PrepareOcclusion` decided since the previous render: `ran`,
+  `skipped_no_world`, `skipped_origin`, `skipped_render_tasks`, `unread`, or
   `none` (not called at all).
 - `detail=kick_failed`: always logged.
 - `detail=orphan n=… state=4->3 guard=0|1 lastPrepare=…`.
@@ -352,11 +363,42 @@ then pairs whichever side comes first.
 
 | Seen | Reading |
 |---|---|
-| `kick … lastPrepare=skipped_origin`, the watch stays at depth 0 through a refusal | Confirmed: the camera reached a world position between the prepare and the render, and the guard paired the frame. |
+| `kick … lastPrepare=skipped_no_world`, the watch stays at depth 0 through a refusal | **Observed 2026-10-21.** The no-world flag a menu sets was cleared between the prepare and the render, and the guard paired the frame. The expected case. |
+| `kick … lastPrepare=skipped_origin` | Same mechanism through the camera test: the camera reached a world position between the prepare and the render. Not seen yet; the guard covers it the same way. |
 | `kick … lastPrepare=none` | `CSystem::Render` ran with no `PrepareOcclusion` since the last render: another caller of Render. |
 | `kick … lastPrepare=ran` | Should not happen: the prepare ran yet the state was not 1 or 2 at the render. Read the window. |
+| `kick_failed` | `PrepareOcclusion` was called with its tests passing yet left no prepare in flight. Read the window; the frame will be orphaned. |
 | `orphan guard=1` or a lag change with no kick | A path the guard does not cover, such as `m_pProcess` without `PROC_3DENGINE`, which draws the world with no camera test. |
 | `guard=0` (A/B): `orphan` then `lag depth=1` | The mechanism, observed directly. |
+| Frame-probe `prepare … gates=r-c` on the frames before a kick | The world flag held the prepare off for those menu frames. `gates=rw-` would mean the camera test did. |
+
+## Field result, 2026-10-21 (PreyVR-55)
+
+Run `player-20261021-204006`, the first in a headset with the guard on.
+
+- **The refusal.** At 20:41:33 a pause-menu close was refused
+  (`dual_first_eye_not_held`). Without the guard, every refusal of that kind had
+  started the lag.
+- **The guard fired once, on that frame:**
+  `kick n=1 state=4->1 lastPrepare=skipped_no_world camera=762.472,1586.829,17.144`.
+- **Frame-probe window 4** (`kinds=panel_close+first_eye_refused+prepare_kick`):
+  - On each of the 8 menu frames before it, `prepare state=4->4 gates=r-c`: the
+    world flag failed and the camera passed.
+  - On the transition frame, the engine's own prepare skipped again at −4 ms.
+    The kick at 0 set the state to 1.
+  - The consumer job ran in that same frame (pass 3700) and drained the queue to
+    read = write. Every later frame did the same.
+- **The watch:** depth 0 for the whole session. 25,659 resets, all at depth 0
+  (`atDepth=25659/0/0/0`), `pendingResets=0`, no stale or doomed items.
+- **Final guard summary:** `prepares=25673`, of which `ran=24484`,
+  `skippedOrigin=1038` (startup, before the first load) and
+  `skippedNoWorld=151` (that menu). Also `unprepared=1 kicks=1 kickFailed=0 orphans=0`.
+- **What the user saw:** no flashing during the session.
+
+One run with one refusal. Before the guard, the lag began at a refusal in all
+16 runs where it occurred (the 15 of the 2026-10-19 field results, plus
+`player-20261021-194310`), and never without one. This is the first refusal
+not followed by it.
 
 ## Verification
 
@@ -389,4 +431,7 @@ then pairs whichever side comes first.
     - the log budgets, the gate and the commands.
   - `frame_probe` covers the new steps and window kinds.
   - The verifier passes against the supported image (17 spans).
-  - The full suite passes (92 tests). **Not yet run in the game.**
+  - The full suite passes (92 tests).
+- 2026-10-21, headset (PreyVR-55, run `player-20261021-204006`): the guard
+  installed (`hooked=1 epsilon=0.05`) and paired the one transition frame. The
+  culler never fell behind. See [Field result](#field-result-2026-10-21-preyvr-55).

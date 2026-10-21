@@ -12,12 +12,16 @@ namespace preyvr::dll {
 // (CObjManager+0x200, state at +4). C3DEngine::PrepareOcclusion kicks the
 // z-buffer jobs (state 1, then 2); CullStart, from RenderWorld, parks in 3 when
 // it comes first. Whichever comes second launches the job (4). CryAction's
-// PostUpdate calls PrepareOcclusion(m_ViewCamera) and then CSystem::Render, and
-// both skip a camera within 5 cm of the origin, each reading it at its own time.
-// When a frame's prepare is skipped and its render is not, CullStart waits for a
-// prepare that never comes and that frame's cull batch stays queued. Every
-// consumer run drains exactly one batch, so the culler then stays a frame behind
-// for the rest of the session.
+// PostUpdate calls PrepareOcclusion(m_ViewCamera) and then CSystem::Render. Both
+// skip while the gEnv+0x2AB no-world flag is set (a menu that hides the world,
+// such as the pause menu, sets it) or the camera is within 5 cm of the origin,
+// and each reads them at its own time. In the field it is the flag that changes
+// in between: on the frame such a menu closes it is still set at the prepare and
+// clear by the render, about 4 ms later (docs, "Field result"). When a frame's
+// prepare is skipped and its render is not, CullStart waits for a prepare that
+// never comes and that frame's cull batch stays queued. Every consumer run
+// drains exactly one batch, so the culler then stays a frame behind for the rest
+// of the session.
 //
 // The guard runs on the main thread, in CSystem::Render's detour before the
 // original. If no prepare is in flight (state not 1 or 2) although

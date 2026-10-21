@@ -56,6 +56,8 @@
     Causes an access violation that then crashes the game. Have got instrumentation in place to catch it. See CameraCullWatch.cpp.
 - Very rare render freeze
     The camera doesn't render any new frame for a short time. Not related to the use-after-free camera bug. Instrumentation in place: FrameProbe.cpp.
+- Camera flashing bug
+    A weird bug that causes certain parts of the world to flash strangely. Might be a culling issue. A fix + instrumentation is in place.
 
 ## DONE
 

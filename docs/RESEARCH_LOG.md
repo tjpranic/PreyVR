@@ -4120,3 +4120,24 @@ Offline only:
 - `verify_cull_camera_watch.py` passes against the supported image.
 
 See [the crash notes](CULL-CAMERA-CRASH-2026-10-17.md#the-handshake-2026-10-21).
+
+## 2026-10-21 — Cull guard: first headset run
+
+PreyVR-55, run `player-20261021-204006`.
+- A pause-menu close was refused at 20:41:33. The guard fired on that frame
+  (`kick n=1 state=4->1`).
+- The cull consumer ran in the same frame and the watch stayed at depth 0 for
+  the whole session: 25,659 resets, none with items left queued.
+- The user saw no flashing. Before the guard, every refusal of this kind had
+  started the lag.
+
+**Correction to the entry above.** The prepare was not skipped by the camera.
+- On every menu frame, the camera was at a world position and the `gEnv+0x2AB`
+  no-world flag held the prepare off (`gates=r-c`, 151 frames).
+- On the closing frame the flag was still set when `PostUpdate` called
+  `PrepareOcclusion`, and clear about 4 ms later when `CSystem::Render` ran.
+- What clears it inside that gap is not identified.
+
+The guard covers both tests unchanged.
+
+See [the field result](CULL-CAMERA-CRASH-2026-10-17.md#field-result-2026-10-21-preyvr-55).
