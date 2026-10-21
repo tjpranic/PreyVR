@@ -148,6 +148,14 @@ struct ContactMark {
     bool pushed = false;
 };
 inline constexpr Color kContact{80, 205, 255, 240};
+// Surface stop: a hand's real grip and where it is drawn; a surface it met.
+struct SurfaceHand {
+    Vec3 real{}, drawn{};
+    bool held = false;
+};
+struct SurfaceMark {
+    Vec3 point{}, normal{};
+};
 struct PhysicalSweep {
     std::array<Vec3, 9> from{}, to{};
     float age = 0;   // seconds
@@ -169,6 +177,9 @@ struct Physical {
     bool foot = false, standing = false;          // the probe under the feet; something underfoot
     std::array<Vec3, 9> footBox{};
     std::string contactStatus;       // the contact lane's status line
+    std::vector<SurfaceHand> surfaceHands;   // surface stop: each tracked hand
+    std::vector<SurfaceMark> surfaceMarks;   // and what held one back
+    std::string surfaceStatus;
 };
 struct OverlayFrame {
     bool headValid = false;

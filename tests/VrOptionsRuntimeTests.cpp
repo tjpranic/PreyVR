@@ -18,6 +18,8 @@ DWORD SetMedkitSlot(unsigned v){applied[options::Medkit]=v;return 0;}unsigned Me
 void SetFreeSwing(unsigned v){applied[options::FreeSwing]=v;}unsigned FreeSwingEnabled(){return applied[options::FreeSwing];}
 void SetPhysicalContact(unsigned v){applied[options::PhysicalContact]=v;}unsigned PhysicalContactEnabled(){return applied[options::PhysicalContact];}
 void SetPushStrength(unsigned v){applied[options::PushStrength]=v;}unsigned PushStrength(){return applied[options::PushStrength];}
+void SetSurfaceStop(unsigned v){applied[options::SurfaceStop]=v;}unsigned SurfaceStopEnabled(){return applied[options::SurfaceStop];}
+void SetSurfaceHeavyMass(unsigned v){applied[options::HeavyMass]=v;}unsigned SurfaceHeavyMass(){return applied[options::HeavyMass];}
 void SetSwingSpeed(unsigned v){applied[options::SwingSpeed]=v;}unsigned SwingSpeed(){return applied[options::SwingSpeed];}
 void SetHeavySwingSpeed(unsigned v){applied[options::HeavySwingSpeed]=v;}unsigned HeavySwingSpeed(){return applied[options::HeavySwingSpeed];}
 void QueueHaptic(Hand,haptics::Event,const TrackingFrame&){}
@@ -192,6 +194,11 @@ int main(){
  set(options::PhysicalContact,0);Check(!PhysicalContactEnabled(),"turning physical contact off reaches the contact lane");
  set(options::PhysicalContact,1);Check(PhysicalContactEnabled(),"and on again");
  set(options::PushStrength,150);Check(PushStrength()==150,"push strength reaches the contact lane");
+ Check(SurfaceStopEnabled(),"hands stop at surfaces by default");
+ set(options::SurfaceStop,0);Check(!SurfaceStopEnabled(),"turning it off reaches the surface stop lane");
+ set(options::SurfaceStop,1);Check(SurfaceStopEnabled(),"and on again");
+ Check(SurfaceHeavyMass()==10,"heavy objects from 10 kg by default");
+ set(options::HeavyMass,25);Check(SurfaceHeavyMass()==25,"the heavy mass reaches the surface stop lane");
  Check(PsiTargetMode()==0&&!MedkitSlotEnabled(),"abilities start with native behavior");
  set(options::PsiTarget,1);Check(PsiTargetMode()==1,"head-directed psi reaches adapter");
  set(options::PsiTarget,2);Check(PsiTargetMode()==2,"controller-directed psi reaches adapter");
@@ -244,7 +251,7 @@ int main(){
    {options::WristHover,50},{options::WristTilt,30},{options::CarryHand,0},{options::GrenadeDeploy,1},
    {options::LongReach,0},{options::InventoryLayer,1},{options::InventoryStereo,1},{options::InventoryDepth,50},
    {options::UiCurve,50},{options::DebugOverlay,1},{options::FingerCurl,0},{options::AimLasers,0},
-   {options::ControllerPrompts,0},{options::ArmLength,51}};
+   {options::ControllerPrompts,0},{options::ArmLength,51},{options::SurfaceStop,0},{options::HeavyMass,40}};
   VrOptionsUiResult result;
   for(const auto& [id,v]:chosen){options::Change change;change.setting=static_cast<int>(id);change.value=v;
    result.changes.push_back(change);}

@@ -12,10 +12,13 @@ namespace preyvr::lifecycle {void Log(std::string_view line){logLines.emplace_ba
 namespace {
 unsigned Count(const char* a){unsigned n=0;for(const auto& l:logLines)n+=l.find(a)!=std::string::npos;return n;}
 bool wanted=false;
+unsigned surfaceStop=0,surfaceWeapon=1;
 }
 namespace preyvr::dll {
 unsigned PhysicalContactEnabled(){return 0;}
 bool SwingLaneWanted(){return wanted;}
+unsigned SurfaceStopEnabled(){return surfaceStop;}
+unsigned SurfaceStopWeapon(){return surfaceWeapon;}
 }
 int main(){
     using namespace preyvr;using namespace preyvr::dll;using preyvr::test::Check;
@@ -48,5 +51,31 @@ int main(){
     PublishPhysicalWeapon(f,rig,location,Pose{{},{.5f,0,0}},shape);
     TryGetWeaponBox(again);
     Check(again.sequence==2&&Count("preyvr_physical geometry")==1,"a newer one does; the same equip logs nothing more");
+    // The surface stop wants it too, for the weapon's own probes.
+    wanted=false;surfaceStop=1;f.tracking.sequence=3;
+    PublishPhysicalWeapon(f,rig,location,Pose{{},{.5f,0,0}},shape);
+    TryGetWeaponBox(again);
+    Check(again.sequence==3,"the surface stop alone wants the box");
+    surfaceWeapon=0;f.tracking.sequence=4;
+    PublishPhysicalWeapon(f,rig,location,Pose{{},{.5f,0,0}},shape);
+    TryGetWeaponBox(again);
+    Check(again.sequence==3,"not when its weapon probes are off");
+    surfaceWeapon=1;
+    // Drawn held back by a wall: the box records it, and the real swing undoes it.
+    f.yaw=.7f;f.tracking.sequence=5;f.surface[static_cast<unsigned>(Hand::right)].offset={-.1f,.02f,0};
+    PublishPhysicalWeapon(f,rig,location,Pose{{},{.5f,0,0}},shape);
+    WeaponBox drawn{};TryGetWeaponBox(drawn);
+    const auto grip=stereo::ToEngineSpace(f.tracking.hands[1].gripPose);
+    Check(drawn.sequence==5&&std::fabs(drawn.correction.x+.1f)<1e-6f&&std::fabs(drawn.correction.y-.02f)<1e-6f&&
+          std::fabs(drawn.gripPose.position.x-grip.position.x)<1e-6f&&std::fabs(drawn.gripPose.orientation.w-grip.orientation.w)<1e-6f,
+          "the box carries the correction it was drawn with, and its grip's pose");
+    WeaponBox real=drawn;TrackedWeaponBox(real);
+    bool moved=true,mapped=true;
+    for(unsigned i=0;i<9;++i){
+        moved&=std::fabs(real.points[i].x-drawn.points[i].x-.1f)<1e-4f&&std::fabs(real.points[i].y-drawn.points[i].y+.02f)<1e-4f;
+        const auto w=physical::Transform(real.worldFromReference,real.local[i]);
+        mapped&=std::fabs(w.x-real.points[i].x)<1e-4f&&std::fabs(w.y-real.points[i].y)<1e-4f&&std::fabs(w.z-real.points[i].z)<1e-4f;
+    }
+    Check(moved&&mapped&&real.correction.x==0,"the real box: moved back in the world and in tracking space alike");
     std::cout<<"Weapon box publication passed\n";
 }

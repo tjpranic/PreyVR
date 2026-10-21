@@ -93,6 +93,17 @@ struct ContactOverlayState {
     std::string status;
 };
 void DebugOverlayContact(const GameplayPoseFrame& frame, const ContactOverlayState& state);
+// Surface stop (SurfaceStopLane), same thread and condition. Engine world space.
+// Each hand's real grip and where it is drawn, by Hand; the surfaces met.
+struct SurfaceOverlayState {
+    struct HandMark { bool active = false, held = false; Vec3 real{}, drawn{}; };
+    std::array<HandMark, 2> hands{};
+    struct Mark { Vec3 point{}, normal{}; };
+    std::array<Mark, 16> marks{};
+    unsigned count = 0;
+    std::string status;
+};
+void DebugOverlaySurface(const GameplayPoseFrame& frame, const SurfaceOverlayState& state);
 // XR frame thread: the wrist layer's own decision this frame.
 void DebugOverlayWristDecision(bool gate, bool visible);
 // XR frame thread: the forearm hologram's card and its look test (WristLane);

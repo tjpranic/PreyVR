@@ -75,7 +75,7 @@ int __fastcall Broadphase(std::uintptr_t, const Vec3*, const Vec3*, void*** list
 }
 struct Response { bool overlap = false, sweep = false, head = false; Vec3 point{}; short surface = 0; int partId = 0; };
 std::map<const void*, Response> responses;
-struct Call { void* entity; Kind kind; };
+struct Call { void* entity; Kind kind; Vec3 centre; };
 std::vector<Call> calls;
 int __fastcall FakeCollide(std::uintptr_t, void* entity, int itype, void* primitive, const Vec3* sweep, scene::Hit* out, void*)
 {
@@ -83,7 +83,7 @@ int __fastcall FakeCollide(std::uintptr_t, void* entity, int itype, void* primit
     const auto& p = *static_cast<const contact::BoxPrimitive*>(primitive);
     const float longest = std::max({p.half.x, p.half.y, p.half.z});
     const Kind kind = Length(*sweep) == 0 ? Kind::overlap : longest <= .07f ? Kind::head : Kind::sweep;
-    calls.push_back({entity, kind});
+    calls.push_back({entity, kind, p.centre});
     const auto it = responses.find(entity);
     if (it == responses.end()) { return 0; }
     const auto& r = it->second;
@@ -266,6 +266,16 @@ bool HudGameplayInputAllowed() { return !menu; }
 bool BodyHeadOut() { return false; }
 unsigned long long HeadTrackingReferenceGeneration() { return 2; }
 bool TryGetWeaponBox(WeaponBox& out) { out = weapon; return haveBox; }
+// PhysicalInteractions.cpp's, whose own test checks it: the box where the controller holds it.
+unsigned tracked = 0;
+void TrackedWeaponBox(WeaponBox& box)
+{
+    ++tracked;
+    const Vec3 local = Rotate(Conjugate(box.worldFromReference.orientation), box.correction);
+    for (auto& p : box.points) { p = Sub(p, box.correction); }
+    for (auto& p : box.local) { p = Sub(p, local); }
+    box.correction = {};
+}
 DWORD SceneQueryWorld(const GameplayPoseFrame&, std::uintptr_t&, void*&) { return ERROR_NOT_READY; }
 std::uintptr_t CarriedPhysics() { return 0; }
 bool DebugOverlayWantsPhysical() { return true; }
@@ -564,6 +574,26 @@ int main()
           report.find(" handoffs=2") != std::string::npos && report.find(" passes=") != std::string::npos &&
           report.find(" static=") != std::string::npos && report.find(" gate=open") != std::string::npos &&
           report.find(" log=0") != std::string::npos, "the report");
+
+    // --- held back by a wall (SurfaceStopLane.h): strikes take the real swing ---
+    {
+        responses.clear();
+        const auto listedBefore = listed;
+        listed = {&wall};
+        still(2);
+        const Vec3 real = weapon.points[0];
+        const unsigned trackedBefore = tracked;
+        weapon.correction = {-.1f, 0, 0};
+        for (auto& p : weapon.points) { p = Add(p, weapon.correction); }   // the grip is the controller's: unmoved
+        calls.clear();
+        move({});
+        Check(tracked > trackedBefore && !calls.empty() && calls[0].kind == Kind::overlap &&
+                  Length(Sub(calls[0].centre, real)) < 1e-4f,
+              "the drawn wrench 10 cm back: the query is where the controller holds it");
+        for (auto& p : weapon.points) { p = Sub(p, weapon.correction); }
+        weapon.correction = {};
+        listed = listedBefore;
+    }
 
     // --- not the wrench any more, then hooks that will not go in ---
     SetSwingEventLog(1);

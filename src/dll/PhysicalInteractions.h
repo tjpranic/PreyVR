@@ -30,7 +30,14 @@ struct WeaponBox {
     std::array<Vec3,9> local{};
     Pose worldFromReference{};
     Vec3 grip{};
+    Pose gripPose{};          // the same grip with its orientation (reference space)
     std::uintptr_t weapon=0;  // the weapon object the box is of
+    // Where the weapon was drawn against where its controller held it: held back
+    // by a surface (SurfaceStopLane.h), world metres. The box is the drawn one.
+    Vec3 correction{};
 };
 bool TryGetWeaponBox(WeaponBox&);
+// The box moved back to where the controller holds it, by its correction: the
+// real swing, for the free-swing wrench's strikes.
+void TrackedWeaponBox(WeaponBox&);
 }

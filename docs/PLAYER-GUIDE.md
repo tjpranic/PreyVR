@@ -127,7 +127,13 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   the grip), **arm length** (shoulder to wrist, 56 cm by default: lower it if
   your arms look bent when yours are straight, raise it if your hands stop short
   of the controllers), the carry grip (hold, or press to toggle), hand or game grenade
-  throwing, how hard thrown objects and grenades fly, and **Physical Contact**
+  throwing, how hard thrown objects and grenades fly, **Hands Stop at Surfaces**
+  (on by default: your drawn hands and weapon stop against walls, floors, desks,
+  doors and glass and slide along them, though your real hands go on; shots,
+  grabbing and psi start where the drawn hand is, while wrench strikes follow your
+  real swing) with **Heavy Objects** (10 kg by default: loose objects heavier than
+  this stop your hands too, and slide away slowly while you press into them;
+  lighter ones, corpses and characters never stop them), **Physical Contact**
   with its push strength (on by default: your weapon and free hands push loose
   objects and bodies; light ones keep up, heavy ones resist, friction lets you
   drag them, a body moves limb by limb, and what you stand on is never pushed),

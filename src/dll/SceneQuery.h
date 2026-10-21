@@ -21,6 +21,8 @@ bool QuerySegment(const GameplayPoseFrame&,Vec3 a,Vec3 b,scene::Hit&);
 // and b, skipping the player and `skip` (may be null). True when the query ran;
 // then hit.distance<0 means clear. Shares the query's gates and fault latch.
 bool QuerySceneryBetween(const GameplayPoseFrame&,Vec3 a,Vec3 b,void* skip,scene::Hit&);
+// The same, asking for `objectTypes` (scene::SceneryAndLooseObjects, say).
+bool QueryObjectsBetween(const GameplayPoseFrame&,Vec3 a,Vec3 b,void* skip,int objectTypes,scene::Hit&);
 bool SceneQueryFaulted();
 // Input-drain thread only: the physical world and the player's own physics,
 // after the scene query's thread, player and vtable checks. ERROR_SUCCESS or why not.

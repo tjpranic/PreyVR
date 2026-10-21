@@ -151,7 +151,7 @@ Slot livingTable[8]{nullptr, nullptr, nullptr, nullptr, nullptr, reinterpret_cas
                      reinterpret_cast<Slot>(LivingStatus), nullptr};
 Slot staticTable[8]{};
 Object player{livingTable}, carried{rigidTable}, can{rigidTable}, body{articulatedTable}, wall{staticTable}, crate{rigidTable},
-    pinned{rigidTable};
+    pinned{rigidTable}, heavyBox{rigidTable};
 void BuildRagdoll()
 {
     for (int i = 0; i < 2; ++i) {
@@ -679,6 +679,44 @@ int main()
     Check(canSets <= 1 && lastOverlay.box && lastOverlay.handBox[1] && !lastOverlay.handBox[0],
           "weapon drawn: its box and the left hand's; one push per object a frame");
     left.gripValidity = {};
+    // --- presses: a heavy prop holding a drawn hand back (SurfaceStopLane.h) ---
+    {
+        const auto rightHand = static_cast<unsigned>(Hand::right);
+        SetMass(heavyBox, 15);
+        underFeet.clear();
+        groundCollider = nullptr;
+        listed = {};
+        for (int i = 0; i < 31; ++i) { tick(0); }   // the pushes above lapse
+        sets.clear();
+        logSecondNs = 0;
+        const unsigned pulsesAtPress = pulses + leftPulses;
+        // The real hand 5 cm past the box's face (normal -x): pushed away along +x,
+        // asking 0.5 m/s, as hard as the hand can (400 N on 15 kg: 0.3 m/s a frame).
+        f.surface[rightHand].press = {&heavyBox, {860.6f, 1579.6f, 7.8f}, {-1, 0, 0}, .05f};
+        tick(0);
+        Check(sets.size() == 1 && sets[0].entity == &heavyBox && sets[0].action.v.x > .25f && sets[0].action.v.x < .31f &&
+                  std::fabs(sets[0].action.v.y) < .01f && std::fabs(sets[0].action.v.z) < .01f,
+              "a press pushes the heavy box away from the hand, as hard as the hand can");
+        Check(pulses + leftPulses == pulsesAtPress && Logged("push entity=", "kind=press") && Logged("kind=press", "depthMm=50.0"),
+              "a press line, and no pulse: a hand stopped at a surface gives none");
+        Check(ContactReport().find(" pressed=1 pressPushes=1 ") != std::string::npos, "counted as a press");
+        // A press and the weapon's overlap on one object: one push, the press's.
+        listed = {&can};
+        f.surface[rightHand].press = {&can, {860.5f, 1579.6f, 7.75f}, {0, 0, 1}, .05f};
+        sets.clear();
+        tick(0);
+        unsigned canPushes = 0;
+        for (const auto& s : sets) { canPushes += s.entity == &can; }
+        Check(canPushes == 1 && sets.back().action.v.z < -.45f && sets.back().action.v.z > -.55f,
+              "a press beats an overlap on the same object: one push, into its surface at 0.5 m/s");
+        // Something that is not a loose prop is never pushed by a press.
+        listed = {};
+        f.surface[rightHand].press = {&wall, {860.5f, 1579.6f, 7.75f}, {0, 0, 1}, .05f};
+        sets.clear();
+        tick(0);
+        Check(sets.empty(), "a press on scenery pushes nothing");
+        f.surface[rightHand].press = {};
+    }
     SetPushStrength(10);
     tick(0);
     Check(PushStrength() == 25 && Logged("settings enabled=1 strength=25"), "strength clamps to 25..200 percent");

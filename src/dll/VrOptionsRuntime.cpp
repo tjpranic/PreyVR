@@ -2,6 +2,7 @@
 #include "SceneQuery.h"
 #include "PhysicalInteractions.h"
 #include "ContactLane.h"
+#include "SurfaceStopLane.h"
 #include "SwingLane.h"
 #include "PsiMedkit.h"
 #include "Haptics.h"
@@ -220,6 +221,8 @@ constexpr Wiring wiring[]={
  {options::AimLasers,Set<SetAimLasers>,Get<AimLasersEnabled>},
  {options::ControllerPrompts,Set<SetControllerPrompts>,Get<ControllerPromptsEnabled>},
  {options::ArmLength,Set<SetArmLengthCm>,Get<ArmLengthCm>},
+ {options::SurfaceStop,Set<SetSurfaceStop>,Get<SurfaceStopEnabled>},
+ {options::HeavyMass,Set<SetSurfaceHeavyMass>,Get<SurfaceHeavyMass>},
 };
 constexpr bool InSettingOrder(){
  for(unsigned i=0;i<std::size(wiring);++i)if(wiring[i].id!=i)return false;

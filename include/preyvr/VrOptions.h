@@ -18,12 +18,12 @@ enum Setting : unsigned { Turn, HeadRelative, TurnSpeed, TwoHand, GripToggle,
     ArmsFree, CarryHold, GrenadeHand, CarryThrowStrength, GrenadeThrowStrength,
     WristOnHud, WristTick, WristAlong, WristHover, WristTilt,
     CarryHand, GrenadeDeploy, LongReach, InventoryLayer, InventoryStereo, InventoryDepth,
-    FingerCurl, AimLasers, ControllerPrompts, ArmLength,
+    FingerCurl, AimLasers, ControllerPrompts, ArmLength, SurfaceStop, HeavyMass,
     Count };
 // What a value counts, for Display. `metresInMm` shows millimetres as metres;
 // the two directional units name the side instead of a sign.
 enum class Unit : unsigned char { none, percent, cm, mm, metresInMm, degrees, degreesRightLeft, degreesUpDown, ms,
-    cmPerSecond };
+    cmPerSecond, kg };
 // **One setting, described once**: the key it is saved under, its label and
 // help, its default, range and step, and how its value reads -- `names` for a
 // named choice (one per value, from `min`), `choices` for a fixed set of

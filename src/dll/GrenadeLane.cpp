@@ -480,6 +480,8 @@ bool RightGrip(const GameplayPoseFrame& f, Pose& out)
         return false;
     }
     out = animik::ControllerWorldFromHead(f.yaw, f.cameraCentre, f.tracking.head, hand.gripPose);
+    // Where the hand is drawn: a wall holding it back holds the grenade back too.
+    out.position = Add(out.position, SurfaceOffset(f, Hand::right));
     return Finite(out.position) && Finite(out.orientation);
 }
 // The middle of the closed right fist: out of the grip origin through the palm

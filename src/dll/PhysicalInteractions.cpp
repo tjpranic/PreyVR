@@ -1,6 +1,7 @@
 #include "PhysicalInteractions.h"
 #include "AimTakeover.h"
 #include "ContactLane.h"
+#include "SurfaceStopLane.h"
 #include "SwingLane.h"
 #include "Logger.h"
 #include "preyvr/LatestSnapshot.h"
@@ -18,7 +19,7 @@
 namespace preyvr::dll {
 namespace {
 using namespace physical;
-struct Geometry {Sample sample{};RigIdentity rig{};std::uint64_t published=0;bool wrench=false;};
+struct Geometry {Sample sample{};RigIdentity rig{};std::uint64_t published=0;bool wrench=false;Vec3 correction{};};
 LatestSnapshot<Geometry> geometry;
 std::mutex publicationMutex;
 std::atomic<std::uint64_t> loggedRig{0};
@@ -32,7 +33,7 @@ void PublishPhysicalWeapon(const GameplayPoseFrame& frame,const RigIdentity& rig
        !IsPoseUsable(frame.tracking.hands[1].gripPose,frame.tracking.hands[1].gripValidity,100000000)||
        frame.tracking.displayTime<=0||!std::isfinite(location.s)||location.s<=0||location.s>2)return;
     const Pose worldFromReference{{0,0,std::sin(frame.yaw*.5f),std::cos(frame.yaw*.5f)}, {}};
-    Geometry g{};g.rig=rig;g.wrench=shape.wrench;
+    Geometry g{};g.rig=rig;g.wrench=shape.wrench;g.correction=SurfaceOffset(frame,Hand::right);
     auto& s=g.sample;s.worldFromReference=worldFromReference;
     s.worldFromReference.position=Sub(frame.cameraCentre,Rotate(worldFromReference.orientation,stereo::ToEngineSpace(frame.tracking.head.position)));
     const auto referenceFromWorld=Inverse(s.worldFromReference);
@@ -54,7 +55,7 @@ void PublishPhysicalWeapon(const GameplayPoseFrame& frame,const RigIdentity& rig
        previous.sample.reference==s.reference&&previous.sample.sequence>=s.sequence)return;
     geometry.Publish(g);
 }
-bool PhysicalGeometryWanted(){return PhysicalContactEnabled()||SwingLaneWanted();}
+bool PhysicalGeometryWanted(){return PhysicalContactEnabled()||SwingLaneWanted()||(SurfaceStopEnabled()&&SurfaceStopWeapon());}
 bool TryGetWeaponBox(WeaponBox& out){
     out={};Geometry g{};
     if(!geometry.TryRead(g))return false;
@@ -64,6 +65,12 @@ bool TryGetWeaponBox(WeaponBox& out){
     out.rig=g.sample.owner;out.sequence=g.sample.sequence;out.reference=g.sample.reference;out.epoch=g.sample.epoch;
     out.publishedNs=g.published;out.stamp=g.sample.stamp;out.wrench=g.wrench;
     out.local=g.sample.points;out.worldFromReference=g.sample.worldFromReference;out.grip=g.sample.grip.position;
-    out.weapon=g.rig.weapon;return true;
+    out.gripPose=g.sample.grip;out.weapon=g.rig.weapon;out.correction=g.correction;return true;
+}
+void TrackedWeaponBox(WeaponBox& box){
+    const Vec3 local=Rotate(Conjugate(box.worldFromReference.orientation),box.correction);
+    for(auto& p:box.points)p=Sub(p,box.correction);
+    for(auto& p:box.local)p=Sub(p,local);
+    box.correction={};
 }
 }

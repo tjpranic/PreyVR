@@ -36,6 +36,7 @@
 #include "ArmsLane.h"
 #include "PhysicalInteractions.h"
 #include "ContactLane.h"
+#include "SurfaceStopLane.h"
 #include "SwingLane.h"
 #include "WrenchDraw.h"
 #include "WrenchSound.h"
@@ -618,6 +619,27 @@ bool ExecuteContact(const std::vector<std::string>& args, std::ostringstream& ou
     out << "contact" << ContactReport();
     return true;
 }
+// Surface stop (SurfaceStopLane.h): surface [0|1] [log 0|1] [weapon 0|1] [heavy kg].
+// 0/1 is the VR Options switch; log the per-event hold and let-go lines; weapon 0
+// stops the hands alone, not the weapon's box; heavy is the Heavy Objects mass.
+bool ExecuteSurface(const std::vector<std::string>& args, std::ostringstream& out)
+{
+    if (args[0] != "surface") { return false; }
+    std::size_t i = 1;
+    if (args.size() > 1 && (args[1] == "0" || args[1] == "1")) {
+        SetSurfaceStop(args[1] == "1");
+        i = 2;
+    }
+    for (; i < args.size(); i += 2) {
+        int on = 1;
+        if (i + 1 < args.size()) { ParseInt(args[i + 1], on); }
+        if (args[i] == "log") { SetSurfaceStopEventLog(on != 0); }
+        else if (args[i] == "weapon") { SetSurfaceStopWeapon(on != 0); }
+        else if (args[i] == "heavy" && i + 1 < args.size() && on > 0) { SetSurfaceHeavyMass(static_cast<unsigned>(on)); }
+    }
+    out << "surface" << SurfaceStopReport();
+    return true;
+}
 bool ExecuteSwing(const std::vector<std::string>& args, std::ostringstream& out)
 {
     if (args[0] != "swing") { return false; }
@@ -740,7 +762,7 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
 
     if (ExecutePose(args, out) || ExecuteCarryCommand(args, out) || ExecuteGrenadeCommand(args, out) || ExecuteArmsCommand(args, out) ||
         ExecuteWristCommand(args, out) || ExecuteDualCommand(args, out) || ExecuteReticle(args, out) ||
-        ExecutePrompts(args, out) || ExecuteContact(args, out) || ExecuteSwing(args, out) ||
+        ExecutePrompts(args, out) || ExecuteContact(args, out) || ExecuteSurface(args, out) || ExecuteSwing(args, out) ||
         ExecuteWrenchDraw(args, out)) {
         return;
     }

@@ -91,6 +91,14 @@ struct ContactRecord {
     std::uint64_t ns = 0, reference = 0;
 };
 LatestSnapshot<ContactRecord> gContact;
+// Surface stop (SurfaceStopLane): held-back hands and the surfaces they met.
+struct SurfaceRecord {
+    std::vector<dd::SurfaceHand> hands;
+    std::vector<dd::SurfaceMark> marks;
+    std::string status;
+    std::uint64_t ns = 0, reference = 0;
+};
+LatestSnapshot<SurfaceRecord> gSurface;
 struct WorldSweep { std::array<Vec3, 9> from{}, to{}; std::uint64_t ns = 0; };
 struct WorldContact { bool valid = false, acted = false; Vec3 point{}, normal{}; std::string result; std::uint64_t ns = 0; };
 std::vector<WorldSweep> gSweepHistory;
@@ -249,6 +257,13 @@ dd::OverlayFrame Gather(unsigned mask)
         f.physical.footBox = touch.feetBox;
         f.physical.contacts = std::move(touch.marks);
         f.physical.contactStatus = std::move(touch.status);
+    }
+    SurfaceRecord surface{};
+    if ((mask & dd::kPhysical) && gameplay && gSurface.TryRead(surface) && FreshSample(now, surface.ns, kRayAgeNs) &&
+        surface.reference == reference) {
+        f.physical.surfaceHands = std::move(surface.hands);
+        f.physical.surfaceMarks = std::move(surface.marks);
+        f.physical.surfaceStatus = std::move(surface.status);
     }
     f.psiMode = PsiTargetMode();
     f.sceneQueryFault = SceneQueryFaulted();
@@ -810,6 +825,24 @@ void DebugOverlayContact(const GameplayPoseFrame& frame, const ContactOverlaySta
     record.ns = MonotonicNanoseconds();
     record.reference = frame.referenceGeneration;
     gContact.Publish(record);
+}
+
+void DebugOverlaySurface(const GameplayPoseFrame& frame, const SurfaceOverlayState& state)
+{
+    if (!DebugOverlayWantsPhysical()) { return; }
+    if (!frame.cameraCentreValid) { gSurface.Clear(); return; }
+    auto toXr = [&](Vec3 world) { return EngineToXr(frame, frame.cameraCentre, world); };
+    SurfaceRecord record{};
+    for (const auto& hand : state.hands) {
+        if (hand.active) { record.hands.push_back({toXr(hand.real), toXr(hand.drawn), hand.held}); }
+    }
+    for (unsigned i = 0; i < state.count && i < state.marks.size(); ++i) {
+        record.marks.push_back({toXr(state.marks[i].point), EngineDirToXr(frame, state.marks[i].normal)});
+    }
+    record.status = state.status;
+    record.ns = MonotonicNanoseconds();
+    record.reference = frame.referenceGeneration;
+    gSurface.Publish(record);
 }
 
 void DebugOverlayHolsters(bool live, const std::array<Vec3, 2>& centres, Vec3 hand, bool gripPressed, bool armed,

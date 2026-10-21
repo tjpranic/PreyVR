@@ -1,4 +1,5 @@
 #include "preyvr/ContactQuery.h"
+#include "preyvr/StereoCamera.h"
 
 #include <algorithm>
 #include <cmath>
@@ -82,6 +83,14 @@ Box HandBox(Vec3 grip, const std::array<Vec3, 3>& axes, bool left, const HandSha
     return b;
 }
 
+Box HandBoxAt(const Pose& grip, bool left, const HandShape& shape)
+{
+    const auto& q = grip.orientation;
+    const std::array<Vec3, 3> axes{Rotate(q, stereo::ToEngineSpace(Vec3{1, 0, 0})), Rotate(q, stereo::ToEngineSpace(Vec3{0, 1, 0})),
+                                   Rotate(q, stereo::ToEngineSpace(Vec3{0, 0, 1}))};
+    return HandBox(grip.position, axes, left, shape);
+}
+
 Vec3 PointVelocity(const Box& now, const Box& before, Vec3 point, float dt)
 {
     if (!(dt > 0) || !std::isfinite(dt)) { return {}; }
@@ -91,7 +100,7 @@ Vec3 PointVelocity(const Box& now, const Box& before, Vec3 point, float dt)
     return Scale(Sub(point, earlier), 1 / dt);
 }
 
-const char* KindName(Kind kind) { return kind == Kind::Sweep ? "sweep" : "overlap"; }
+const char* KindName(Kind kind) { return kind == Kind::Sweep ? "sweep" : kind == Kind::Press ? "press" : "overlap"; }
 
 bool Valid(const scene::Hit& hit, const void* collider)
 {

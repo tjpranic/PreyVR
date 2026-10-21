@@ -17,6 +17,8 @@
     Low-hanging fruit like dead code removal, renaming and de-duplication should be prioritised for the first pass. Next should be low-risk refactors that involve refactoring code that can verified with just tests and no VR headset runs.
     Code should also be reorganized and restructured to be more understandable, where possible.
     One thing I'm particularly concerned about is 1. bad abstractions and 2. logic that should be abstracted but isn't. A lot of hyper-focused work has been done on various issues that may leave similar logic unconnected and ungeneralized when they ought to be.
+- Optimization
+    The mod is starting to lag a bit due to all the feature work. Two types of optimizations are needed. Big O optimization of code and actual targeted optimization of bottlenecks.
 - Tuning parameter cleanup
     One set of functionality that's going to need to be refactored out at the end of the project is all the tuning parameters. If they can be made debug build only, then that is preferred, otherwise they should be removed.
 - Instrumentation cleanup
@@ -24,8 +26,8 @@
 
 ### Immersion
 - Fine dextrous finger controls
-- Rotatable carried objects
-- Weapons and hands don't stop against surfaces
+- Stopping hand -> object interactions from pushing objects through other objects
+    e.g. Pressing down on a mug on a desk can push the mug through the desk
 - Leaning over desks/railings
     Have the player body bend at the waist to allow leaning over furniture
 - Optional body rendering
@@ -38,7 +40,7 @@
 - Some UI elements still only display at the periphery of vision
     It makes them hard to see. They need to be moved a little closer in.
 - Objective markers don't display at the proper depth
-    They need to be at the depth they appear at in the world. Repair markers (and possibly enemy detection markers) also affected.
+    They need to be at the depth they appear at in the world. Repair markers (and possibly enemy detection markers) also affected. Another one is the stun gun max charge effect.
 - The hand lasers start outside of player hands
     They seem to begin out of nowhere. Something like a fade in along the length (like when the laser fades out in menus when it's not hitting a surface) would make them look a bit nicer.
 
@@ -63,5 +65,7 @@
     It just shows a black screen instead.
 
 ### Immersion
+- Weapons and hands don't stop against surfaces
+    They now stop at fixed scenery and at heavy (Heavy Objects setting, 10 kg) or immovable loose objects, which slide when pressed. See docs/SURFACE-STOP-SCOPE-2026-10-21.md.
 - Hand animation plays when taking the wrench out
     It causes the right hand to spin. The animation should not play.

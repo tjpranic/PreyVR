@@ -125,6 +125,9 @@ bool QuerySegment(const GameplayPoseFrame& frame,Vec3 a,Vec3 b,scene::Hit& hit){
     return result==ERROR_SUCCESS;
 }
 bool QuerySceneryBetween(const GameplayPoseFrame& frame,Vec3 a,Vec3 b,void* skip,scene::Hit& hit){
+    return QueryObjectsBetween(frame,a,b,skip,scene::SceneryObjects,hit);
+}
+bool QueryObjectsBetween(const GameplayPoseFrame& frame,Vec3 a,Vec3 b,void* skip,int objectTypes,scene::Hit& hit){
     hit={};hit.distance=-1;
     const Vec3 d{b.x-a.x,b.y-a.y,b.z-a.z};
     const float length=std::sqrt(d.x*d.x+d.y*d.y+d.z*d.z);
@@ -134,7 +137,7 @@ bool QuerySceneryBetween(const GameplayPoseFrame& frame,Vec3 a,Vec3 b,void* skip
     thread_local bool busy=false;
     if(busy)return false;
     busy=true;
-    const auto result=Query(frame,a,{d.x/length,d.y/length,d.z/length},length,hit,scene::SceneryObjects,skip);
+    const auto result=Query(frame,a,{d.x/length,d.y/length,d.z/length},length,hit,objectTypes,skip);
     busy=false;
     if(result){lastError=result;++refused;
         if(result!=ERROR_NOT_READY&&result!=ERROR_INVALID_THREAD_ID)fault=true;

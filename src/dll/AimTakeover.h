@@ -1,8 +1,10 @@
 #pragma once
 
 #include <windows.h>
+#include <array>
 #include <string>
 #include "XrInput.h"
+#include "preyvr/SurfaceStop.h"
 #include "preyvr/WeaponAim.h"
 #include "preyvr/TwoHandedAim.h"
 
@@ -70,7 +72,16 @@ struct GameplayPoseFrame {
     std::uint64_t publishedNs = 0;
     std::uint64_t weaponGeneration = 0;
     twohand::Output twoHand{};
+    // Surface stop (SurfaceStopLane.h), by Hand: how far from where its
+    // controller puts it each hand is drawn, held back by fixed scenery.
+    std::array<surface::Correction, 2> surface{};
 };
+// The world offset a hand is drawn at this frame (SurfaceStopLane.h): added to a
+// controller position, it is where the drawn hand is.
+inline Vec3 SurfaceOffset(const GameplayPoseFrame& frame, Hand hand)
+{
+    return frame.surface[static_cast<unsigned>(hand)].offset;
+}
 // Published only after a successful owned right-wrist target write. Geometry
 // comes from the native pre-IK wrists expressed in the authored barrel basis.
 struct SupportGripGeometry {

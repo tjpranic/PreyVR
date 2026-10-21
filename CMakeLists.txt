@@ -101,6 +101,7 @@ add_library(preyvr_core STATIC
     src/common/ArmPose.cpp
     src/common/BodyFollow.cpp
     src/common/ContactQuery.cpp
+    src/common/SurfaceStop.cpp
     src/common/SwingStrike.cpp
     src/common/RoomScale.cpp
     src/common/DebugDraw.cpp
@@ -237,6 +238,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/InteractionLane.cpp
         src/dll/CarryLane.cpp
         src/dll/ContactLane.cpp
+        src/dll/SurfaceStopLane.cpp
         src/dll/SwingLane.cpp
         src/dll/WrenchDraw.cpp
         src/dll/WrenchSound.cpp
@@ -421,6 +423,7 @@ if(PREYVR_BUILD_TESTS)
     preyvr_add_test(swing_strike tests/SwingStrikeTests.cpp)
     preyvr_add_test(wrench_draw_native tests/WrenchDrawNativeTests.cpp)
     preyvr_add_test(contact_query tests/ContactQueryTests.cpp)
+    preyvr_add_test(surface_stop tests/SurfaceStopTests.cpp)
     preyvr_add_test(psi_medkit_contracts tests/PsiMedkitTests.cpp TARGET preyvr_psi_medkit_tests)
     preyvr_add_test(frustum_coverage tests/FrustumCoverageTests.cpp)
     preyvr_add_test(frame_timing tests/FrameTimingTests.cpp)
@@ -453,6 +456,10 @@ if(PREYVR_BUILD_TESTS)
             DEFS WIN32_LEAN_AND_MEAN NOMINMAX
             LIBS preyvr_core minhook)
         preyvr_add_test(contact_lane tests/ContactLaneTests.cpp
+            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            LIBS preyvr_core)
+        preyvr_add_test(surface_stop_lane tests/SurfaceStopLaneTests.cpp
             INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
             DEFS WIN32_LEAN_AND_MEAN NOMINMAX
             LIBS preyvr_core)

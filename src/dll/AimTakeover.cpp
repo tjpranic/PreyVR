@@ -7,6 +7,7 @@
 #include "ShotRay.h"
 #include "PhysicalInteractions.h"
 #include "ContactLane.h"
+#include "SurfaceStopLane.h"
 #include "SwingLane.h"
 #include "Haptics.h"
 #include "BodyEquipment.h"
@@ -291,6 +292,8 @@ void __fastcall UpdateCachedRayWithTakeover(void* player)
         frame.referenceGeneration != HeadTrackingReferenceGeneration() || !std::isfinite(frame.yaw)) { gGameplayFrame.Clear(); return; }
     // IK must never reread the mutable cached origin below.
     SolveTwoHandedFrame(frame,haveTracking);
+    // Before publishing: the takeover draws each hand where this puts it.
+    UpdateSurfaceStop(frame,haveTracking&&gEnabled.load());
     frame.publishedNs = MonotonicNanoseconds();
     gGameplayFrame.Publish(frame);
     UpdatePsiMedkit(frame,haveTracking&&gEnabled.load());

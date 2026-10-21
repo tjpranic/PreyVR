@@ -172,6 +172,14 @@ void LayoutChecks(){
   Check(Has(MenuEntries(MenuPages()-1),e),"features still being proven, and their tuning, on the experimental tab");
  Check(Has(MenuEntries(1),PhysicalContact)&&Has(MenuEntries(1),PushStrength)&&Defaults()[PhysicalContact]==1,
        "physical contact, proven, is on by default on the hands tab with its strength");
+ Check(Has(MenuEntries(1),SurfaceStop)&&Defaults()[SurfaceStop]==1&&KindOf(SurfaceStop)==Kind::toggle&&
+       std::string(Describe(SurfaceStop).key)=="surface_stop",
+       "hands stop at surfaces: an on/off on the hands tab, on by default");
+ {const auto page=MenuEntries(1);const auto stop=std::find(page.begin(),page.end(),static_cast<int>(SurfaceStop));
+  Check(stop!=page.end()&&stop+1!=page.end()&&stop[1]==HeavyMass,"heavy objects sits under hands stop at surfaces");}
+ Check(Defaults()[HeavyMass]==10&&Valid(HeavyMass,1)&&Valid(HeavyMass,100)&&!Valid(HeavyMass,0)&&!Valid(HeavyMass,101)&&
+       Display(HeavyMass,10)==L"10 KG"&&std::string(Describe(HeavyMass).key)=="heavy_mass",
+       "heavy objects: above 10 kg by default, 1 to 100 kg");
  Check(Has(MenuEntries(1),FreeSwing)&&Has(MenuEntries(1),SwingSpeed)&&Has(MenuEntries(1),HeavySwingSpeed)&&
        !Has(MenuEntries(MenuPages()-1),FreeSwing)&&Defaults()[FreeSwing]==1,
        "the free-swing wrench, proven, is on by default on the hands tab with its two speeds");

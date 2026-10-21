@@ -1131,6 +1131,10 @@ void DriveHand(unsigned int hand, std::uint8_t* relative, std::uint8_t* absolute
         }
         Pose world = animik::ControllerWorldFromHead(frame.yaw, anchor,
                                                           frame.tracking.head, state.gripPose);
+        // Surface stop (SurfaceStopLane.h): where fixed scenery holds the hand
+        // back, the hand -- and the weapon it holds -- is drawn there instead.
+        const Vec3 stopped = SurfaceOffset(frame, hand == 0 ? Hand::right : Hand::left);
+        world.position = Add(world.position, stopped);
         if(supportLocked) world.orientation=frame.twoHand.supportOrientation;
         traceGrip = state.gripPose.position;
         traceControllerWorld = world.position;
@@ -1271,7 +1275,7 @@ void DriveHand(unsigned int hand, std::uint8_t* relative, std::uint8_t* absolute
             const Pose raw = animik::ControllerWorldFromHead(frame.yaw, anchor, frame.tracking.head, state.gripPose);
             const Quaternion wristWorld = AnatomicalWrist(hand, raw.orientation, pose);
             rotation = animik::WorldToModel(location, wristWorld);
-            goal = animik::WorldToModel(location, Sub(raw.position,
+            goal = animik::WorldToModel(location, Sub(Add(raw.position, stopped),
                 Rotate(wristWorld, Scale(GripPointLocal(hand, pose), location.s))));
             writeRotation = true;
             posedFree = true;

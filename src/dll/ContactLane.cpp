@@ -47,6 +47,7 @@ std::atomic<unsigned> strength{100};
 std::atomic<std::uint64_t> settings{1};
 std::atomic<std::uint64_t> pushes{0}, pushBegins{0}, limitedPushes{0}, slidingPushes{0}, pushFailed{0}, dvMaxMm{0};
 std::atomic<std::uint64_t> partPushes{0}, hostedRefused{0}, immovableRefused{0}, standingSkipped{0}, struckSkipped{0};
+std::atomic<std::uint64_t> pressed{0}, pressPushes{0};
 std::atomic<std::uint64_t> queries{0}, refused{0}, overflows{0}, entities{0}, entitiesMax{0}, others{0};
 std::atomic<std::uint64_t> found{0}, overlaps{0}, sweeps{0}, begins{0}, ends{0}, dropped{0}, usTotal{0}, usMax{0};
 std::atomic<DWORD> error{0};
@@ -296,12 +297,13 @@ BodyRead ReadRigid(void* entity, contact::Body& body, float& mass)
 
 // An articulated body's host: set for a live character's skeleton, null for a
 // ragdoll. -1: unreadable.
-int Hosted(const void* entity)
+int Hosted(const void* entity) { return phys::ArticulatedHosted(entity); }
+std::uintptr_t VtableOf(const void* entity)
 {
     __try {
-        return *reinterpret_cast<void* const*>(reinterpret_cast<std::uintptr_t>(entity) + cn::ArticulatedHost) ? 1 : 0;
+        return entity ? *reinterpret_cast<const std::uintptr_t*>(entity) : 0;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return -1;
+        return 0;
     }
 }
 // One part of a corpse, for a push: its joint's body, read live where the
@@ -680,9 +682,12 @@ void Publish(const GameplayPoseFrame& frame, const Proxies& proxy, const char* g
     for (unsigned p = 0; p < kProxies; ++p) {
         if (proxy[p].active) { boxes += std::string(boxes.empty() ? "" : "+") + ProxyName(p); }
     }
+    unsigned press = 0;
+    for (unsigned i = 0; i < count; ++i) { press += contacts[i].kind == Kind::Press; }
     const auto q = queries.load();
     state.status = std::string(enabled.load() ? "on" : "off") + "  gate " + gate + "  boxes " + (boxes.empty() ? "-" : boxes) +
-                   "  overlap " + std::to_string(overlap) + "  sweep " + std::to_string(sweep) + "  objects " +
+                   "  overlap " + std::to_string(overlap - press) + "  sweep " + std::to_string(sweep) + "  press " +
+                   std::to_string(press) + "  objects " +
                    std::to_string(tracker.Tracked()) + "  push " + std::to_string(pushCount) +
                    (!pushReady.load() ? " (unavailable)" : !bodyReady.load() ? " (props only)" : "") +
                    "  us avg " + std::to_string(q ? usTotal.load() / q : 0) +
@@ -696,7 +701,7 @@ void MaybeReport()
     reportNs = now;
     const auto sum = queries.load() + refused.load() + found.load() + begins.load() + ends.load() + overflows.load() +
                      pushes.load() + pushFailed.load() + hostedRefused.load() + immovableRefused.load() +
-                     standingSkipped.load();
+                     standingSkipped.load() + pressed.load();
     const char* gate = lastGate.load();
     if (sum == reportSum && gate == reportGate) { return; }
     reportSum = sum;
@@ -710,6 +715,11 @@ void MaybeReport()
 // player stands on is never pushed. `pushed` gets each applied contact's
 // velocity change, by contact index.
 bool loggedGround = false;
+int Rank(Kind kind) { return kind == Kind::Press ? 2 : kind == Kind::Overlap ? 1 : 0; }
+// A press asks for this many m/s per metre the real hand is past the surface
+// (10 cm: 1 m/s), within the hand's force: a 15 kg prop follows it in a few
+// frames, 10,000 kg not at all.
+constexpr float kPressGain = 10;
 unsigned PushContacts(const GameplayPoseFrame& frame, const Natives& n, const Contact* contacts, unsigned count,
                       const Proxies& proxy, const std::array<const Box*, kProxies>& previous,
                       const std::array<float, kProxies>& dt, Vec3* pushed, Underfoot* underfoot = nullptr)
@@ -725,11 +735,13 @@ unsigned PushContacts(const GameplayPoseFrame& frame, const Natives& n, const Co
         const auto& c = contacts[i];
         const bool part = c.type == cn::TypeArticulated;
         if (part ? !n.bodies : c.type != cn::TypeRigid) { continue; }
+        // A press first (the real hand's push where the drawn one is held off),
+        // then the deepest overlap, else a sweep.
         bool best = true;
         for (unsigned j = 0; j < count && best; ++j) {
             if (j == i || contacts[j].collider != c.collider || (part && contacts[j].hit.partId != c.hit.partId)) { continue; }
-            const bool overlap = c.kind == Kind::Overlap, other = contacts[j].kind == Kind::Overlap;
-            best = overlap != other ? overlap : c.hit.distance > contacts[j].hit.distance || (c.hit.distance == contacts[j].hit.distance && i < j);
+            const int mine = Rank(c.kind), other = Rank(contacts[j].kind);
+            best = mine != other ? mine > other : c.hit.distance > contacts[j].hit.distance || (c.hit.distance == contacts[j].hit.distance && i < j);
         }
         if (!best) { continue; }
         if (!groundRead) {
@@ -763,7 +775,12 @@ unsigned PushContacts(const GameplayPoseFrame& frame, const Natives& n, const Co
         }
         const unsigned p = c.proxy < kProxies ? c.proxy : kWeapon;
         const float step = dt[p] > 0 ? dt[p] : 1.0f / 90.0f;
-        const Vec3 velocity = previous[p] && dt[p] > 0 ? contact::PointVelocity(proxy[p].box, *previous[p], c.hit.point, dt[p]) : Vec3{};
+        // A press goes into the surface, the faster the further the real hand is
+        // past it: the object slides until it reaches the real hand.
+        const bool press = c.kind == Kind::Press;
+        const Vec3 velocity = press ? Scale(c.hit.normal, -std::min(tuning.maxSpeed, c.hit.distance * kPressGain))
+                              : previous[p] && dt[p] > 0 ? contact::PointVelocity(proxy[p].box, *previous[p], c.hit.point, dt[p])
+                                                         : Vec3{};
         const float depth = c.kind == Kind::Overlap ? c.hit.distance : 0.0f;
         const auto push = contact::Solve(body, c.hit.point, c.hit.normal, depth, velocity, friction, step, tuning);
         if (!push.apply) { continue; }
@@ -774,6 +791,7 @@ unsigned PushContacts(const GameplayPoseFrame& frame, const Natives& n, const Co
         if (!phys::SetVelocity(reinterpret_cast<std::uintptr_t>(c.collider), action)) { ++pushFailed; continue; }
         ++pushes;
         if (part) { ++partPushes; }
+        if (press) { ++pressPushes; }
         if (push.limited) { ++limitedPushes; }
         if (push.sliding) { ++slidingPushes; }
         const Vec3 change = Sub(push.v, body.v);
@@ -783,13 +801,14 @@ unsigned PushContacts(const GameplayPoseFrame& frame, const Natives& n, const Co
         ++applied;
         if (!PushStarts(c.collider)) { continue; }
         ++pushBegins;
-        QueueHaptic(ProxyHand(p), haptics::Event::WeaponContact, frame.tracking);
+        // A press is a hand stopped at a surface: no pulse (the surface stop gives none).
+        if (!press) { QueueHaptic(ProxyHand(p), haptics::Event::WeaponContact, frame.tracking); }
         if (eventLog.load() && LogBudget()) {
             Log("push entity=" + Hex(reinterpret_cast<std::uintptr_t>(c.collider)) + " type=" + TypeName(c.type) +
                 (part ? " part=" + std::to_string(c.hit.partId) : std::string()) + " proxy=" + ProxyName(p) +
                 " kind=" + contact::KindName(c.kind) + " mass=" + Fixed(mass, 2) + " friction=" + Fixed(friction, 2) +
                 " approachCms=" + Fixed(push.approach * 100, 1) + " handCms=" + Fixed(Length(velocity) * 100, 1) +
-                " dvCms=" + Fixed(Length(change) * 100, 1) + " depthMm=" + Fixed(depth * 1000, 1) +
+                " dvCms=" + Fixed(Length(change) * 100, 1) + " depthMm=" + Fixed((press ? c.hit.distance : depth) * 1000, 1) +
                 " limited=" + std::to_string(push.limited) + " sliding=" + std::to_string(push.sliding) +
                 " dtMs=" + Fixed(step * 1000, 1));
         }
@@ -803,20 +822,21 @@ float AngleBetween(float a, float b)
     return std::fabs(d);
 }
 // A hand's box, from its controller's grip pose mapped into the world as the
-// hands are placed (animik::ControllerWorldFromHead, the carry lane's own route).
+// hands are placed (animik::ControllerWorldFromHead, the carry lane's own route),
+// where the hand is drawn: held back by a surface (SurfaceStopLane.h), it pushes
+// what it visibly touches.
 void HandProxy(const GameplayPoseFrame& f, Hand hand, ProxyNow& out)
 {
     const auto& h = f.tracking.hands[static_cast<unsigned>(hand)];
     if (!IsPoseUsable(h.gripPose, h.gripValidity, kMaxPoseAgeNs)) { out.why = "hand_pose"; return; }
-    const Pose grip = animik::ControllerWorldFromHead(f.yaw, f.cameraCentre, f.tracking.head, h.gripPose);
+    Pose grip = animik::ControllerWorldFromHead(f.yaw, f.cameraCentre, f.tracking.head, h.gripPose);
     const auto& q = grip.orientation;
     if (!Finite(grip.position) || !std::isfinite(q.x) || !std::isfinite(q.y) || !std::isfinite(q.z) || !std::isfinite(q.w)) {
         out.why = "hand_pose";
         return;
     }
-    const std::array<Vec3, 3> axes{Rotate(q, stereo::ToEngineSpace(Vec3{1, 0, 0})), Rotate(q, stereo::ToEngineSpace(Vec3{0, 1, 0})),
-                                   Rotate(q, stereo::ToEngineSpace(Vec3{0, 0, 1}))};
-    out.box = contact::HandBox(grip.position, axes, hand == Hand::left);
+    grip.position = Add(grip.position, SurfaceOffset(f, hand));
+    out.box = contact::HandBoxAt(grip, hand == Hand::left);
     out.key = 1 + static_cast<unsigned>(hand);
     out.sequence = f.tracking.sequence;
     out.stamp = static_cast<std::uint64_t>(f.tracking.displayTime);
@@ -957,6 +977,24 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
     others += total.other;
     found += count;
     for (unsigned i = 0; i < count; ++i) { (contacts[i].kind == Kind::Sweep ? sweeps : overlaps) += 1; }
+    // A heavy prop holding a drawn hand back (SurfaceStopLane.h): the drawn hand
+    // stops short of it, so it is pushed by how far the real hand presses into it.
+    for (const Hand hand : {Hand::right, Hand::left}) {
+        const auto& press = frame.surface[static_cast<unsigned>(hand)].press;
+        if (!press.object || !(press.depth > 0) || count >= kMaxContacts || VtableOf(press.object) != natives.rigid) { continue; }
+        Contact& c = contacts[count++];
+        c = {};
+        c.collider = const_cast<void*>(press.object);
+        c.type = cn::TypeRigid;
+        c.kind = Kind::Press;
+        c.hit.collider = c.collider;
+        c.hit.distance = press.depth;
+        c.hit.point = press.point;
+        c.hit.normal = press.normal;
+        c.hit.surface = -1;   // the engine's default friction
+        c.proxy = hand == Hand::left ? kLeftHand : proxy[kWeapon].active ? kWeapon : kRightHand;
+        ++pressed;
+    }
     LogEvents(natives, contacts, count);
     Vec3 pushed[kMaxContacts]{};
     Underfoot under{};
@@ -972,6 +1010,7 @@ void UpdateContactLane(const GameplayPoseFrame& frame, bool allowed)
     struct Guard { bool& value; explicit Guard(bool& v) : value(v) { value = true; } ~Guard() { value = false; } } guard(busy);
     UpdateImpl(frame, allowed);
 }
+DWORD GateLooseBodies() { return GateBodies(PreyBase()); }
 void SetPhysicalContact(unsigned v)
 {
     enabled = v != 0;
@@ -1002,6 +1041,7 @@ std::string ContactReport()
            " bodies=" + std::to_string(bodyReady.load()) + " partPushes=" + std::to_string(partPushes.load()) +
            " hosted=" + std::to_string(hostedRefused.load()) + " immovable=" + std::to_string(immovableRefused.load()) +
            " standing=" + std::to_string(standingSkipped.load()) + " struck=" + std::to_string(struckSkipped.load()) +
+           " pressed=" + std::to_string(pressed.load()) + " pressPushes=" + std::to_string(pressPushes.load()) +
            " ground=" + groundClass +
            " log=" + std::to_string(eventLog.load()) +
            " dvMaxCms=" + std::to_string(dvMaxMm.load() / 10) + " droppedLines=" + std::to_string(dropped.load()) +

@@ -645,6 +645,15 @@ Sight LineOfSight(const GameplayPoseFrame& frame, Vec3 point, void* target, scen
     if (!QuerySceneryBetween(frame, a, b, target, blocker)) { return Sight::unknown; }
     return blocker.distance < 0 ? Sight::clear : Sight::blocked;
 }
+// The wrench where the controller swings it. Where a surface holds the drawn one
+// back (SurfaceStopLane.h), it stops short of what it hits; the real swing still
+// crosses it once, and strikes it.
+bool TryGetRealWrench(WeaponBox& sample)
+{
+    if (!TryGetWeaponBox(sample)) { return false; }
+    TrackedWeaponBox(sample);
+    return true;
+}
 void LogWrench(const Natives& n, const WeaponBox& sample)
 {
     const auto w = ReadWrench(n, sample.weapon);
@@ -757,7 +766,7 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
     else if (!frame.cameraCentreValid || !frame.headYawUsable || !std::isfinite(frame.yaw)) { why = "camera"; }
     else if (!FreshSample(now, frame.tracking.publishedNs, kFreshNs) ||
              frame.referenceGeneration != HeadTrackingReferenceGeneration()) { why = "pose"; }
-    else if (!TryGetWeaponBox(sample) || !FreshSample(now, sample.publishedNs, kFreshNs)) { why = "no_weapon"; }
+    else if (!TryGetRealWrench(sample) || !FreshSample(now, sample.publishedNs, kFreshNs)) { why = "no_weapon"; }
     else if (!sample.wrench) { why = "not_wrench"; }
     else if (!contact::BoxFromPoints(sample.points, box)) { why = "bad_box"; }
     else if (sample.reference != frame.referenceGeneration || sample.epoch != frame.tracking.epoch) { why = "reference"; }

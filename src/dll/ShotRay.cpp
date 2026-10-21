@@ -190,19 +190,22 @@ bool FiringPositionNow(void* weapon, std::uint32_t flags, FiringPosition& out)
 }
 
 // The right controller's aim pose in engine world space, on the anchor the IK
-// places the drawn hand with.
+// places the drawn hand with, where the hand is drawn (SurfaceStopLane.h: held
+// back by a wall, the weapon and its muzzle are too).
 bool AimWorld(const GameplayPoseFrame& frame, Pose& out)
 {
     const auto& hand = frame.tracking.hands[static_cast<unsigned>(Hand::right)];
     if (!frame.cameraCentreValid || !IsPoseUsable(hand.aimPose, hand.aimValidity, kMaxPoseAgeNs)) { return false; }
     out = animik::ControllerWorldFromHead(frame.yaw, frame.cameraCentre, frame.tracking.head, hand.aimPose);
+    out.position = Add(out.position, SurfaceOffset(frame, Hand::right));
     return Finite(out.position);
 }
 bool GripWorld(const GameplayPoseFrame& frame, Vec3& out)
 {
     const auto& hand = frame.tracking.hands[static_cast<unsigned>(Hand::right)];
     if (!frame.cameraCentreValid || !IsPoseUsable(hand.gripPose, hand.gripValidity, kMaxPoseAgeNs)) { return false; }
-    out = animik::ControllerWorldFromHead(frame.yaw, frame.cameraCentre, frame.tracking.head, hand.gripPose).position;
+    out = Add(animik::ControllerWorldFromHead(frame.yaw, frame.cameraCentre, frame.tracking.head, hand.gripPose).position,
+              SurfaceOffset(frame, Hand::right));
     return Finite(out);
 }
 

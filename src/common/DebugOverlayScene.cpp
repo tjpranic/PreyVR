@@ -335,6 +335,34 @@ void AddPhysical(Scene& scene, const Physical& p, unsigned mask)
             scene.labels.push_back(label);
         }
     }
+    // Surface stop, orange: a held-back hand's real grip as a ring, where it is
+    // drawn as a dot, joined; each surface met with its normal.
+    for (const auto& h : p.surfaceHands) {
+        if (!h.held || !Finite(h.real) || !Finite(h.drawn)) { continue; }
+        Marker real{};
+        real.centre = h.real;
+        real.radius = .015f;
+        real.color = kWarn;
+        real.filled = false;
+        real.minPixels = 6.0f;
+        scene.markers.push_back(real);
+        Marker drawn = real;
+        drawn.centre = h.drawn;
+        drawn.radius = .01f;
+        drawn.filled = true;
+        scene.markers.push_back(drawn);
+        scene.lines.push_back({h.real, h.drawn, kWarn, .002f, 1.5f});
+    }
+    for (const auto& m : p.surfaceMarks) {
+        if (!Finite(m.point)) { continue; }
+        Marker mark{};
+        mark.centre = m.point;
+        mark.radius = .006f;
+        mark.color = kWarn;
+        mark.minPixels = 4.0f;
+        scene.markers.push_back(mark);
+        if (Finite(m.normal)) { scene.lines.push_back({m.point, Add(m.point, Scale(m.normal, .05f)), kWarn, .0015f, 1.2f}); }
+    }
     if (p.contact && p.contactAge >= 0 && p.contactAge <= kContactSeconds && Finite(p.point)) {
         const Color color = p.acted ? kActive : kDenied;
         Marker hit{};
@@ -506,6 +534,7 @@ std::string OverlayStatusText(const OverlayFrame& f, unsigned mask)
     }
     if ((mask & kPhysical) && !f.physical.status.empty()) { text += "\nPhysical " + f.physical.status; }
     if ((mask & kPhysical) && !f.physical.contactStatus.empty()) { text += "\nContact " + f.physical.contactStatus; }
+    if ((mask & kPhysical) && !f.physical.surfaceStatus.empty()) { text += "\nSurface " + f.physical.surfaceStatus; }
     if (!f.extra.empty()) { text += "\n" + f.extra; }
     return text;
 }

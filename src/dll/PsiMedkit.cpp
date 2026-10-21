@@ -73,9 +73,11 @@ bool MakeContext(std::uintptr_t component,psi::Context& ctx){
        !IsPoseUsable(f.tracking.head,f.tracking.headValidity,100000000)||
        f.referenceGeneration!=HeadTrackingReferenceGeneration()||(f.referenceGeneration&1))return false;
     const auto& left=f.tracking.hands[0];
-    const auto ray=psi::BuildRay(static_cast<psi::Mode>(m),f.yaw,f.cameraCentre,
+    auto ray=psi::BuildRay(static_cast<psi::Mode>(m),f.yaw,f.cameraCentre,
         f.tracking.head,left.aimPose,m==1?f.tracking.headValidity:left.aimValidity);
     if(!ray)return false;
+    // From the drawn hand: held back by a wall (SurfaceStopLane.h), it casts from there.
+    if(static_cast<psi::Mode>(m)==psi::Mode::LeftController)ray->origin=Add(ray->origin,SurfaceOffset(f,Hand::left));
     ctx.sample={*ray,f.player,component,owner.selectedPower,owner.selected,f.tracking.epoch,
         f.referenceGeneration,generation.load(),f.tracking.publishedNs,HudMenuEpoch()};
     ctx.active=true;return true;

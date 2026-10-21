@@ -5,6 +5,7 @@
 // the carry lane's throws; ContactNative.h hashes the rigid and articulated
 // GetStatus bodies and PhysicalNative.h the rigid Action and QueueAction.
 // Header-only so tests that compile a lane's .cpp directly need nothing extra.
+#include "preyvr/ContactNative.h"
 #include "preyvr/VrMath.h"
 
 #include <windows.h>
@@ -70,6 +71,17 @@ inline bool SetVelocity(std::uintptr_t physics, const SetVelocityAction& action)
         return act(physics, &action, 1) != 0;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
+    }
+}
+
+// An articulated body's host (ContactNative.h ArticulatedHost): set on a live
+// character's skeleton, null on a ragdoll. 1, 0, or -1 when unreadable.
+inline int ArticulatedHosted(const void* entity)
+{
+    __try {
+        return *reinterpret_cast<void* const*>(reinterpret_cast<std::uintptr_t>(entity) + contact::native::ArticulatedHost) ? 1 : 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return -1;
     }
 }
 

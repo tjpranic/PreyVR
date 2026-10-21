@@ -59,13 +59,18 @@ struct HandShape {
     float along = .06f;   // half-size along z, the handle
 };
 Box HandBox(Vec3 grip, const std::array<Vec3, 3>& axes, bool left, const HandShape& shape = {});
+// The same box from the grip pose in the world (animik::ControllerWorldFromHead),
+// whose orientation turns the grip's OpenXR axes, in engine space, into the world.
+Box HandBoxAt(const Pose& grip, bool left, const HandShape& shape = {});
 // How fast the box's material at `point` (on the box at `now`) moved since
 // `before`, dt seconds earlier: its translation, its turn and the player's own motion.
 Vec3 PointVelocity(const Box& now, const Box& before, Vec3 point, float dt);
 
 // Overlap: the box at this frame's pose, not moving. Sweep: last frame's box
 // moved to this frame's, so a fast pass cannot skip through a thin object.
-enum class Kind : std::uint8_t { Overlap, Sweep };
+// Press: a heavy object holding a drawn hand back (surface::Press); `hit.distance`
+// is how far past its surface the real hand presses.
+enum class Kind : std::uint8_t { Overlap, Sweep, Press };
 const char* KindName(Kind kind);
 struct Contact {
     void* collider = nullptr;

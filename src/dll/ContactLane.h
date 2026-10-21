@@ -1,4 +1,5 @@
 #pragma once
+#include <windows.h>
 #include <string>
 // Physical contact (docs/PHYSICAL-CONTACT-SCOPE-2026-10-18.md): each gameplay
 // frame, which movable objects the held weapon's box touches, with the engine's
@@ -23,4 +24,9 @@ unsigned PushStrength();
 void SetContactEventLog(unsigned on);
 unsigned ContactEventLog();
 std::string ContactReport();
+// The loose-body contracts this lane gates on (ContactNative.h: the rigid and
+// articulated classes' hashed GetType and GetStatus behind their vtable slots,
+// and the world's query slots). ERROR_SUCCESS, or why not. The surface stop
+// asks before it reads what its rays meet.
+DWORD GateLooseBodies();
 }

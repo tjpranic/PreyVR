@@ -45,8 +45,10 @@ static_assert(offsetof(Params,collisionIgnore)==0x64);
 constexpr float Range = 200.f;
 // The broadphase classes a query asks for: everything the native rays ask for
 // (static, sleeping and awake rigid, living, independent, terrain), or fixed
-// scenery alone (static and terrain), which a held weapon or hand never is.
-constexpr int AllObjects = 0x11f, SceneryObjects = 0x101;
+// scenery alone (static and terrain), which a held weapon or hand never is, or
+// scenery and loose objects (sleeping and awake rigid: props and corpses), not
+// living or independent (characters, the player's own skeleton).
+constexpr int AllObjects = 0x11f, SceneryObjects = 0x101, SceneryAndLooseObjects = 0x107;
 using preyvr::Finite;
 inline bool Build(Params& p,Vec3 origin,Vec3 direction,Hit& hit,void** skip,int count,float range=Range,int objectTypes=AllObjects){
     p={};
