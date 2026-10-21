@@ -20,6 +20,7 @@
 
 #include "FrameCaptureWin32.h"
 #include "CullCameraWatch.h"
+#include "CullPrepareGuard.h"
 #include "FrameProbe.h"
 #include "Logger.h"
 #include "preyvr/CameraEdit.h"
@@ -347,14 +348,25 @@ void __fastcall RenderWithCameraEdit(void* system)
         // One record per native render, including refusals and flat/menu frames.
         // A missing record would shift every subsequent image's metadata.
         if(gStereoIpd.load()>0.f) eyehandoff::Publish(renderContract);
+        // After every drain and the camera edit, so it tests the camera Render
+        // is about to: if this frame's occlusion prepare was skipped though the
+        // world is about to be drawn, make it now, or the frame's cull batch is
+        // orphaned and the culler stays a frame behind (CullPrepareGuard.h).
+        if (target != nullptr) {
+            CullPrepareBeforeRender(static_cast<const std::uint8_t*>(target) + engine::SystemLayout::viewCamera);
+        }
         // The frame probe's main-thread bracket around the world render
-        // (FrameProbe.h): whether the cull queue drained inside it.
+        // (FrameProbe.h): whether the cull queue drained inside it, and the cull
+        // handshake on each side (CullPrepareGuard.h), which shows an orphaned batch.
         std::uint32_t write = 0, read = 0;
         CullQueueIndices(write, read);
-        ProbeRecord(ProbeStep::renderEnter, 0, 0, write, read);
+        const std::uint32_t handshake = CullThreadState();
+        ProbeRecord(ProbeStep::renderEnter, handshake, 0, write, read);
         original(target);
         CullQueueIndices(write, read);
-        ProbeRecord(ProbeStep::renderExit, 0, 0, write, read);
+        const std::uint32_t handshakeAfter = CullThreadState();
+        ProbeRecord(ProbeStep::renderExit, handshakeAfter, 0, write, read);
+        CullPrepareAfterRender(handshake, handshakeAfter);
     };
 
     const bool stereoArmed = gStereoIpd.load(std::memory_order_acquire) > 0.0f;

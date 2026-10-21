@@ -9,8 +9,9 @@ namespace preyvr::dll {
 // (docs/CULL-CAMERA-CRASH-2026-10-17.md). The lag starts on a VR-panel close
 // where the main and render threads disagree about one frame, so every frame
 // step of both threads, and of the cull consumer job between them, goes into a
-// lock-free ring. A panel close, a first-eye refusal or a cull-lag change opens
-// a window from kBeforeTicks main frames before it to kAfterTicks after; the
+// lock-free ring. A panel close, a first-eye refusal, a cull-lag change, a
+// prepare the guard had to make or an orphaned cull batch opens a window from
+// kBeforeTicks main frames before it to kAfterTicks after; the
 // command worker then writes that window to the log, off the game threads.
 // Only read-only observation: one hook of its own (the consumer job) that calls
 // the original unchanged, plus records from seams other lanes already own --
@@ -20,8 +21,8 @@ namespace preyvr::dll {
 // PREYVR_FRAME_PROBE=0 leaves it off; cull.probe 0|1 switches recording.
 enum class ProbeStep : std::uint16_t {
     tick,            // main: C3DEngine pool reset, the frame start. a=lag depth b=pending c/d=queue write/read
-    renderEnter,     // main: CSystem::Render calls the original. c/d=queue write/read
-    renderExit,      // main: the original returned. c/d=queue write/read
+    renderEnter,     // main: CSystem::Render calls the original. a=cull handshake state c/d=queue write/read
+    renderExit,      // main: the original returned. a=cull handshake state c/d=queue write/read
     passCreated,     // any thread: CreateGeneralPassRenderingInfo. a/b=frame ids c=caller RVA d=flags
     consumerEnter,   // job: the cull consumer (0x23F1B0). a/b=its frame ids c/d=queue write/read
     consumerExit,    // job: it returned. a/b=frame ids c/d=queue write/read
@@ -32,6 +33,10 @@ enum class ProbeStep : std::uint16_t {
     panelClose,      // render (XR): the VR panel is hidden -- a trigger
     firstEyeRefused, // render (XR): a both-eyes contract with no held first eye -- a trigger. a=refusals
     lagChange,       // main: the cull lag depth changed -- a trigger. a=depth b=was c=pending
+    // CullPrepareGuard.h. States are CCullThread's handshake, kCullStateUnknown unread.
+    prepare,         // main: C3DEngine::PrepareOcclusion. a/b=state before/after c=its gates
+    prepareKick,     // main: the guard called it before Render -- a trigger. a/b=state c=gates d=last prepare
+    orphan,          // main: CullStart parked with no prepare in flight -- a trigger. a/b=state c=guard d=last prepare
 };
 // sceneExit outcomes, from the dual lane's own counters.
 enum class ProbeScene : std::uint32_t { single = 0, doubled = 1, buildMiss = 2, refused = 3, noTeardown = 4 };

@@ -5,6 +5,13 @@ The trigger is **not** established. A read-only instrument (`CullCameraWatch`)
 is in the DLL to catch it on the next occurrence. Steam PreyDll SHA-256
 `7d6e322f…05311a7`.
 
+Status, 2026-10-21: the step that puts the culler behind is found ([The
+handshake](#the-handshake-2026-10-21)): a frame that draws the world without
+its occlusion prepare leaves its cull batch queued for good. The same lag is
+the likely cause of a "parts of the world flash" glitch. A guard that makes the
+missing prepare is built ([The guard](#the-guard-2026-10-21)), offline only.
+Which of the prepare's tests failed on that frame is still inferred.
+
 ## Symptom
 
 `EXCEPTION_ACCESS_VIOLATION` on a `JobSystem_Worker`, PreyVR.dll not on the
@@ -217,11 +224,139 @@ consumer run that the main thread overtook points at the engine's frame pacing.
     counts are false positives.
   - Those false events used up the logging budget, so no doomed event was logged
     in detail.
-- **Not yet known:** how the bad transition frame shifts the culler. A probe
+- **Not yet known** (answered 2026-10-21, [The handshake](#the-handshake-2026-10-21)):
+  how the bad transition frame shifts the culler. A probe
   should log, around each panel close, every `CSystem::Render`, `RT_RenderScene`
   (doubled or not), `RT_EndFrame`, `PrepareOcclusion` and `EndOcclusion`.
 - **Reproduce:** open and close VR-panel menus until the log shows a refusal; a
   second refusal leaves the culler two frames behind.
+
+## The handshake (2026-10-21)
+
+**The run.** `player-20261021-194310`, PreyVR-54. The user saw parts of the
+world flash. At 19:50:09 a pause-menu close was refused
+(`dual_first_eye_not_held`), and the watch went to lag depth 1. It stayed there
+until the session ended at 19:52:32: 9,747 resets, 1.6 M `previous` items.
+That stretch had 35 snap turns.
+
+**The frame probe's first refusal window (window 4).**
+- During the menu the main thread rendered no world: `render_enter`/`render_exit`
+  about 2 µs apart, with no pass.
+- On the first world frame after it (pass 29957), the main thread queued 98 items
+  and its end marker, **but no consumer job ran that frame.**
+- From the next frame on, every consumer run took exactly the previous frame's
+  batch: read index to the previous write index. One run drains one batch, so
+  the extra batch never clears.
+- The control at game start (window 1) is also a first world frame after frames
+  without one. Its consumer ran in the same frame.
+
+**Why the consumer did not start.** The job (`0x23F1B0`, "CheckOcclusion")
+starts from a two-party handshake on `CCullThread`, which is `CObjManager+0x200`.
+The state at `+4`:
+
+| Writer | Does | Where |
+|---|---|---|
+| `PrepareCullbufferAsync` (`0x23FFB0`) | state = 1, then kicks the z-buffer jobs: transfer (`0x2409C0`), reproject (`0x240EB0`), rasterize | `0x240790` |
+| `RasterizeZBuffer` (`0x240CB0`), the last of them | 3 → 4 and launch the consumer with the stored pass, else 2 | `0x240D47` |
+| `CullStart` (`0x23F020`), from `RenderWorld` (`0x21E6F0` → thunk `0x281E20`) | 2 → 4 and launch, else 3 and store the pass | `0x23F061` |
+| `EndOcclusion` (`0x23EFE0`, C3DEngine vtable `+0x48`) | waits for the z-buffer jobs; a state other than 0 or 4 only drops the producer count (`0x27E5C0`) | |
+
+Nothing discards a queued batch. A frame that reaches `CullStart` with no
+prepare in flight parks in 3. Nothing will launch the consumer for it, and the
+batch waits for the next frame's run.
+
+**The order in a frame.** `CCryAction::PostUpdate` (`0x5C6BA0`) does:
+1. `p3DEngine->PrepareOcclusion(pSystem->GetViewCamera())`, vtable `+0x40` = `0x20DA10`;
+2. the UI update, `OnPreRender` listeners and others;
+3. `pSystem->Render()`, ISystem `+0x48` = `CSystem::Render`. PreyVR's detour
+   drains its queued input here, before the original;
+4. `p3DEngine->EndOcclusion()`;
+5. `RenderEnd`.
+
+`PrepareOcclusion` does nothing unless all three of its tests pass:
+- `cvars+0x1A4` is nonzero;
+- the byte at `gEnv+0x2AB` is 0;
+- the camera's translation (`+0x0C/+0x1C/+0x2C`) is more than 0.05 from 0 on some
+  axis (`0x1C7F77C`).
+
+`CSystem::Render` draws the world only under the last two tests, and draws a
+black 800×600 image otherwise. That black image is the
+`dual_overlay image rect=0,0,800,600 argb=0xff000000` seen at startup. The two
+read the camera at different points of the frame. If it reaches a world
+position between them, the prepare is skipped and the render is not: an
+orphaned batch.
+
+**Inferred, not yet observed:**
+- that the camera (or the `gEnv` flag) is what changed between steps 1 and 3 on
+  that frame;
+- what changed it.
+
+PreyVR's input drain sits inside that gap and the UI update is beside it. The
+drain moved into the `CSystem::Render` detour on 2026-09-06, before the
+September crashes, and nobody reports this crash in unmodded Prey. The run
+cannot tell these apart; the observation below records it.
+
+**The visible effect (inferred).** At depth 1, each frame's world content is
+culled with the previous frame's camera and drawn with the current one. What
+just came into view is missing for one frame: a sliver at the edge on a head
+turn, a wide wedge on a 45° snap turn. At depth 2 the cameras are recycled
+pool slots, so the frustum used is some other camera of the frame. Depth 2 plus
+a freeing reset is the crash.
+
+## The guard (2026-10-21)
+
+`src/dll/CullPrepareGuard.cpp`. It runs on the main thread inside the
+`CSystem::Render` detour, after the drains and the camera edit, just before the
+original:
+- If the state is 1 or 2, this frame's prepare is in flight; nothing to do.
+- Otherwise, if `PrepareOcclusion`'s own three tests pass for `m_ViewCamera`,
+  the world is about to be drawn with no prepare. The guard calls
+  `PrepareOcclusion(m_ViewCamera)` on `gEnv->p3DEngine`, after checking its
+  vtable.
+
+That is the engine's own call, a little later in the same frame. The handshake
+then pairs whichever side comes first.
+
+**Observation, which stays on with the guard off:**
+- A hook on `PrepareOcclusion` (`0x20DA10`) records each call. It calls the
+  original unchanged and counts the skips by test: `skippedOrigin`,
+  `skippedNoWorld`, `skippedRenderTasks`. MinHook relocates the RIP-relative load
+  it displaces.
+- The render bracket reads the state on both sides. A 3 after a state other than
+  1 or 2 is an orphan, certain to stay queued. A 3 after a 1 is the normal race,
+  which `RasterizeZBuffer` resolves.
+- Frame-probe steps:
+  - `prepare` records the states and the tests (`gates=rwc`: r render tasks, w
+    world, c camera; `-` failed);
+  - `prepare_kick` and `orphan` are triggers that open windows;
+  - `render_enter`/`render_exit` now carry `state=`.
+
+**Lines (`preyvr_cull_prepare`):**
+- `detail=installed … hooked=1 epsilon=0.05`.
+- `detail=kick n=… state=4->1 lastPrepare=skipped_origin camera=x,y,z`. The first
+  32 are logged, then one in 256. `lastPrepare` is what the engine's own
+  `PrepareOcclusion` decided since the previous render: `ran`, `skipped_*`, or
+  `none` (not called at all).
+- `detail=kick_failed`: always logged.
+- `detail=orphan n=… state=4->3 guard=0|1 lastPrepare=…`.
+- `detail=first_origin_skip`.
+- `summary` every 60 s, the same text as `cull.prepare`.
+
+**Controls.**
+- `cull.prepare 0|1`; `PREYVR_CULL_PREPARE=0` starts with the guard off.
+- An exact-bytes gate (8 spans plus the `+0x40` slot) guards every offset.
+  `verify_cull_camera_watch.py` checks it, together with the reads, jumps and
+  calls the spans imply.
+
+**Reading the next run.**
+
+| Seen | Reading |
+|---|---|
+| `kick … lastPrepare=skipped_origin`, the watch stays at depth 0 through a refusal | Confirmed: the camera reached a world position between the prepare and the render, and the guard paired the frame. |
+| `kick … lastPrepare=none` | `CSystem::Render` ran with no `PrepareOcclusion` since the last render: another caller of Render. |
+| `kick … lastPrepare=ran` | Should not happen: the prepare ran yet the state was not 1 or 2 at the render. Read the window. |
+| `orphan guard=1` or a lag change with no kick | A path the guard does not cover, such as `m_pProcess` without `PROC_3DENGINE`, which draws the world with no camera test. |
+| `guard=0` (A/B): `orphan` then `lag depth=1` | The mechanism, observed directly. |
 
 ## Verification
 
@@ -243,3 +378,15 @@ consumer run that the main thread overtook points at the engine's frame pacing.
   - The full suite passes (86 tests).
   - The watch's per-reset cost is unchanged, and the probe adds about a dozen
     ring writes a frame. **Not yet run in the game.**
+- 2026-10-21, offline:
+  - `cull_prepare_guard` drives the guard and the observation detour over fake
+    `CObjManager`, cvars, `gEnv` flag, engine and camera memory. It covers:
+    - normal frames;
+    - kicks from states 0, 3 and 4;
+    - each of the three tests, including the 5 cm boundary and NaN;
+    - orphans with the guard off, against the normal 1 → 3 race;
+    - a failed kick, the wrong receiver, unread states;
+    - the log budgets, the gate and the commands.
+  - `frame_probe` covers the new steps and window kinds.
+  - The verifier passes against the supported image (17 spans).
+  - The full suite passes (92 tests). **Not yet run in the game.**

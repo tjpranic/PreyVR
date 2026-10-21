@@ -4085,3 +4085,38 @@ Offline only:
 - `verify_loading_screen.py` passes against the supported image.
 
 Package PreyVR-48. See [the loading-screen notes](LOADING-SCREEN-2026-10-20.md).
+
+## 2026-10-21 — Cull lag: the orphaned batch, and a guard
+
+The user saw parts of the world flash in run `player-20261021-194310`. A
+pause-menu close at 19:50:09 was refused, and the cull watch then sat at lag
+depth 1 for the rest of the session. The frame probe caught its first refusal
+window: on the first frame after the menu that drew the world, the main thread
+queued its cull batch, but the consumer job never started. Every later run
+drained exactly one batch, so the extra batch never cleared.
+
+Static cause: the consumer starts from a handshake on `CCullThread`
+(`CObjManager+0x200`, state at `+4`), between `PrepareOcclusion`'s z-buffer
+jobs and `CullStart`.
+- `CCryAction::PostUpdate` calls `PrepareOcclusion(m_ViewCamera)` before
+  `CSystem::Render`.
+- Both skip a camera within 0.05 of the origin, each reading it at its own time.
+- A frame whose prepare is skipped but whose render is not parks `CullStart` in
+  state 3, and `EndOcclusion` only drops the producer count.
+
+What changed the camera between the two reads is not yet observed.
+
+The fix, `CullPrepareGuard`:
+- It runs in the `CSystem::Render` detour, just before the original.
+- If no prepare is in flight but the prepare's own tests pass, it calls
+  `PrepareOcclusion` itself.
+- A read-only hook on `PrepareOcclusion`, the handshake state on the render
+  bracket and new frame-probe steps (`prepare`, `prepare_kick`, `orphan`) record
+  which test failed.
+- `cull.prepare 0|1` allows an A/B comparison.
+
+Offline only:
+- 92/92 tests pass;
+- `verify_cull_camera_watch.py` passes against the supported image.
+
+See [the crash notes](CULL-CAMERA-CRASH-2026-10-17.md#the-handshake-2026-10-21).

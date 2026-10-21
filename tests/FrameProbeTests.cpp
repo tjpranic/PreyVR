@@ -117,7 +117,7 @@ void TestControlWindow()
     std::size_t triggers = 0;
     for (const auto& line : events) triggers += line.find("<trigger") != std::string::npos ? 1 : 0;
     Require(triggers == 1 && Logged("panel_close <trigger"), "the trigger is marked");
-    Require(Logged("render_exit q=12/10") && Logged("window=1 end lost=0"), "args and the footer");
+    Require(Logged("render_exit state=0 q=12/10") && Logged("window=1 end lost=0"), "args and the footer");
     Require(gReadyCount == 0 && gEmitted == 1, "written once");
     ServiceFrameProbe();
     Require(Lines("preyvr_frame_probe window=").size() == 2, "and not again");
@@ -226,6 +226,32 @@ void TestThreadsAndFormat()
     Require(Logged(" main=") && Logged(" render="), "the header names the main and render threads");
 }
 
+void TestGuardSteps()
+{
+    ResetProbe();
+    Frame(10);
+    ProbeRecord(ProbeStep::prepare, 4, 4, 3);                // PostUpdate's: skipped at the origin
+    ProbeRecord(ProbeStep::prepareKick, 4, 1, 7, 0x100 | 3); // the guard's, before Render
+    Frame(12);
+    ServiceFrameProbe();
+    Require(gWritten == 1 && gControls == 0 && Logged("kinds=prepare_kick control=0"),
+            "a kick opens a window of its own, not a control");
+    Require(Logged(" M prepare state=4->4 gates=rw-"), "the engine's prepare with the gate that closed");
+    Require(Logged(" M prepare_kick state=4->1 gates=rwc last=skipped <trigger"), "the kick and what preceded it");
+
+    ResetProbe();
+    Frame(10);
+    ProbeRecord(ProbeStep::renderEnter, kStateUnknown, 0, 1, 1);
+    ProbeRecord(ProbeStep::prepare, kStateUnknown, kStateUnknown, 8);
+    ProbeRecord(ProbeStep::orphan, 4, 3, 0, 0);
+    Frame(12);
+    ServiceFrameProbe();
+    Require(gWritten == 1 && Logged("kinds=orphan control=0"), "an orphan opens a window");
+    Require(Logged(" M orphan state=4->3 guard=0 last=none <trigger"), "with the guard and the prepare");
+    Require(Logged(" M render_enter state=? q=1/1") && Logged(" M prepare state=?->? gates=u"),
+            "unread states and gates print as such");
+}
+
 unsigned gConsumerCalls = 0;
 void* gConsumerParams = nullptr;
 void __fastcall FakeConsumer(void* params)
@@ -318,6 +344,7 @@ int main()
     TestMergedTriggers();
     TestOverwriteAndTimeout();
     TestThreadsAndFormat();
+    TestGuardSteps();
     TestDetours();
     TestGateAndCommands();
     std::cout << "frame probe tests passed\n";

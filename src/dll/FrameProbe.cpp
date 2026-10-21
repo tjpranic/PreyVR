@@ -45,7 +45,9 @@ constexpr unsigned long long kMaxWindows = 16, kControlWindows = 3;
 // A window still open this long after its trigger (no frame starts: the cull
 // watch is off, or the game stopped ticking) is written with what it has.
 constexpr std::int64_t kWindowTimeoutUs = 2000000;
-constexpr unsigned kPanelClose = 1, kFirstEyeRefused = 2, kLagChange = 4;
+constexpr unsigned kPanelClose = 1, kFirstEyeRefused = 2, kLagChange = 4, kPrepareKick = 8, kOrphan = 16;
+constexpr unsigned kInteresting = kFirstEyeRefused | kLagChange | kPrepareKick | kOrphan;
+constexpr std::uint32_t kStateUnknown = 0xFF; // CullPrepareGuard.h's kCullStateUnknown
 
 struct Slot {
     std::atomic<std::uint64_t> seq{0}; // index + 1 once written, 0 while being written
@@ -133,7 +135,7 @@ bool ReadEvent(std::uint64_t index, Event& out)
 void Finish(std::uint64_t end)
 {
     gOpen.end = end;
-    const bool interesting = (gOpen.kinds & (kFirstEyeRefused | kLagChange)) != 0;
+    const bool interesting = (gOpen.kinds & kInteresting) != 0;
     gOpen.control = !interesting;
     auto& quota = interesting ? gWritten : gControls;
     const auto limit = interesting ? kMaxWindows : kControlWindows;
@@ -186,8 +188,34 @@ const char* StepName(std::uint32_t step)
 {
     static constexpr const char* names[] = {"tick", "render_enter", "render_exit", "pass_created",
         "consumer_enter", "consumer_exit", "scene_enter", "scene_exit", "end_frame", "panel_open",
-        "panel_close", "first_eye_refused", "lag_change"};
+        "panel_close", "first_eye_refused", "lag_change", "prepare", "prepare_kick", "orphan"};
     return step < std::size(names) ? names[step] : "unknown";
+}
+
+void AppendState(std::ostringstream& line, std::uint32_t state)
+{
+    if (state == kStateUnknown) line << '?';
+    else line << state;
+}
+
+// PrepareOcclusion's gates (CullPrepareGuard.cpp): r render tasks, w world, c camera; u unread.
+std::string Gates(std::uint32_t gates)
+{
+    if ((gates & 8) != 0) return "u";
+    std::string out;
+    out += (gates & 1) != 0 ? 'r' : '-';
+    out += (gates & 2) != 0 ? 'w' : '-';
+    out += (gates & 4) != 0 ? 'c' : '-';
+    return out;
+}
+
+// The guard's record of what PrepareOcclusion did before this render.
+const char* LastPrepare(std::uint32_t last)
+{
+    if ((last & 0x100) == 0) return "none";
+    const std::uint32_t gates = last & 0xF;
+    if ((gates & 8) != 0) return "unread";
+    return (gates & 7) == 7 ? "ran" : "skipped";
 }
 
 const char* SceneName(std::uint32_t outcome)
@@ -207,6 +235,8 @@ std::string Kinds(unsigned kinds)
     add(kPanelClose, "panel_close");
     add(kFirstEyeRefused, "first_eye_refused");
     add(kLagChange, "lag_change");
+    add(kPrepareKick, "prepare_kick");
+    add(kOrphan, "orphan");
     return out.empty() ? "none" : out;
 }
 
@@ -228,6 +258,8 @@ std::string FormatEvent(unsigned long long window, const Event& e, std::int64_t 
         break;
     case ProbeStep::renderEnter:
     case ProbeStep::renderExit:
+        line << " state=";
+        AppendState(line, e.a);
         line << " q=" << e.c << '/' << e.d;
         break;
     case ProbeStep::passCreated:
@@ -251,6 +283,17 @@ std::string FormatEvent(unsigned long long window, const Event& e, std::int64_t 
         break;
     case ProbeStep::lagChange:
         line << " depth=" << e.a << " was=" << e.b << " pending=" << e.c;
+        break;
+    case ProbeStep::prepare:
+    case ProbeStep::prepareKick:
+    case ProbeStep::orphan:
+        line << " state=";
+        AppendState(line, e.a);
+        line << "->";
+        AppendState(line, e.b);
+        if (static_cast<ProbeStep>(e.step) == ProbeStep::orphan) line << " guard=" << e.c;
+        else line << " gates=" << Gates(e.c);
+        if (static_cast<ProbeStep>(e.step) != ProbeStep::prepare) line << " last=" << LastPrepare(e.d);
         break;
     default:
         break;
@@ -384,6 +427,8 @@ void ProbeRecord(ProbeStep step, std::uint32_t a, std::uint32_t b, std::uint32_t
     case ProbeStep::panelClose: Open(kPanelClose, index, qpc); break;
     case ProbeStep::firstEyeRefused: Open(kFirstEyeRefused, index, qpc); break;
     case ProbeStep::lagChange: Open(kLagChange, index, qpc); break;
+    case ProbeStep::prepareKick: Open(kPrepareKick, index, qpc); break;
+    case ProbeStep::orphan: Open(kOrphan, index, qpc); break;
     default: break;
     }
 }
