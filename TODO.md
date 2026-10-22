@@ -11,8 +11,7 @@
     Add in a two-handed wrench mode that automatically triggers heavy wrench attacks. One handed mode would always be a light attack. This would replace the speed based light/heavy attack system.
 - Immersive reloading
     Right now it just plays the animation. It would be better to allow the player to physically attach and detach weapon ammunition.
-- Shot from muzzle laser shows skewed
-    The game naturally skews the aim laser when it comes from the muzzle. It should be straightened.
+- The wrench tends to hit around the hand area instead of the head of the wrench
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -60,6 +59,10 @@
     A weird bug that causes certain parts of the world to flash strangely. Might be a culling issue. A fix + instrumentation is in place.
 
 ## DONE
+
+### UX/Game Feel
+- Shot from muzzle laser shows skewed
+    The game naturally skews the aim laser when it comes from the muzzle. It should be straightened.
 
 ### UI
 - Controller Prompts option doesn't seem to apply sometimes

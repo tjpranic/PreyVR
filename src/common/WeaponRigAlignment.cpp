@@ -11,6 +11,9 @@ constexpr std::uintptr_t kBoneVtable = 0x1D212B8;
 constexpr std::uintptr_t kSkinVtable = 0x1D1EDA8;
 constexpr std::uintptr_t kWrenchVtable = 0x1E92F00;
 constexpr std::uintptr_t kDisruptorVtable = 0x1E31290;
+// CArkWeaponGooGun: written to [this] by its constructor 0x169E1D0 (and only
+// reset by its destructor 0x169E2D0); also the weaponVtable ik.align reported live.
+constexpr std::uintptr_t kGlooVtable = 0x1E6E390;
 constexpr std::uintptr_t kCharacterBindingVtable = 0x1CB1328;
 constexpr std::uintptr_t kCharacterVtable = 0x1D22200;
 constexpr std::uintptr_t kManagerVtable = 0x1D22110;
@@ -186,6 +189,13 @@ Status ReadBasis(const Memory& memory, std::uintptr_t moduleBase,
     // Asset-specific presentation policy; the ammo position/name stays native.
     if(r.Is(owner.weapon,moduleBase+kDisruptorVtable)) {
         std::memcpy(candidate.helper,"fx_muzzle",sizeof("fx_muzzle"));
+    }
+    // The GLOO's "muzzle" is authored 4.8 degrees yawed off its barrel (+Y
+    // 0.083,0.997,0); its "muzzlefx" at the nozzle lies along the model's long
+    // axis like muzzle_jnt (ik.helpers, headset 2026-10-22). Aligning "muzzle"
+    // drew the nozzle 4.8 degrees off the aim, so the laser left it skewed.
+    if(r.Is(owner.weapon,moduleBase+kGlooVtable)) {
+        std::memcpy(candidate.helper,"muzzlefx",sizeof("muzzlefx"));
     }
     // Mirror native lookup precedence: attachment first, then skeleton joint.
     // Never fall through from an unsupported matching attachment to a joint.

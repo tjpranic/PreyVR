@@ -224,6 +224,37 @@ void LookupAndRefusals()
         Check(disruptor.Resolve(b)==Status::ready && std::strcmp(b.helper,"fx_muzzle")==0,
               "Disruptor uses its measured barrel-facing effects frame");
     }
+    {
+        // The GLOO as measured in the headset (2026-10-22): its ammo helper
+        // "muzzle" is authored 4.76 degrees yawed off the barrel (+Y 0.083,
+        // 0.997, 0); "muzzlefx" lies along it.
+        Fixture gloo;
+        const auto list=gloo.Array(2,8), fx=gloo.Alloc(0x170);
+        const auto yawed=Q(0,0,1,-.0831f), straight=Quaternion{};
+        gloo.Put(gloo.weaponChar,0x38,list);gloo.Put(list,0,gloo.helper);gloo.Put(list,8,fx);
+        gloo.Put(gloo.weapon,0x2F0,gloo.Name("muzzle"));
+        gloo.Put(gloo.helper,0x10,gloo.Name("muzzle"));gloo.Put(gloo.helper,0x114,yawed);
+        gloo.Put(gloo.helper,0x14C,Quaternion{});
+        gloo.Put(fx,0,Fixture::base+0x1D212B8);gloo.Put(fx,0x10,gloo.Name("muzzlefx"));
+        gloo.Put(fx,0x28,gloo.weaponChar+0x18);gloo.Put(fx,0x114,straight);gloo.Put(fx,0x14C,Quaternion{});
+        Check(gloo.Resolve(b)==Status::ready && std::strcmp(b.helper,"muzzle")==0,
+              "another weapon with the same helpers keeps its ammo helper");
+        gloo.Put(gloo.weapon,0,Fixture::base+0x1E6E390);
+        Check(gloo.Resolve(b)==Status::ready && std::strcmp(b.helper,"muzzlefx")==0 &&
+              SameRotation(b.barrelInWeapon,straight),
+              "GLOO aligns its barrel-straight muzzlefx, not the yawed ammo helper");
+        Quaternion solved{};
+        const auto aim=Q(1,2,3,.8f);
+        Check(SolveWrist({},aim,b,solved),"solve GLOO basis");
+        const auto weaponWorld=Multiply(solved,b.weaponInWrist);
+        const Vec3 aimForward=Rotate(aim,{0,1,0});
+        Check(Distance(Rotate(Multiply(weaponWorld,straight),{0,1,0}),aimForward)<1e-4f,
+              "GLOO nozzle lies on the aim");
+        const float ammoOff=std::acos(std::fmin(1.0f,Dot(Rotate(Multiply(weaponWorld,yawed),{0,1,0}),aimForward)))*57.29578f;
+        Check(std::fabs(ammoOff-4.76f)<.05f,"the ammo helper sits its authored 4.76 degrees off the aim instead");
+        gloo.Put(fx,0x10,gloo.Name("other"));
+        Check(gloo.Resolve(b)==Status::missingHelper,"GLOO without muzzlefx refuses rather than drawing the skew");
+    }
     f.Put(f.mount, 0x15C, 2);
     Check(f.Resolve(b) == Status::ready, "direct wrist mount supported");
     f.Put(f.mount, 8, std::uint32_t(0x4000));
