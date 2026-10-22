@@ -118,6 +118,22 @@ it for developer runs (omitted, the shell's value is inherited).
   without one is refused rather than paired with an older eye.
 - **Fallback:** any mode-3 refusal returns the camera hook to alternate-eye
   contracts instead of leaving the headset dark.
+- **Pairing by camera (2026-10-22).** The contract queue assumed one main-thread
+  render per RT_EndFrame. A level-transition load breaks that: Prey's main loop kept
+  rendering (about 330 empty renders in the last 0.28 s, frame probe w=4) while the
+  render thread's loadtime loop ended the frame once. The 64-record queue overflowed,
+  poisoned itself by design, and refused every later frame. The headset stayed black
+  while the desktop was fine (run `player-20261022-185737`: `render_contract eye=-1
+  lag=64`, `dropped` climbing to 3,408). Now each both-eyes contract carries the head
+  camera the main thread wrote. Mode 3 notes the camera from the render thread's own
+  frame info (`NoteDualFrameCamera`), and RT_EndFrame takes the record with that camera,
+  dropping older ones (`RenderContractQueue::PopMatching`). Overflow drops the oldest
+  record. Unidentified frames (menus, alternate-eye mode) still take the oldest, and
+  are still refused after an overflow until a match resynchronises the queue. If no
+  record matches, the frame falls back to taking the oldest and logs
+  `eye_handoff unmatched` with the nearest camera difference. `preyvr_vr status`
+  carries `handoff=queued/pushed/matched/resyncs/skipped/unmatched/starved/dropped`,
+  and each resync logs `eye_handoff resync skipped=N`.
 
 ## Headset results, 2026-10-10 (SteamVR, Steam Frame)
 

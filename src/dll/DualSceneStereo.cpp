@@ -501,6 +501,11 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
             --tDepth;
             return;
         }
+        // This frame's head camera, from its own frame info: RT_EndFrame takes
+        // the render contract published with it (ConsumeRenderedContract).
+        if (mode == 3) {
+            NoteDualFrameCamera(centre);
+        }
         if (!built || !PrepareEye(renderer, view, threadInfo, eyes[0], infos[0])) {
             if (built) {
                 restoreCentre();
@@ -814,7 +819,7 @@ std::string DualSceneReport()
         << " secondUs=" << (doubled ? gSecondMicros.load() / doubled : 0)
         << " dualContract=" << (DualStereoContractEnabled() ? 1 : 0)
         << " stereoIpd=" << SyntheticStereoIpdMetres()
-        << " headsetBuildMisses=" << gHeadsetBuildMisses.load() << DualPairReport();
+        << " headsetBuildMisses=" << gHeadsetBuildMisses.load() << DualPairReport() << EyeHandoffReport();
     return out.str();
 }
 

@@ -5,6 +5,9 @@
 
 #include <Windows.h>
 
+#include <cstdint>
+#include <string>
+
 // Prey's CSystem::Render, hooked: the one per-frame seam on the engine's main
 // thread, which keeps running while a menu is up. Every frame it drains queued
 // input and HUD calls and runs the move, turn and fire lanes. With stereo armed
@@ -186,27 +189,37 @@ DWORD SetStereoEyeLock(unsigned int eye);
 // out which one it has -- which is what let the dwell go, and with it the 11 Hz
 // per-eye refresh that made the first stereo test judder.
 //
+// **Not always 1:1.** Through a level-transition load Prey's main loop keeps
+// rendering while the render thread ends the frame once, so a both-eyes frame
+// whose camera was noted (NoteDualFrameCamera) takes the record carrying that
+// camera and drops the older ones (RenderContractQueue). Any other frame takes
+// the oldest.
+//
 // Call exactly once per finished frame. Consuming twice would advance past a
 // frame and swap the eyes from then on.
 bool ConsumeRenderedContract(RenderContract& out);
+
+// The head camera (CCamera bytes, Matrix34 first) of the both-eyes frame the
+// render thread is drawing, noted from its own frame info; the next
+// ConsumeRenderedContract identifies the frame's record by it. Render thread.
+void NoteDualFrameCamera(const std::uint8_t* camera);
 
 // Clears the queue. Call when arming, so a stale backlog from a previous run
 // cannot decide the first few frames' eyes.
 void ResetEyeHandoff();
 
-// Pushes minus pops -- the pipeline depth in frames.
-//
-// **This is the check that the ordering assumption is holding.** It should sit
-// at a small constant. Drift means the 1:1 correspondence between built cameras
-// and rendered frames has broken, and the eye identity can no longer be trusted.
+// Records queued -- the pipeline depth in frames. It should sit at a small
+// constant; a load can raise it until the next identified frame drops the backlog.
 unsigned long long EyeHandoffLag();
 
 // Frames finished with nothing queued -- the render thread ran ahead.
 unsigned long long EyeHandoffStarvedCount();
 
-// Entries discarded because the queue ran long. A stale eye is a frame from a
-// different camera position, so it is dropped rather than shown.
+// Records dropped, oldest first, because the queue was full.
 unsigned long long EyeHandoffDroppedCount();
+
+// " handoff=" queued/pushed/matched/resyncs/skipped/unmatched/starved/dropped.
+std::string EyeHandoffReport();
 
 // Sets the eye lock from inside the render loop, without taking the control
 // mutex. For the stereo submission path only; everything else should use

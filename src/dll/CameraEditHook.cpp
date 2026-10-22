@@ -188,14 +188,51 @@ namespace eyehandoff {
 
 RenderContractQueue gQueue;
 std::atomic<unsigned long long> gPushed{0}, gPopped{0}, gStarved{0}, gDropped{0};
+std::atomic<unsigned long long> gMatched{0}, gResyncs{0}, gSkipped{0}, gUnmatched{0};
+// The head camera of the frame the render thread doubled (NoteDualFrameCamera),
+// taken by the Consume at that frame's RT_EndFrame. Render thread only.
+std::array<float,12> gRenderedCamera{};
+bool gHaveRenderedCamera = false;
 void Publish(const RenderContract& contract) {
-    if(gQueue.Push(contract)) ++gPushed; else ++gDropped;
+    ++gPushed;
+    if(!gQueue.Push(contract)) ++gDropped;
 }
 bool Consume(RenderContract& contract) {
+    const bool identified = gHaveRenderedCamera;
+    gHaveRenderedCamera = false;
+    if (identified) {
+        std::size_t skipped = 0;
+        if (gQueue.PopMatching(gRenderedCamera, contract, skipped)) {
+            ++gPopped; ++gMatched;
+            if (skipped != 0) {
+                gSkipped += skipped;
+                const auto resyncs = ++gResyncs;
+                if (resyncs <= 8 || resyncs % 100 == 0) {
+                    lifecycle::Log("preyvr_camera_edit eye_handoff resync skipped=" + std::to_string(skipped) +
+                                   " resyncs=" + std::to_string(resyncs) +
+                                   " dropped=" + std::to_string(gDropped.load()));
+                }
+            }
+            return true;
+        }
+        // No record carries this frame's camera: the position fallback below,
+        // as before identities, and logged so a systematic miss shows.
+        const auto unmatched = ++gUnmatched;
+        if (unmatched <= 4 || unmatched % 1000 == 0) {
+            lifecycle::Log("preyvr_camera_edit eye_handoff unmatched=" + std::to_string(unmatched) +
+                           " queued=" + std::to_string(gQueue.Size()) +
+                           " nearestDiff=" + std::to_string(gQueue.NearestCameraDifference(gRenderedCamera)) +
+                           " camera=" + std::to_string(gRenderedCamera[3]) + "," +
+                           std::to_string(gRenderedCamera[7]) + "," + std::to_string(gRenderedCamera[11]));
+        }
+    }
     if(!gQueue.Pop(contract)) {++gStarved;return false;}
     ++gPopped;return true;
 }
-void Reset() {gQueue.Reset();gPushed=0;gPopped=0;gStarved=0;gDropped=0;}
+void Reset() {
+    gQueue.Reset();gPushed=0;gPopped=0;gStarved=0;gDropped=0;
+    gMatched=0;gResyncs=0;gSkipped=0;gUnmatched=0;
+}
 
 } // namespace eyehandoff
 
@@ -523,9 +560,13 @@ void __fastcall RenderWithCameraEdit(void* system)
 
     std::memcpy(camera, edited.data(), cameraedit::kCameraSize);
     // The camera this both-eyes frame is prepared from, so DrawNear particle
-    // geometry built from it can be told apart (IsDualFrameCentre).
+    // geometry built from it can be told apart (IsDualFrameCentre), and so the
+    // render thread can find this frame's record by it (NoteDualFrameCamera).
     if (dualFrame) {
-        PublishFrameCentre(stereo::ReadMatrix(edited));
+        const stereo::Matrix34 head = stereo::ReadMatrix(edited);
+        PublishFrameCentre(head);
+        renderContract.camera = head;
+        renderContract.haveCamera = true;
     }
 
     UpdateAimReticleForRender();
@@ -821,6 +862,12 @@ DWORD SetStereoEyeLock(unsigned int eye)
 
 bool ConsumeRenderedContract(RenderContract& out) { return eyehandoff::Consume(out); }
 
+void NoteDualFrameCamera(const std::uint8_t* camera)
+{
+    std::memcpy(eyehandoff::gRenderedCamera.data(), camera, sizeof(eyehandoff::gRenderedCamera));
+    eyehandoff::gHaveRenderedCamera = true;
+}
+
 void ResetEyeHandoff()
 {
     eyehandoff::Reset();
@@ -828,9 +875,17 @@ void ResetEyeHandoff()
 
 unsigned long long EyeHandoffLag()
 {
-    const unsigned long long pushed = eyehandoff::gPushed.load(std::memory_order_acquire);
-    const unsigned long long popped = eyehandoff::gPopped.load(std::memory_order_acquire);
-    return pushed >= popped ? pushed - popped : 0;
+    return eyehandoff::gQueue.Size();
+}
+
+std::string EyeHandoffReport()
+{
+    std::ostringstream out;
+    out << " handoff=" << eyehandoff::gQueue.Size() << "q/" << eyehandoff::gPushed.load() << "pushed/"
+        << eyehandoff::gMatched.load() << "matched/" << eyehandoff::gResyncs.load() << "resyncs/"
+        << eyehandoff::gSkipped.load() << "skipped/" << eyehandoff::gUnmatched.load() << "unmatched/"
+        << eyehandoff::gStarved.load() << "starved/" << eyehandoff::gDropped.load() << "dropped";
+    return out.str();
 }
 
 unsigned long long EyeHandoffStarvedCount()
