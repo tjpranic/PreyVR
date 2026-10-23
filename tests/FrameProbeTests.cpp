@@ -14,7 +14,7 @@ namespace preyvr::dll {
 DWORD gPinned = 0;
 DWORD ModulePinStatus() { return gPinned; }
 bool EnsureMinHook() { return false; }
-// PassCameraProbe's shared R-071 hook: unavailable without Prey.
+// PassCreationHook's shared R-071 hook: unavailable without Prey.
 bool EnsurePassCreationHook() { return false; }
 // The cull watch's queue indices: a scripted sequence.
 std::vector<std::pair<std::uint32_t, std::uint32_t>> gIndices;

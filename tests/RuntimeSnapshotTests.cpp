@@ -184,19 +184,19 @@ int main()
         derived.farPlane = source.farPlane;
 
         Require(IsPlausible(derived), "a derived render camera is plausible");
-        Require(RenderCameraMatchesSource(source, derived),
+        Require(RenderCameraResidual(source, derived) <= kRenderCameraResidualLimit,
             "the SetCamera frustum formula reproduces the render camera");
 
         // The whole point of the asymmetry fields: a per-eye shift must move the
         // derived frustum, or our model of SetCamera is wrong.
         CameraView shifted = source;
         shifted.asymLeft = 0.05f;
-        Require(!RenderCameraMatchesSource(shifted, derived),
+        Require(RenderCameraResidual(shifted, derived) > kRenderCameraResidualLimit,
             "an asymmetry shift changes the derived frustum");
 
         RenderCameraView shiftedDerived = derived;
         shiftedDerived.frustumLeft = shifted.asymLeft - horizontal;
-        Require(RenderCameraMatchesSource(shifted, shiftedDerived),
+        Require(RenderCameraResidual(shifted, shiftedDerived) <= kRenderCameraResidualLimit,
             "and the shifted frustum matches the shifted source");
     }
 
@@ -273,7 +273,7 @@ int main()
             "correct scores an order of magnitude below the limit");
         Require(tightest > kRenderCameraResidualLimit * 10.0f,
             "the tightest wrong case scores an order of magnitude above the limit");
-        Require(RenderCameraMatchesSource(asymSource, asymTruth),
+        Require(RenderCameraResidual(asymSource, asymTruth) <= kRenderCameraResidualLimit,
             "a genuinely asymmetric frustum still passes");
     }
 
@@ -320,7 +320,7 @@ int main()
         Require(std::fabs(produced.frustumBottom - tanD * base.nearPlane) < 1e-5f, "bottom round-trips");
         Require(std::fabs(produced.frustumTop - tanU * base.nearPlane) < 1e-5f, "top round-trips");
         Require(IsPlausible(produced), "the per-eye frustum is plausible");
-        Require(RenderCameraMatchesSource(eyeCamera, produced),
+        Require(RenderCameraResidual(eyeCamera, produced) <= kRenderCameraResidualLimit,
             "and agrees with the camera that produced it");
 
         // The asymmetry must be genuinely off-centre, or we have symmetrised.

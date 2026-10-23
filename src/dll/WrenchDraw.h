@@ -25,6 +25,5 @@ void ServiceWrenchDrawFrame();
 // wrench.draw: 1 (default) skips the wrench's draw and stow animations, 0 plays
 // them again. Skipped selections already waiting are finished either way.
 void SetWrenchDrawSkip(unsigned on);
-unsigned WrenchDrawSkip();
 std::string WrenchDrawReport();
 } // namespace preyvr::dll

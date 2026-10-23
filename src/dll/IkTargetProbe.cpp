@@ -334,6 +334,4 @@ DWORD IkLogGateCurrentValue()
     return value;
 }
 
-DWORD IkCaptureArmed() { return gCaptureArmed.load(std::memory_order_relaxed) ? 1u : 0u; }
-
 } // namespace preyvr::dll

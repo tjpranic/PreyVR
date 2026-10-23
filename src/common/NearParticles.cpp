@@ -24,16 +24,6 @@ bool KeepNearProjection(bool enabled, bool perEyeSubmission, std::uint32_t objec
     return enabled && perEyeSubmission && (objectFlags & kObjectNearest) != 0;
 }
 
-const char* BuilderName(Builder builder)
-{
-    switch (builder) {
-    case Builder::Sprites: return "sprites";
-    case Builder::Geometry: return "geometry";
-    case Builder::Other: return "other";
-    default: return "unknown";
-    }
-}
-
 bool CameraSpaceOrigin(Vec3 camera, const EyeCamera& eye, Vec3& out, float tolerance)
 {
     const float values[] = {camera.x, camera.y, camera.z, eye.position.x, eye.position.y,

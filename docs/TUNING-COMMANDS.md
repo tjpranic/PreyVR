@@ -34,14 +34,13 @@ or switched something on. For example, `ui.curve` reset curvature to 35,
 `aim.origin` switched the aim origin to the hand, and `ik.mode` switched the
 arms off. Those commands now reply with the value where the mod can read it
 back, or with `note=no_value_nothing_changed` where it cannot. Each command
-makes this check itself (`Valued` in `CommandChannel.cpp`). `ik.mode`,
-`move.mode` and `hand.mode` reply with the mode in effect, also after a refused
-change.
+makes this check itself (`Valued` in `CommandChannel.cpp`). `ik.mode` and
+`move.mode` reply with the mode in effect, also after a refused change.
 
 The exceptions are one-shot actions, which act when they are typed:
 
 - `capture`, `capture.hud`, `capture.inventory`, `dual.capture`
-- `ik.calibrate`, `aim.calibratebarrel`, `hand.calibrate`, `weapon.calibrate`
+- `ik.calibrate`, `aim.calibratebarrel`
 - `vr.enable`, `vr.disable`, `vr.recenter`, `view.recenter`, `view.calibrate`, `xr.start`
 - `arms.draw`, `ik.dump`, `ik.skel`, `ik.helpers`, `near.dump`
 - `menu`. A bare `menu` posts action 0, Up.
@@ -425,5 +424,4 @@ value report, as described above.
 | `console <command ...>`, or an allowlisted name alone | An engine console command through the fail-closed allowlist. |
 | `mem.peek`, `mem.scan`, `mem.deep`, `mem.watch`, `mem.hits`, `mem.stack`, `mem.str` | Memory inspection and hardware breakpoints. Research only. |
 | `frame.capture`, `frame.character`, `frame.offset`, `frame.apply`, `frame.propagate`, `frame.near` | Per-character render-matrix override. Research. |
-| `hand.*` (`mode`, `joint`, `offset`, `right`, `left`, `drive`, `wrist`, `turnyaw`, `scale`, `calibrate`, `character`) | The legacy hand-rig lane, superseded by `ik.*`. VR start never arms it, and `hand.mode 2` is refused while `ik.mode 2` runs. |
-| `weapon.*` (`observe`, `offset`, `apply`, `rotate`, `calibrate`) | The legacy weapon-mount lane, refused while `ik.mode 2` runs. |
+| `weapon.observe [0\|1]` | Passive capture of the equipped weapon's attachment and firing position; `ik.mode` turns it on. The legacy `hand.*` lane and the `weapon.offset/apply/rotate/calibrate` mount writer were removed on 2026-10-23, superseded by `ik.*`. |

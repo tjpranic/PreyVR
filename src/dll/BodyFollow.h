@@ -30,7 +30,6 @@ DWORD SetBodyFollowActive(unsigned active);
 // The player's choice (VR options, body.follow). The torso is estimated and
 // shared whenever the lane is active, followed or not.
 DWORD SetBodyFollow(unsigned enabled);
-unsigned BodyFollowEnabled();
 // Write a level rotation (no pitch or roll), on by default: native pitch
 // bends the body mesh, and nothing in VR reads it.
 DWORD SetBodyFollowLevel(unsigned enabled);
@@ -50,7 +49,6 @@ DWORD RequestBodyTurn(int degrees, int delaySeconds = 5);
 // moves move the capsule natively and the view with it. Needs positional head
 // tracking in the view; refused, and counted, without it.
 DWORD SetRoomScale(unsigned enabled);
-unsigned RoomScaleEnabled();
 // Idle until the head is `startMm` from the body, then follow to `stopMm`,
 // closing the gap with time constant `followMs` (negative: unchanged).
 DWORD SetRoomScaleZone(int startMm, int stopMm, int followMs = -1);

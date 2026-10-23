@@ -4,14 +4,12 @@
 #include "preyvr/StereoCamera.h"
 #include "preyvr/VrMath.h"
 
-#include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
 
-// A complete description of one stereo frame: given the camera the engine was
-// about to render with, and what OpenXR says about the two eyes, produce the two
-// cameras that should be rendered instead.
+// The per-eye projection of one stereo frame: what OpenXR says about each eye's
+// frustum, expressed in the fields Prey's CCamera renders with, and back again.
 //
 // CameraEditHook builds each eye's camera with it. Keeping it pure means the
 // whole per-eye construction can be checked without a headset, a GPU, or a
@@ -128,40 +126,6 @@ EyeFovAngles AnglesFromTangents(const EyeView& view);
 // The pose is left at identity: callers compose the eye offset onto the engine's
 // live camera, which this function knows nothing about.
 EyeView SyntheticEyeView(int eye, float halfFovDegrees, float asymmetryScale);
-
-// A finished camera, ready for UpdateFrustum and then a blit.
-struct EyeCamera {
-    std::array<std::uint8_t, kCameraSize> bytes{};
-};
-
-struct StereoPlan {
-    EyeCamera left{};
-    EyeCamera right{};
-
-    // The single eye point for gameplay systems, in engine world space.
-    Pose cyclops{};
-
-    EyeProjection leftProjection{};
-    EyeProjection rightProjection{};
-};
-
-// Builds both eye cameras from the camera the engine was about to use.
-//
-// Everything not related to the view is inherited from `baseCamera` unchanged --
-// dimensions, near and far planes, and every cached field. A per-eye camera
-// should differ from the engine's own in exactly the ways it has to and in no
-// others, both because that is the smallest change and because it makes a diff
-// of the two blobs readable.
-//
-// Returns nothing if the base camera is too small, if either eye's tangents are
-// not a valid frustum, or if a produced matrix is not safe to write. A partial
-// stereo plan is never returned: rendering one good eye and one bad one is worse
-// than rendering neither, because it looks like it nearly works.
-std::optional<StereoPlan> BuildStereoPlan(
-    std::span<const std::uint8_t> baseCamera,
-    const stereo::ReferenceFrame& reference,
-    const EyeView& leftEye,
-    const EyeView& rightEye);
 
 // Reads the near plane the engine is currently using, since the asymmetry solve
 // needs it and it must come from the live camera rather than a constant.

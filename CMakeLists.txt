@@ -7,7 +7,7 @@ option(PREYVR_BUILD_TOOLS "Build local research helpers" ON)
 option(PREYVR_BUILD_SMOKE_DLL "Build PreyVR.dll, the signature-gated mod, and the tests that compile its sources" ON)
 option(PREYVR_BUILD_OPENXR_LOADER "Package the x64 OpenXR loader for preflight-only bootstrap work" ON)
 option(PREYVR_REQUIRE_GAME_BASELINE "Fail tests when the researched Prey installation is unavailable" OFF)
-set(PREYVR_BUILD_VERSION "0.3.1-static-ik-integration")
+set(PREYVR_BUILD_VERSION "0.6.0-preview")
 set(PREYVR_SUPPORTED_PREYDLL_SHA256 "7D6E322F61B28331095A400F0BA5F09BD9A39C57BF993602285DD6ACB05311A7")
 set(PREYVR_MINHOOK_GIT_COMMIT "c3fcafdc10146beb5919319d0683e44e3c30d537" CACHE STRING "Pinned MinHook commit (v1.3.4)")
 set(PREYVR_OPENXR_GIT_COMMIT "64f2b37c8c6da3d83c9b4d11865ba1fb752cb8ec" CACHE STRING "Pinned OpenXR-SDK commit (release-1.1.60)")
@@ -225,7 +225,6 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
     preyvr_enable_warnings(preyvr_win32_bootstrap)
 
     add_library(preyvr SHARED
-        src/dll/AimRayProbe.cpp
         src/dll/AimTakeover.cpp
         src/dll/PsiMedkit.cpp
         src/dll/AnimIkTakeover.cpp
@@ -280,7 +279,6 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/MinHookInit.cpp
         src/dll/MoveLane.cpp
         src/dll/CommandChannel.cpp
-        src/dll/HandRigTakeover.cpp
         src/dll/NearFovOverride.cpp
         src/dll/NearViewStereo.cpp
         src/dll/NearParticleStereo.cpp
@@ -289,7 +287,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/DualOverlay.cpp
         src/dll/RenderFrame.cpp
         src/dll/WeaponAttachment.cpp
-        src/dll/PassCameraProbe.cpp
+        src/dll/PassCreationHook.cpp
         src/dll/ReticleFollow.cpp
         src/dll/XrInput.cpp
         src/dll/Haptics.cpp

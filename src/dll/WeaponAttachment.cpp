@@ -5,17 +5,13 @@
 #include "ShotRay.h"
 #include "preyvr/AnimIk.h"
 #include <sstream>
-#include "AnimIkTakeover.h"
 #include "WeaponAttachment.h"
 #include "MinHookInit.h"
 #include "preyvr/LatestSnapshot.h"
 
-#include "HeadTrackingHook.h"
 #include "Logger.h"
 #include "XrInput.h"
 #include "preyvr/EngineMap.h"
-#include "preyvr/MotionController.h"
-#include "preyvr/StereoCamera.h"
 #include "preyvr/VrMath.h"
 
 #include <MinHook.h>
@@ -51,7 +47,6 @@ constexpr std::size_t kWeaponAttachmentField = 0x2B0;   // R-024
 
 // IAttachment vtable, aligned against R-024's independently recorded +0xD8
 // (AddBinding, index 27).
-constexpr std::size_t kSetAttAbsoluteDefault = 9 * 8;   // +0x48
 constexpr std::size_t kGetAttAbsoluteDefault = 10 * 8;  // +0x50
 
 // CryEngine QuatT: Quat(x,y,z,w) then Vec3(x,y,z), 28 bytes.
@@ -60,7 +55,6 @@ struct QuatT {
     float px, py, pz;
 };
 
-using SetAbsFn = void(__fastcall*)(void* attachment, const QuatT* value);
 using GetAbsFn = const QuatT*(__fastcall*)(void* attachment);
 
 void* gTarget = nullptr;
@@ -71,17 +65,9 @@ std::mutex gMountMutex;
 std::atomic<std::uint64_t> gEquipGeneration{0};
 
 std::atomic<bool> gObserving{false};
-std::atomic<bool> gOffsetEnabled{false};
 std::atomic<unsigned long long> gAttachment{0};
-std::atomic<float> gOffsetX{0.0f}, gOffsetY{0.0f}, gOffsetZ{0.0f};
-std::atomic<unsigned long long> gApplied{0}, gRefused{0};
 QuatT gBaseline{};
 std::atomic<bool> gHaveBaseline{false};
-
-std::atomic<bool> gRotationDrive{false};
-std::atomic<bool> gRotationCalibrated{false};
-Quaternion gZeroAim{};
-std::atomic<unsigned long long> gRotationApplied{0}, gRotationNoPose{0};
 
 using FiringPositionFn = void*(__fastcall*)(void*, void*, std::uint32_t, void*);
 std::atomic<FiringPositionFn> gFiringPositionOriginal{nullptr};
@@ -155,33 +141,6 @@ bool InstallMuzzleObserver()
     return true;
 }
 
-
-// The controller's aim rotation in world terms, through the same reference the
-// aim lane uses. Origin-anchored: the camera is offset per eye by the synthetic
-// stereo, and anchoring there leaks half an IPD into the result (FAIL-HAND-037).
-bool ControllerAimRotation(Quaternion& out, float& bodyYaw)
-{
-    ControllerState state{};
-    if (!TryGetControllerState(Hand::right, state)) {
-        return false;
-    }
-    if (!state.aimValidity.orientationTracked) {
-        return false;
-    }
-    const std::uint8_t* const camera = LiveViewCamera();
-    if (camera == nullptr) {
-        return false;
-    }
-    const stereo::Matrix34 m =
-        stereo::ReadMatrix(std::span<const std::uint8_t>(camera, engine::CameraLayout::size));
-    bodyYaw = stereo::CameraYawOf(m) - HeadTrackingReferenceYaw();
-    stereo::ReferenceFrame reference{};
-    reference.yawRadians = bodyYaw;
-    reference.worldPosition = Vec3{};
-    out = controller::ControllerPoseInWorld(reference, state.aimPose).orientation;
-    return true;
-}
-
 bool ReadMount(void* attachment, QuatT& out)
 {
     if (attachment == nullptr) {
@@ -206,18 +165,6 @@ bool ReadMount(void* attachment, QuatT& out)
         return false;
     }
     return std::isfinite(out.px) && std::isfinite(out.py) && std::isfinite(out.pz);
-}
-
-bool WriteMount(void* attachment, const QuatT& value)
-{
-    __try {
-        auto* const vtable = *reinterpret_cast<std::uint8_t**>(attachment);
-        const auto set = *reinterpret_cast<SetAbsFn*>(vtable + kSetAttAbsoluteDefault);
-        set(attachment, &value);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
 }
 
 // POD-only guarded reads, no guessed virtual calls. R-088 bone vtable and
@@ -267,15 +214,11 @@ bool __fastcall AttachToHandObserved(void* weapon)
             gEquippedRig.Publish(rig);
             gHaveBaseline.store(false);
             gAttachment.store(0);
-            gRotationCalibrated.store(false);
-            gOffsetEnabled.store(false);
             QuatT mount{};
             if (ReadMount(reinterpret_cast<void*>(rig.attachment), mount)) {
                 gHaveBaseline.store(false, std::memory_order_release);
                 gAttachment.store(rig.attachment, std::memory_order_release);
                 gBaseline = mount;
-                gRotationCalibrated.store(false, std::memory_order_release);
-                gOffsetEnabled.store(false, std::memory_order_release);
                 gHaveBaseline.store(true, std::memory_order_release);
             }
         } else {
@@ -453,9 +396,6 @@ DWORD SetWeaponAttachmentObserving(unsigned int enabled)
         gEquippedRig.Clear();
         std::lock_guard mountLock(gMountMutex);
         gHaveBaseline.store(false);
-        gRotationCalibrated.store(false);
-        gOffsetEnabled.store(false);
-        gRotationDrive.store(false);
         gAttachment.store(0);
     }
     Log(std::string("result=0 detail=observing value=") + (on ? "1" : "0") +
@@ -498,186 +438,9 @@ int WeaponMountPositionMillimetres(unsigned int axis)
     return static_cast<int>(v * 1000.0f);
 }
 
-int WeaponMountQuaternionMilli(unsigned int component)
-{
-    std::lock_guard mountLock(gMountMutex);
-    if (!gHaveBaseline.load(std::memory_order_acquire)) {
-        return 0;
-    }
-    const float v = component == 0 ? gBaseline.x : component == 1 ? gBaseline.y
-                  : component == 2 ? gBaseline.z : gBaseline.w;
-    return static_cast<int>(v * 1000.0f);
-}
-
-DWORD SetWeaponOffsetMillimetres(int x, int y, int z)
-{
-    std::lock_guard mountLock(gMountMutex);
-    // A weapon does not sit a metre from its own mount.
-    const auto tooBig = [](int v) { return v < -1000 || v > 1000; };
-    if (tooBig(x) || tooBig(y) || tooBig(z)) {
-        return 1;
-    }
-    gOffsetX.store(static_cast<float>(x) / 1000.0f, std::memory_order_relaxed);
-    gOffsetY.store(static_cast<float>(y) / 1000.0f, std::memory_order_relaxed);
-    gOffsetZ.store(static_cast<float>(z) / 1000.0f, std::memory_order_relaxed);
-    Log("result=0 detail=offset_mm x=" + std::to_string(x) + " y=" + std::to_string(y) +
-        " z=" + std::to_string(z));
-    return 0;
-}
-
-DWORD SetWeaponOffsetEnabled(unsigned int enabled)
-{
-    if (enabled && AnimIkMode() == 2u) { return 3; }
-    std::lock_guard mountLock(gMountMutex);
-    GameplayPoseFrame frame{};
-    EquippedRig owner{};
-    if (!TryGetGameplayPoseFrame(frame, false) || !TryGetEquippedRig(frame.player, owner)) { return 2; }
-    const bool on = enabled != 0u;
-    auto* const attachment =
-        reinterpret_cast<void*>(gAttachment.load(std::memory_order_acquire));
-    if (attachment == nullptr || reinterpret_cast<std::uintptr_t>(attachment) != owner.attachment ||
-        !gHaveBaseline.load(std::memory_order_acquire)) {
-        Log("result=refused detail=no_attachment note=equip_or_reequip_a_weapon");
-        return 2;
-    }
-    QuatT value = gBaseline;
-    if (on) {
-        value.px += gOffsetX.load(std::memory_order_relaxed);
-        value.py += gOffsetY.load(std::memory_order_relaxed);
-        value.pz += gOffsetZ.load(std::memory_order_relaxed);
-    }
-    // Disarming writes the captured baseline back, so this is reversible by
-    // construction rather than by remembering what it used to be.
-    if (!WriteMount(attachment, value)) {
-        gRefused.fetch_add(1, std::memory_order_relaxed);
-        Log("result=failed detail=write_mount");
-        return 3;
-    }
-    gOffsetEnabled.store(on, std::memory_order_release);
-    gApplied.fetch_add(1, std::memory_order_relaxed);
-    Log(std::string("result=0 detail=offset_enabled value=") + (on ? "1" : "0"));
-    return 0;
-}
-
-DWORD SetWeaponRotationDrive(unsigned int enabled)
-{
-    if (enabled && AnimIkMode() == 2u) { return 3; }
-    const bool wasArmed = gRotationDrive.exchange(enabled != 0u);
-    if (!enabled && wasArmed && gRotationCalibrated.load()) {
-        const DWORD restored = SetWeaponOffsetEnabled(WeaponOffsetArmed());
-        gRotationCalibrated.store(false);
-        if (restored != 0) { Log("result=refused detail=rotation_stopped_restore_unavailable"); return restored; }
-    }
-    gRotationNoPose.store(0, std::memory_order_relaxed);
-    Log(std::string("result=0 detail=rotation_drive value=") + (enabled ? "1" : "0"));
-    return 0;
-}
-
-DWORD CalibrateWeaponRotation()
-{
-    std::lock_guard mountLock(gMountMutex);
-    Quaternion aim{};
-    float yaw = 0.0f;
-    if (!ControllerAimRotation(aim, yaw)) {
-        Log("result=refused detail=aim_pose_untracked");
-        return 1;
-    }
-    if (!gHaveBaseline.load(std::memory_order_acquire)) {
-        Log("result=refused detail=no_mount note=equip_or_reequip_a_weapon");
-        return 2;
-    }
-    gZeroAim = aim;
-    gRotationCalibrated.store(true, std::memory_order_release);
-    Log("result=0 detail=rotation_calibrated");
-    return 0;
-}
-
-unsigned int WeaponOffsetArmed() { return gOffsetEnabled.load() ? 1u : 0u; }
-
-void UpdateWeaponMountFromController()
-{
-    if (AnimIkMode() == 2u) { return; }
-    std::unique_lock mountLock(gMountMutex, std::try_to_lock);
-    if (!mountLock.owns_lock()) { return; }
-    GameplayPoseFrame frame{};
-    EquippedRig owner{};
-    if (!TryGetGameplayPoseFrame(frame, false) || !TryGetEquippedRig(frame.player, owner)) { return; }
-    if (!gRotationDrive.load(std::memory_order_acquire) ||
-        !gRotationCalibrated.load(std::memory_order_acquire) ||
-        !gHaveBaseline.load(std::memory_order_acquire)) {
-        return;
-    }
-    auto* const attachment =
-        reinterpret_cast<void*>(gAttachment.load(std::memory_order_acquire));
-    if (attachment == nullptr || reinterpret_cast<std::uintptr_t>(attachment) != owner.attachment) {
-        return;
-    }
-    Quaternion aim{};
-    float yaw = 0.0f;
-    if (!ControllerAimRotation(aim, yaw)) {
-        gRotationNoPose.fetch_add(1, std::memory_order_relaxed);
-        return;   // untracked: leave the engine's own mount alone
-    }
-    // The tracked delta since calibration, in world terms.
-    const Quaternion delta = Normalize(Multiply(aim, Conjugate(gZeroAim)));
-
-    QuatT value = gBaseline;
-    // **currentController * authoredMount.** The mount is the basis being changed,
-    // so it goes on the RIGHT. Composing it the other way is the failure that
-    // looks like a sign error and survives every sign flip.
-    const Quaternion composed = Normalize(Multiply(delta, Quaternion{
-        gBaseline.x, gBaseline.y, gBaseline.z, gBaseline.w}));
-    if (!std::isfinite(composed.x) || !std::isfinite(composed.y) ||
-        !std::isfinite(composed.z) || !std::isfinite(composed.w)) {
-        gRefused.fetch_add(1, std::memory_order_relaxed);
-        return;
-    }
-    value.x = composed.x; value.y = composed.y; value.z = composed.z; value.w = composed.w;
-    if (gOffsetEnabled.load()) {
-        value.px += gOffsetX.load(std::memory_order_relaxed);
-        value.py += gOffsetY.load(std::memory_order_relaxed);
-        value.pz += gOffsetZ.load(std::memory_order_relaxed);
-    }
-    if (WriteMount(attachment, value)) {
-        gRotationApplied.fetch_add(1, std::memory_order_relaxed);
-    } else {
-        gRefused.fetch_add(1, std::memory_order_relaxed);
-    }
-}
-
-unsigned long long WeaponRotationAppliedCount()
-{
-    return gRotationApplied.load(std::memory_order_relaxed);
-}
-
-unsigned long long WeaponRotationNoPoseCount()
-{
-    return gRotationNoPose.load(std::memory_order_relaxed);
-}
-
-unsigned int WeaponRotationDriveArmed()
-{
-    return gRotationDrive.load(std::memory_order_acquire) ? 1u : 0u;
-}
-
-unsigned int WeaponRotationCalibrated()
-{
-    return gRotationCalibrated.load(std::memory_order_acquire) ? 1u : 0u;
-}
-
 unsigned int WeaponBaselineCaptured()
 {
     return gHaveBaseline.load(std::memory_order_acquire) ? 1u : 0u;
 }
-
-unsigned int WeaponAimPoseUsable()
-{
-    Quaternion aim{};
-    float yaw = 0.0f;
-    return ControllerAimRotation(aim, yaw) ? 1u : 0u;
-}
-
-unsigned long long WeaponOffsetAppliedCount() { return gApplied.load(std::memory_order_relaxed); }
-unsigned long long WeaponOffsetRefusedCount() { return gRefused.load(std::memory_order_relaxed); }
 
 } // namespace preyvr::dll

@@ -4,7 +4,6 @@
 #include "TestSupport.h"
 
 #include <cmath>
-#include <limits>
 #include <cstdlib>
 #include <iostream>
 #include <vector>
@@ -334,166 +333,6 @@ void TestNearVerticalHeadPoseIsRefused()
         "a steep but usable pitch is still accepted");
 }
 
-// The acceptance test the two above are building toward: a reference captured
-// from a crooked headset, then used with a level head, must produce a level
-// world. If roll had leaked into the reference, the camera's right axis would be
-// tilted out of horizontal by exactly that roll.
-void TestCrookedRecenterDoesNotTiltTheWorld()
-{
-    const auto reference = MakeRecenterReference(
-        HeadPose(0.6f, 0.2f, 0.5f), Vec3{10.0f, -4.0f, 2.0f});
-    Require(reference.has_value(), "a crooked recenter still produces a reference");
-
-    // A level head, looking straight ahead.
-    const Pose level = HeadPose(0.0f, 0.0f, 0.0f);
-    const Pose world = EyePoseInWorld(*reference, level);
-
-    const Vec3 right = Rotate(world.orientation, Vec3{1.0f, 0.0f, 0.0f});
-    Require(std::fabs(right.z) < 1e-3f,
-        "the camera's right axis stays horizontal, so the horizon is level");
-
-    const Vec3 up = Rotate(world.orientation, Vec3{0.0f, 0.0f, 1.0f});
-    Require(up.z > 0.99f, "and up still points up");
-}
-
-void TestRecenterReferenceFailsClosed()
-{
-    const float notFinite = std::numeric_limits<float>::quiet_NaN();
-    Require(!MakeRecenterReference(HeadPose(0.0f, 0.0f, 0.0f),
-                                   Vec3{notFinite, 0.0f, 0.0f}).has_value(),
-        "a non-finite world position is refused rather than written");
-    Require(!MakeRecenterReference(HeadPose(0.0f, 1.5707963f, 0.0f),
-                                   Vec3{0.0f, 0.0f, 0.0f}).has_value(),
-        "an unusable head pose refuses the whole reference");
-}
-
-// The correction to the first head-tracking build, pinned.
-//
-// That version parked the reference at the recenter yaw, so the rendered camera
-// pointed at recenterYaw + headRotation and the player's mouse-look never reached
-// it. In game that looks like the body rotating in front of the view -- the body
-// still turns with the mouse and the camera does not. The composition has to
-// start from the engine's own facing.
-void TestHeadAtRecenterReproducesTheGameCamera()
-{
-    // The engine facing several different ways, as a player turning would.
-    const float gameYaws[] = {0.0f, 0.8f, -1.9f, 2.7f};
-    const float recenterYaw = 0.35f;
-    const Pose headAtRecenter = HeadPose(recenterYaw, 0.0f, 0.0f);
-
-    for (const float gameYaw : gameYaws) {
-        const Matrix34 gameCamera = MatrixFromPose(
-            Pose{YawQuaternion(gameYaw), Vec3{5.0f, -2.0f, 1.5f}});
-
-        const ReferenceFrame reference =
-            ReferenceFrameForHeadTracking(gameCamera, recenterYaw);
-        const Pose world = EyePoseInWorld(reference, headAtRecenter);
-
-        Require(Near(CameraYawOf(MatrixFromPose(world)), gameYaw, 1e-3f),
-            "a head at its recenter orientation reproduces the engine's own facing");
-        Require(NearVec(world.position, Vec3{5.0f, -2.0f, 1.5f}),
-            "and the engine keeps its own eye point");
-    }
-}
-
-// Head rotation adds to the player's facing rather than replacing it: turn the
-// head 30 degrees and the camera moves 30 degrees from wherever the mouse left it.
-void TestHeadRotationAddsToTheGameCamera()
-{
-    const float recenterYaw = 0.0f;
-    const float gameYaw = 1.2f;
-    const float headTurn = 0.5236f;   // 30 degrees
-    const Matrix34 gameCamera = MatrixFromPose(Pose{YawQuaternion(gameYaw), Vec3{}});
-
-    const ReferenceFrame reference = ReferenceFrameForHeadTracking(gameCamera, recenterYaw);
-    const Pose world = EyePoseInWorld(reference, HeadPose(headTurn, 0.0f, 0.0f));
-
-    Require(Near(CameraYawOf(MatrixFromPose(world)), gameYaw + headTurn, 1e-3f),
-        "the head turn composes onto the player's facing");
-}
-
-// The property the camera seam depends on: a head back where it was at recenter
-// leaves the game's own camera completely alone -- including its pitch, which the
-// previous yaw-only composition discarded and which showed in headset as rotating
-// away from the torso.
-void TestHeadAtRecenterLeavesGameRotationUntouched()
-{
-    const float recenterYaw = 0.4f;
-    const Pose headAtRecenter = HeadPose(recenterYaw, 0.0f, 0.0f);
-
-    // Game orientations including pitch, which is the case that regressed before.
-    const Quaternion gameRotations[] = {
-        YawQuaternion(0.0f),
-        YawQuaternion(1.3f),
-        Multiply(YawQuaternion(1.3f), HeadAxisAngle(Vec3{1.0f, 0.0f, 0.0f}, 0.6f)),
-        Multiply(YawQuaternion(-2.2f), HeadAxisAngle(Vec3{1.0f, 0.0f, 0.0f}, -0.45f)),
-    };
-
-    for (const Quaternion& game : gameRotations) {
-        const Quaternion composed =
-            ComposeHeadOntoGameRotation(game, headAtRecenter, recenterYaw);
-        // Compared by the axes they produce: quaternions double-cover rotations,
-        // so q and -q are the same orientation and comparing components would
-        // report a difference that does not exist.
-        const Vec3 axes[] = {Vec3{1,0,0}, Vec3{0,1,0}, Vec3{0,0,1}};
-        for (const Vec3& axis : axes) {
-            Require(NearVec(Rotate(composed, axis), Rotate(Normalize(game), axis)),
-                "a head at its recenter pose leaves the game's orientation untouched");
-        }
-    }
-}
-
-// **The frame the head delta is applied in is NOT pinned by these tests, and that
-// is deliberate until the design question below is answered.**
-//
-// A negative control caught this: swapping the multiply order -- applying the head
-// in the world frame instead of the camera frame -- still passed everything here.
-// Every rotation in these cases turns about Z, and rotations about a shared axis
-// commute, so the two orders are indistinguishable. The case that does have pitch
-// puts the head at recenter, making the delta identity, which commutes with
-// everything.
-//
-// Discriminating needs a game rotation with pitch AND a non-identity head delta,
-// and writing that test means first deciding what *should* happen: whether a head
-// yaw turns about the world's up axis (the body's) or about the pitched camera's
-// own up. Those differ exactly when the mouse has pitched the view, which is the
-// case the headset report was about. It is a design decision, not a maths one, so
-// it is left open rather than frozen by a test that assumes an answer.
-
-// And the head genuinely adds: turning the head yaws the view away from the
-// game's facing by the same amount.
-void TestHeadDeltaAddsToGameRotation()
-{
-    const float recenterYaw = 0.0f;
-    const float headTurn = 0.6f;
-    const Quaternion game = YawQuaternion(1.1f);
-
-    const Quaternion composed =
-        ComposeHeadOntoGameRotation(game, HeadPose(headTurn, 0.0f, 0.0f), recenterYaw);
-    Require(Near(CameraYawOf(MatrixFromPose(Pose{composed, Vec3{}})), 1.1f + headTurn, 1e-3f),
-        "the head turn adds to the game's facing");
-}
-
-// FAIL-CAM-019 through this seam: a headset rolled when recenter was pressed must
-// not tilt the world afterwards. Only the reference's yaw is taken, so the stored
-// value carries no tilt to bake in -- while a live roll still reaches the view.
-void TestRolledRecenterDoesNotTiltTheComposition()
-{
-    const float recenterYaw = 0.5f;
-    const Quaternion game = YawQuaternion(0.9f);
-
-    // Recenter captured from a rolled headset yields a yaw-only reference.
-    const auto reference = RecenterYawFromHeadPose(HeadPose(recenterYaw, 0.0f, 0.7f));
-    Require(reference.has_value(), "a rolled recenter still yields a yaw");
-
-    // A level head afterwards must leave the horizon level.
-    const Quaternion composed =
-        ComposeHeadOntoGameRotation(game, HeadPose(recenterYaw, 0.0f, 0.0f), *reference);
-    const Vec3 right = Rotate(composed, Vec3{1.0f, 0.0f, 0.0f});
-    Require(std::fabs(right.z) < 1e-3f,
-        "a crooked recenter does not tilt the composed camera");
-}
-
 // An engine point back in tracking space: the inverse of carrying a tracked
 // offset into the world (anchor + yaw * OpenXR-to-engine), so a point on the
 // aim ray lands where the controller points.
@@ -521,16 +360,9 @@ void TestEngineToTracking()
 int main()
 {
     TestEngineToTracking();
-    TestHeadAtRecenterLeavesGameRotationUntouched();
-    TestHeadDeltaAddsToGameRotation();
-    TestRolledRecenterDoesNotTiltTheComposition();
-    TestHeadAtRecenterReproducesTheGameCamera();
-    TestHeadRotationAddsToTheGameCamera();
     TestRecenterYawTracksYaw();
     TestRecenterYawIgnoresRollAndPitch();
     TestNearVerticalHeadPoseIsRefused();
-    TestCrookedRecenterDoesNotTiltTheWorld();
-    TestRecenterReferenceFailsClosed();
     TestAxisConversion();
     TestConversionIsAProperRotation();
     TestRotationConversionInvariant();

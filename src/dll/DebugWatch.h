@@ -80,7 +80,6 @@ DWORD ArmWatch(unsigned int slot, unsigned long long address, WatchKind kind,
                unsigned int maxCaptures);
 
 DWORD DisarmWatch(unsigned int slot);
-DWORD DisarmAllWatches();
 
 // Installs the debug registers on every thread that exists right now. Called by
 // `ArmWatch`; call it again after the game has spawned more threads.
@@ -136,6 +135,5 @@ unsigned long long ApplyOffsetAppliedCount();
 // skip count with zero applied means the match address is wrong -- which is a
 // different problem from the override not being armed.
 unsigned long long ApplyOffsetSkippedCount();
-unsigned long long ApplyOffsetExpiredCount();
 
 } // namespace preyvr::dll

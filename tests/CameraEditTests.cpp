@@ -18,13 +18,6 @@ bool Near(float left, float right, float epsilon = 1e-5f)
     return std::fabs(left - right) <= epsilon;
 }
 
-float Get(const std::vector<std::uint8_t>& camera, std::size_t index)
-{
-    float value = 0.0f;
-    std::memcpy(&value, camera.data() + index * sizeof(float), sizeof(float));
-    return value;
-}
-
 void Set(std::vector<std::uint8_t>& camera, std::size_t index, float value)
 {
     std::memcpy(camera.data() + index * sizeof(float), &value, sizeof(float));
@@ -46,55 +39,25 @@ std::vector<std::uint8_t> MakeCamera()
     return camera;
 }
 
-void TestBounds()
-{
-    Require(IsWithinBounds({10.0f}), "ten degrees is within bounds");
-    Require(IsWithinBounds({-15.0f}), "the negative bound is inclusive");
-    Require(IsWithinBounds({15.0f}), "the positive bound is inclusive");
-    Require(!IsWithinBounds({15.1f}), "past the bound is rejected");
-    Require(!IsWithinBounds({-90.0f}), "a large negative angle is rejected");
-    // A zero edit would make "did the image change?" pass without testing
-    // anything at all.
-    Require(!IsWithinBounds({0.0f}), "a zero edit is rejected as vacuous");
-    Require(!IsWithinBounds({std::nanf("")}), "NaN is rejected");
-    Require(!IsWithinBounds({INFINITY}), "infinity is rejected");
-}
-
-void TestYawRotatesTheBasisOnly()
+// MakeCamera turned about Z (Z-up yaw) by `degrees`.
+std::vector<std::uint8_t> MakeYawedCamera(float degrees)
 {
     auto camera = MakeCamera();
-    // Deliberately at the bound rather than at a convenient 90 degrees: the
-    // bound is a safety property and the test should exercise what is actually
-    // allowed. (90 was the first attempt here and was correctly refused.)
-    Require(ApplyYaw(camera, {kMaxYawDegrees}), "a yaw at the bound applies");
-
-    const float c = std::cos(kMaxYawDegrees * 3.14159265358979323846f / 180.0f);
-    const float s = std::sin(kMaxYawDegrees * 3.14159265358979323846f / 180.0f);
-    Require(Near(Get(camera, 0), c), "m00 becomes cos");
-    Require(Near(Get(camera, 1), -s), "m01 picks up -sin");
-    Require(Near(Get(camera, 4), s), "m10 picks up sin");
-    Require(Near(Get(camera, 5), c), "m11 becomes cos");
-    Require(Near(Get(camera, 2), 0.0f), "column 2 of row 0 is untouched");
-    Require(Near(Get(camera, 10), 1.0f), "the Z axis is untouched by a Z-up yaw");
-
-    const auto position = PositionOf(camera);
-    Require(Near(position[0], 325.847f), "translation X is preserved");
-    Require(Near(position[1], 740.602f), "translation Y is preserved");
-    Require(Near(position[2], 482.790f), "translation Z is preserved");
-
-    Require(camera[0x200] == 0xAB && camera[0x23F] == 0xCD,
-        "the edit touches the matrix only, not the cached derived state");
+    const float c = std::cos(degrees * 3.14159265358979323846f / 180.0f);
+    const float s = std::sin(degrees * 3.14159265358979323846f / 180.0f);
+    Set(camera, 0, c);
+    Set(camera, 1, -s);
+    Set(camera, 4, s);
+    Set(camera, 5, c);
+    return camera;
 }
 
-void TestYawIsRejectedOutOfBounds()
+void TestPositionOf()
 {
-    auto camera = MakeCamera();
-    const auto before = camera;
-    Require(!ApplyYaw(camera, {45.0f}), "an out-of-bounds yaw is refused");
-    Require(camera == before, "a refused edit leaves the camera byte-identical");
-
-    std::vector<std::uint8_t> tooSmall(kCameraSize - 1, 0);
-    Require(!ApplyYaw(tooSmall, {10.0f}), "a short buffer is refused");
+    const auto position = PositionOf(MakeCamera());
+    Require(Near(position[0], 325.847f), "translation X is read from m[3]");
+    Require(Near(position[1], 740.602f), "translation Y is read from m[7]");
+    Require(Near(position[2], 482.790f), "translation Z is read from m[11]");
 }
 
 void TestRotationStaysOrthonormal()
@@ -106,18 +69,10 @@ void TestRotationStaysOrthonormal()
     Require(RotationIsOrthonormal(camera), "the identity rotation is orthonormal");
 
     for (const float degrees : {-15.0f, -7.5f, -1.0f, 1.0f, 7.5f, 15.0f}) {
-        auto rotated = MakeCamera();
-        Require(ApplyYaw(rotated, {degrees}), "the yaw applies");
+        const auto rotated = MakeYawedCamera(degrees);
         Require(RotationIsOrthonormal(rotated),
             "a yawed rotation is still orthonormal, so culling will not invert");
     }
-
-    // Repeated application must not drift out of the check either.
-    auto drifting = MakeCamera();
-    for (int i = 0; i < 64; ++i) {
-        Require(ApplyYaw(drifting, {15.0f}), "repeated yaw applies");
-    }
-    Require(RotationIsOrthonormal(drifting), "64 chained yaws stay orthonormal");
 }
 
 void TestNonOrthonormalIsDetected()
@@ -139,11 +94,10 @@ void TestNonOrthonormalIsDetected()
     Require(RotationIsDegenerate(zeroed), "the degeneracy check catches an all-zero matrix");
     Require(!RotationIsSafeToWrite(zeroed), "an all-zero matrix is not safe to write");
 
-    auto camera = MakeCamera();
+    const auto camera = MakeCamera();
     Require(!RotationIsDegenerate(camera), "the identity is not degenerate");
     Require(RotationIsSafeToWrite(camera), "the identity is safe to write");
-    Require(ApplyYaw(camera, {12.0f}), "the yaw applies");
-    Require(RotationIsSafeToWrite(camera), "a yawed identity is still safe to write");
+    Require(RotationIsSafeToWrite(MakeYawedCamera(12.0f)), "a yawed identity is still safe to write");
 
     auto nonFinite = MakeCamera();
     Set(nonFinite, 5, std::nanf(""));
@@ -159,7 +113,7 @@ void TestRestoreIsByteExact()
     Require(point.captured, "the restore point records that it captured");
     Require(MatchesRestorePoint(camera, point), "an untouched camera still matches");
 
-    Require(ApplyYaw(camera, {10.0f}), "the yaw applies");
+    Set(camera, 0, 0.5f);
     Require(!MatchesRestorePoint(camera, point), "an edited camera no longer matches");
 
     std::memcpy(camera.data(), point.bytes.data(), kCameraSize);
@@ -180,9 +134,7 @@ void TestRestoreIsByteExact()
 
 int main()
 {
-    TestBounds();
-    TestYawRotatesTheBasisOnly();
-    TestYawIsRejectedOutOfBounds();
+    TestPositionOf();
     TestRotationStaysOrthonormal();
     TestNonOrthonormalIsDetected();
     TestRestoreIsByteExact();

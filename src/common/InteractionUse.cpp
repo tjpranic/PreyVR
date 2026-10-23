@@ -16,18 +16,6 @@ float Alpha(float cutoff, float dt)
 
 }  // namespace
 
-const char* OwnerName(Owner owner)
-{
-    switch (owner) {
-    case Owner::Use: return "use";
-    case Owner::Reload: return "reload";
-    case Owner::Legacy: return "legacy";
-    case Owner::Hold: return "hold";
-    case Owner::Draw: return "draw";
-    default: return "none";
-    }
-}
-
 void UseButton::Reset()
 {
     *this = UseButton{};

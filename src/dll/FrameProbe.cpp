@@ -4,7 +4,7 @@
 #include "EnvSwitch.h"
 #include "HookInstall.h"
 #include "Logger.h"
-#include "PassCameraProbe.h"
+#include "PassCreationHook.h"
 #include "SafeMemory.h"
 #include <MinHook.h>
 #include <algorithm>
@@ -368,7 +368,7 @@ void InstallHooks()
                      reinterpret_cast<void*>(&ConsumerJobDetour), gConsumerOriginal, "cull_consumer_job", &Log)) {
         gConsumerHooked.store(true, std::memory_order_release);
     }
-    // Shared with PassCameraProbe, which owns it and logs its own failure.
+    // Shared with PassCreationHook, which owns it and logs its own failure.
     if (EnsurePassCreationHook()) {
         gPassHooked.store(true, std::memory_order_release);
     }

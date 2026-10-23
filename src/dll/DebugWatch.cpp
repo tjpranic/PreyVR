@@ -56,7 +56,6 @@ struct SlotState {
 
 std::atomic<unsigned long long> gApplyApplied{0};
 std::atomic<unsigned long long> gApplySkipped{0};
-std::atomic<unsigned long long> gApplyExpired{0};
 
 long long QpcNowRaw()
 {
@@ -183,7 +182,6 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* info)
         if (state.applyEnabled.load(std::memory_order_acquire)) {
             if (QpcNowRaw() > state.applyDeadlineQpc.load(std::memory_order_relaxed)) {
                 state.applyEnabled.store(false, std::memory_order_release);
-                gApplyExpired.fetch_add(1, std::memory_order_relaxed);
             } else if (context.Rip != state.applyMatchRip.load(std::memory_order_relaxed)) {
                 // A write from some other site in the cycle. Left alone -- only
                 // the LAST writer's result is worth overriding, and editing an
@@ -420,7 +418,6 @@ DWORD ArmApplyOffset(unsigned int slot, unsigned long long vec3Address,
         std::memory_order_relaxed);
     gApplyApplied.store(0, std::memory_order_relaxed);
     gApplySkipped.store(0, std::memory_order_relaxed);
-    gApplyExpired.store(0, std::memory_order_relaxed);
     state.applyEnabled.store(true, std::memory_order_release);
     return 0;
 }
@@ -436,8 +433,6 @@ DWORD DisarmApplyOffset(unsigned int slot)
 
 unsigned long long ApplyOffsetAppliedCount() { return gApplyApplied.load(std::memory_order_relaxed); }
 unsigned long long ApplyOffsetSkippedCount() { return gApplySkipped.load(std::memory_order_relaxed); }
-unsigned long long ApplyOffsetExpiredCount() { return gApplyExpired.load(std::memory_order_relaxed); }
-
 DWORD DisarmWatch(unsigned int slot)
 {
     if (slot >= kSlots) {
@@ -447,21 +442,6 @@ DWORD DisarmWatch(unsigned int slot)
     gSlots[slot].address.store(0, std::memory_order_relaxed);
     RearmThreads();
     Log("result=0 detail=disarmed slot=" + std::to_string(slot));
-    return 0;
-}
-
-DWORD DisarmAllWatches()
-{
-    for (unsigned int slot = 0; slot < kSlots; ++slot) {
-        gSlots[slot].armed.store(false, std::memory_order_release);
-        gSlots[slot].address.store(0, std::memory_order_relaxed);
-    }
-    RearmThreads();
-    if (gHandler != nullptr) {
-        RemoveVectoredExceptionHandler(gHandler);
-        gHandler = nullptr;
-    }
-    Log("result=0 detail=disarmed_all");
     return 0;
 }
 

@@ -4,35 +4,6 @@
 
 namespace preyvr::inventory {
 
-std::optional<DepthMapping> MapDepth(float cameraUnits, float panelMetres,
-                                     float ipdMetres, float depthScale)
-{
-    if (!std::isfinite(cameraUnits) || !std::isfinite(panelMetres) ||
-        !std::isfinite(ipdMetres) || !std::isfinite(depthScale)) {
-        return {};
-    }
-    const float camera = std::abs(cameraUnits);
-    // Below 1 unit the division below stops meaning anything: a camera that
-    // close to its own scene is a misread, not a very small camera.
-    if (camera <= 1.f) return {};
-    if (panelMetres < .5f || panelMetres > 10.f) return {};
-    if (ipdMetres < .04f || ipdMetres > .09f) return {};
-    if (depthScale < 0 || depthScale > 1) return {};
-
-    DepthMapping mapping{};
-    mapping.panelMetres = panelMetres;
-    mapping.metresPerUnit = panelMetres / camera;
-    // Eye displacement magnitude, not an inverse-view matrix write.
-    mapping.halfSeparationUnits = (ipdMetres * .5f / mapping.metresPerUnit) * depthScale;
-    return mapping;
-}
-
-float PlaneMetres(const DepthMapping& mapping, float offsetUnits)
-{
-    if (!std::isfinite(offsetUnits)) return mapping.panelMetres;
-    return mapping.panelMetres + offsetUnits * mapping.metresPerUnit;
-}
-
 bool ApplyStereoParallax(std::array<float,16>& clip, float cameraUnits,
                          float panelWidth, float eyeOnPanel, float depthScale)
 {

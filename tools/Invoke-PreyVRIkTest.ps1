@@ -17,9 +17,6 @@
 
     Phase drive (-Drive): controller ownership of the wrist through the engine's
     own arm IK, then calibration. Requires head and selected controller tracked.
-
-    hand.mode must be 0 for phases test and drive: the two lanes are mutually
-    exclusive, and the script refuses rather than apply the controller twice.
 #>
 [CmdletBinding()]
 param(
@@ -62,12 +59,6 @@ Write-Host ('  ' + (Send 'ik.dump') + '  -- full ADIK table and limbs are in Pre
 if ($matched -eq '0' -or $calls -eq '0' -or (Field $r 'ikOwner') -eq '0x0') {
     Write-Host ''
     Write-Host 'stop here: re-equip after ik.mode 1, then rerun; verify ownership and native gates before changing the signature.'
-    exit 1
-}
-
-if (($TestMillimetres -ne 0 -or $Drive) -and (Field $r 'handMode') -eq '2') {
-    Write-Host ''
-    Write-Host 'refusing: hand.mode is 2. Send "hand.mode 0" first -- the lanes are mutually exclusive.'
     exit 1
 }
 

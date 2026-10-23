@@ -188,17 +188,6 @@ void TestPullBack()
     Require(NearV(PullBack(head, hand, 0.01f, 0.05f), head), "never behind the head");
 }
 
-void TestLanding()
-{
-    Vec3 at{};
-    float t = 0;
-    Require(Landing({0, 0, 1.0f}, {5.0f, 0, 0}, 9.81f, 0.0f, at, t), "lands");
-    Require(Near(t, std::sqrt(2.0f / 9.81f), 1e-4f) && Near(at.x, 5.0f * t, 1e-4f), "horizontal throw");
-    Require(Landing({0, 0, 0}, {0, 3.0f, 4.0f}, 9.81f, 0.0f, at, t) && Near(t, 8.0f / 9.81f, 1e-4f),
-            "lob from the floor comes back down");
-    Require(!Landing({0, 0, -1.0f}, {1.0f, 0, 0}, 9.81f, 0.0f, at, t), "below the floor and falling: never");
-}
-
 }  // namespace
 
 int main()
@@ -212,7 +201,6 @@ int main()
     TestLever();
     TestNonFinite();
     TestPullBack();
-    TestLanding();
     std::cout << "grenade_throw: all tests passed\n";
     return 0;
 }

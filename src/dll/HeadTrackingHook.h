@@ -66,12 +66,6 @@ bool TryReadHeadPose(Pose& out, unsigned long long& ageMicroseconds);
 unsigned long long ViewHookObservedCount();
 unsigned long long ViewHookAppliedCount();
 
-// The last SViewParams the hook saw, for confirming the struct layout before
-// trusting it. FOV in radians: a reading near 1.5447 confirms the offsets, since
-// that value was measured from the live camera by a different route.
-float ViewHookLastFov();
-float ViewHookLastNearPlane();
-
 // Installs the hook in observe-only mode. Nothing is written; the counters and
 // the readings above start moving.
 DWORD SetViewHookObserving(unsigned int enabled);
@@ -185,14 +179,6 @@ unsigned long long HeadTrackingRoomReadFallbacks();
 void ResetHeadTrackingReference();
 bool RebaseHeadTrackingSpace(const Pose& previousFromNew, bool valid);
 std::string HeadHeightReport();
-
-// Microseconds between a pose being published and the camera edit that consumed
-// it. **This is the latency number the scope calls for measuring in M1.** It is
-// only the handoff segment -- it excludes the runtime's own prediction and the
-// display pipeline -- so it is a floor on end-to-end latency, not the whole of it.
-unsigned long long HeadTrackingLastPoseAgeMicroseconds();
-
-unsigned long long HeadTrackingMaxPoseAgeMicroseconds();
 
 // 1 once a recenter reference exists.
 DWORD HeadTrackingHasReference();

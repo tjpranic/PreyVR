@@ -21,7 +21,6 @@ namespace preyvr::dll {
 namespace {
 struct Request {int slot=-1;std::uint64_t epoch=0,reference=0,stamp=0;};
 struct Status {equipment::Vitals values;std::uint64_t epoch=0,stamp=0;};
-LatestSnapshot<Status> status;
 Request request; // input-drain / player-producer thread only
 equipment::HolsterGesture gesture;
 std::atomic<bool> gripOwned{false},clear{false},fault{false};
@@ -52,7 +51,7 @@ DWORD Native(const GameplayPoseFrame& frame,int slot,bool readStats,Status* out,
   const auto now=MonotonicNanoseconds();
   const bool cleared=clear.exchange(false);
   if(owner!=player||inventory!=inv||ownerEpoch!=frame.tracking.epoch||cleared){
-   slots={};slotWeapons={};occupied=0;status.Clear();owner=player;inventory=inv;ownerEpoch=frame.tracking.epoch;
+   slots={};slotWeapons={};occupied=0;owner=player;inventory=inv;ownerEpoch=frame.tracking.epoch;
   }
   if(readStats){
    using Scalar=float(__fastcall*)(std::uintptr_t);
@@ -138,7 +137,7 @@ void UpdateBodyEquipment(const GameplayPoseFrame& frame,bool valid){
  if(!OnEngineMainThread())return;
  if(!valid||fault.load()||!HudGameplayInputAllowed()||
     !FreshSample(MonotonicNanoseconds(),frame.tracking.publishedNs)||
-    frame.referenceGeneration!=HeadTrackingReferenceGeneration()) {status.Clear();request={};return;}
+    frame.referenceGeneration!=HeadTrackingReferenceGeneration()) {request={};return;}
  const auto now=MonotonicNanoseconds();
  int slot=-1;
  if(request.slot>=0){
@@ -148,7 +147,6 @@ void UpdateBodyEquipment(const GameplayPoseFrame& frame,bool valid){
  }
  // Wrist status now uses native HUD pixels; do not poll duplicate vitals or
  // make a health-read failure disable otherwise independent holster controls.
- status.Clear();
  if(!HolstersEnabled())return;
  Status sample{};bool stored=false;const auto result=Native(frame,slot,false,&sample,&stored);
  DebugOverlayHolsterSlots(slots[0]!=0,slots[1]!=0);
@@ -157,12 +155,7 @@ void UpdateBodyEquipment(const GameplayPoseFrame& frame,bool valid){
   using N=equipment::SlotNotice;
   PublishSlotFeedback(result?(slot==0?N::HipDenied:N::ChestDenied):stored?(slot==0?N::HipStored:N::ChestStored):(slot==0?N::HipDraw:N::ChestDraw),frame);
  }
- if(result!=0&&result!=ERROR_NOT_READY){fault=true;status.Clear();}
-}
-bool ReadWristVitals(equipment::Vitals& out,std::uint64_t epoch){
- Status s;if(!WristDisplayEnabled()||fault.load()||!status.TryRead(s)||s.epoch!=epoch||
-    !FreshSample(MonotonicNanoseconds(),s.stamp,350000000ull))return false;
- out=s.values;return out.health>=0&&out.maxHealth>0;
+ if(result!=0&&result!=ERROR_NOT_READY){fault=true;}
 }
 std::string BodyEquipmentReport(){return " holsterSlots="+std::to_string(occupied.load())+
  " holsterDispatched="+std::to_string(dispatched.load())+" holsterRefused="+std::to_string(refused.load())+

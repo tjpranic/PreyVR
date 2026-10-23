@@ -78,54 +78,6 @@ std::optional<Quaternion> MountRotationFromControllerDelta(
     return composed;
 }
 
-Pose WeaponPoseFromController(
-    const stereo::ReferenceFrame& reference,
-    const Pose& openXrControllerPose,
-    const GripTransform& grip)
-{
-    const Pose hand = ControllerPoseInWorld(reference, openXrControllerPose);
-    return Compose(hand, grip.controllerToWeapon);
-}
-
-std::optional<Pose> TwoHandedWeaponPose(
-    const Vec3& rearHandWorld,
-    const Vec3& frontHandWorld,
-    const Vec3& referenceUp,
-    float minimumSeparation)
-{
-    const Vec3 along{
-        frontHandWorld.x - rearHandWorld.x,
-        frontHandWorld.y - rearHandWorld.y,
-        frontHandWorld.z - rearHandWorld.z,
-    };
-    if (Length(along) < minimumSeparation) {
-        // Below this the direction between the hands is mostly tracking noise
-        // and the weapon would spin. Refusing is better than producing a pose
-        // that jitters.
-        return std::nullopt;
-    }
-    const auto forward = TryNormalize(along);
-    if (!forward) {
-        return std::nullopt;
-    }
-
-    // Engine basis: column 0 right, column 1 forward, column 2 up, right-handed.
-    // right = forward x up, then up = right x forward re-orthogonalises.
-    const auto right = TryNormalize(Cross(*forward, referenceUp));
-    if (!right) {
-        return std::nullopt; // hands aligned with the up axis: roll is undefined
-    }
-    const Vec3 up = Cross(*right, *forward);
-
-    // Shared with StereoCamera rather than hand-rolled a second time: two copies
-    // of quaternion-from-basis is two chances to get the branch conditions
-    // subtly different, and they would disagree only at rare orientations.
-    Pose pose{};
-    pose.orientation = stereo::QuaternionFromBasis(*right, *forward, up);
-    pose.position = frontHandWorld;
-    return pose;
-}
-
 float WrapAngle(float radians)
 {
     if (!std::isfinite(radians)) {
@@ -146,43 +98,6 @@ float SnapTurn(float currentYawRadians, int steps, float stepRadians)
         return 0.0f;
     }
     return WrapAngle(currentYawRadians + static_cast<float>(steps) * stepRadians);
-}
-
-float SmoothTurn(float currentYawRadians, float stickX, float radiansPerSecond, float deltaSeconds)
-{
-    if (!std::isfinite(currentYawRadians) || !std::isfinite(stickX) ||
-        !std::isfinite(radiansPerSecond) || !std::isfinite(deltaSeconds)) {
-        return WrapAngle(currentYawRadians);
-    }
-    if (deltaSeconds < 0.0f) {
-        return WrapAngle(currentYawRadians);
-    }
-    return WrapAngle(currentYawRadians + stickX * radiansPerSecond * deltaSeconds);
-}
-
-JointPose RotateJointAboutPivot(const JointPose& joint, const Vec3& pivot,
-                                const Quaternion& rotation)
-{
-    const Vec3 offset{joint.position.x - pivot.x,
-                      joint.position.y - pivot.y,
-                      joint.position.z - pivot.z};
-    const Vec3 turned = Rotate(rotation, offset);
-    JointPose out;
-    out.position = Vec3{pivot.x + turned.x, pivot.y + turned.y, pivot.z + turned.z};
-    out.rotation = Normalize(Multiply(rotation, joint.rotation));
-    return out;
-}
-
-Quaternion WorldTurnToModel(const Quaternion& worldTurn, float bodyYaw)
-{
-    // `WorldDeltaToModel` projects onto the body basis, which is the transpose
-    // of a yaw by `bodyYaw` -- so a vector is rotated by `-bodyYaw`. Match it
-    // exactly: the two lanes must agree or the hand's turn and its travel
-    // disagree the moment the player faces anywhere but the calibration
-    // heading, and that reads as the wrist twisting on its own while walking.
-    const float half = -bodyYaw * 0.5f;
-    const Quaternion basis{0.0f, 0.0f, std::sin(half), std::cos(half)};
-    return Normalize(Multiply(Multiply(basis, worldTurn), Conjugate(basis)));
 }
 
 } // namespace preyvr::controller

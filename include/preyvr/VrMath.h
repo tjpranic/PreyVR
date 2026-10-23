@@ -61,7 +61,6 @@ Pose Compose(Pose parent, Pose child);
 // The rotation whose columns are the orthonormal basis (x, y, z), i.e. the
 // images of the unit axes; normalised.
 Quaternion QuaternionFromBasis(Vec3 x, Vec3 y, Vec3 z);
-Vec2 ApplyRadialDeadzone(Vec2 input, float deadzone);
 bool IsPoseUsable(const Pose& pose, const PoseValidity& validity, std::uint64_t maxAgeNanoseconds);
 
 } // namespace preyvr

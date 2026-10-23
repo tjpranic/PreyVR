@@ -83,25 +83,6 @@ Sample Compose(const Pose& gripWorld,
                const Quaternion& gripToBarrel,
                bool haveBarrelCalibration);
 
-// Where a world point lands on screen for one eye, as normalised [0,1] with the
-// origin top-left, matching Prey's cached reticle position.
-//
-// **Per eye, from that eye's own view-projection.** A single screen position
-// cannot be correct for both eyes at a depth that is not infinity: projecting
-// once and reusing it puts the crosshair at a different world depth than the
-// thing it is over, which reads as a reticle that will not fuse.
-struct ScreenPoint {
-    float x = 0.0f;
-    float y = 0.0f;
-    bool onScreen = false;
-    bool behind = false;
-};
-ScreenPoint ProjectToScreen(const Vec3& worldPoint,
-                            const Vec3& eyePosition,
-                            const Quaternion& eyeOrientation,
-                            float tanLeft, float tanRight,
-                            float tanUp, float tanDown);
-
 // **A viewport fraction is not what the HUD movie wants.** Prey's HUD draws into
 // a 16:9 canvas scaled to COVER the frame and centred, so at any aspect other
 // than 16:9 the canvas is larger than the frame in one axis and only its middle

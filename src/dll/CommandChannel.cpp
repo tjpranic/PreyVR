@@ -20,7 +20,6 @@
 #include "HotkeyBridge.h"
 #include "preyvr/ConsolePolicy.h"
 #include "FrameObserverHook.h"
-#include "HandRigTakeover.h"
 #include "HeadTrackingHook.h"
 #include "Logger.h"
 #include "NearViewStereo.h"
@@ -199,23 +198,6 @@ void WriteReport(std::ostringstream& out)
         << " eyeLookupMiss=" << BuiltEyeLookupMissCount()
         << " nearDeltaUm=" << NearViewLastDeltaMicrometres()
         << " " << NearParticleStereoReport()
-        << " handMatched=" << HandRigMatchedCount()
-        << " handSkipped=" << HandRigSkippedCount()
-        << " handApplied=" << HandRigAppliedCount()
-        << " handRefused=" << HandRigRefusedCount()
-        << " handSubtree=" << HandRigLastSubtreeSize()
-        << " handRightMm=" << HandRigLastRightMillimetres()
-        << " handLeftMm=" << HandRigLastLeftMillimetres()
-        << " handNoPose=" << HandRigNoPoseCount()
-        << " handJoints=" << HandRigJointCount()
-        << " handMode=" << HandRigMode()
-        << " handDriveArmed=" << HandRigControllerDriveArmed()
-        << " handCalibrated=" << HandRigCalibrationDone()
-        << " handRightJoint=" << HandRigSelectedRightJoint()
-        << " handLeftJoint=" << HandRigSelectedLeftJoint()
-        << " handWristArmed=" << HandRigWristDriveArmed()
-        << " handWristApplied=" << HandRigWristAppliedCount()
-        << " handTurnYaw=" << HandRigTurnYawDeciDegrees()
         << " ikMode=" << AnimIkMode()
         << " ikHooked=" << AnimIkHooked()
         << " ikOwner=0x" << std::hex << AnimIkOwnerCharacter() << std::dec
@@ -240,13 +222,6 @@ void WriteReport(std::ostringstream& out)
         << " ikLocYawMdeg=" << AnimIkLocationYawMilliDegrees()
         << " ikGoalMm=" << AnimIkLastGoalMillimetres(0) << "," << AnimIkLastGoalMillimetres(1)
         << "," << AnimIkLastGoalMillimetres(2)
-        << " handZeroRightMm=" << HandRigZeroRightMm(0) << "," << HandRigZeroRightMm(1)
-        << "," << HandRigZeroRightMm(2)
-        << " handWorldRightMm=" << HandRigWorldRightMm(0) << "," << HandRigWorldRightMm(1)
-        << "," << HandRigWorldRightMm(2)
-        << " handCalibYawMdeg=" << HandRigCalibrationYawMilli()
-        << " handLastYawMdeg=" << HandRigLastYawMilli()
-        << " handLastCharacter=0x" << std::hex << HandRigLastCharacter() << std::dec
         << " weaponAttachment=0x" << std::hex << WeaponAttachmentPointer() << std::dec
         << " weaponBone=" << WeaponAttachmentJointIndex()
         << " weaponSim=0x" << std::hex << WeaponAttachmentSimulationFlags() << std::dec
@@ -293,14 +268,7 @@ void WriteReport(std::ostringstream& out)
         << " weaponMountMm=" << WeaponMountPositionMillimetres(0)
         << "," << WeaponMountPositionMillimetres(1)
         << "," << WeaponMountPositionMillimetres(2)
-        << " weaponApplied=" << WeaponOffsetAppliedCount()
-        << " weaponRefused=" << WeaponOffsetRefusedCount()
-        << " weaponRotApplied=" << WeaponRotationAppliedCount()
-        << " weaponRotNoPose=" << WeaponRotationNoPoseCount()
-        << " weaponRotDrive=" << WeaponRotationDriveArmed()
-        << " weaponRotCalib=" << WeaponRotationCalibrated()
         << " weaponBaseline=" << WeaponBaselineCaptured()
-        << " weaponAimUsable=" << WeaponAimPoseUsable()
         << " aimApplied=" << AimTakeoverAppliedCount()
         << " aimNoPose=" << AimTakeoverRejectedNoPose()
         << " aimNoPlayer=" << AimTakeoverRejectedNoPlayer()
@@ -1003,47 +971,6 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         out << trace;
     } else if (verb == "ik.dump") {
         out << "ik.dump result=" << DumpAnimIk();
-    } else if (verb == "hand.mode") {
-        out << "hand.mode result=" << (Valued(args) ? SetHandRigTakeoverMode(arg(1, 0)) : 0);
-        // Named, because "1" reads like "on" and is actually the control that
-        // deliberately changes nothing.
-        const unsigned int mode = HandRigMode();
-        const char* name = mode == 0 ? "off"
-                         : mode == 1 ? "passthrough_changes_nothing"
-                         : mode == 2 ? "apply"
-                                     : "unknown";
-        out << " mode=" << mode << "(" << name << ")";
-    } else if (verb == "hand.joint") {
-        out << "hand.joint result=" << (Valued(args) ? SetHandRigJoint(arg(1, 0)) : 0) << NoValue(args);
-    } else if (verb == "hand.offset") {
-        out << "hand.offset result="
-            << (Valued(args) ? SetHandRigOffsetMillimetres(arg(1, 0), arg(2, 0), arg(3, 0)) : 0) << NoValue(args);
-    } else if (verb == "hand.right") {
-        out << "hand.right result=" << (Valued(args) ? SetHandRigRightJoint(arg(1, 0)) : 0) << NoValue(args);
-    } else if (verb == "hand.left") {
-        out << "hand.left result=" << (Valued(args) ? SetHandRigLeftJoint(arg(1, 0)) : 0) << NoValue(args);
-    } else if (verb == "hand.drive") {
-        out << "hand.drive result=" << (Valued(args) ? SetHandRigControllerDrive(arg(1, 1)) : 0) << NoValue(args);
-    } else if (verb == "hand.wrist") {
-        out << "hand.wrist result=" << (Valued(args) ? SetHandRigWristDrive(arg(1, 1)) : 0) << NoValue(args);
-    } else if (verb == "hand.turnyaw") {
-        // Tenths of a degree, so 1800 is a half turn. Reported back so a wearer
-        // reading the channel can see what is actually set.
-        out << "hand.turnyaw result=" << (Valued(args) ? SetHandRigTurnYaw(arg(1, 0)) : 0)
-            << " deciDegrees=" << HandRigTurnYawDeciDegrees();
-    } else if (verb == "hand.calibrate") {
-        out << "hand.calibrate result=" << CalibrateHandRig();
-    } else if (verb == "hand.scale") {
-        out << "hand.scale result=" << (Valued(args) ? SetHandRigScalePercent(arg(1, 100)) : 0) << NoValue(args);
-    } else if (verb == "hand.character" && args.size() >= 2) {
-        unsigned long long pointer = 0;
-        if (!ParseU64(args[1], pointer)) {
-            gRejected.fetch_add(1, std::memory_order_relaxed);
-            out << "hand.character result=rejected detail=unparsable";
-            return;
-        }
-        out << "hand.character result="
-            << SetHandRigCharacterPtr(reinterpret_cast<void*>(pointer));
     } else if (verb == "console" && args.size() >= 2) {
         // Rebuilt from the tokens, then through the existing fail-closed
         // allowlist. This channel adds no reach to the console.
@@ -1138,15 +1065,6 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
     } else if (verb == "weapon.observe") {
         out << "weapon.observe result=" << (Valued(args) ? SetWeaponAttachmentObserving(arg(1, 1)) : 0)
             << NoValue(args);
-    } else if (verb == "weapon.offset") {
-        out << "weapon.offset result="
-            << (Valued(args) ? SetWeaponOffsetMillimetres(arg(1, 0), arg(2, 0), arg(3, 0)) : 0) << NoValue(args);
-    } else if (verb == "weapon.apply") {
-        out << "weapon.apply result=" << (Valued(args) ? SetWeaponOffsetEnabled(arg(1, 1)) : 0) << NoValue(args);
-    } else if (verb == "weapon.rotate") {
-        out << "weapon.rotate result=" << (Valued(args) ? SetWeaponRotationDrive(arg(1, 1)) : 0) << NoValue(args);
-    } else if (verb == "weapon.calibrate") {
-        out << "weapon.calibrate result=" << CalibrateWeaponRotation();
     } else if (verb == "capture.hud") {
         out << "capture.hud result=" << RequestFrameCapture(static_cast<std::uint32_t>(arg(1,900)),true);
     } else if (verb == "capture.inventory") {
@@ -1488,17 +1406,5 @@ DWORD StartCommandChannel()
     CloseHandle(thread);
     return 0;
 }
-
-unsigned long long CommandChannelProcessedCount()
-{
-    return gProcessed.load(std::memory_order_relaxed);
-}
-
-unsigned long long CommandChannelRejectedCount()
-{
-    return gRejected.load(std::memory_order_relaxed);
-}
-
-DWORD CommandChannelRunning() { return gRunning.load(std::memory_order_acquire) ? 1u : 0u; }
 
 } // namespace preyvr::dll

@@ -66,13 +66,6 @@ void MotionHistory::Reset()
     count_ = 0;
 }
 
-bool MotionHistory::Latest(MotionSample& out) const
-{
-    if (!count_) { return false; }
-    out = At(0);
-    return true;
-}
-
 void MotionHistory::Push(const MotionSample& s, const MotionSettings& settings)
 {
     if (!Finite(s.position) || !Finite(s.orientation)) { return; }

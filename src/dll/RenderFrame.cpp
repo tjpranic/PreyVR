@@ -199,11 +199,6 @@ DWORD SetRenderFrameCapture(unsigned int enabled)
     return 0;
 }
 
-bool TryGetRenderMatrix(unsigned long long character, float out[12])
-{
-    return gTable.Read(character, out, nullptr);
-}
-
 DWORD SetRenderFrameOverrideCharacter(unsigned long long character)
 {
     gOverrideCharacter.store(character, std::memory_order_release);
@@ -252,32 +247,6 @@ unsigned long long RenderFrameOverrideRefusedCount()
     return gOverrideRefused.load(std::memory_order_relaxed);
 }
 
-bool RenderMatrixBasisIsOrthonormal(unsigned long long character)
-{
-    float m[12]{};
-    if (!TryGetRenderMatrix(character, m)) {
-        return false;
-    }
-    // Columns.
-    const float x[3] = {m[0], m[4], m[8]};
-    const float y[3] = {m[1], m[5], m[9]};
-    const float z[3] = {m[2], m[6], m[10]};
-    const auto length = [](const float v[3]) {
-        return std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-    };
-    const auto dot = [](const float a[3], const float b[3]) {
-        return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
-    };
-    const float unit = 0.01f;
-    if (std::fabs(length(x) - 1.0f) > unit || std::fabs(length(y) - 1.0f) > unit ||
-        std::fabs(length(z) - 1.0f) > unit) {
-        return false;   // scale present: an inverse-by-transpose would be wrong
-    }
-    const float square = 0.01f;
-    return std::fabs(dot(x, y)) < square && std::fabs(dot(x, z)) < square &&
-           std::fabs(dot(y, z)) < square;
-}
-
 bool RenderFrameSlot(unsigned int index, unsigned long long* character, bool* nearest)
 {
     return gTable.SlotAt(index, character, nearest);
@@ -286,14 +255,5 @@ bool RenderFrameSlot(unsigned int index, unsigned long long* character, bool* ne
 unsigned long long RenderFrameCaptureCount() { return gCaptures.load(std::memory_order_relaxed); }
 
 unsigned int RenderFrameTrackedCharacters() { return gTable.Tracked(); }
-
-int RenderFrameBasisMicro(unsigned long long character, unsigned int index)
-{
-    float m[12]{};
-    if (index >= 12 || !TryGetRenderMatrix(character, m)) {
-        return 0;
-    }
-    return static_cast<int>(m[index] * 1.0e6f);
-}
 
 } // namespace preyvr::dll

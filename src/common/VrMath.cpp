@@ -1,6 +1,5 @@
 #include "preyvr/VrMath.h"
 
-#include <algorithm>
 #include <cmath>
 
 namespace preyvr {
@@ -102,24 +101,6 @@ Quaternion QuaternionFromBasis(Vec3 x, Vec3 y, Vec3 z)
         q = {(m02 + m20) / s, (m12 + m21) / s, 0.25f * s, (m10 - m01) / s};
     }
     return Normalize(q);
-}
-
-Vec2 ApplyRadialDeadzone(Vec2 input, float deadzone)
-{
-    if (!IsFinite(input.x) || !IsFinite(input.y) || !IsFinite(deadzone)) {
-        return {};
-    }
-
-    deadzone = std::clamp(deadzone, 0.0f, 0.9999f);
-    const float magnitude = std::sqrt(input.x * input.x + input.y * input.y);
-    if (!IsFinite(magnitude) || magnitude <= deadzone || magnitude <= 1.0e-8f) {
-        return {};
-    }
-
-    const float clampedMagnitude = std::min(magnitude, 1.0f);
-    const float outputMagnitude = (clampedMagnitude - deadzone) / (1.0f - deadzone);
-    const float scale = outputMagnitude / magnitude;
-    return {input.x * scale, input.y * scale};
 }
 
 bool IsPoseUsable(const Pose& pose, const PoseValidity& validity, std::uint64_t maxAgeNanoseconds)

@@ -129,12 +129,10 @@ Vec3 BodyPole(const TorsoFrame& torso, Side side);
 // The wrist's angles for a forearm direction `forearm` (elbow -> wrist, unit)
 // and the hand's anatomical frame (`length` wrist -> knuckles, `palm` out of
 // the palm, both unit). Flexion bends the hand towards its palm (positive) or
-// its back (negative); deviation tilts it towards the thumb or the little
-// finger (magnitude only). Degrees.
+// its back (negative). Degrees.
 float WristFlexionDeg(const Vec3& forearm, const Vec3& length, const Vec3& palm);
-float WristDeviationDeg(const Vec3& forearm, const Vec3& length, const Vec3& palm);
-// Signed: towards the thumb (radial) positive, towards the little finger
-// (ulnar) negative. The thumb is on length x palm for the right hand.
+// Deviation, signed: towards the thumb (radial) positive, towards the little
+// finger (ulnar) negative. The thumb is on length x palm for the right hand.
 float WristRadialDeg(const Vec3& forearm, const Vec3& length, const Vec3& palm, Side side);
 
 // How likely a wrist and an elbow are, as a MAP estimate's priors (degrees).

@@ -151,18 +151,4 @@ Vec3 PullBack(Vec3 head, Vec3 want, float hitFraction, float margin)
     return Add(head, Scale(d, along / l));
 }
 
-bool Landing(Vec3 p, Vec3 v, float g, float floorZ, Vec3& at, float& seconds)
-{
-    if (!Finite(p) || !Finite(v) || !(g > 0.0f)) { return false; }
-    // z(t) = p.z + v.z t - g t^2 / 2 = floorZ, the later root.
-    const float a = -0.5f * g, b = v.z, c = p.z - floorZ;
-    const float disc = b * b - 4.0f * a * c;
-    if (disc < 0.0f) { return false; }
-    const float t = (-b - std::sqrt(disc)) / (2.0f * a);
-    if (!(t >= 0.0f)) { return false; }
-    seconds = t;
-    at = {p.x + v.x * t, p.y + v.y * t, floorZ};
-    return true;
-}
-
 }  // namespace preyvr::grenade

@@ -80,6 +80,5 @@ DWORD IkProducerRipIsAfterWrite();
 // never opened.
 DWORD IkLogGateOriginalValue();
 DWORD IkLogGateCurrentValue();
-DWORD IkCaptureArmed();
 
 } // namespace preyvr::dll

@@ -56,40 +56,6 @@ Sample Compose(const Pose& gripWorld,
     return out;
 }
 
-ScreenPoint ProjectToScreen(const Vec3& worldPoint,
-                            const Vec3& eyePosition,
-                            const Quaternion& eyeOrientation,
-                            float tanLeft, float tanRight,
-                            float tanUp, float tanDown)
-{
-    ScreenPoint out;
-    const Vec3 offset{worldPoint.x - eyePosition.x,
-                      worldPoint.y - eyePosition.y,
-                      worldPoint.z - eyePosition.z};
-    // Into the eye's own frame. Engine basis: X right, Y forward, Z up.
-    const Vec3 local = Rotate(Conjugate(Normalize(eyeOrientation)), offset);
-    if (!Finite(local)) { return out; }
-    // Forward is +Y, and a point at or behind the eye plane has no projection.
-    if (local.y <= 1e-4f) {
-        out.behind = true;
-        return out;
-    }
-    const float tx = local.x / local.y;
-    const float tz = local.z / local.y;
-    const float width = tanRight - tanLeft;
-    const float height = tanUp - tanDown;
-    if (!std::isfinite(width) || !std::isfinite(height) ||
-        std::fabs(width) < 1e-6f || std::fabs(height) < 1e-6f) {
-        return out;
-    }
-    out.x = (tx - tanLeft) / width;
-    // Screen Y runs down while the frustum's up is +Z, so this inverts.
-    out.y = (tanUp - tz) / height;
-    out.onScreen = std::isfinite(out.x) && std::isfinite(out.y) &&
-                   out.x >= 0.0f && out.x <= 1.0f && out.y >= 0.0f && out.y <= 1.0f;
-    return out;
-}
-
 CanvasPoint ViewportToHudCanvas(float viewportX, float viewportY,
                                 float frameWidth, float frameHeight)
 {

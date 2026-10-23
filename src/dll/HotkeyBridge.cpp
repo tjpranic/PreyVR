@@ -33,7 +33,6 @@ constexpr int kDefaultIpdIndex = 3;   // 0.064
 std::atomic<bool> gRunning{false};
 std::atomic<int> gIpdIndex{kDefaultIpdIndex};
 std::atomic<int> gAaMode{0};
-std::atomic<unsigned int> gPressCount{0};
 std::thread gThread;
 
 bool Chord()
@@ -147,7 +146,6 @@ void Poll()
             if (!pressed) {
                 continue;
             }
-            gPressCount.fetch_add(1, std::memory_order_relaxed);
             switch (i) {
                 case 0:
                     gIpdIndex.store(
@@ -235,7 +233,6 @@ void Poll()
         const bool consoleDown = ForegroundIsPrey() &&
                                  (GetAsyncKeyState(static_cast<int>(tildeVk)) & 0x8000) != 0;
         if (consoleDown && !consoleWas) {
-            gPressCount.fetch_add(1, std::memory_order_relaxed);
             ToggleConsole();
         }
         consoleWas = consoleDown;
@@ -252,7 +249,6 @@ DWORD SetHotkeysEnabled(unsigned int enabled)
         return 0;
     }
     if (on) {
-        gPressCount.store(0, std::memory_order_relaxed);
         gIpdIndex.store(kDefaultIpdIndex, std::memory_order_relaxed);
         gRunning.store(true, std::memory_order_release);
         gThread = std::thread(Poll);
@@ -267,30 +263,9 @@ DWORD SetHotkeysEnabled(unsigned int enabled)
     return 0;
 }
 
-DWORD HotkeyIpdTenthsMm()
-{
-    const float ipd = kIpdSteps[static_cast<std::size_t>(gIpdIndex.load(std::memory_order_relaxed))];
-    return static_cast<DWORD>((ipd * 10000.0f) + 0.5f);
-}
-
 DWORD HotkeyConsoleToggles()
 {
     return static_cast<DWORD>(gConsoleToggles.load(std::memory_order_relaxed));
-}
-
-DWORD HotkeyAaMode()
-{
-    return static_cast<DWORD>(gAaMode.load(std::memory_order_relaxed));
-}
-
-DWORD HotkeyEyeSwap()
-{
-    return XrSwapEyes() ? 1u : 0u;
-}
-
-DWORD HotkeyPressCount()
-{
-    return gPressCount.load(std::memory_order_relaxed);
 }
 
 } // namespace preyvr::dll

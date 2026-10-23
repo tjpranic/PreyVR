@@ -226,13 +226,6 @@ std::string EyeHandoffReport();
 // SetStereoEyeLock, which also keeps the capture tag correct.
 void SetStereoEyeLockFromRenderThread(int eye);
 
-// The forward axis the camera edit last wrote, for the pass-camera probe.
-//
-// Exists so the probe can answer whether the camera the engine culls with is the
-// one we wrote, rather than the two of us reasoning about it from the call graph
-// -- which said it should be, while the cull frustum visibly followed the mouse.
-bool LastWrittenCameraForward(Vec3& out);
-
 // Builds the per-eye camera by translation alone, inheriting Prey's own
 // projection rather than overwriting it with a synthetic one.
 //

@@ -1,6 +1,5 @@
 #include "preyvr/StereoFrame.h"
 
-#include "preyvr/CameraEdit.h"
 #include "preyvr/EngineMap.h"
 
 #include <algorithm>
@@ -9,11 +8,6 @@
 
 namespace preyvr::stereoframe {
 namespace {
-
-void WriteFloatAt(std::span<std::uint8_t> bytes, std::size_t offset, float value)
-{
-    std::memcpy(bytes.data() + offset, &value, sizeof(float));
-}
 
 float ReadFloatAt(std::span<const std::uint8_t> bytes, std::size_t offset)
 {
@@ -165,81 +159,6 @@ std::optional<EyeProjection> ProjectionFromTangents(const EyeView& view, float n
         }
     }
     return projection;
-}
-
-namespace {
-
-// Produces one eye's camera by copying the base and overwriting only the view
-// and projection fields.
-std::optional<EyeCamera> BuildEye(
-    std::span<const std::uint8_t> baseCamera,
-    const stereo::ReferenceFrame& reference,
-    const EyeView& view,
-    const EyeProjection& projection,
-    Pose& worldPoseOut)
-{
-    EyeCamera eye{};
-    std::memcpy(eye.bytes.data(), baseCamera.data(), kCameraSize);
-
-    worldPoseOut = stereo::EyePoseInWorld(reference, view.openXrPose);
-    const stereo::Matrix34 matrix = stereo::MatrixFromPose(worldPoseOut);
-    if (!stereo::WriteMatrix(eye.bytes, matrix)) {
-        return std::nullopt;
-    }
-
-    WriteFloatAt(eye.bytes, engine::CameraLayout::fov, projection.fov);
-    WriteFloatAt(eye.bytes, engine::CameraLayout::projectionRatio, projection.projectionRatio);
-    WriteFloatAt(eye.bytes, engine::CameraLayout::asymLeft, projection.asymmetry.left);
-    WriteFloatAt(eye.bytes, engine::CameraLayout::asymRight, projection.asymmetry.right);
-    WriteFloatAt(eye.bytes, engine::CameraLayout::asymBottom, projection.asymmetry.bottom);
-    WriteFloatAt(eye.bytes, engine::CameraLayout::asymTop, projection.asymmetry.top);
-
-    // The same gate the single-camera write uses. A per-eye matrix that fails it
-    // would make UpdateFrustum negate the plane normals for that eye only, which
-    // is a genuinely confusing thing to debug from inside a headset.
-    if (!cameraedit::RotationIsSafeToWrite(eye.bytes)) {
-        return std::nullopt;
-    }
-    return eye;
-}
-
-} // namespace
-
-std::optional<StereoPlan> BuildStereoPlan(
-    std::span<const std::uint8_t> baseCamera,
-    const stereo::ReferenceFrame& reference,
-    const EyeView& leftEye,
-    const EyeView& rightEye)
-{
-    if (baseCamera.size() < kCameraSize) {
-        return std::nullopt;
-    }
-    const float nearPlane = NearPlaneOf(baseCamera);
-
-    const auto leftProjection = ProjectionFromTangents(leftEye, nearPlane);
-    const auto rightProjection = ProjectionFromTangents(rightEye, nearPlane);
-    if (!leftProjection || !rightProjection) {
-        return std::nullopt;
-    }
-
-    StereoPlan plan{};
-    plan.leftProjection = *leftProjection;
-    plan.rightProjection = *rightProjection;
-
-    Pose leftWorld{};
-    Pose rightWorld{};
-    const auto left = BuildEye(baseCamera, reference, leftEye, *leftProjection, leftWorld);
-    const auto right = BuildEye(baseCamera, reference, rightEye, *rightProjection, rightWorld);
-    // Both or neither: one good eye and one bad one is worse than none, because
-    // it looks like it nearly works.
-    if (!left || !right) {
-        return std::nullopt;
-    }
-
-    plan.left = *left;
-    plan.right = *right;
-    plan.cyclops = stereo::CyclopsPose(leftWorld, rightWorld);
-    return plan;
 }
 
 } // namespace preyvr::stereoframe

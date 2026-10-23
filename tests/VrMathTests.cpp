@@ -38,18 +38,6 @@ void TestQuaternionFailClosed()
         "zero quaternion falls back to identity");
 }
 
-void TestRadialDeadzone()
-{
-    const preyvr::Vec2 center = preyvr::ApplyRadialDeadzone({0.1f, 0.1f}, 0.2f);
-    Require(Near(center.x, 0.0f) && Near(center.y, 0.0f), "center input is suppressed");
-
-    const preyvr::Vec2 edge = preyvr::ApplyRadialDeadzone({2.0f, 0.0f}, 0.2f);
-    Require(Near(edge.x, 1.0f) && Near(edge.y, 0.0f), "overscale input clamps to unit circle");
-
-    const preyvr::Vec2 middle = preyvr::ApplyRadialDeadzone({0.6f, 0.0f}, 0.2f);
-    Require(Near(middle.x, 0.5f), "deadzone remaps remaining range");
-}
-
 void TestPoseValidity()
 {
     preyvr::Pose pose{};
@@ -75,7 +63,6 @@ int main()
 {
     TestPoseComposition();
     TestQuaternionFailClosed();
-    TestRadialDeadzone();
     TestPoseValidity();
     std::cout << "PreyVR math tests passed\n";
     return 0;

@@ -103,9 +103,4 @@ Release ComputeRelease(const ReleaseInput& in, const ThrowSettings& settings = {
 // wall the hand has gone through.
 Vec3 PullBack(Vec3 head, Vec3 want, float hitFraction, float margin);
 
-// Ballistic flight (engine Z up, gravity g > 0 down): where a body launched at
-// p with velocity v crosses the height floorZ on the way down, and when.
-// False if it never does (launched below it and never rising to it).
-bool Landing(Vec3 p, Vec3 v, float g, float floorZ, Vec3& at, float& seconds);
-
 }  // namespace preyvr::grenade

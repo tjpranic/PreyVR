@@ -43,8 +43,5 @@ DWORD StartCommandChannel();
 // A verb the channel does not know is reported as rejected rather than ignored
 // silently, because a typo that does nothing is indistinguishable from a
 // mechanism that does not work -- a confusion this project has paid for.
-unsigned long long CommandChannelProcessedCount();
-unsigned long long CommandChannelRejectedCount();
-DWORD CommandChannelRunning();
 
 } // namespace preyvr::dll

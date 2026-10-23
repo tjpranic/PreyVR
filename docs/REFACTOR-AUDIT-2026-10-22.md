@@ -15,7 +15,12 @@ This was read-only: five parallel reviews, each covering one slice, with nothing
 - **2026-10-23, the easy-win batch is done.** See the **Done 10-23** notes in sections 2 and 3.
   - Build passes and 93/93 ctest pass, with no new warnings.
   - The DLL's 159 export names are unchanged; they were compared before and after the split.
-  - **Not yet worn.** The batch touches lane, input-post and startup code, all behaviour-identical by construction, so it needs the usual headset smoke check before it is committed.
+  - **Committed by you as `baa6878`** ("Refactoring").
+- **2026-10-23, the cut batch is done** (your decisions 1, 2, 3, 5 and 9; see section 4).
+  - Removed: the legacy hand rig, WeaponAttachment's mount writer, 84 unused exports, AimRayProbe, PassCameraProbe's comparison (its hook is now PassCreationHook), the getters and setters left with no caller, and 19 test-only pure functions with their tests.
+  - The version is now `0.6.0-preview`.
+  - Size: 78 files, about 4,270 lines removed net. Build passes and 93/93 ctest pass (no target emptied), with no new warnings. The export table is exactly the kept 75.
+  - **Not yet worn and not committed.** It changes no live behaviour, but it deletes hook installers and the IK interlocks, so it needs the usual headset smoke check: IK arms, aim, weapon draw, grab and throw.
 
 **How this relates to [the 10-17 audit](DUPLICATION-AUDIT-2026-10-17.md):**
 - The older audit is still the reference for its items. Its "Constraints that shape every fix" and section F ("don't merge") still apply in full.
@@ -244,7 +249,7 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
   - **Open:** ARCHITECTURE.md (08-27, pre-implementation). Do it last (section 3, "Last").
 - **Build names:**
   - **Done 10-23:** the `PREYVR_BUILD_SMOKE_DLL` option text and the CMake comment no longer call PreyVR.dll an "inert smoke DLL".
-  - **Needs you:** the version string `0.3.1-static-ik-integration` (CMakeLists:10). It is printed in `preyvr_smoke_start version=`, so the choice of number is yours (section 4).
+  - **Done 10-23:** the version string is `0.6.0-preview` (section 4, item 9).
 - **Pre-existing warnings, found 10-23.** None of them come from this batch's edits. A clean rebuild reports six:
   - C4996 `strncpy` ×4 in XrInput.cpp (161, 162, 201, 202);
   - C4389 signed/unsigned in `std::` code from VrOptionsTests;
@@ -355,31 +360,67 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
    - **Keep** `weapon.observe` and `EquippedRig`.
    - `tools/Invoke-PreyVRIkTest.ps1:68` reads `handMode` and needs updating.
    - Section F forbids only *merging* the legacy yaw, so deleting it is consistent with F.
+   - **Done 10-23 (you: "if it's unused, cut it").**
+     - Deleted HandRigTakeover.{h,cpp}, the 11 `hand.*` verbs, `weapon.offset/apply/rotate/calibrate`, 31 report fields, AnimIk's two interlocks, and Invoke-PreyVRIkTest's `handMode` guard.
+     - Cut WeaponAttachment's mount writer (offset, rotation drive, `WriteMount`, `ControllerAimRotation`). Its observation half is kept: rig identity, barrel calibration, the firing-position observer, and the mount read at equip (`weaponMountMm`, `weaponBaseline`).
+     - The hand-rig MotionController helpers went with the item 5 batch.
+     - TUNING-COMMANDS.md is updated.
 2. **Unused exports.** 85–99 of the 159 have no consumer in tools, tests, the harness or the docs; this comes from grep, not a link map. Choose one:
    - cut them;
    - move them to `Exports.cpp` and compile it only in dev builds;
    - keep them.
+   - **Done 10-23: cut.**
+     - Of the 159, 84 were removed: the 82 that nothing references, plus `SetHandRigModePtr` and `SetXrSwapEyesPtr`, which only the audit notes named.
+     - 75 are kept: 62 that the live harness (`tools/live/preyvr-harness.js`) or DllSmokeHost calls, and 13 that procedure docs still tell someone to call (XRSIM_INTEGRATION.md, LIVE_SUBMISSION_TEST_PROTOCOL.md, LIVE_CAPTURE_PLAN.md and others).
+     - The built DLL's export table was checked against that kept set: exactly 75 names, no more and no fewer.
+     - Getters and setters left with no caller were then cut too, along with the state only they read. That covers BodyFollow ×2, CommandChannel ×3 (its counters stay, because the report prints them), DebugWatch ×2, HeadTrackingHook ×4, HotkeyBridge ×4 (and its press count), IkTargetProbe ×1, MoveLane's no-op `SetFireLaneThreshold`, RenderFrame ×2, and WrenchDraw ×1.
+     - BodyEquipment's `ReadWristVitals` was cut with its `status` snapshot, which nothing ever published, so it always returned false.
 3. **Research probes:**
    - **AimRayProbe:** enabled only through an unreferenced export, but sampled every render frame (FrameObserverHook:69).
    - **IkTargetProbe:** reachable only through the harness; the H-005 question was answered 09-05.
    - **PassCameraProbe's forward-axis comparison and its 6 exports:** keep the hook, because FrameProbe uses it, and rename it for that job. Cut the comparison together with CameraEditHook's `gWrittenForward*`.
    - **RuntimeSnapshot:** runs on every startup (Bootstrap.cpp:216-228).
+   - **Done 10-23:**
+     - **AimRayProbe** is deleted, including its per-frame sample in FrameObserverHook; nothing could switch it on once its exports were gone.
+     - **PassCameraProbe** is replaced by `PassCreationHook.{h,cpp}`: just the R-071 hook that FrameProbe rides on. The comparison and CameraEditHook's `gWrittenForward*` / `LastWrittenCameraForward` are cut. Its log prefix `preyvr_pass_camera` is unchanged.
+     - **Kept: IkTargetProbe**, because the harness drives it, and **RuntimeSnapshot**, because it writes the startup log.
 4. **Feature leftovers:**
    - WrenchSound's capture path: 3 hooks plus a timing window, about 180 LOC.
    - WrenchDraw's capturing branch.
    - Grenade's flight watch, about 200 LOC.
    - The `carry.impulse` A/B modes; mode 2 drops objects through the floor.
    - `grenade::Landing`, used only by tests.
+   - **Not cut 10-23: these are reachable, not unused.** The wrench-sound capture is switched on by `wrench.sound capture`, the grenade flight watch runs on every throw, and `carry.impulse` selects its modes by command. They belong to the TODO's instrumentation and tuning cleanups. `grenade::Landing` was cut with item 5.
 5. **Pure functions used only by tests:**
    - `aim::ProjectToScreen`, `ApplyRadialDeadzone`
    - StereoCamera's `ReferenceFrameForHeadTracking`, `ComposeHeadOntoGameRotation`, `MakeRecenterReference`, `RightOf`, `UpOf`
    - `StereoFrame::BuildStereoPlan`, InventoryDepth's `MapDepth`/`PlaneMetres`
    - MotionController's `SmoothTurn`, `Mount*`, `WeaponPoseFromController`, `TwoHandedWeaponPose`
    - InteractionQuery/WrenchQuery, which you chose to keep on 10-18.
+   - **Done 10-23.** A comment-stripping scan over every header found the full set; each name was re-checked with `git grep` and ripgrep before it was cut.
+     - **Cut, with their tests:**
+       - ArmPose `WristDeviationDeg`
+       - CameraEdit `ApplyYaw` and its bounds helpers
+       - GrenadeThrow `Landing`
+       - HandCarry `MotionHistory::Latest`
+       - InteractionUse `OwnerName`
+       - InventoryDepth `MapDepth`/`PlaneMetres`, and the two observed constants
+       - MotionController `RotateJointAboutPivot`, `SmoothTurn`, `TwoHandedWeaponPose`, `WeaponPoseFromController`, `WorldTurnToModel`, `JointPose` and `GripTransform`
+       - NearParticles `BuilderName`
+       - RuntimeSnapshot `RenderCameraMatchesSource`; its tests now compare `RenderCameraResidual` against the limit, as production does
+       - StereoCamera `ComposeHeadOntoGameRotation`, `MakeRecenterReference` and `ReferenceFrameForHeadTracking`
+       - StereoFrame `BuildStereoPlan`
+       - VrMath `ApplyRadialDeadzone`
+       - WeaponAim `ProjectToScreen`
+       - RenderFrame `TryGetRenderMatrix`
+     - **Kept because live code calls them:** `WrapAngle` (SnapTurn), `RightOf`/`UpOf` (PoseFromMatrix), `RotationIsOrthonormal`/`RotationIsDegenerate`, and `ControllerPoseInWorld`/`MountRotationFromControllerDelta`, which tools/xr_session_probe uses.
+     - **Kept as test oracles or accessors for live code:** ControllerProfiles `ActionOf`, DebugRegisters `Dr7SlotEnabled`, FrameTiming `BudgetMicroseconds`, ShotRay `ConvergenceErrorMetres`, and the lanes' `*EventLog` getters.
+     - **Left:** RenderFrame's matrix capture (`frame.*`, research) is now never read back in production; it goes with the instrumentation cleanup.
 6. **Torso settings: give them one owner (T2/T3).** They are stored twice, in AnimIk `PoseSettings` and BodyFollow `gDeadzoneMilliDeg/gRelaxPerMille`. `arm.torso` writes both, `body.torso` writes only BodyFollow, and the Body Turn Deadzone option goes to AnimIk.
 7. **Should Grenade get the `VelocityQueueReady` gate** that Carry and Contact use? This changes behaviour, although it is latent on the pinned build.
 8. **The instrumentation gate design** (S4: `PREYVR_DEV`, `kDev`, `Diag()`, Audience tags). It is a later TODO item, but the refactors above should be shaped for it.
 9. **The build version string,** added 10-23. CMakeLists:10 says `0.3.1-static-ik-integration`, while the tags are at v0.5.1-preview. It is logged as `preyvr_smoke_start version=`. What should it say?
+   - **Done 10-23:** `0.6.0-preview`, following the tag scheme; the last tag is v0.5.1-preview (09-13), 92 commits back.
 
 ---
 

@@ -37,23 +37,10 @@ namespace preyvr::dll {
 
 DWORD SetHotkeysEnabled(unsigned int enabled);
 
-// Eye offset in tenths of a millimetre -- 640 is 0.064 m. An integer because
-// these cross the export boundary as DWORD, and a float there would be a lie
-// about precision anyway.
-DWORD HotkeyIpdTenthsMm();
-
 // How many times the ~ key has toggled Prey's console. Zero after pressing it
 // means the key never reached us -- Prey was not the foreground window, or the
 // hotkey thread is not running -- which is a different fault from the console
 // opening and drawing nothing.
 DWORD HotkeyConsoleToggles();
-DWORD HotkeyAaMode();
-
-DWORD HotkeyEyeSwap();
-
-// Accepted presses since arming. Zero while the wearer insists they are pressing
-// keys means the poll is not seeing them, which is a different problem from a
-// setting that does nothing.
-DWORD HotkeyPressCount();
 
 } // namespace preyvr::dll

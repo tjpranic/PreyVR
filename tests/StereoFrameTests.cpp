@@ -27,13 +27,6 @@ void SetFloat(std::vector<std::uint8_t>& camera, std::size_t offset, float value
     std::memcpy(camera.data() + offset, &value, sizeof(float));
 }
 
-float GetFloat(const std::array<std::uint8_t, kCameraSize>& camera, std::size_t offset)
-{
-    float value = 0.0f;
-    std::memcpy(&value, camera.data() + offset, sizeof(float));
-    return value;
-}
-
 // A camera matching the values actually captured from Prey on 2026-08-29, so the
 // test is exercising realistic magnitudes rather than round numbers.
 std::vector<std::uint8_t> MakeLiveLikeCamera()
@@ -49,8 +42,6 @@ std::vector<std::uint8_t> MakeLiveLikeCamera()
     SetFloat(camera, engine::CameraLayout::projectionRatio, 1.7777778f);
     SetFloat(camera, engine::CameraLayout::edgeNearLeftTop + sizeof(float), 0.1f);
     SetFloat(camera, engine::CameraLayout::edgeFarLeftTop + sizeof(float), 8000.0f);
-    // A marker in the cached region: the plan must inherit it untouched.
-    camera[0x1F0] = 0x5A;
     return camera;
 }
 
@@ -130,61 +121,6 @@ void TestProjectionRejectsBadFrusta()
 
     Require(!ProjectionFromTangents(MakeEye(true), 0.0f), "a zero near plane is refused");
     Require(!ProjectionFromTangents(MakeEye(true), -1.0f), "a negative near plane is refused");
-}
-
-void TestStereoPlanBuildsBothEyes()
-{
-    const auto base = MakeLiveLikeCamera();
-    stereo::ReferenceFrame reference{};
-    reference.worldPosition = Vec3{325.847f, 740.602f, 482.790f};
-
-    const auto plan = BuildStereoPlan(base, reference, MakeEye(true), MakeEye(false));
-    Require(plan.has_value(), "a valid pair of eyes produces a plan");
-
-    // The eyes must differ from each other, or nothing is stereo.
-    Require(std::memcmp(plan->left.bytes.data(), plan->right.bytes.data(), kCameraSize) != 0,
-        "the two eye cameras differ");
-
-    // The IPD shows up as a lateral separation of the two camera positions.
-    const float leftX = GetFloat(plan->left.bytes, 3 * sizeof(float));
-    const float rightX = GetFloat(plan->right.bytes, 3 * sizeof(float));
-    Require(Near(rightX - leftX, 0.064f, 1e-4f), "the eye separation is the IPD");
-
-    // The cyclops point sits between them, which is what gameplay gets.
-    Require(Near(plan->cyclops.position.x, reference.worldPosition.x, 1e-4f),
-        "the gameplay eye point is centred between the two eyes");
-
-    // Everything not view- or projection-related is inherited untouched.
-    Require(plan->left.bytes[0x1F0] == 0x5A, "the left eye inherits the cached region");
-    Require(plan->right.bytes[0x1F0] == 0x5A, "the right eye inherits the cached region");
-    Require(Near(GetFloat(plan->left.bytes, engine::CameraLayout::edgeFarLeftTop + sizeof(float)),
-                 8000.0f),
-        "the far plane is inherited");
-
-    // The projection fields were actually written.
-    Require(Near(GetFloat(plan->left.bytes, engine::CameraLayout::fov), plan->leftProjection.fov),
-        "the left eye's FOV is written into the camera");
-    Require(Near(GetFloat(plan->left.bytes, engine::CameraLayout::asymLeft),
-                 plan->leftProjection.asymmetry.left),
-        "the left eye's asymmetry shift is written into the camera");
-
-    // The two eyes have mirrored asymmetry, which is what an HMD reports.
-    Require(Near(plan->leftProjection.asymmetry.left, -plan->rightProjection.asymmetry.right, 1e-6f),
-        "the eyes' asymmetry mirrors");
-}
-
-void TestStereoPlanIsAllOrNothing()
-{
-    const auto base = MakeLiveLikeCamera();
-    EyeView broken = MakeEye(false);
-    broken.tanUp = std::nanf("");
-
-    Require(!BuildStereoPlan(base, stereo::ReferenceFrame{}, MakeEye(true), broken),
-        "one bad eye refuses the whole plan rather than returning a half-stereo frame");
-
-    std::vector<std::uint8_t> tooSmall(16, 0);
-    Require(!BuildStereoPlan(tooSmall, stereo::ReferenceFrame{}, MakeEye(true), MakeEye(false)),
-        "a short base camera is refused");
 }
 
 void TestNearPlaneIsReadFromTheLiveCamera()
@@ -493,8 +429,6 @@ int main()
     TestProjectionRoundTripsThroughTheEngineFormula();
     TestSymmetricFrustumProducesZeroShifts();
     TestProjectionRejectsBadFrusta();
-    TestStereoPlanBuildsBothEyes();
-    TestStereoPlanIsAllOrNothing();
     TestNearPlaneIsReadFromTheLiveCamera();
     TestSymmetricCameraGivesSymmetricTangents();
     TestAsymmetryIsANearPlaneEdgeOffset();

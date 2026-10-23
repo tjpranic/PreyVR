@@ -1062,8 +1062,6 @@ DWORD SetBodyFollow(unsigned enabled)
     return 0;
 }
 
-unsigned BodyFollowEnabled() { return gEnabled.load(std::memory_order_relaxed) ? 1u : 0u; }
-
 DWORD SetBodyFollowLevel(unsigned enabled)
 {
     if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
@@ -1089,8 +1087,6 @@ DWORD SetRoomScale(unsigned enabled)
     Log(std::string("result=0 detail=room_scale value=") + (enabled ? "1" : "0"));
     return 0;
 }
-
-unsigned RoomScaleEnabled() { return gRoomScale.load(std::memory_order_relaxed) ? 1u : 0u; }
 
 DWORD SetRoomScaleZone(int startMm, int stopMm, int followMs)
 {

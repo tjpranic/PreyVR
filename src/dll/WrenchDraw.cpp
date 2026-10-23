@@ -306,7 +306,6 @@ void SetWrenchDrawSkip(unsigned on)
     enabled = on != 0;
     Log("settings enabled=" + std::to_string(enabled.load()));
 }
-unsigned WrenchDrawSkip() { return enabled.load() ? 1u : 0u; }
 std::string WrenchDrawReport()
 {
     return " enabled=" + std::to_string(enabled.load()) + " hooks=" + std::to_string(installed.load()) + " gate=" + gate.load() +

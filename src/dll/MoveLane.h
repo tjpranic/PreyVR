@@ -82,7 +82,6 @@ unsigned long long TurnLaneRefused();
 // -- the same rule the stick lane follows, and for the same reason: the last
 // thing the engine was told persists until contradicted.
 DWORD SetFireLaneEnabled(unsigned int enabled);
-DWORD SetFireLaneThreshold(unsigned int hundredths);
 unsigned int FireLaneEnabled();
 unsigned long long FireLanePressed();
 unsigned long long FireLaneReleased();

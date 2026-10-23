@@ -164,12 +164,6 @@ float WristFlexionDeg(const Vec3& forearm, const Vec3& length, const Vec3& palm)
     return std::atan2(-Dot(forearm, palm), Dot(forearm, length)) * 57.29578f;
 }
 
-float WristDeviationDeg(const Vec3& forearm, const Vec3& length, const Vec3& palm)
-{
-    const Vec3 side = Unit(Cross(length, palm), Vec3{0, 0, 1});
-    return std::asin(std::clamp(std::fabs(Dot(Unit(forearm, length), side)), 0.0f, 1.0f)) * 57.29578f;
-}
-
 float WristRadialDeg(const Vec3& forearm, const Vec3& length, const Vec3& palm, Side side)
 {
     // Deviated by d towards the thumb, the hand's length is forearm*cos(d) +

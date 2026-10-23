@@ -65,8 +65,6 @@ void LogRecenterRefusal(const char* detail)
     Log(std::string("result=refused detail=") + detail + HeldRecenterRefusals());
 }
 
-std::atomic<unsigned long long> gLastPoseAgeMicroseconds{0};
-std::atomic<unsigned long long> gMaxPoseAgeMicroseconds{0};
 
 // Atomic publication of the complete payload; render readers never wait.
 struct PoseSlot { Pose pose{}; std::int64_t publishedQpc = 0; long long displayTime = 0; unsigned long long spaceEpoch=0; };
@@ -151,8 +149,6 @@ bool TryReadHeadPose(Pose& out, unsigned long long& ageMicroseconds)
     }
     const auto age = static_cast<unsigned long long>(
         ((QpcNow() - publishedQpc) * 1000000ll) / QpcFrequency());
-    gLastPoseAgeMicroseconds.store(age, std::memory_order_relaxed);
-    StoreMax(gMaxPoseAgeMicroseconds, age);
     out = pose;
     ageMicroseconds = age;
     return age <= 200000ull;
@@ -222,8 +218,6 @@ std::atomic<unsigned long long> gPositionRefused{0};
 std::atomic<unsigned int> gLastOffsetMillimetres{0};
 std::atomic<unsigned long long> gObserved{0};
 std::atomic<unsigned long long> gApplied{0};
-std::atomic<float> gLastFov{0.0f};
-std::atomic<float> gLastNearPlane{0.0f};
 
 float ReadFloat(const std::uint8_t* base, std::size_t offset)
 {
@@ -246,8 +240,6 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     if (viewParams == nullptr || !gObserving.load(std::memory_order_acquire)) {
         return;
     }
-    gLastFov.store(ReadFloat(viewParams, kViewFov), std::memory_order_relaxed);
-    gLastNearPlane.store(ReadFloat(viewParams, kViewNearPlane), std::memory_order_relaxed);
     gObserved.fetch_add(1, std::memory_order_relaxed);
 
     if (!gApplying.load(std::memory_order_acquire) ||
@@ -393,9 +385,6 @@ bool Install()
 
 unsigned long long ViewHookObservedCount() { return viewhook::gObserved.load(std::memory_order_relaxed); }
 unsigned long long ViewHookAppliedCount() { return viewhook::gApplied.load(std::memory_order_relaxed); }
-float ViewHookLastFov() { return viewhook::gLastFov.load(std::memory_order_relaxed); }
-float ViewHookLastNearPlane() { return viewhook::gLastNearPlane.load(std::memory_order_relaxed); }
-
 DWORD SetViewHookObserving(unsigned int enabled)
 {
     const bool on = enabled != 0u;
@@ -631,16 +620,6 @@ std::string HeadHeightReport() {
         out<<" referenceHeight="<<room.origin.y<<" headHeight="<<frame.head.position.y
            <<" relativeHeight="<<(frame.head.position.y-room.origin.y);
     return out.str();
-}
-
-unsigned long long HeadTrackingLastPoseAgeMicroseconds()
-{
-    return gLastPoseAgeMicroseconds.load(std::memory_order_relaxed);
-}
-
-unsigned long long HeadTrackingMaxPoseAgeMicroseconds()
-{
-    return gMaxPoseAgeMicroseconds.load(std::memory_order_relaxed);
 }
 
 unsigned long long HeadTrackingReferenceGeneration() { return gReferenceGeneration.load(); }

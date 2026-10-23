@@ -15,7 +15,7 @@ namespace preyvr::dll {
 // command worker then writes that window to the log, off the game threads.
 // Only read-only observation: one hook of its own (the consumer job) that calls
 // the original unchanged, plus records from seams other lanes already own --
-// CreateGeneralPassRenderingInfo through PassCameraProbe's hook among them.
+// CreateGeneralPassRenderingInfo through PassCreationHook's hook among them.
 //
 // Started with the cull watch once the module is pinned, VR or not.
 // PREYVR_FRAME_PROBE=0 leaves it off; cull.probe 0|1 switches recording.
@@ -46,7 +46,7 @@ constexpr std::uint32_t kLagUnknown = 0xFF;
 // Cheap and lock-free on every thread; a no-op while recording is off.
 void ProbeRecord(ProbeStep step, std::uint32_t a = 0, std::uint32_t b = 0, std::uint32_t c = 0,
                  std::uint32_t d = 0);
-// From the CreateGeneralPassRenderingInfo hook PassCameraProbe owns, after the
+// From the CreateGeneralPassRenderingInfo hook PassCreationHook owns, after the
 // original has filled `out`: records its frame ids, its caller and its flags.
 void ProbePassCreated(const void* out, std::uint32_t flags, const void* returnAddress);
 // Command worker, every poll: starts the probe once pinned, writes finished windows.

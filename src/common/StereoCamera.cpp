@@ -126,55 +126,11 @@ std::optional<float> RecenterYawFromHeadPose(const Pose& openXrHeadPose)
     return std::atan2(-forward.x, forward.y);
 }
 
-Quaternion ComposeHeadOntoGameRotation(
-    Quaternion gameRotation,
-    const Pose& openXrHeadPose,
-    float recenterYaw)
-{
-    const Quaternion headEngine = ToEngineSpace(openXrHeadPose.orientation);
-    // The head measured against where it was pointing at recenter, taking only
-    // that reference's yaw so a tilted capture cannot bake itself in.
-    const Quaternion delta =
-        Multiply(Conjugate(YawQuaternion(recenterYaw)), headEngine);
-    // Post-multiplied: the delta is expressed in the camera's own frame, so it
-    // turns the head relative to wherever the game is facing rather than relative
-    // to the world.
-    return Normalize(Multiply(Normalize(gameRotation), delta));
-}
-
 float CameraYawOf(const Matrix34& matrix)
 {
     // Row-major Matrix34: forward is column 1, elements 1, 5 and 9. Matches
     // YawQuaternion, where a yaw of t sends +Y to (-sin t, cos t, 0).
     return std::atan2(-matrix[1], matrix[5]);
-}
-
-ReferenceFrame ReferenceFrameForHeadTracking(const Matrix34& gameCamera, float recenterYaw)
-{
-    ReferenceFrame reference{};
-    reference.worldPosition = PositionOf(gameCamera);
-    // The engine's facing, minus where the head was when recenter was pressed.
-    // A head back at that orientation then reproduces the engine's camera exactly.
-    reference.yawRadians = CameraYawOf(gameCamera) - recenterYaw;
-    return reference;
-}
-
-std::optional<ReferenceFrame> MakeRecenterReference(
-    const Pose& openXrHeadPose,
-    Vec3 worldPosition)
-{
-    const auto yaw = RecenterYawFromHeadPose(openXrHeadPose);
-    if (!yaw) {
-        return std::nullopt;
-    }
-    if (!std::isfinite(worldPosition.x) || !std::isfinite(worldPosition.y) ||
-        !std::isfinite(worldPosition.z)) {
-        return std::nullopt;
-    }
-    ReferenceFrame reference{};
-    reference.worldPosition = worldPosition;
-    reference.yawRadians = *yaw;
-    return reference;
 }
 
 Pose EyePoseInWorld(const ReferenceFrame& reference, const Pose& openXrEyePose)

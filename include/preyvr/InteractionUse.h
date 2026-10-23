@@ -73,7 +73,6 @@ struct ButtonInput {
 // Hold: the left press is holding what it picked up; letting go lets go.
 // Draw: the right grip drew the weapon; nothing more until it opens.
 enum class Owner : std::uint8_t { None, Use, Reload, Legacy, Hold, Draw };
-const char* OwnerName(Owner owner);
 
 struct ButtonOutput {
     bool down = false;            // the native use/reload button is held this frame

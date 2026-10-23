@@ -5,7 +5,6 @@
 
 #include "preyvr/FrameTiming.h"
 
-#include "HandRigTakeover.h"
 #include "AimTakeover.h"
 #include "ArmsLane.h"
 #include "BodyFollow.h"
@@ -1919,8 +1918,7 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
                 gFreeFrames.fetch_add(1, std::memory_order_relaxed);
                 if (gate == 0) { gFreeGateZero.fetch_add(1, std::memory_order_relaxed); }
             }
-            if (mode == 2 && validLocation && (gate != 0 || free) && cvar != 0 && cvar != -1 &&
-                HandRigMode() != 2 && !WeaponRotationDriveArmed() && !WeaponOffsetArmed()) {
+            if (mode == 2 && validLocation && (gate != 0 || free) && cvar != 0 && cvar != -1) {
                 void* pose = nullptr;
                 void* relative = nullptr;
                 void* absolute = nullptr;
@@ -2089,11 +2087,6 @@ DWORD SetAnimIkMode(unsigned int mode)
     if (mode > 2u) { return 1; }
     if (mode != 0u && (!EnsureGameplayPoseObservation() ||
         SetWeaponAttachmentObserving(1) != 0 || !Install())) { return 2; }
-    if (mode == 2u && HandRigMode() == 2u) {
-        Log("result=refused detail=hand_rig_mode_2_active");
-        return 3;
-    }
-    if (mode == 2u && (WeaponRotationDriveArmed() || WeaponOffsetArmed())) { return 3; }
     std::lock_guard stateLock(gIkMutex);
     if (mode == 0) {
         gCalibration = {};

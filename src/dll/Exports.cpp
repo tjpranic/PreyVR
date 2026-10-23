@@ -11,17 +11,14 @@
 
 #include "FrameObserverHook.h"
 #include "Logger.h"
-#include "AimRayProbe.h"
 #include "AimTakeover.h"
 #include "HeadTrackingHook.h"
-#include "PassCameraProbe.h"
 #include "ReticleFollow.h"
 #include "XrInput.h"
 #include "HotkeyBridge.h"
 #include "IkTargetProbe.h"
 #include "InputPathProbe.h"
 #include "CommandChannel.h"
-#include "HandRigTakeover.h"
 #include "NearViewStereo.h"
 #include "RenderFrame.h"
 #include "WeaponAttachment.h"
@@ -286,35 +283,6 @@ extern "C" __declspec(dllexport) DWORD PreyVR_ReadDeclaredFovPtr(PreyVRDeclaredF
 // ---------------------------------------------------------------------------
 // Pointer-argument variants, for automation
 // ---------------------------------------------------------------------------
-//
-// **These exist because a float argument cannot be driven reliably from Frida.**
-//
-// F-009 records that Frida's NativeFunction aborts a call into this DLL with a
-// bare "system error". The harness works around it by invoking anything that
-// does work on a real Windows thread, where Frida marshals nothing -- but
-// CreateThread can only pass a *pointer*, and the x64 calling convention passes
-// floats in XMM registers, so a float-taking export cannot go through that route
-// at all.
-//
-// That left the float exports on the unreliable path, and on 2026-09-01 it cost
-// a live A2b run: SetStereoAsymmetry raised the abort and **never executed**, as
-// the log proved by not containing its line. Had the sweep continued, every step
-// would have run at the default 1.1 asymmetry and measured the same 462 px shear
-// that F-011 is about -- while looking like a clean run.
-//
-// Each of these takes a pointer to its arguments, so it matches
-// LPTHREAD_START_ROUTINE exactly and can be called on a real thread. The thread's
-// exit code is the return value. Null is rejected rather than dereferenced;
-// beyond that the caller is trusted with its own memory, which is inherent to
-// the pattern and is why these are automation-only entry points.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetStereoAsymmetryPtr(const float* outerScale)
-{
-    if (outerScale == nullptr) {
-        return static_cast<DWORD>(preyvr::dll::CameraEditStatus::failed);
-    }
-    return preyvr::dll::SetStereoAsymmetry(*outerScale);
-}
-
 // args[0] = IPD in metres, args[1] = half-FOV in degrees.
 extern "C" __declspec(dllexport) DWORD PreyVR_SetSyntheticStereoPtr(const float* args)
 {
@@ -325,24 +293,6 @@ extern "C" __declspec(dllexport) DWORD PreyVR_SetSyntheticStereoPtr(const float*
 }
 
 // --- Hurdle 2: an OpenXR session hosted inside Prey ------------------------
-//
-// Binds a session to *Prey's own* D3D11 device and mirrors its backbuffer into
-// both eyes. Never starts on load.
-//
-// Returns 0 idle, 1 running, 2 adapter mismatch, 3 unavailable, 4 failed,
-// 5 stopped. On 2 the log names the r_overrideDXGIAdapter index to set **before
-// the next launch** - the cvar is read once during device creation, so it cannot
-// be fixed from here.
-// Selects the OpenXR runtime for this process, before the loader is first used.
-// Required rather than convenient: Prey is launched by Steam and inherits Steam's
-// environment, so an injected mod cannot be handed a runtime choice and must make
-// one itself. Pass null or "" to return to the machine's runtime. Must be called
-// before PreyVR_StartXrSession.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetXrRuntimeManifest(const char* manifestPath)
-{
-    return preyvr::dll::SetXrRuntimeManifest(manifestPath);
-}
-
 extern "C" __declspec(dllexport) DWORD PreyVR_StartXrSession()
 {
     return preyvr::dll::StartXrSession();
@@ -351,11 +301,6 @@ extern "C" __declspec(dllexport) DWORD PreyVR_StartXrSession()
 extern "C" __declspec(dllexport) DWORD PreyVR_StopXrSession()
 {
     return preyvr::dll::StopXrSession();
-}
-
-extern "C" __declspec(dllexport) DWORD PreyVR_GetXrSessionStatus()
-{
-    return preyvr::dll::XrSessionStatusValue();
 }
 
 // Arms stereo submission: a real image per eye, and Prey's own frustum declared
@@ -370,204 +315,6 @@ extern "C" __declspec(dllexport) DWORD PreyVR_SetXrStereoSubmissionPtr(void* ena
 extern "C" __declspec(dllexport) DWORD PreyVR_SetXrPreferSrgbFormatPtr(void* enabled)
 {
     return preyvr::dll::SetXrPreferSrgbFormat(PtrArg(enabled));
-}
-
-// Sends each eye's image to the other eye's socket. Safe to toggle live, and the
-// only way to settle inverted stereo without a rebuild. Pointer-taking per F-009.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetXrSwapEyesPtr(void* enabled)
-{
-    return preyvr::dll::SetXrSwapEyes(PtrArg(enabled));
-}
-
-// In-headset A/B. Cycles the eye offset and antialiasing mode from Ctrl+Alt
-// chords so two values can be compared seconds apart instead of minutes apart.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetHotkeysEnabledPtr(void* enabled)
-{
-    return preyvr::dll::SetHotkeysEnabled(PtrArg(enabled));
-}
-
-// Eye offset in tenths of a millimetre: 640 is 0.064 m.
-extern "C" __declspec(dllexport) DWORD PreyVR_GetHotkeyIpdTenthsMm()
-{
-    return preyvr::dll::HotkeyIpdTenthsMm();
-}
-
-extern "C" __declspec(dllexport) DWORD PreyVR_GetHotkeyAaMode()
-{
-    return preyvr::dll::HotkeyAaMode();
-}
-
-extern "C" __declspec(dllexport) DWORD PreyVR_GetHotkeyEyeSwap()
-{
-    return preyvr::dll::HotkeyEyeSwap();
-}
-
-// Zero while the wearer is pressing keys means the poll is not seeing them,
-// which is a different problem from a setting that does nothing.
-extern "C" __declspec(dllexport) DWORD PreyVR_GetHotkeyPressCount()
-{
-    return preyvr::dll::HotkeyPressCount();
-}
-
-// Is the camera the engine culls with the camera we wrote? Read-only.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetPassCameraProbeEnabledPtr(void* enabled)
-{
-    return preyvr::dll::SetPassCameraProbeEnabled(PtrArg(enabled));
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetPassCameraSamples()
-{
-    return preyvr::dll::PassCameraSamples();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetPassCameraAgreements()
-{
-    return preyvr::dll::PassCameraAgreements();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetPassCameraDisagreements()
-{
-    return preyvr::dll::PassCameraDisagreements();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetPassCameraLastDifferenceMillidegrees()
-{
-    return preyvr::dll::PassCameraLastDifferenceMillidegrees();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetPassCameraMaxDifferenceMillidegrees()
-{
-    return preyvr::dll::PassCameraMaxDifferenceMillidegrees();
-}
-
-// The indicative overlay: Prey's own crosshair follows the controller ray.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetReticleFollowEnabledPtr(void* enabled)
-{
-    return preyvr::dll::SetReticleFollowEnabled(PtrArg(enabled));
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetReticleFollowApplied()
-{
-    return preyvr::dll::ReticleFollowAppliedCount();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetReticleFollowOffScreen()
-{
-    return preyvr::dll::ReticleFollowOffScreenCount();
-}
-
-// Thousandths of a viewport fraction. 500/500 with the controller pointed
-// straight ahead confirms the projection before anything is judged by eye.
-extern "C" __declspec(dllexport) DWORD PreyVR_GetReticleFollowLastX()
-{
-    return preyvr::dll::ReticleFollowLastX();
-}
-
-extern "C" __declspec(dllexport) DWORD PreyVR_GetReticleFollowLastY()
-{
-    return preyvr::dll::ReticleFollowLastY();
-}
-
-// M2: the weapon points where the controller points. Off by default; the A/B that
-// matters is aim, look away, toggle, aim again.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetAimTakeoverEnabledPtr(void* enabled)
-{
-    return preyvr::dll::SetAimTakeoverEnabled(PtrArg(enabled));
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetAimTakeoverApplied()
-{
-    return preyvr::dll::AimTakeoverAppliedCount();
-}
-
-// Split deliberately: a sleeping controller, a refused composition and a missing
-// player call for opposite responses, and one counter would hide which happened.
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetAimTakeoverRejectedNoPose()
-{
-    return preyvr::dll::AimTakeoverRejectedNoPose();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetAimTakeoverRejectedCompose()
-{
-    return preyvr::dll::AimTakeoverRejectedCompose();
-}
-
-// The engine's own direction magnitude in thousandths, sampled before any write.
-// 1000 confirms the field is the unit vector we think it is.
-extern "C" __declspec(dllexport) DWORD PreyVR_GetAimTakeoverNativeMagnitude()
-{
-    return preyvr::dll::AimTakeoverNativeDirectionMagnitude();
-}
-
-// Controller input. 1 once the action set is attached; created with the session,
-// since OpenXR permits that exactly once and it cannot be armed later.
-extern "C" __declspec(dllexport) DWORD PreyVR_GetXrInputCreated()
-{
-    return preyvr::dll::XrInputCreated();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetXrInputSyncCount()
-{
-    return preyvr::dll::XrInputSyncCount();
-}
-
-// Frames where that hand reported a valid pose. 0 = left, 1 = right. Zero syncs
-// means the action set never attached; syncs climbing with zero located means the
-// runtime has the actions but no controller is tracking.
-// Syncs that returned NOT_FOCUSED. High here means the headset is not being worn,
-// which is a different problem from controllers not tracking.
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetXrInputNotFocused()
-{
-    return preyvr::dll::XrInputNotFocusedCount();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetXrInputLocatedLeft()
-{
-    return preyvr::dll::XrInputLocatedCount(preyvr::dll::Hand::left);
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetXrInputLocatedRight()
-{
-    return preyvr::dll::XrInputLocatedCount(preyvr::dll::Hand::right);
-}
-
-// One hand's live state, for verifying the poses are real before anything is
-// driven from them. Millimetres and thousandths, so it crosses as integers.
-struct PreyVRControllerReadout {
-    unsigned int gripValid, aimValid;
-    int gripX, gripY, gripZ;              // millimetres, OpenXR space
-    int aimForwardX, aimForwardY, aimForwardZ;   // thousandths of a unit
-    int thumbstickX, thumbstickY;         // thousandths
-    unsigned int trigger, grip;
-};
-
-extern "C" __declspec(dllexport) DWORD PreyVR_ReadControllerPtr(PreyVRControllerReadout* out)
-{
-    if (out == nullptr) {
-        return 0;
-    }
-    *out = PreyVRControllerReadout{};
-    preyvr::dll::ControllerState state{};
-    // Right hand: the one a weapon would be in.
-    if (!preyvr::dll::TryGetControllerState(preyvr::dll::Hand::right, state)) {
-        return 0;
-    }
-    out->gripValid = state.gripValidity.orientationValid ? 1u : 0u;
-    out->aimValid = state.aimValidity.orientationValid ? 1u : 0u;
-    out->gripX = static_cast<int>(state.gripPose.position.x * 1000.0f);
-    out->gripY = static_cast<int>(state.gripPose.position.y * 1000.0f);
-    out->gripZ = static_cast<int>(state.gripPose.position.z * 1000.0f);
-    // OpenXR forward is -Z; rotating it shows where the controller points.
-    const preyvr::Vec3 forward =
-        preyvr::Rotate(state.aimPose.orientation, preyvr::Vec3{0.0f, 0.0f, -1.0f});
-    out->aimForwardX = static_cast<int>(forward.x * 1000.0f);
-    out->aimForwardY = static_cast<int>(forward.y * 1000.0f);
-    out->aimForwardZ = static_cast<int>(forward.z * 1000.0f);
-    out->thumbstickX = static_cast<int>(state.thumbstickX * 1000.0f);
-    out->thumbstickY = static_cast<int>(state.thumbstickY * 1000.0f);
-    out->trigger = state.triggerPressed ? 1u : 0u;
-    out->grip = state.gripPressed ? 1u : 0u;
-    return 1;
 }
 
 // The view seam: ArkPlayerCamera::UpdateView. Observe first -- the SViewParams
@@ -593,70 +340,10 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetViewHookAppliedCount()
     return preyvr::dll::ViewHookAppliedCount();
 }
 
-// FOV in ten-thousandths of a radian. Near 15447 confirms the struct layout,
-// since 1.5447 rad was measured from the live camera by an unrelated route.
-extern "C" __declspec(dllexport) DWORD PreyVR_GetViewHookLastFovTenThousandths()
-{
-    return static_cast<DWORD>(preyvr::dll::ViewHookLastFov() * 10000.0f + 0.5f);
-}
-
-extern "C" __declspec(dllexport) DWORD PreyVR_GetViewHookLastNearPlaneMicrometres()
-{
-    return static_cast<DWORD>(preyvr::dll::ViewHookLastNearPlane() * 1.0e6f + 0.5f);
-}
-
 // M1 head tracking.
 extern "C" __declspec(dllexport) DWORD PreyVR_RecenterHeadTracking()
 {
     return preyvr::dll::RecenterHeadTracking();
-}
-
-// The handoff segment of pose latency only -- it excludes the runtime's own
-// prediction and the display pipeline, so it is a floor rather than the whole.
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetHeadTrackingLastPoseAgeMicroseconds()
-{
-    return preyvr::dll::HeadTrackingLastPoseAgeMicroseconds();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetHeadTrackingMaxPoseAgeMicroseconds()
-{
-    return preyvr::dll::HeadTrackingMaxPoseAgeMicroseconds();
-}
-
-extern "C" __declspec(dllexport) DWORD PreyVR_GetHeadTrackingHasReference()
-{
-    return preyvr::dll::HeadTrackingHasReference();
-}
-
-// Measures whether per-eye stereo is contaminating Prey's cached aim ray -- the
-// acceptance check H-008 called required and that has never been run.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetAimRayProbeEnabledPtr(void* enabled)
-{
-    return preyvr::dll::SetAimRayProbeEnabled(PtrArg(enabled));
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetAimRaySampleCount()
-{
-    return preyvr::dll::AimRaySampleCount();
-}
-
-// A high count means the probe measured nothing, which must not be read as a
-// clean result.
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetAimRayUnreadableCount()
-{
-    return preyvr::dll::AimRayUnreadableCount();
-}
-
-// The headline number: the largest jump in ray origin between consecutive
-// frames, in micrometres. Near the IPD (about 64000) means contaminated.
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetAimRayMaxOriginGapMicrometres()
-{
-    return preyvr::dll::AimRayMaxOriginGapMicrometres();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetAimRayMaxAngleGapMillidegrees()
-{
-    return preyvr::dll::AimRayMaxAngleGapMillidegrees();
 }
 
 // Eye-handoff diagnostics. The lag is pushes minus pops -- the pipeline depth in
@@ -703,11 +390,6 @@ extern "C" __declspec(dllexport) DWORD PreyVR_ArmIkCapturePtr(void* maxCaptures)
 extern "C" __declspec(dllexport) DWORD PreyVR_DisarmIkCapture()
 {
     return preyvr::dll::DisarmIkCapture();
-}
-
-extern "C" __declspec(dllexport) DWORD PreyVR_GetIkCaptureArmed()
-{
-    return preyvr::dll::IkCaptureArmed();
 }
 
 // The gate byte before we touched it, and what it reads now. Equal after a disarm
@@ -834,19 +516,6 @@ extern "C" __declspec(dllexport) DWORD PreyVR_GetWatchCaptureCount()
     return preyvr::dll::WatchCaptureCount();
 }
 
-// Re-installs the debug registers on every thread that exists now. Worth calling
-// once the game has spawned its worker threads, since threads created after
-// arming carry no breakpoints and would make a real producer look absent.
-extern "C" __declspec(dllexport) DWORD PreyVR_RearmWatchThreads()
-{
-    return preyvr::dll::RearmThreads();
-}
-
-extern "C" __declspec(dllexport) DWORD PreyVR_DisarmAllWatches()
-{
-    return preyvr::dll::DisarmAllWatches();
-}
-
 // ---------------------------------------------------------------------------
 // Positional 6DoF. Separate switch from rotation, because they fail differently
 // and one switch would make an in-headset A/B unable to say which half is wrong.
@@ -855,14 +524,6 @@ extern "C" __declspec(dllexport) DWORD PreyVR_DisarmAllWatches()
 extern "C" __declspec(dllexport) DWORD PreyVR_SetViewPositionApplyingPtr(void* enabled)
 {
     return preyvr::dll::SetViewPositionApplying(PtrArg(enabled));
-}
-
-// Thousandths; 1000 == the measured unitsPerMetre of 1. Needing a value far from
-// 1000 means the measurement was wrong, which is worth surfacing rather than
-// quietly compensating for.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetViewPositionScaleMilliPtr(void* scaleMilli)
-{
-    return preyvr::dll::SetViewPositionScaleMilli(PtrArg(scaleMilli));
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetViewPositionApplied()
@@ -1043,319 +704,4 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetIkApplyAppliedCount()
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetIkApplySkippedCount()
 {
     return preyvr::dll::ApplyOffsetSkippedCount();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetIkApplyExpiredCount()
-{
-    return preyvr::dll::ApplyOffsetExpiredCount();
-}
-
-// ---------------------------------------------------------------------------
-// Captured registers.
-//
-// The ring has recorded all sixteen since it was written; only rip, stackTop,
-// sequence, thread and slot were reachable. R-083 needs `rdx`: the out-of-module
-// memcpy at 0xF97DC1DC refreshes the IK targets every cycle, and on the Win64 ABI
-// memcpy(dst, src, n) passes the SOURCE in rdx -- which names the buffer the
-// scratch targets are copied from, and therefore the next candidate for the real
-// one.
-//
-// Returned raw, not as an RVA: these are heap pointers as often as code
-// addresses, and silently subtracting a module base from a heap pointer produces
-// a plausible number that means nothing.
-// ---------------------------------------------------------------------------
-
-namespace {
-struct CaptureRegisterQuery {
-    unsigned int index;
-    unsigned int which;   // 0 rax, 1 rcx, 2 rdx, 3 rbx, 4 rsp, 5 rbp, 6 rsi, 7 rdi,
-                          // 8..15 r8..r15
-};
-} // namespace
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWatchCaptureRegisterPtr(
-    const CaptureRegisterQuery* query)
-{
-    if (query == nullptr) {
-        return 0;
-    }
-    preyvr::dll::WatchCapture c{};
-    if (!preyvr::dll::ReadWatchCapture(query->index, c)) {
-        return 0;
-    }
-    switch (query->which) {
-        case 0:  return c.rax;
-        case 1:  return c.rcx;
-        case 2:  return c.rdx;
-        case 3:  return c.rbx;
-        case 4:  return c.rsp;
-        case 5:  return c.rbp;
-        case 6:  return c.rsi;
-        case 7:  return c.rdi;
-        case 8:  return c.r8;
-        case 9:  return c.r9;
-        case 10: return c.r10;
-        case 11: return c.r11;
-        case 12: return c.r12;
-        case 13: return c.r13;
-        case 14: return c.r14;
-        case 15: return c.r15;
-        default: return 0;
-    }
-}
-
-// ---------------------------------------------------------------------------
-// H-011: a per-eye viewpoint for the near/viewmodel pass.
-//
-// Prey builds a translation-FREE view for near geometry (0xFB0B70 zeroes the
-// translation row), so the weapon is camera-relative by construction and cannot
-// receive stereo separation from moving the camera. This edits the finished near
-// view-projection instead, which is narrow: patching the translation clear would
-// restore translation to every camera-relative product.
-// ---------------------------------------------------------------------------
-
-extern "C" __declspec(dllexport) DWORD PreyVR_SetNearViewStereoPtr(void* enabled)
-{
-    return preyvr::dll::SetNearViewStereo(PtrArg(enabled));
-}
-
-extern "C" __declspec(dllexport) DWORD PreyVR_SetNearViewHalfIpdMmPtr(void* millimetres)
-{
-    return preyvr::dll::SetNearViewHalfIpdMillimetres(PtrArg(millimetres));
-}
-
-// The zero-delta control: every code path armed, displacement zero. A correct
-// implementation is pixel-identical to no edit, so any visible change under this
-// flag is the edit being wrong rather than stereo appearing.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetNearViewZeroDeltaControlPtr(void* enabled)
-{
-    return preyvr::dll::SetNearViewZeroDeltaControl(PtrArg(enabled));
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetNearViewApplied()
-{
-    return preyvr::dll::NearViewAppliedCount();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetNearViewRefused()
-{
-    return preyvr::dll::NearViewRefusedCount();
-}
-
-// Non-zero with applied at zero means the camera hook is not publishing an eye --
-// a different fault from the hook not running at all.
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetNearViewNoEye()
-{
-    return preyvr::dll::NearViewNoEyeCount();
-}
-
-// Signed, in micrometres. This is what shows the two eyes receive OPPOSITE
-// displacements rather than the same one.
-extern "C" __declspec(dllexport) int PreyVR_GetNearViewLastDeltaMicrometres()
-{
-    return preyvr::dll::NearViewLastDeltaMicrometres();
-}
-
-// ---------------------------------------------------------------------------
-// H-005: independent hand control at the pose CONSUMER.
-//
-// The producer side is a regress -- every level recomputes each frame, which six
-// live bump attempts and three walked levels established. This substitutes the
-// input to CCharInstance::SkinningTransformationsComputation (0x82EE10) instead,
-// and lets the engine do its own inverse-bind conversion.
-// ---------------------------------------------------------------------------
-
-// 0 off, 1 passthrough, 2 apply. **Passthrough is the control**: it exercises the
-// hook, the copy and the private pose view with joints unchanged, so a correct
-// build is pixel-identical to no hook.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetHandRigModePtr(void* mode)
-{
-    return preyvr::dll::SetHandRigTakeoverMode(PtrArg(mode));
-}
-
-extern "C" __declspec(dllexport) DWORD PreyVR_SetHandRigJointPtr(void* jointIndex)
-{
-    return preyvr::dll::SetHandRigJoint(PtrArg(jointIndex));
-}
-
-namespace {
-struct HandRigOffsetArgs { int x, y, z; };
-} // namespace
-
-extern "C" __declspec(dllexport) DWORD PreyVR_SetHandRigOffsetMmPtr(const HandRigOffsetArgs* args)
-{
-    if (args == nullptr) {
-        return 1;
-    }
-    return preyvr::dll::SetHandRigOffsetMillimetres(args->x, args->y, args->z);
-}
-
-// Passive topology, captured at the consumer. **Read this before choosing a
-// joint**: indices 45 and 72 are end-effector candidates and may be *IKTarget
-// helpers rather than the joints that deform the mesh.
-extern "C" __declspec(dllexport) DWORD PreyVR_GetHandRigJointCount()
-{
-    return preyvr::dll::HandRigJointCount();
-}
-
-extern "C" __declspec(dllexport) DWORD PreyVR_GetHandRigJointNamePtr(void* request)
-{
-    return preyvr::dll::HandRigJointNamePtr(request);
-}
-
-extern "C" __declspec(dllexport) int PreyVR_GetHandRigJointParentPtr(void* index)
-{
-    return preyvr::dll::HandRigJointParent(PtrArg(index));
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetHandRigForwarded()
-{
-    return preyvr::dll::HandRigForwardedCount();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetHandRigApplied()
-{
-    return preyvr::dll::HandRigAppliedCount();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetHandRigRefused()
-{
-    return preyvr::dll::HandRigRefusedCount();
-}
-
-// Joints moved by the last applied delta. **One means the descendant walk found
-// nothing**, which would tear the hand rather than move it.
-extern "C" __declspec(dllexport) DWORD PreyVR_GetHandRigLastSubtreeSize()
-{
-    return preyvr::dll::HandRigLastSubtreeSize();
-}
-
-// Restricts the hand edit to one character instance. R-085: two instances share
-// the hand rig, and only the FOB_NEAREST-drawn one is the first-person hands.
-// Editing both would move the shadow too -- and the shadow NOT moving is the
-// control that proves the right instance was selected.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetHandRigCharacterPtr(void* character)
-{
-    return preyvr::dll::SetHandRigCharacterPtr(character);
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetHandRigLastCharacter()
-{
-    return preyvr::dll::HandRigLastCharacter();
-}
-
-// Skipped climbing while matched stays zero means the selected pointer is wrong,
-// which is a different fault from the hook not running.
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetHandRigMatched()
-{
-    return preyvr::dll::HandRigMatchedCount();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetHandRigSkipped()
-{
-    return preyvr::dll::HandRigSkippedCount();
-}
-
-// The file-based command channel, so routine testing needs no injector.
-// frida-agent crashed the host four times in one session; both ways of calling
-// into the DLL through it cost a run.
-extern "C" __declspec(dllexport) DWORD PreyVR_GetCommandChannelRunning()
-{
-    return preyvr::dll::CommandChannelRunning();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetCommandChannelProcessed()
-{
-    return preyvr::dll::CommandChannelProcessedCount();
-}
-
-// Verbs that were not recognised. Reported rather than ignored, because a typo
-// that silently does nothing is indistinguishable from a mechanism that does not
-// work -- a confusion this project has paid for repeatedly.
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetCommandChannelRejected()
-{
-    return preyvr::dll::CommandChannelRejectedCount();
-}
-
-// The weapon model, moved in its own frame (the playbook's "kinematic, local"
-// route). Separate from the hand rig because displacing hand joints moves the
-// hand mesh and nothing else - confirmed in a headset by R-086.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetWeaponAttachObservingPtr(void* enabled)
-{
-    return preyvr::dll::SetWeaponAttachmentObserving(PtrArg(enabled));
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWeaponAttachmentPointer()
-{
-    return preyvr::dll::WeaponAttachmentPointer();
-}
-
-extern "C" __declspec(dllexport) int PreyVR_GetWeaponMountPosMmPtr(void* axis)
-{
-    return preyvr::dll::WeaponMountPositionMillimetres(PtrArg(axis));
-}
-
-extern "C" __declspec(dllexport) int PreyVR_GetWeaponMountQuatMilliPtr(void* component)
-{
-    return preyvr::dll::WeaponMountQuaternionMilli(PtrArg(component));
-}
-
-namespace { struct WeaponOffsetArgs { int x, y, z; }; }
-
-extern "C" __declspec(dllexport) DWORD PreyVR_SetWeaponOffsetMmPtr(const WeaponOffsetArgs* args)
-{
-    if (args == nullptr) { return 1; }
-    return preyvr::dll::SetWeaponOffsetMillimetres(args->x, args->y, args->z);
-}
-
-// Disarming writes the captured baseline back, so this is reversible by
-// construction rather than by remembering the previous value.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetWeaponOffsetEnabledPtr(void* enabled)
-{
-    return preyvr::dll::SetWeaponOffsetEnabled(PtrArg(enabled));
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWeaponOffsetApplied()
-{
-    return preyvr::dll::WeaponOffsetAppliedCount();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetWeaponOffsetRefused()
-{
-    return preyvr::dll::WeaponOffsetRefusedCount();
-}
-
-// The character render matrix (R-088), captured at RenderCHR's own entry - which
-// is EARLIER than the skinning dispatch, and so avoids the timing hazard against
-// the existing 0x81D377 observation point.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetRenderFrameCapturePtr(void* enabled)
-{
-    return preyvr::dll::SetRenderFrameCapture(PtrArg(enabled));
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetRenderFrameCaptures()
-{
-    return preyvr::dll::RenderFrameCaptureCount();
-}
-
-extern "C" __declspec(dllexport) DWORD PreyVR_GetRenderFrameTracked()
-{
-    return preyvr::dll::RenderFrameTrackedCharacters();
-}
-
-namespace { struct RenderBasisQuery { unsigned long long character; unsigned int index; }; }
-
-// Millionths, so a matrix can be read through a text channel without floats.
-extern "C" __declspec(dllexport) int PreyVR_GetRenderFrameBasisMicroPtr(const RenderBasisQuery* q)
-{
-    if (q == nullptr) { return 0; }
-    return preyvr::dll::RenderFrameBasisMicro(q->character, q->index);
-}
-
-// Whether inverse-by-transpose is legitimate for this character. R-088 warns that
-// scale or shear needs a full affine inverse instead, so this is checked.
-extern "C" __declspec(dllexport) DWORD PreyVR_GetRenderFrameOrthonormalPtr(void* character)
-{
-    return preyvr::dll::RenderMatrixBasisIsOrthonormal(
-        reinterpret_cast<unsigned long long>(character)) ? 1u : 0u;
 }

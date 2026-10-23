@@ -1,5 +1,4 @@
 #include "preyvr/CameraEdit.h"
-#include "preyvr/VrMath.h"
 
 #include <cmath>
 #include <cstring>
@@ -15,48 +14,7 @@ float ReadFloat(std::span<const std::uint8_t> bytes, std::size_t index)
     return value;
 }
 
-void WriteFloat(std::span<std::uint8_t> bytes, std::size_t index, float value)
-{
-    std::memcpy(bytes.data() + index * sizeof(float), &value, sizeof(float));
-}
-
 } // namespace
-
-bool IsWithinBounds(const YawEdit& edit)
-{
-    if (!std::isfinite(edit.degrees)) {
-        return false;
-    }
-    // A zero edit would make "did the image change?" pass without testing
-    // anything, so it is rejected rather than silently accepted as a no-op.
-    if (edit.degrees == 0.0f) {
-        return false;
-    }
-    return std::fabs(edit.degrees) <= kMaxYawDegrees;
-}
-
-bool ApplyYaw(std::span<std::uint8_t> camera, const YawEdit& edit)
-{
-    if (camera.size() < kCameraSize || !IsWithinBounds(edit)) {
-        return false;
-    }
-
-    const float radians = edit.degrees * (kPi / 180.0f);
-    const float c = std::cos(radians);
-    const float s = std::sin(radians);
-
-    // Row-major Matrix34: row i occupies floats [4i .. 4i+3], with the
-    // translation in column 3. Only columns 0 and 1 move under a Z-up yaw.
-    for (std::size_t row = 0; row < 3; ++row) {
-        const std::size_t c0 = row * 4 + 0;
-        const std::size_t c1 = row * 4 + 1;
-        const float x = ReadFloat(camera, c0);
-        const float y = ReadFloat(camera, c1);
-        WriteFloat(camera, c0, c * x + s * y);
-        WriteFloat(camera, c1, -s * x + c * y);
-    }
-    return true;
-}
 
 bool RotationIsOrthonormal(std::span<const std::uint8_t> camera, float epsilon)
 {

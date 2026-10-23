@@ -228,14 +228,6 @@ float RenderCameraResidual(const CameraView& source, const RenderCameraView& der
     return worst;
 }
 
-bool RenderCameraMatchesSource(
-    const CameraView& source,
-    const RenderCameraView& derived,
-    float tolerance)
-{
-    return RenderCameraResidual(source, derived) <= tolerance;
-}
-
 EyeAsymmetry AsymmetryFromFovTangents(
     float tanLeft,
     float tanRight,

@@ -100,7 +100,7 @@ bool IsPlausible(const RenderCameraView& camera);
 // camera -- both worth knowing before writing anything.
 //
 // Returns the raw residual: the largest absolute disagreement across the four
-// frustum tangents and near/far. Exposed rather than hidden behind the bool
+// frustum tangents and near/far. Exposed rather than hidden behind a bool
 // because a threshold is a property of a *metric*, not of a problem -- you
 // cannot tell whether a limit is sane without seeing the separation it is
 // supposed to sit inside. RuntimeSnapshotTests builds that separation table.
@@ -127,11 +127,6 @@ float RenderCameraResidual(const CameraView& source, const RenderCameraView& der
 // This limit already earned its keep: it is what caught the missing near-plane
 // factor, by scoring 1.5588 on the first live frame instead of quietly passing.
 inline constexpr float kRenderCameraResidualLimit = 1.0e-4f;
-
-bool RenderCameraMatchesSource(
-    const CameraView& source,
-    const RenderCameraView& derived,
-    float tolerance = kRenderCameraResidualLimit);
 
 // ---------------------------------------------------------------------------
 // OpenXR per-eye projection

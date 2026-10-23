@@ -55,8 +55,7 @@ bool NearestFromRenderArguments(const void* params, const void* character);
 //
 // `offsetMetres` is added to the translation column. `turn` rotates the basis
 // columns, which rotates the object about its own origin rather than about the
-// world -- the same choice `RotateJointAboutPivot` makes, and for the same
-// reason: rotating about the world origin would fling a near object across the
+// world: rotating about the world origin would fling a near object across the
 // screen.
 //
 // False when the matrix is unusable, leaving it untouched; a refusal must not

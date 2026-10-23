@@ -477,7 +477,7 @@ Left:
   - Removed: A1 yaw edit, A3 double render, A4 second pass, A6 interpose (its `RenderWorld` hook was only ever installed when armed), A7 frame shape, the render-view probe, upstream and kept head rotation, the watchdog and the step trace.
   - The `CSystem::Render` hook keeps its live path unchanged: drains, lanes, the stereo edit with restore and verify, the render contract and the dual-eye build.
   - About 25 exports went with them, as did HeadTrackingHook's `ApplyHeadRotation`, whose only caller was the upstream-rotation experiment.
-  - The pure `cameraedit::ApplyYaw` stays: the restore and orthonormality tests use it to perturb a camera.
+  - The pure `cameraedit::ApplyYaw` stays: the restore and orthonormality tests use it to perturb a camera. **Reversed 2026-10-23:** cut as unused; those tests now build their yawed camera locally.
 - **HeadTrackingHook:** the SetCamera hook and its three exports are gone. Head tracking runs on the `ArkPlayerCamera::UpdateView` seam, as before.
 - **DepthSubmission:** gone, with XrSessionHost's depth fields and helpers. The instance no longer requests `XR_KHR_composition_layer_depth`, and the `xr_depth extension_supported=` log line is gone. **Headset check needed.**
 - **FrameClock, WristPanel and Publish-PreyVR051:** deleted.

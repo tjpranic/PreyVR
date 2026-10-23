@@ -40,16 +40,6 @@ namespace preyvr::dll {
 // Passive: installs the hook and records matrices. Writes nothing.
 DWORD SetRenderFrameCapture(unsigned int enabled);
 
-// The most recent render matrix for `character`, as twelve floats in the engine's
-// own layout. False when that character has not been seen.
-bool TryGetRenderMatrix(unsigned long long character, float out[12]);
-
-// True when the captured basis is orthonormal within tolerance, which is what
-// makes an inverse-by-transpose legitimate. R-088 warns that scale or shear needs
-// a full affine inverse and an explicit rotation-extraction policy instead, so
-// this is checked rather than assumed.
-bool RenderMatrixBasisIsOrthonormal(unsigned long long character);
-
 // --- the per-frame transform seam -------------------------------------------
 //
 // **This is what `SetAttAbsoluteDefault` could not be.** That writes an
@@ -83,7 +73,5 @@ bool RenderFrameSlot(unsigned int index, unsigned long long* character, bool* ne
 
 unsigned long long RenderFrameCaptureCount();
 unsigned int RenderFrameTrackedCharacters();
-// Millionths, for reporting through a text channel without floats.
-int RenderFrameBasisMicro(unsigned long long character, unsigned int index);
 
 } // namespace preyvr::dll

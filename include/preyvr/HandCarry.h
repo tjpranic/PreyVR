@@ -93,7 +93,6 @@ public:
     void Push(const MotionSample& sample, const MotionSettings& settings = {});
     void Reset();
     unsigned Size() const { return count_; }
-    bool Latest(MotionSample& out) const;
     // The release velocity as of `now` (ns; 0 = the latest sample).
     Motion Estimate(std::int64_t now = 0, const MotionSettings& settings = {}) const;
 

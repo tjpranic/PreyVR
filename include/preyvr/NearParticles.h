@@ -69,7 +69,6 @@ bool IsSpriteVertexCaller(std::uint32_t rva);
 
 enum class Builder : std::uint8_t { Unknown, Sprites, Geometry, Other };
 Builder BuilderFromReturnRva(std::uint32_t rva);
-const char* BuilderName(Builder builder);
 
 // --- both eyes from one frame (2026-10-21) ----------------------------------
 //

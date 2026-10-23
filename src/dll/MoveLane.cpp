@@ -715,12 +715,6 @@ DWORD SetFireLaneEnabled(unsigned int enabled)
     return 0;
 }
 
-DWORD SetFireLaneThreshold(unsigned int hundredths)
-{
-    if (hundredths < 5u || hundredths > 95u) { return 1; }
-    return 0;   // XrInput already thresholds the trigger; kept for the contract
-}
-
 unsigned int TurnLaneEnabled() { return gTurnEnabled.load(std::memory_order_relaxed) ? 1u : 0u; }
 unsigned long long TurnLanePosted() { return gTurnPosted.load(std::memory_order_relaxed); }
 unsigned long long TurnLaneRefused() { return gTurnRefused.load(std::memory_order_relaxed); }

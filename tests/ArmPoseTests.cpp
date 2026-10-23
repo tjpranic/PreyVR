@@ -224,8 +224,6 @@ void TestWristAngles()
     // Flexed 30 degrees: the forearm, seen from the hand, rises out of the palm side.
     Require(std::fabs(WristFlexionDeg(Vec3{0, s, -c}, length, palm) - 30.0f) < 1e-2f, "flexion towards the palm");
     Require(std::fabs(WristFlexionDeg(Vec3{0, -s, -c}, length, palm) + 30.0f) < 1e-2f, "extension is negative");
-    Require(std::fabs(WristDeviationDeg(Vec3{s, 0, -c}, length, palm) - 30.0f) < 1e-2f, "side deviation");
-    Require(std::fabs(WristDeviationDeg(Vec3{0, s, -c}, length, palm)) < 1e-2f, "flexion is not deviation");
     // Right hand, palm down: the thumb is on length x palm = -X... (0,0,-1) x (0,-1,0) = (-1,0,0).
     // Deviated 20 degrees towards the thumb, the forearm leans away from it, to +X.
     const float c2 = std::cos(20 * kDeg), s2 = std::sin(20 * kDeg);

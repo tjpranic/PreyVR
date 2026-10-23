@@ -140,13 +140,6 @@ std::atomic<bool> gNativeProjection{false};
 std::atomic<bool> gRuntimeFrustum{false};
 std::atomic<unsigned long long> gRuntimeFrustumUsed{0}, gRuntimeFrustumMissing{0};
 
-// The forward axis the edit last wrote, for the pass-camera probe to compare
-// against. Three floats rather than a matrix: the question is only which way the
-// camera faces, and a direction is cheap to publish without a lock.
-std::atomic<float> gWrittenForwardX{0.0f};
-std::atomic<float> gWrittenForwardY{0.0f};
-std::atomic<float> gWrittenForwardZ{0.0f};
-std::atomic<bool> gHaveWrittenForward{false};
 
 void* gTarget = nullptr;
 bool gHookCreated = false;
@@ -569,16 +562,6 @@ void __fastcall RenderWithCameraEdit(void* system)
 
     UpdateAimReticleForRender();
 
-    // Publish the forward axis we just wrote, so the pass-camera probe can ask
-    // whether the camera the engine culls with is this one.
-    {
-        const stereo::Matrix34 written = stereo::ReadMatrix(edited);
-        gWrittenForwardX.store(written[1], std::memory_order_relaxed);
-        gWrittenForwardY.store(written[5], std::memory_order_relaxed);
-        gWrittenForwardZ.store(written[9], std::memory_order_relaxed);
-        gHaveWrittenForward.store(true, std::memory_order_release);
-    }
-
     if (original != nullptr) {
         renderOriginal(system);
     }
@@ -910,17 +893,6 @@ void SetStereoEyeLockFromRenderThread(int eye)
     // offline dumps from being confused with each other, which is a debugging
     // concern; submission has its own eye identity and does not read it.
     gEyeLock.store((eye == 0 || eye == 1) ? eye : -1, std::memory_order_release);
-}
-
-bool LastWrittenCameraForward(Vec3& out)
-{
-    if (!gHaveWrittenForward.load(std::memory_order_acquire)) {
-        return false;
-    }
-    out.x = gWrittenForwardX.load(std::memory_order_relaxed);
-    out.y = gWrittenForwardY.load(std::memory_order_relaxed);
-    out.z = gWrittenForwardZ.load(std::memory_order_relaxed);
-    return true;
 }
 
 DWORD SetNativeProjection(unsigned int enabled)
