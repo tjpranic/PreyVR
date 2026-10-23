@@ -27,6 +27,7 @@
 #include "CarryLane.h"
 #include "GrenadeLane.h"
 #include "DebugOverlay.h"
+#include "EnvSwitch.h"
 #include "FocusHold.h"
 #include "ControllerPrompts.h"
 #include "InventoryPointerCapture.h"
@@ -194,16 +195,12 @@ void TickVrMode() {
         // contracts, so no such contract can arrive without a submission to fill
         // it. Not fatal: without the hooks the alternate-eye path continues.
         {
-            wchar_t dualSetting[8]{};
-            GetEnvironmentVariableW(L"PREYVR_DUAL_STEREO",dualSetting,8);
-            if(dualSetting[0]==L'0') Log("dual_stereo=off reason=PREYVR_DUAL_STEREO");
+            if(EnvSwitchOff(L"PREYVR_DUAL_STEREO")) Log("dual_stereo=off reason=PREYVR_DUAL_STEREO");
             else if(SetDualSceneMode(3,0)==0) {
                 SetDualStereoContract(1);Log("dual_stereo=on");
                 // What the game draws after the world, into the held eye too
                 // (DualOverlay.h). PREYVR_DUAL_OVERLAY=0 leaves it in one eye.
-                wchar_t overlaySetting[8]{};
-                GetEnvironmentVariableW(L"PREYVR_DUAL_OVERLAY",overlaySetting,8);
-                if(overlaySetting[0]==L'0') Log("dual_overlay=off reason=PREYVR_DUAL_OVERLAY");
+                if(EnvSwitchOff(L"PREYVR_DUAL_OVERLAY")) Log("dual_overlay=off reason=PREYVR_DUAL_OVERLAY");
                 else if(SetDualOverlayRedraw(1)==0) Log("dual_overlay=on");
                 else Log("dual_overlay=unavailable overlays=second_eye_only");
             }

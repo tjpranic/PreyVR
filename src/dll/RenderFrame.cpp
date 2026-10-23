@@ -252,13 +252,6 @@ unsigned long long RenderFrameOverrideRefusedCount()
     return gOverrideRefused.load(std::memory_order_relaxed);
 }
 
-bool RenderMatrixIsNear(unsigned long long character)
-{
-    float ignored[12]{};
-    bool nearest = false;
-    return gTable.Read(character, ignored, &nearest) && nearest;
-}
-
 bool RenderMatrixBasisIsOrthonormal(unsigned long long character)
 {
     float m[12]{};

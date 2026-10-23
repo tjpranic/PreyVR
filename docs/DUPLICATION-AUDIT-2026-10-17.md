@@ -23,6 +23,9 @@ Line numbers are as of commit 8c07a51, before the section A fixes. Files those f
   - Build passes, 77/77 ctest pass (one new test, `hook_install`), no new warnings.
   - PreyVR-15 passed in the headset; committed as `fc7b335`.
 - **2026-10-18, group 1:** B12 (most of it), D5, E1, E2 and E3 were done; see their status notes. Committed as `19edcd7`.
+- **2026-10-23:** three leftovers were done with [the 10-22 audit](REFACTOR-AUDIT-2026-10-22.md)'s easy-win batch: B5's per-frame lookup in AnimIk, and B12's InputPost and wrist-card repeats. B12's pointer visual was checked and kept. See the B5 and B12 notes.
+  - Build passes and 93/93 ctest pass. Not yet worn: InputPost and the wrist card are live paths, so the batch needs the usual headset smoke check.
+  - Open items in this audit (B6–B11, D3, D4, E4, E5, E7) are tracked with fresh line numbers in the 10-22 audit's section 2.
 - **2026-10-18, C:** the signed-off dead code was cut. PreyVR-17 passed in the headset; committed as `1d8bae9`.
   - Build passes with no new warnings; 81/81 ctest pass (the four VR scheme replays are new), and 12 runs in a row at `-j12` were clean.
   - Every unpinned `tools/re` verifier prints byte-identical output before and after.
@@ -290,6 +293,8 @@ What changed:
 - **7 copies of the view-camera chain** use `LiveViewCamera()`: AimTakeover ×2, Bootstrap, HandRigTakeover, ReticleFollow, WeaponAttachment and XrSessionHost.
 - **PsiMedkitRuntimeTests' `#define GetModuleHandleW` stub** still applies, because the header is included inside it. That test uses one fake module throughout, so caching is safe.
 
+**2026-10-23:** AnimIkTakeover's IK detour no longer calls `GetModuleHandleW` on every matched frame; it reads `PreyBase()`.
+
 Left:
 - **25 lookups** in hook installers and Bootstrap paths that pass the `HMODULE` on. B2 rewrites the installers.
 - **The four test-included files without an `include/` path,** and the pinned NativeHudValue.h.
@@ -419,6 +424,10 @@ Left:
   - **FocusHold's upper-case `Hex(const void*)`:** its output differs.
   - **The `.45f` grip literals and TwoHandedAim's .45/.65:** equal to `kGripPress.release` by value, but not shown to be the same setting, and TwoHandedAim's .65 is a different press threshold.
   - **HudBridge, InputPost, UiPointer/VrOptionsRuntime and the wrist-card size:** they are on live input and HUD paths, so they go with the headset-tested batch (B7/B10).
+    - **2026-10-23, InputPost: done.** The raw event is built once, by `BuildRawEvent`, and the disarm is one `DisarmAfterFault(detail)`. Return codes and log lines are unchanged.
+    - **2026-10-23, wrist-card size: done.** `WristCardWidthMetres()` in VrOptionsRuntime.h is used by both DebugOverlay and XrSessionHost; it is the same expression in the same order.
+    - **2026-10-23, pointer visual: checked and kept.** The three copies (UiPointer `PublishUiPointer`, VrOptionsRuntime's frame input and `OptionsPointer`) gate differently: only `OptionsPointer` checks sample freshness, and only the frame input checks the surface's reference. They share about two lines.
+    - **HudBridge:** still open.
 - **`Hex()`:**
   - Identical in DebugWatch:277, IkTargetProbe:95 and InputPathProbe:73.
   - FocusHold:114 is uppercase.

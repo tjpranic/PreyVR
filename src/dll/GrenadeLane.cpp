@@ -4,7 +4,7 @@
 #include "EngineAccess.h"
 #include "preyvr/TextFormat.h"
 
-#include "AimTakeover.h"
+#include "GameplayFrame.h"
 #include "CarryLane.h"
 #include "Haptics.h"
 #include "Logger.h"
@@ -349,7 +349,8 @@ const char* CallArchetypeName(std::uintptr_t entity)
     }
 }
 
-// pe_status_dynamics: type 8; v +0x0C, w +0x18, mass +0x4C (CarryLane.cpp).
+// pe_status_dynamics: type 8; v +0x0C, w +0x18, mass +0x4C (phys::QueryDynamics,
+// PhysicsCalls.h, reads the same buffer).
 bool CallDynamics(std::uintptr_t physics, Vec3& v, Vec3& w)
 {
     alignas(16) std::uint8_t status[128]{};
@@ -366,7 +367,8 @@ bool CallDynamics(std::uintptr_t physics, Vec3& v, Vec3& w)
     std::memcpy(&w, status + 0x18, sizeof(Vec3));
     return Finite(v) && Finite(w);
 }
-// pe_action_set_velocity, 40 bytes (CarryLane.cpp verifies the queue's size for type 10).
+// pe_action_set_velocity, 40 bytes: phys::SetVelocityAction (PhysicsCalls.h).
+// Unlike carry and contact, this lane does not check phys::VelocityQueueReady.
 struct SetVelocityAction {
     int type = 10;
     int ipart = INT_MIN;

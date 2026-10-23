@@ -18,7 +18,8 @@
 
 namespace preyvr::dll::phys {
 
-inline constexpr std::size_t kTypeSlot = 0x08, kStatusSlot = 0x30, kActionSlot = 0x38;
+inline constexpr std::size_t kTypeSlot = contact::native::TypeSlot, kStatusSlot = contact::native::StatusSlot,
+                             kActionSlot = contact::native::ActionSlot;
 
 // pe_status_dynamics: type 8; ipart/partid unused; v +0x0C, w +0x18, centre of
 // mass +0x3C, mass +0x4C (rigid GetStatus 0xBE2BB0, docs/PHYSICAL-CONTACT-SCOPE).
@@ -85,8 +86,10 @@ inline int ArticulatedHosted(const void* entity)
     }
 }
 
-// QueueAction copies a queued action by its type's entry in two runtime tables:
-// set velocity must be 40 bytes with no pointed-to payload, or it cannot be queued.
+// QueueAction copies a queued action by its type's entry in two runtime tables,
+// the per-type struct sizes and payload descriptors written at start-up by
+// 0xD0D1D0: set velocity (type 10) must be 40 bytes with no pointed-to payload,
+// or the queued copy would be wrong.
 inline constexpr std::uintptr_t kActionSizeTableRva = 0x2982CA0, kActionPayloadTableRva = 0x2982DE0;
 inline bool VelocityQueueReady(std::uintptr_t base, std::uint32_t* sizeOut = nullptr, std::uintptr_t* payloadOut = nullptr)
 {

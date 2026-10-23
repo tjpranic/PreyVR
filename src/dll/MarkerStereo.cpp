@@ -2,6 +2,7 @@
 
 #include "CameraEditHook.h"
 #include "EngineAccess.h"
+#include "EnvSwitch.h"
 #include "HookInstall.h"
 #include "HudLayer.h"
 #include "Logger.h"
@@ -489,8 +490,7 @@ unsigned MarkerDepthEnabled() { return gEnabled.load(std::memory_order_acquire) 
 void EnsureMarkerDepth()
 {
     // PREYVR_MARKER_DEPTH=0: leave the markers untouched, not even hooked.
-    wchar_t value[8]{};
-    if (GetEnvironmentVariableW(L"PREYVR_MARKER_DEPTH", value, 8) > 0 && value[0] == L'0') {
+    if (EnvSwitchOff(L"PREYVR_MARKER_DEPTH")) {
         gEnabled.store(false, std::memory_order_release);
         Log("result=0 detail=disabled_by_environment hooks=0");
         return;

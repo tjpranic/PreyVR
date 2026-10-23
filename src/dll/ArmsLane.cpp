@@ -2,7 +2,7 @@
 #include "SafeMemory.h"
 #include "EngineAccess.h"
 
-#include "AimTakeover.h"
+#include "GameplayFrame.h"
 #include "AnimIkTakeover.h"
 #include "DebugWatch.h"
 #include "InputPost.h"
@@ -187,7 +187,7 @@ void RequestDrawWeapon() { gDrawRequested.store(true, std::memory_order_release)
 
 void UpdateArmsLane(const GameplayPoseFrame& frame, bool valid)
 {
-    if (InputDrainThreadId() != GetCurrentThreadId()) { return; }
+    if (!OnEngineMainThread()) { return; }
     const auto base = PreyBase();
     WeaponState state{};
     const bool read = valid && base && frame.player && ReadWeaponState(base, frame.player, state);

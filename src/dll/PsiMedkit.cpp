@@ -1,7 +1,7 @@
 #include "PsiMedkit.h"
 #include "HookInstall.h"
 #include "EngineAccess.h"
-#include "AimTakeover.h"
+#include "GameplayFrame.h"
 #include "BodyFollow.h"
 #include "HeadTrackingHook.h"
 #include "HudBridge.h"
@@ -47,7 +47,7 @@ thread_local psi::Sample preview{};
 struct Owner {std::uintptr_t player=0,power=0,focus=0,inventory=0;int selected=-1;std::uintptr_t selectedPower=0;};
 DWORD ReadOwner(Owner* out){
  __try {
-    if(!InputDrainThreadId()||InputDrainThreadId()!=GetCurrentThreadId())return ERROR_INVALID_THREAD_ID;
+    if(!OnEngineMainThread())return ERROR_INVALID_THREAD_ID;
     const auto base=PreyBase();
     if(!base)return ERROR_NOT_READY;
     out->player=reinterpret_cast<std::uintptr_t(__fastcall*)()>(base+native::GetPlayer)();
@@ -285,7 +285,7 @@ unsigned MedkitSlotEnabled(){return medkit.load();}
 bool MedkitOwnsGrip(){return medkitGrip.load();}
 bool MedkitZoneHasLeftHand(){return medkitZone.load()||medkitGrip.load();}
 void UpdatePsiMedkit(const GameplayPoseFrame& frame,bool valid){
-    if(InputDrainThreadId()!=GetCurrentThreadId())return;
+    if(!OnEngineMainThread())return;
     const auto& f=frame.tracking;const auto ref=frame.referenceGeneration,gen=generation.load();
     valid=valid&&!fault.load()&&HudGameplayInputAllowed()&&!frame.twoHand.held&&
         FreshSample(MonotonicNanoseconds(),f.publishedNs,100000000)&&

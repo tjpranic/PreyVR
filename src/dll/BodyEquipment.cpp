@@ -38,7 +38,7 @@ bool Gate(std::uintptr_t base){return contract::BodiesMatch(base,equipment::nati
 // Entry/consumer bytes and complete ABIs are recorded in EquipmentNative.h.
 DWORD Native(const GameplayPoseFrame& frame,int slot,bool readStats,Status* out,bool* didStow){
  __try {
-  if(InputDrainThreadId()==0||InputDrainThreadId()!=GetCurrentThreadId())return ERROR_INVALID_THREAD_ID;
+  if(!OnEngineMainThread())return ERROR_INVALID_THREAD_ID;
   const auto base=PreyBase();
   if(!base||!frame.player)return ERROR_NOT_READY;
   static bool gated=false;
@@ -135,7 +135,7 @@ void UpdateHolsterInput(const TrackingFrame& f,bool valid){
 bool HolsterOwnsGrip(){return gripOwned.load();}
 void ClearHolsters(){clear=true;}
 void UpdateBodyEquipment(const GameplayPoseFrame& frame,bool valid){
- if(InputDrainThreadId()!=GetCurrentThreadId())return;
+ if(!OnEngineMainThread())return;
  if(!valid||fault.load()||!HudGameplayInputAllowed()||
     !FreshSample(MonotonicNanoseconds(),frame.tracking.publishedNs)||
     frame.referenceGeneration!=HeadTrackingReferenceGeneration()) {status.Clear();request={};return;}

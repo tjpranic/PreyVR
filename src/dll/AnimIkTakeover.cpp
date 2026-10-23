@@ -162,10 +162,10 @@ struct IkTraceRecord {
     std::uint64_t trackingSequence = 0;
     std::uint64_t publishedNs = 0;
     std::uintptr_t owner = 0;
-    // The shared anchor. Currently `GameplayPoseFrame::nativeEye`, which holds
-    // the native cached RETICLE ray origin rather than a head position -- so a
-    // reticle write that moves this moves both hands. Recorded so that claim is
-    // measured rather than argued.
+    // The shared anchor: the camera centre by default (gCameraAnchor below), or
+    // in the A/B's old mode `GameplayPoseFrame::nativeEye`, the native cached
+    // RETICLE ray origin -- where a reticle write that moves it moves both
+    // hands. Recorded so that claim is measured rather than argued.
     Vec3 anchor{};
     float yaw = 0.0f;
     Pose head{}, grip{};
@@ -1891,9 +1891,9 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
             if (ReadInt(ch + kCharAnimPlaying, &gate)) {
                 gGate.store(static_cast<unsigned int>(gate), std::memory_order_relaxed);
             }
-            const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
+            const std::uintptr_t preyDll = PreyBase();
             int cvar = -1;
-            if (preyDll != nullptr &&
+            if (preyDll != 0 &&
                 ReadInt(reinterpret_cast<std::uint8_t*>(preyDll) + kUseAdikCvarRva, &cvar)) {
                 gCvar.store(cvar, std::memory_order_relaxed);
             }

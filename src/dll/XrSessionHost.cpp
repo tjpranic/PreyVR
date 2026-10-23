@@ -1016,28 +1016,13 @@ Pose PoseOf(const XrPosef& p)
                 Vec3{p.position.x,p.position.y,p.position.z}};
 }
 
-// Reads Prey's live view camera and returns the frustum to declare.
-//
-// The same code path the verified PreyVR_ReadDeclaredFovPtr uses, so what is
-// submitted is what was measured on 2026-09-02 -- 120 degrees horizontal by
-// 88.507 vertical, zero asymmetry, confirmed against the player's FOV slider.
-//
-// Returns nothing rather than guessing. Every caller must treat that as "do not
-// submit a layer".
 // **Off by default, because a profiler that is always on is a profiler nobody
 // trusts.** Recording is a store and an increment, but the honest way to answer
 // "did measuring change the number" is to be able to turn it off.
 std::atomic<bool> gTimingEnabled{false};
 preyvr::timing::IntervalSeries gServiceInterval;
 preyvr::timing::DurationSeries gWaitFrame, gAcquireWait, gEndFrame, gServiceTotal;
-// The runtime's OWN display period, from XrFrameState, reported beside the
-// configured budget so nobody has to assume the two agree. `xr.timing 1 90`
-// configures 11111 us; if the runtime is at 72 Hz that budget is simply wrong,
-// and only this number says so.
 
-// **Off by default, and it stays that way until a wearer has judged it.** A
-// wrong depth layer degrades the image everywhere and looks like a subtle warp
-// under head motion rather than an obvious fault, so this is not a default.
 // **Eye skew: how far apart in time the two submitted eyes are.**
 //
 // Prey renders one eye per frame, so a submitted pair is always one older image
@@ -1097,15 +1082,19 @@ std::atomic<unsigned long long> gPanelSettingsGeneration{0};
 // **Off by default from 2026-09-11**, at the wearer's request after measuring
 // what it costs: the card is read once and then paid for on every menu, and a
 // wearer who already knows the controls was giving up a sixth of the panel to
-// keep it. `ui.guide 1` brings it back for the session, and UiGuide in
-// PreyVR.json brings it back for good -- which is what to set when handing the
-// package to someone who has not seen the controls before.
+// keep it. `ui.guide 1` brings it back for the session, and the VR Options
+// menu's CONTROLS GUIDE (ui_guide) brings it back for good -- which is what to
+// set when handing the package to someone who has not seen the controls before.
 std::atomic<unsigned int> gUiFitMarginPercent{72};
 std::atomic<bool> gUiGuide{false};
 float UiFitMargin() {
     return static_cast<float>(gUiFitMarginPercent.load(std::memory_order_relaxed))*.01f;
 }
 
+// The runtime's OWN display period, from XrFrameState, reported beside the
+// configured budget so nobody has to assume the two agree. `xr.timing 1 90`
+// configures 11111 us; if the runtime is at 72 Hz that budget is simply wrong,
+// and only this number says so.
 std::atomic<std::uint32_t> gRuntimePeriodUs{0};
 
 // Eye images published with the render contract that produced them, and
@@ -1152,6 +1141,14 @@ XrFovf ScaleDeclaredFov(const XrFovf& fov)
     return out;
 }
 
+// Reads Prey's live view camera and returns the frustum to declare.
+//
+// The same code path the verified PreyVR_ReadDeclaredFovPtr uses, so what is
+// submitted is what was measured on 2026-09-02 -- 120 degrees horizontal by
+// 88.507 vertical, zero asymmetry, confirmed against the player's FOV slider.
+//
+// Returns nothing rather than guessing. Every caller must treat that as "do not
+// submit a layer".
 std::optional<XrFovf> DeclaredFovFromLiveCamera()
 {
     const std::uint8_t* const camera = LiveViewCamera();
@@ -1172,16 +1169,6 @@ std::optional<XrFovf> DeclaredFovFromLiveCamera()
     return fov;
 }
 
-// Holds one image per eye and submits a complete pair every frame.
-//
-// Prey renders one eye at a time, so the backbuffer is only ever half of a
-// stereo pair. This keeps the other half from the last time that eye was on
-// screen. The frame service consumes one eye label at every renderer frame,
-// including menu/flat/skipped XR frames, and passes that label with this buffer.
-//
-// Returns false until both eyes have been seen at least once. Submitting a pair
-// with one empty half would show a black eye, which reads as a broken headset
-// rather than as a warming-up mod.
 // The two held eye images, created on first use at the backbuffer's size and
 // format. Shared by the per-frame submission and the rung-1b mid-frame hold, so
 // both see the same textures.
@@ -1216,6 +1203,16 @@ bool EnsureEyeImages(const D3D11_TEXTURE2D_DESC& desc)
     return true;
 }
 
+// Holds one image per eye and submits a complete pair every frame.
+//
+// Prey renders one eye at a time, so the backbuffer is only ever half of a
+// stereo pair. This keeps the other half from the last time that eye was on
+// screen. The frame service consumes one eye label at every renderer frame,
+// including menu/flat/skipped XR frames, and passes that label with this buffer.
+//
+// Returns false until both eyes have been seen at least once. Submitting a pair
+// with one empty half would show a black eye, which reads as a broken headset
+// rather than as a warming-up mod.
 bool SubmitStereoPair(
     ID3D11DeviceContext* context,
     ID3D11Texture2D* backBuffer,
@@ -2659,7 +2656,7 @@ void ServiceXrFrame(void* renderer)
             wristLayer.layerFlags=XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
             wristLayer.pose={{p.orientation.x,p.orientation.y,p.orientation.z,p.orientation.w},
                 {p.position.x,p.position.y,p.position.z}};
-            const float width=.18f*WristSizePercent()*.01f;
+            const float width=WristCardWidthMetres();
             wristLayer.size=hologram?XrExtent2Df{hologramDecision.width,hologramDecision.height}:
                 XrExtent2Df{width,width*NativeWristHeight/NativeWristWidth};
             wristLayer.subImage.swapchain=gHost.wristSwapchain->Handle();

@@ -24,7 +24,6 @@ static_assert(contract::Gated(sn::Contracts, sn::PlaySoundEnter) && contract::Ga
 
 constexpr std::uint64_t kWindowNs = 3000000000ull;
 constexpr unsigned kMaxLines = 200;
-constexpr std::uint32_t kPlayerId = 0x7777;
 
 std::atomic<bool> wanted{false}, installed{false}, hookFailed{false}, fault{false};
 std::atomic<const char*> gate{"unchecked"}, audioSystem{"unread"};
@@ -109,7 +108,7 @@ long long WindowMs()
 }
 std::string Who(std::uint32_t id)
 {
-    if (id == kPlayerId) { return "player"; }
+    if (id == sn::PlayerEntityId) { return "player"; }
     if (id && id == windowItem.load()) { return "wrench"; }
     return std::to_string(id);
 }

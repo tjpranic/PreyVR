@@ -72,7 +72,6 @@ struct Natives {
 };
 struct QueryStats { unsigned entities = 0, other = 0, skipped = 0; DWORD error = 0; };
 
-bool EngineThread() { return InputDrainThreadId() != 0 && InputDrainThreadId() == GetCurrentThreadId(); }
 void Log(const std::string& line) { lifecycle::Log("preyvr_contact " + line); }
 
 // The broadphase over both poses, then the box against each movable object: still,
@@ -295,9 +294,6 @@ BodyRead ReadRigid(void* entity, contact::Body& body, float& mass)
     return Checked(body, mass);
 }
 
-// An articulated body's host: set for a live character's skeleton, null for a
-// ragdoll. -1: unreadable.
-int Hosted(const void* entity) { return phys::ArticulatedHosted(entity); }
 std::uintptr_t VtableOf(const void* entity)
 {
     __try {
@@ -640,7 +636,7 @@ void LogEvents(const Natives& n, const Contact* contacts, unsigned count)
         Log("begin entity=" + id + " type=" + TypeName(c->type) + " kind=" + contact::KindName(c->kind) +
             (both ? "+sweep" : "") + " proxy=" + ProxyName(c->proxy) + " dist=" + Fixed(c->hit.distance, 4) +
             " partId=" + std::to_string(c->hit.partId) +
-            (c->type == cn::TypeArticulated ? " host=" + std::to_string(Hosted(c->collider)) : std::string()) +
+            (c->type == cn::TypeArticulated ? " host=" + std::to_string(phys::ArticulatedHosted(c->collider)) : std::string()) +
             " surface=" + std::to_string(c->hit.surface) +
             " friction=" + Fixed(d.friction, 2) + " bounciness=" + Fixed(d.bounciness, 2) + " mass=" + Fixed(d.mass, 2) +
             " point=" + Point(c->hit.point) + " normal=" + Point(c->hit.normal));
@@ -816,11 +812,6 @@ unsigned PushContacts(const GameplayPoseFrame& frame, const Natives& n, const Co
     if (underfoot) { *underfoot = under; }
     return applied;
 }
-float AngleBetween(float a, float b)
-{
-    const float d = std::remainder(a - b, 6.2831853f);
-    return std::fabs(d);
-}
 // A hand's box, from its controller's grip pose mapped into the world as the
 // hands are placed (animik::ControllerWorldFromHead, the carry lane's own route),
 // where the hand is drawn: held back by a surface (SurfaceStopLane.h), it pushes
@@ -940,7 +931,7 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
         auto& was = last[p];
         if (!current.active) { was = {}; continue; }
         if (was.valid && was.key == current.key && was.reference == current.reference && current.sequence > was.sequence &&
-            AngleBetween(current.yaw, was.yaw) < .05f && Length(Sub(current.box.centre, was.box.centre)) < .3f) {
+            YawDistance(current.yaw, was.yaw) < .05f && Length(Sub(current.box.centre, was.box.centre)) < .3f) {
             before[p] = was.box;
             previous[p] = &before[p];
             float d = current.stamp > was.stamp ? static_cast<float>(current.stamp - was.stamp) * 1e-9f : 0.0f;
@@ -1006,7 +997,7 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
 void UpdateContactLane(const GameplayPoseFrame& frame, bool allowed)
 {
     thread_local bool busy = false;
-    if (busy || !EngineThread()) { return; }
+    if (busy || !OnEngineMainThread()) { return; }
     struct Guard { bool& value; explicit Guard(bool& v) : value(v) { value = true; } ~Guard() { value = false; } } guard(busy);
     UpdateImpl(frame, allowed);
 }

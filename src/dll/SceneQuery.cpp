@@ -24,7 +24,7 @@ bool Gate(std::uintptr_t base){return contract::BodiesMatch(base,scene::native::
 // The physical world and the player's own physics (what every query skips),
 // after the thread, player and vtable checks. Faults propagate to the caller's __try.
 DWORD World(const GameplayPoseFrame& frame,std::uintptr_t& base,std::uintptr_t& world,void*& player){
-    if(InputDrainThreadId()==0||InputDrainThreadId()!=GetCurrentThreadId())return ERROR_INVALID_THREAD_ID;
+    if(!OnEngineMainThread())return ERROR_INVALID_THREAD_ID;
     base=PreyBase();
     if(!base||!frame.player)return ERROR_NOT_READY;
     static bool gated=false;
@@ -81,19 +81,6 @@ void QueryAimScene(const GameplayPoseFrame& frame,aim::Sample& sample){
         // malformed output or access faults remain disarmed for this process.
         if(result!=ERROR_NOT_READY&&result!=ERROR_INVALID_THREAD_ID)fault=true;
     }
-}
-bool QueryPhysicalSegment(const GameplayPoseFrame& frame,Vec3 origin,Vec3 delta,scene::Hit& hit){
-    hit={};hit.distance=-1;
-    const float length=std::sqrt(delta.x*delta.x+delta.y*delta.y+delta.z*delta.z);
-    if(fault.load()||!std::isfinite(length)||length<.001f||length>.501f||!HudGameplayInputAllowed()||
-       !FreshSample(MonotonicNanoseconds(),frame.tracking.publishedNs,100000000)||
-       frame.referenceGeneration!=HeadTrackingReferenceGeneration())return false;
-    const auto result=Query(frame,origin,{delta.x/length,delta.y/length,delta.z/length},length,hit);
-    if(result){lastError=result;++refused;
-        if(result!=ERROR_NOT_READY&&result!=ERROR_INVALID_THREAD_ID)fault=true;
-        hit={};hit.distance=-1;
-    }
-    return result==ERROR_SUCCESS;
 }
 bool QueryDebugRay(const GameplayPoseFrame& frame,Vec3 origin,Vec3 direction,scene::Hit& hit){
     hit={};hit.distance=-1;

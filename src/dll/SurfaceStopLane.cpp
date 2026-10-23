@@ -50,7 +50,6 @@ std::atomic<std::uint64_t> frames{0}, solves{0}, rays{0}, raysMax{0}, held{0}, h
 std::atomic<const char*> lastGate{"none"};
 std::atomic<int> objectsGate{-1};   // -1 not asked yet; 0 scenery alone; 1 loose objects too
 
-bool EngineThread() { return InputDrainThreadId() != 0 && InputDrainThreadId() == GetCurrentThreadId(); }
 void Log(const std::string& line) { lifecycle::Log("preyvr_surface " + line); }
 const char* HandName(Hand hand) { return hand == Hand::left ? "left" : "right"; }
 
@@ -269,8 +268,6 @@ struct HandNow {
     std::uint64_t key = 0;
     bool weapon = false;
 };
-float AngleBetween(float a, float b) { return std::fabs(std::remainder(a - b, 6.2831853f)); }
-
 // The weapon's box as last drawn (the takeover's own sample), carried to this
 // frame's grip: where the controller holds it now, without the correction it was
 // drawn with. Its eight corners and, on a long weapon, the middles of its four
@@ -344,7 +341,7 @@ void Follow(const GameplayPoseFrame& f, HandLane& lane, const HandNow& now, floa
     const long long time = f.tracking.displayTime;
     const float gap = time >= lane.time ? static_cast<float>(time - lane.time) * 1e-9f : -1.0f;
     if (lane.key != now.key || lane.reference != f.referenceGeneration || lane.epoch != f.tracking.epoch ||
-        AngleBetween(f.yaw, lane.yaw) > kMaxTurn || Length(Sub(now.probes.point[0], lane.state.grip)) > kMaxGripJump ||
+        YawDistance(f.yaw, lane.yaw) > kMaxTurn || Length(Sub(now.probes.point[0], lane.state.grip)) > kMaxGripJump ||
         gap < 0 || gap > kMaxGap) {
         Forget(lane);
         return;
@@ -529,7 +526,7 @@ void UpdateImpl(GameplayPoseFrame& frame, bool allowed)
 void UpdateSurfaceStop(GameplayPoseFrame& frame, bool allowed)
 {
     thread_local bool busy = false;
-    if (busy || !EngineThread()) {
+    if (busy || !OnEngineMainThread()) {
         frame.surface = {};
         return;
     }

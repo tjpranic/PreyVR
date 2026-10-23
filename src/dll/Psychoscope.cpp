@@ -1,6 +1,6 @@
 #include "Psychoscope.h"
 #include "EngineAccess.h"
-#include "AimTakeover.h"
+#include "GameplayFrame.h"
 #include "HudBridge.h"
 #include "VrOptionsRuntime.h"
 #include "InputPost.h"
@@ -17,7 +17,7 @@ std::atomic<unsigned long long> sent{0},refused{0};
 std::atomic<bool> fault{false},zone{false};
 DWORD Toggle(std::uintptr_t player){
  __try {
-  if(InputDrainThreadId()==0||InputDrainThreadId()!=GetCurrentThreadId())return ERROR_INVALID_THREAD_ID;
+  if(!OnEngineMainThread())return ERROR_INVALID_THREAD_ID;
   const auto base=PreyBase();
   if(!base||!player)return ERROR_NOT_READY;
   if(std::memcmp(reinterpret_cast<const void*>(base+scope::HandlerRva),scope::HandlerBytes.data(),scope::HandlerBytes.size()))

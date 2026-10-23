@@ -5,6 +5,7 @@
 #include "AimTakeover.h"
 #include "CameraEditHook.h"
 #include "DualSceneStereo.h"
+#include "EnvSwitch.h"
 #include "Logger.h"
 #include "MinHookInit.h"
 #include "NearViewStereo.h"
@@ -383,8 +384,7 @@ void EnsureNearParticleStereo()
 {
     // PREYVR_NEAR_FX=0 (launcher -NearFx 0): leave the particle code untouched,
     // not even hooked.
-    wchar_t value[8]{};
-    if (GetEnvironmentVariableW(L"PREYVR_NEAR_FX", value, 8) > 0 && value[0] == L'0') {
+    if (EnvSwitchOff(L"PREYVR_NEAR_FX")) {
         gEnabled.store(false, std::memory_order_release);
         Log("result=0 detail=disabled_by_environment hooks=0");
         return;

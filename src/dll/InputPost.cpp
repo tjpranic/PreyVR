@@ -123,6 +123,41 @@ bool Enqueue(const std::uint8_t* event)
     return gQueue.Push(event);
 }
 
+// The event a raw key post sends: 0, or 2 when the key has no stable name, 3
+// when the event does not build.
+DWORD BuildRawEvent(int keyId, unsigned int state, int valueMilli,
+                    std::array<std::uint8_t, input::kEventSize>& buffer)
+{
+    const char* const name = input::KeyNameFor(keyId);
+    if (name == nullptr) {
+        // Refused rather than invented: the key name must be stable storage the
+        // refire path can keep, and a caller-supplied string is not.
+        return 2;
+    }
+    input::EventFields fields;
+    // Derived, not assumed: a keyboard key posted as a gamepad event is a pairing
+    // no real device produces, and the listener walk filters on device.
+    fields.device = input::DeviceForKeyId(keyId);
+    fields.state = state;
+    // Carried for every state, not only UI: the field costs nothing on the
+    // paths that ignore it, and omitting it is what made the UI path silent.
+    fields.inputChar = input::InputCharForKeyId(keyId);
+    fields.keyName = name;
+    fields.keyId = keyId;
+    fields.value = static_cast<float>(valueMilli) / 1000.0f;
+    return input::BuildEvent(fields, buffer.data(), buffer.size()) ? 0u : 3u;
+}
+
+// Disarmed rather than retried: a fault in the post means the call target or the
+// event shape is wrong, and repeating it every frame would turn one bad
+// assumption into a crash loop.
+void DisarmAfterFault(const char* detail)
+{
+    gRefused.fetch_add(1, std::memory_order_relaxed);
+    gEnabled.store(false, std::memory_order_release);
+    Log(std::string("result=failed detail=") + detail + " disarmed=1");
+}
+
 } // namespace
 
 void DrainQueuedInput()
@@ -159,12 +194,7 @@ void DrainQueuedInput()
     }
     if(!accepted)return;
     if (!CallPost(gPost, gInput, event.data(), gForce.load(std::memory_order_acquire))) {
-        gRefused.fetch_add(1, std::memory_order_relaxed);
-        // Disarmed rather than retried: a fault here means the call target or the
-        // event shape is wrong, and repeating it every frame would turn one bad
-        // assumption into a crash loop.
-        gEnabled.store(false, std::memory_order_release);
-        Log("result=failed detail=exception_in_post disarmed=1");
+        DisarmAfterFault("exception_in_post");
         return;
     }
     gPosted.fetch_add(1, std::memory_order_relaxed);
@@ -212,27 +242,9 @@ DWORD PostMenuAction(unsigned int action, unsigned long long menuEpoch)
 
 DWORD PostRawInput(int keyId, unsigned int state, int valueMilli)
 {
-    const char* const name = input::KeyNameFor(keyId);
-    if (name == nullptr) {
-        // Refused rather than invented: the key name must be stable storage the
-        // refire path can keep, and a caller-supplied string is not.
-        return 2;
-    }
-    input::EventFields fields;
-    // Derived, not assumed: a keyboard key posted as a gamepad event is a pairing
-    // no real device produces, and the listener walk filters on device.
-    fields.device = input::DeviceForKeyId(keyId);
-    fields.state = state;
-    // Carried for every state, not only UI: the field costs nothing on the
-    // paths that ignore it, and omitting it is what made the UI path silent.
-    fields.inputChar = input::InputCharForKeyId(keyId);
-    fields.keyName = name;
-    fields.keyId = keyId;
-    fields.value = static_cast<float>(valueMilli) / 1000.0f;
-
     std::array<std::uint8_t, input::kEventSize> buffer{};
-    if (!input::BuildEvent(fields, buffer.data(), buffer.size())) {
-        return 3;
+    if (const DWORD built = BuildRawEvent(keyId, state, valueMilli, buffer)) {
+        return built;
     }
     return Enqueue(buffer.data()) ? 0u : 4u;
 }
@@ -257,21 +269,12 @@ DWORD PostRawInputImmediate(int keyId, unsigned int state, int valueMilli)
     if (drain != 0 && thread != drain) {
         return 5;   // wrong thread: refuse rather than post from anywhere
     }
-    const char* const name = input::KeyNameFor(keyId);
-    if (name == nullptr) { return 2; }
-    input::EventFields fields;
-    fields.device = input::DeviceForKeyId(keyId);
-    fields.state = state;
-    fields.inputChar = input::InputCharForKeyId(keyId);
-    fields.keyName = name;
-    fields.keyId = keyId;
-    fields.value = static_cast<float>(valueMilli) / 1000.0f;
     std::array<std::uint8_t, input::kEventSize> buffer{};
-    if (!input::BuildEvent(fields, buffer.data(), buffer.size())) { return 3; }
+    if (const DWORD built = BuildRawEvent(keyId, state, valueMilli, buffer)) {
+        return built;
+    }
     if (!CallPost(gPost, gInput, buffer.data(), gForce.load(std::memory_order_acquire))) {
-        gRefused.fetch_add(1, std::memory_order_relaxed);
-        gEnabled.store(false, std::memory_order_release);
-        Log("result=failed detail=exception_in_immediate_post disarmed=1");
+        DisarmAfterFault("exception_in_immediate_post");
         return 4;
     }
     gPosted.fetch_add(1, std::memory_order_relaxed);

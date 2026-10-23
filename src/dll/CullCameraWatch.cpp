@@ -1,4 +1,5 @@
 #include "CullCameraWatch.h"
+#include "EnvSwitch.h"
 #include "FrameProbe.h"
 #include "SafeMemory.h"
 #include "HookInstall.h"
@@ -637,9 +638,7 @@ void ServiceCullCameraWatch()
         return;
     }
     gStartAttempted.store(true, std::memory_order_release);
-    wchar_t setting[8]{};
-    GetEnvironmentVariableW(L"PREYVR_CULL_WATCH", setting, 8);
-    if (setting[0] == L'0') {
+    if (EnvSwitchOff(L"PREYVR_CULL_WATCH")) {
         Log("result=0 detail=off reason=PREYVR_CULL_WATCH");
         return;
     }

@@ -90,4 +90,13 @@ bool InputPostDrivingThisThread();
 
 unsigned long InputDrainThreadId();
 
+// True on the thread the drain runs on: the engine's main thread
+// (CSystem::Render, CameraEditHook), which the lanes' engine calls need. False
+// until the drain has run once.
+inline bool OnEngineMainThread()
+{
+    const unsigned long drain = InputDrainThreadId();
+    return drain != 0 && drain == GetCurrentThreadId();
+}
+
 } // namespace preyvr::dll

@@ -35,41 +35,12 @@ DWORD StartCommandChannel();
 // `<log directory>/results.txt`. The command file is **truncated once read**, so a
 // command runs once rather than every poll.
 //
-// One verb per line, `#` comments and blank lines ignored:
+// One verb per line, `#` comments and blank lines ignored, e.g. `vr.enable`,
+// `ui.scale 110`, `console <command>` (through the fail-closed allowlist) or
+// `report` (every counter to the result file). docs/TUNING-COMMANDS.md lists
+// the verbs, grouped by who they are for.
 //
-//     observer 1                  frame observer (also initialises MinHook)
-//     xr.runtime <path>           OpenXR runtime manifest; before xr.start
-//     xr.srgb 1                   prefer the sRGB swapchain; before xr.start
-//     xr.start                    begin the session
-//     xr.native 1                 keep Prey's own projection per eye
-//     xr.stereo <ipdmm> <halffov> arm synthetic stereo
-//     xr.submit 1                 submit stereo frames
-//     view.observe 1              install the view seam
-//     view.recenter               set the play-space reference
-//     view.apply 1                head rotation into the game camera
-//     view.position 1             positional 6DoF
-//     near.enable 1               per-eye offset for the near/viewmodel pass
-//     near.halfipd <mm>           half-IPD for that offset
-//     near.zero 1                 zero-delta control: arms every path, moves nothing
-//     hand.mode <0|1|2>           off / passthrough control / apply
-//     hand.joint <index>          which joint's subtree moves
-//     hand.offset <x> <y> <z>     model-space millimetres
-//     hand.right <index>          joint whose subtree the RIGHT controller drives
-//     hand.left <index>           joint whose subtree the LEFT controller drives
-//     hand.calibrate              record where the controllers are now as zero
-//     hand.drive 1                controller-driven instead of a fixed offset
-//     hand.scale <percent>        displacement scale; 100 is one-to-one
-//     hand.character <hex>        restrict to one character instance
-//     weapon.observe 1            capture the equipped weapon's attachment
-//     weapon.offset <x> <y> <z>   model-space millimetres for the mount
-//     weapon.apply 1              write the offset; 0 restores the captured mount
-//     weapon.calibrate            record the controller aim rotation as zero
-//     weapon.rotate 1             weapon rotation follows the aim controller
-//     frame.capture 1             capture each character's render matrix (passive)
-//     console <command>           through the existing fail-closed allowlist
-//     report                      write every counter to the result file
-//
-// A verb that is not on this list is reported as rejected rather than ignored
+// A verb the channel does not know is reported as rejected rather than ignored
 // silently, because a typo that does nothing is indistinguishable from a
 // mechanism that does not work -- a confusion this project has paid for.
 unsigned long long CommandChannelProcessedCount();

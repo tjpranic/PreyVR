@@ -1,13 +1,18 @@
 # Tests
 
-This directory is for deterministic tests that do not require a running game or headset: engine signature gating, captured aim fixtures, DLL fail-closed lifecycle, matrix conventions, asymmetric OpenXR FoV projection, eye-pose composition, coordinate conversion, dead zones, and controller-aim calibration.
+These are deterministic tests that need no running game and no headset. `ctest` runs 93 of them (as of 2026-10-23).
 
-Runtime validation belongs in `docs/TEST_PLAN.md` with its resulting artifacts recorded under `captures/`.
+**What they cover:**
+- **Pure logic:** tests over `preyvr_core` (`src/common`).
+- **DLL sources:** these tests `#include` a `src/dll/*.cpp`, or list it in `SOURCES`, and stub its engine, input and hook boundaries.
+  - They are registered with `preyvr_add_test(... DLL ...)`, which gives them the DLL's lifecycle include and compile defines.
+  - They call file-local names in those modules, so renaming inside a module can break its test.
+- **Fixtures and replays:** the captured aim, wrench-query and interaction-query fixtures, and the offline VR scheme replays in `tools/re/vr_scheme_review`.
+- **Fail-closed load:** `dll_load_fail_closed` and `smoke_log_parser` load the real DLL in an isolated host. With no Prey present, it must refuse and log that it did.
+- **Scripts:** the PowerShell launcher suites (`Launcher*.Tests.ps1`), and `build_doctor`, which checks the installed Prey build when one is present.
 
-Run the complete no-game/no-headset loop with:
+**Shared helpers:** `TestSupport.h` (checks; it has no project includes) and `TestGeometry.h`.
 
-```powershell
-./tools/Run-Headless.ps1
-```
+**Not in ctest:** `test_extract_native_hud.py`. The receipt-pinned extractor it tests needs Python 3.11+ (`hashlib.file_digest`) and pycryptodome.
 
-The fresh loop configures and builds, executes eleven deterministic CTest targets, replays the captured aim, wrench-query, and interaction-query fixtures, validates the frame-observer plan and OpenXR state/file preflight, optionally verifies the installed Prey module architecture, exact hashes, and all 22 compiled signatures, checks the ReGenny notebook, resolves the local DXGI method table using an out-of-process two-pixel swapchain, and loads the real DLL in an isolated fail-closed host whose identity, unpinned lifecycle, log, and default-off exports are checked automatically.
+**Running them:** `./tools/Run-Headless.ps1` runs the whole loop: configure, build, then ctest. Runtime validation is described in `docs/TEST_PLAN.md`.

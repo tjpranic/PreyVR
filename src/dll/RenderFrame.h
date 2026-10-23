@@ -50,17 +50,6 @@ bool TryGetRenderMatrix(unsigned long long character, float out[12]);
 // this is checked rather than assumed.
 bool RenderMatrixBasisIsOrthonormal(unsigned long long character);
 
-// Whether this character's captured sample was a **near** draw, using RenderCHR's
-// own predicate (R-089): `params+0x80 & 0x800000`, or the entity slot's render
-// flags at `character+0xAC8 & 2`. That is the test the function performs before
-// setting `FOB_NEAREST`, so reading it at entry removes the last injector
-// dependency from routine testing.
-//
-// Near is a **render classification, not proof of player identity** -- a held item
-// and a viewmodel are both near. Keep the existing rig and player selection
-// alongside it rather than substituting this for them.
-bool RenderMatrixIsNear(unsigned long long character);
-
 // --- the per-frame transform seam -------------------------------------------
 //
 // **This is what `SetAttAbsoluteDefault` could not be.** That writes an

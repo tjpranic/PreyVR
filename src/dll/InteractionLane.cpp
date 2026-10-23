@@ -4,7 +4,7 @@
 #include "EngineAccess.h"
 #include "preyvr/TextFormat.h"
 
-#include "AimTakeover.h"
+#include "GameplayFrame.h"
 #include "CarryLane.h"
 #include "HeadTrackingHook.h"
 #include "HudBridge.h"

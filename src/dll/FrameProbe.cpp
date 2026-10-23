@@ -1,6 +1,7 @@
 #include "FrameProbe.h"
 #include "Bootstrap.h"
 #include "CullCameraWatch.h"
+#include "EnvSwitch.h"
 #include "HookInstall.h"
 #include "Logger.h"
 #include "PassCameraProbe.h"
@@ -456,9 +457,7 @@ void ServiceFrameProbe()
             return;
         }
         gStartAttempted.store(true, std::memory_order_release);
-        wchar_t setting[8]{};
-        GetEnvironmentVariableW(L"PREYVR_FRAME_PROBE", setting, 8);
-        if (setting[0] == L'0') {
+        if (EnvSwitchOff(L"PREYVR_FRAME_PROBE")) {
             Log("result=0 detail=off reason=PREYVR_FRAME_PROBE");
             return;
         }

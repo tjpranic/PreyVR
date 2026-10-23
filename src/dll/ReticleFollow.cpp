@@ -448,7 +448,6 @@ std::atomic<unsigned> gSizePercent{100}; // options::Defaults(): reticle_size 10
 LatestSnapshot<ReticleTarget> gTarget;
 std::atomic<unsigned long long> gTargets{0}, gTargetHits{0}, gTargetRefused{0}, gShown{0}, gNotShown{0};
 std::atomic<unsigned> gLastTargetMm{0};
-bool FiniteVec(const Vec3& v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
 } // namespace
 
 DWORD SetReticleInWorld(unsigned enabled)
@@ -474,7 +473,7 @@ void PublishReticleTarget(const GameplayPoseFrame& frame, const aim::Sample& sam
     if (!gWorld.load(std::memory_order_acquire)) { return; }
     const auto& right = frame.tracking.hands[static_cast<unsigned>(Hand::right)];
     if (!IsPoseUsable(right.aimPose, right.aimValidity, 200ull * 1000ull * 1000ull) ||
-        !FiniteVec(sample.origin) || !FiniteVec(sample.direction)) {
+        !Finite(sample.origin) || !Finite(sample.direction)) {
         gTarget.Clear();
         gTargetRefused.fetch_add(1, std::memory_order_relaxed);
         return;
@@ -496,7 +495,7 @@ void PublishReticleTarget(const GameplayPoseFrame& frame, const aim::Sample& sam
     target.hit = hit;
     target.ns = MonotonicNanoseconds();
     target.reference = frame.referenceGeneration;
-    if (!FiniteVec(target.point)) {
+    if (!Finite(target.point)) {
         gTarget.Clear();
         gTargetRefused.fetch_add(1, std::memory_order_relaxed);
         return;

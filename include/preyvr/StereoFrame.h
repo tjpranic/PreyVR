@@ -13,11 +13,11 @@
 // about to render with, and what OpenXR says about the two eyes, produce the two
 // cameras that should be rendered instead.
 //
-// This is the payload of the double-render experiment. Keeping it pure means the
+// CameraEditHook builds each eye's camera with it. Keeping it pure means the
 // whole per-eye construction can be checked without a headset, a GPU, or a
-// running Prey -- and it means the hook that eventually executes it is small
-// enough to read in one sitting, which is what you want in code that runs inside
-// someone else's render loop.
+// running Prey -- and it means the hook that executes it is small enough to read
+// in one sitting, which is what you want in code that runs inside someone else's
+// render loop.
 //
 // It deliberately does **not** call CCamera::UpdateFrustum. That is an engine
 // function and this is pure; the caller runs it on each produced camera before

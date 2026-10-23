@@ -47,6 +47,9 @@ inline float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
 inline Vec3 Cross(Vec3 a, Vec3 b) { return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x}; }
 inline float Length(Vec3 a) { return std::sqrt(Dot(a, a)); }
 inline bool Finite(Vec3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
+// How far apart two yaws are, radians, 0..pi; NaN in, NaN out. Not a general
+// wrap: the other yaw wraps differ on NaN and on their thresholds on purpose.
+inline float YawDistance(float a, float b) { return std::fabs(std::remainder(a - b, 2.0f * kPi)); }
 
 // The inverse of a unit quaternion.
 inline Quaternion Conjugate(Quaternion q) { return {-q.x, -q.y, -q.z, q.w}; }

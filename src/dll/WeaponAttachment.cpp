@@ -1,7 +1,7 @@
 #include "preyvr/FiringPosition.h"
 #include "HookInstall.h"
 #include "EngineAccess.h"
-#include "AimTakeover.h"
+#include "GameplayFrame.h"
 #include "ShotRay.h"
 #include "preyvr/AnimIk.h"
 #include <sstream>

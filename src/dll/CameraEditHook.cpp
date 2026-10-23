@@ -157,8 +157,6 @@ bool PrologueMatches(std::uintptr_t address, const std::uint8_t* expected, std::
            std::memcmp(reinterpret_cast<const void*>(address), expected, length) == 0;
 }
 
-// Produces the edited camera for a synthetic stereo eye, composed onto whatever
-// camera the engine was about to render with.
 // ---------------------------------------------------------------------------
 // Eye handoff: which eye is in the frame the render thread is finishing
 // ---------------------------------------------------------------------------

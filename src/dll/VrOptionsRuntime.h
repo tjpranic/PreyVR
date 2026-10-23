@@ -54,6 +54,9 @@ bool PsychoscopeGestureEnabled();
 bool HolstersEnabled();
 bool WristDisplayEnabled();
 unsigned WristSizePercent();
+// The wrist card's width, metres: 18 cm at WRIST SIZE 100. Its height keeps the
+// native wrist texture's aspect.
+inline float WristCardWidthMetres() { return .18f * static_cast<float>(WristSizePercent()) * .01f; }
 bool BeltHintsEnabled();
 std::string VrOptionsReport();
 }

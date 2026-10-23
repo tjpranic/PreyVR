@@ -1,5 +1,6 @@
 #include "CullPrepareGuard.h"
 #include "Bootstrap.h"
+#include "EnvSwitch.h"
 #include "FrameProbe.h"
 #include "HookInstall.h"
 #include "Logger.h"
@@ -406,9 +407,7 @@ void ServiceCullPrepareGuard()
             return;
         }
         gStartAttempted.store(true, std::memory_order_release);
-        wchar_t setting[8]{};
-        GetEnvironmentVariableW(L"PREYVR_CULL_PREPARE", setting, 8);
-        const bool off = setting[0] == L'0';
+        const bool off = EnvSwitchOff(L"PREYVR_CULL_PREPARE");
         if (off) Log("result=0 detail=guard_off reason=PREYVR_CULL_PREPARE");
         SetCullPrepareGuard(off ? 0 : 1);
         return;

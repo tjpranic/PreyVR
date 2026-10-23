@@ -1,5 +1,5 @@
 #include "SwingLane.h"
-#include "AimTakeover.h"
+#include "GameplayFrame.h"
 #include "BodyFollow.h"
 #include "CarryLane.h"
 #include "DebugOverlay.h"
@@ -79,7 +79,6 @@ struct Natives {
     StaminaCheck staminaAvailable = nullptr;
 };
 
-bool EngineThread() { return InputDrainThreadId() != 0 && InputDrainThreadId() == GetCurrentThreadId(); }
 void Log(const std::string& line) { lifecycle::Log("preyvr_swing " + line); }
 
 // Every function called or hooked through a named RVA is one the gate hashes.
@@ -987,7 +986,7 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
 void UpdateSwingLane(const GameplayPoseFrame& frame, bool allowed)
 {
     thread_local bool busy = false;
-    if (busy || !EngineThread()) { return; }
+    if (busy || !OnEngineMainThread()) { return; }
     struct Guard { bool& value; explicit Guard(bool& v) : value(v) { value = true; } ~Guard() { value = false; } } guard(busy);
     UpdateImpl(frame, allowed);
 }

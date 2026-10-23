@@ -12,6 +12,7 @@
 - Immersive reloading
     Right now it just plays the animation. It would be better to allow the player to physically attach and detach weapon ammunition.
 - The wrench tends to hit around the hand area instead of the head of the wrench
+- Focusing on keypads brings the camera *way* too close
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -27,6 +28,7 @@
 
 ### Immersion
 - Fine dextrous finger controls
+    Definitely want this for the glass button pressing jumpscare.
 - Stopping hand -> object interactions from pushing objects through other objects
     e.g. Pressing down on a mug on a desk can push the mug through the desk
 - Leaning over desks/railings

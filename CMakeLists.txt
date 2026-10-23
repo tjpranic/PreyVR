@@ -4,7 +4,7 @@ project(PreyVR LANGUAGES C CXX)
 
 option(PREYVR_BUILD_TESTS "Build deterministic math/unit tests" ON)
 option(PREYVR_BUILD_TOOLS "Build local research helpers" ON)
-option(PREYVR_BUILD_SMOKE_DLL "Build the inert, signature-gated injection smoke DLL" ON)
+option(PREYVR_BUILD_SMOKE_DLL "Build PreyVR.dll, the signature-gated mod, and the tests that compile its sources" ON)
 option(PREYVR_BUILD_OPENXR_LOADER "Package the x64 OpenXR loader for preflight-only bootstrap work" ON)
 option(PREYVR_REQUIRE_GAME_BASELINE "Fail tests when the researched Prey installation is unavailable" OFF)
 set(PREYVR_BUILD_VERSION "0.3.1-static-ik-integration")
@@ -89,8 +89,8 @@ configure_file(
     @ONLY
 )
 
-# Engine-specific state remains in small typed contracts. The only current
-# game-facing target is an inert bootstrap/signature smoke DLL.
+# Engine-specific state remains in small typed contracts. The game-facing
+# target is PreyVR.dll (src/dll), which stays off unless every landmark matches.
 add_library(preyvr_headers INTERFACE)
 target_include_directories(preyvr_headers INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
@@ -175,13 +175,19 @@ endfunction()
 # default preyvr_core, so a test that does not link the core lists what it does.
 # Tools and docs name the executables, so keep TARGET when renaming a test.
 function(preyvr_add_test name source)
-    cmake_parse_arguments(PARSE_ARGV 2 arg "" "TARGET" "SOURCES;INCLUDES;DEFS;LIBS;ARGS")
+    cmake_parse_arguments(PARSE_ARGV 2 arg "DLL" "TARGET" "SOURCES;INCLUDES;DEFS;LIBS;ARGS")
     if(arg_UNPARSED_ARGUMENTS)
         message(FATAL_ERROR "preyvr_add_test(${name}): unexpected arguments: ${arg_UNPARSED_ARGUMENTS}")
     endif()
     set(target preyvr_${name}_tests)
     if(arg_TARGET)
         set(target ${arg_TARGET})
+    endif()
+    # DLL: the test compiles DLL sources, so it gets the DLL's lifecycle include
+    # and defines and builds the same translation unit the DLL ships.
+    if(arg_DLL)
+        list(APPEND arg_INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle")
+        list(APPEND arg_DEFS WIN32_LEAN_AND_MEAN NOMINMAX)
     endif()
     if(NOT DEFINED arg_LIBS)
         set(arg_LIBS preyvr_core)
@@ -224,6 +230,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/PsiMedkit.cpp
         src/dll/AnimIkTakeover.cpp
         src/dll/Bootstrap.cpp
+        src/dll/Exports.cpp
         src/dll/VrMode.cpp
         src/dll/UiGuide.cpp
         src/dll/BindingDump.cpp
@@ -450,80 +457,71 @@ if(PREYVR_BUILD_TESTS)
 
     if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         preyvr_add_test(slot_feedback tests/SlotFeedbackTests.cpp
-            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            DLL
             LIBS preyvr_core gdi32 user32)
         preyvr_add_test(psi_medkit_runtime tests/PsiMedkitRuntimeTests.cpp
-            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            DLL
             LIBS preyvr_core minhook)
         preyvr_add_test(physical_runtime tests/PhysicalRuntimeTests.cpp
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
-            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            DLL
             LIBS preyvr_core minhook)
         preyvr_add_test(contact_lane tests/ContactLaneTests.cpp
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
-            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            DLL
             LIBS preyvr_core)
         preyvr_add_test(surface_stop_lane tests/SurfaceStopLaneTests.cpp
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
-            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            DLL
             LIBS preyvr_core)
         preyvr_add_test(swing_lane tests/SwingLaneTests.cpp
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
-            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            DLL
             LIBS preyvr_core minhook)
         preyvr_add_test(wrench_draw tests/WrenchDrawTests.cpp
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
-            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            DLL
             LIBS preyvr_core minhook)
         preyvr_add_test(wrench_sound tests/WrenchSoundTests.cpp
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
-            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            DLL
             LIBS preyvr_core minhook)
         preyvr_add_test(ui_pointer_dispatch tests/UiPointerTests.cpp TARGET preyvr_ui_pointer_tests
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
-            DEFS WIN32_LEAN_AND_MEAN NOMINMAX)
+            DLL)
         # The VR Options panel, drawn by the real ImGui backend on WARP.
         preyvr_add_test(vr_options_ui tests/VrOptionsUiTests.cpp SOURCES src/dll/VrOptionsUi.cpp
             INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/dll"
-            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            DLL
             LIBS preyvr_core preyvr_imgui d3d11)
         preyvr_add_test(native_wrist tests/NativeWristTests.cpp SOURCES src/dll/NativeWristTexture.cpp
-            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            DLL
             LIBS preyvr_core d3d11 d3dcompiler)
         preyvr_add_test(vr_options_runtime tests/VrOptionsRuntimeTests.cpp
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
-            DEFS WIN32_LEAN_AND_MEAN NOMINMAX)
+            DLL)
 
         preyvr_add_test(inventory_pointer_capture tests/InventoryPointerCaptureTests.cpp
             TARGET preyvr_inventory_capture_tests
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            DLL
             LIBS minhook)
         preyvr_add_test(near_fov_override tests/NearFovOverrideTests.cpp TARGET preyvr_near_fov_tests
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            DLL
             LIBS minhook)
         preyvr_add_test(cull_camera_watch tests/CullCameraWatchTests.cpp
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            DLL
             LIBS minhook)
         preyvr_add_test(frame_probe tests/FrameProbeTests.cpp
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            DLL
             LIBS minhook)
         preyvr_add_test(cull_prepare_guard tests/CullPrepareGuardTests.cpp
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            DLL
             LIBS minhook)
         preyvr_add_test(focus_hold tests/FocusHoldTests.cpp
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
+            DLL
             LIBS preyvr_headers minhook user32)
         preyvr_add_test(controller_prompts tests/ControllerPromptsTests.cpp
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle")
+            DLL)
         preyvr_add_test(hook_install tests/HookInstallTests.cpp
-            DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+            DLL
             LIBS minhook)
         # The offline VR scheme replays: the real MoveLane, AimTakeover, HudBridge and
         # ReticleFollow sources, with the game, input and hook boundaries stubbed.
         foreach(review IN ITEMS scheme aim hud_queue reticle)
             preyvr_add_test(${review}_review tools/re/vr_scheme_review/${review}_review.cpp
-                INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
-                DEFS WIN32_LEAN_AND_MEAN NOMINMAX
+                DLL
                 LIBS preyvr_core minhook)
         endforeach()
 
@@ -542,12 +540,13 @@ if(PREYVR_BUILD_TESTS)
             preyvr_add_test(haptics_contracts tests/HapticsTests.cpp TARGET preyvr_haptics_tests
                 SOURCES src/dll/Haptics.cpp
                 INCLUDES $<TARGET_PROPERTY:openxr_loader,INTERFACE_INCLUDE_DIRECTORIES>
-                DEFS WIN32_LEAN_AND_MEAN NOMINMAX)
+                DLL)
             preyvr_add_test(inventory_swapchain tests/InventorySwapchainTests.cpp
                 SOURCES src/dll/InventorySwapchain.cpp
                 INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/dll"
                     $<TARGET_PROPERTY:openxr_loader,INTERFACE_INCLUDE_DIRECTORIES>
-                DEFS WIN32_LEAN_AND_MEAN NOMINMAX XR_USE_PLATFORM_WIN32 XR_USE_GRAPHICS_API_D3D11
+                DLL
+                DEFS XR_USE_PLATFORM_WIN32 XR_USE_GRAPHICS_API_D3D11
                 LIBS d3d11)
 
             preyvr_add_test(openxr_preflight_files tests/OpenXRPreflightWin32Tests.cpp

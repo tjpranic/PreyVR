@@ -4,7 +4,7 @@
 #include "EngineAccess.h"
 #include "AtomicMax.h"
 
-#include "AimTakeover.h"
+#include "GameplayFrame.h"
 #include "HeadTrackingHook.h"
 #include "HudBridge.h"
 #include "Logger.h"

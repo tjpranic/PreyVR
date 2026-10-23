@@ -1,13 +1,10 @@
-# Source lanes
+# Source
 
-Create code under a lane only after its ownership is known:
+- `dll/`: PreyVR.dll, the mod itself. It holds the bootstrap and its landmark gate, the MinHook detours, the OpenXR session and composition layers, stereo, the gameplay lanes, the VR Options menu and the command channel. It is one flat folder for now; [the 2026-10-22 refactor audit](../docs/REFACTOR-AUDIT-2026-10-22.md) proposes subfolders by subsystem.
+- `common/`: pure logic with no Windows, D3D11, OpenXR or live engine pointers. That covers math, eye-camera construction, IK, hand and body pose, option specs, UI panel fitting, input event encoding and the like. It is built into `preyvr_core` and unit-tested in `tests/`. Its headers are in `include/preyvr/`.
+- `lifecycle/`: the log every module writes through (`lifecycle::Log`).
 
-- `dll/` and `lifecycle/` — module identity, logging, lifecycle, injection boundary, default-off frame observer, and Win32 OpenXR preflight.
-- `graphics/` — DXGI/D3D11 observation, state guards, resource ownership, desktop preservation.
-- `xr/` — OpenXR session, spaces, frame timing, swapchains, and composition.
-- `engine/` — build-gated CryEngine camera/render/input integrations. No raw absolute addresses.
-- `input/` — action mapping, controller pose/aim transforms, haptics, and gameplay hand-off.
-- `ui/` — HUD/menu/viewmodel policy, separate from world stereo.
-- `common/` — pure math, configuration, telemetry schemas, and build identity.
-
-Do not put renderer mutations in the observation callback. The no-op EndScene observer lifecycle proof now passes; the next target is a default-off OpenXR instance/system-only smoke that creates no session or swapchain and always destroys its objects.
+Engine addresses live in three places:
+- `include/preyvr/EngineMap.h`: the landmarks the bootstrap checks at startup, and layouts several modules share.
+- The per-feature `include/preyvr/*Native.h` contract tables.
+- File-local gates inside some `dll/` modules.

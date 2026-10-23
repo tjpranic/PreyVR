@@ -753,7 +753,7 @@ bool ExecuteDualCommand(const std::vector<std::string>& args, std::ostringstream
             << CullPrepareReport();
     } else if (verb == "window.hold") {
         // docs/DESKTOP-WINDOW-2026-10-17.md: Prey runs as though focused. The
-        // launcher sends 1 and minimises the window once state=held is logged.
+        // launcher sends 1 before vr.enable.
         out << "window.hold result=" << (Valued(args) ? SetFocusHold(arg(1, 1)) : 0) << NoValue(args)
             << FocusHoldReport();
     } else if (verb == "xr.hold") {
@@ -1088,10 +1088,9 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         // oversight, and a genuinely stereo reticle needs a mod-drawn one.
         out << "aim.reticle result=" << (Valued(args) ? SetReticleFollowEnabled(arg(1, 1)) : 0) << NoValue(args);
     } else if (verb == "aim.reticleconverge") {
-        // The distance the crosshair marks along the firing ray, in mm. Only
-        // matters once a barrel calibration puts the origin off the eye: until
-        // then reticleOriginMm reads 0 and the setting changes nothing, which is
-        // the honest reading rather than a knob that appears to do something.
+        // The distance the crosshair marks along the firing ray, in mm, when the
+        // scene query is off or finds nothing within range: the VR option
+        // RETICLE FALLBACK DISTANCE (reticle_fallback_mm).
         out << "aim.reticleconverge result="
             << (Valued(args) ? SetReticleConvergenceMillimetres(arg(1, 10000)) : 0)
             << " mm=" << ReticleConvergenceMillimetres();

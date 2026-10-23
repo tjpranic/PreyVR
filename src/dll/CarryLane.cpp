@@ -4,7 +4,7 @@
 #include "EngineAccess.h"
 #include "preyvr/TextFormat.h"
 
-#include "AimTakeover.h"
+#include "GameplayFrame.h"
 #include "Haptics.h"
 #include "HeadTrackingHook.h"
 #include "InteractionLane.h"
@@ -76,10 +76,6 @@ constexpr std::size_t kGetPhysVarsSlot = 0x78;
 constexpr std::uintptr_t kMinMass = 0x1C8, kMaxMass = 0x1CC, kArticulatedScale = 0x1D8;
 constexpr std::uintptr_t kGetPlayerRva = engine::ArkPlayerLayout::getInstanceRva;
 constexpr std::uintptr_t kEntitySystemRva = 0x224DA38;   // gEnv->pEntitySystem
-// The physics queue's per-type struct sizes and payload descriptors (written at
-// start-up by 0xD0D1D0): type 2 (impulse) is 0x38 at +2*4, which is what
-// PhysicalInteractions verifies; type 10 (pe_action_set_velocity) must be 40
-// bytes with no pointed-to payload, or the queued copy would be wrong.
 
 constexpr std::uintptr_t kCarryInInteraction = 0x28;
 constexpr std::uintptr_t kGrabberConstrained = 0x60;
