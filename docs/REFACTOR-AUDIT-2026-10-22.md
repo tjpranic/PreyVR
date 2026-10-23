@@ -29,7 +29,12 @@ This was read-only: five parallel reviews, each covering one slice, with nothing
   - Build passes and 93/93 ctest pass; `render_frame_table` went, `command_channel` is new.
   - The only warnings are the six pre-existing ones. The DLL's 75 export names are unchanged.
   - Tracked files: 71 changed, +505/−2,292. New files: PhysicalLane.h, VerifiedSetting.h, DllTestSupport.h and CommandChannelTests.cpp, about 790 lines, 630 of them tests.
-  - **Not yet worn and not committed.** Every change is behaviour-identical by construction except the four cuts, which remove code that only debug commands reached. It needs the usual smoke check.
+  - **Worn OK on PreyVR-62, and committed by you as `f9cc865`** ("More refactoring").
+- **2026-10-24, the FrameSchedule batch is done (S1).** It follows [the scope](FRAME-SCHEDULE-SCOPE-2026-10-24.md), whose "Done" section lists what moved and where it differs from the plan.
+  - Phases 1-2, the tick lists and the worker thread: **PreyVR-63**.
+  - Phase 3, the CameraEditHook split into MainRenderHook, StereoEyeCamera and EyeRecords: **PreyVR-64**, built on top of 63.
+  - Build passes, 93/93 ctest pass, no new warnings, and the 75 export names are unchanged.
+  - **Worn OK on PreyVR-63 and PreyVR-64 (10-24).** Not yet committed.
 
 **How this relates to [the 10-17 audit](DUPLICATION-AUDIT-2026-10-17.md):**
 - The older audit is still the reference for its items. Its "Constraints that shape every fix" and section F ("don't merge") still apply in full.
@@ -65,6 +70,7 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
 - `GameplayFrame.h` (T1): the struct, `SurfaceOffset`, `TryGet`/`Ensure`, out of AimTakeover.h. **Done 10-23;** see section 3.
 - Then `FrameSchedule.cpp` (T2): four explicit ordered tick lists, in the same order as now, keeping the comments that explain the order.
 - CommandChannel becomes one 5 Hz entry in the worker list.
+- **Done 10-24, worn OK on PreyVR-63/64:** `FrameSchedule.{h,cpp}` and `WorkerThread.{h,cpp}`. aim_review stubs the two gameplay schedule calls instead of the 12 lane and overlay calls.
 - **Not** a polymorphic `ILane`/Feature registry. Lanes differ in thread, hook ownership and enable semantics, and the VR start sequence has documented order and conditional chains (`VrMode.cpp:61, 133-140, 191-195, 227-231`). Every reviewer reached the same verdict.
 
 ### S2. No single "where is my hand, head or body in the world this frame" abstraction
@@ -165,6 +171,7 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
   - `MainFrameHook`, the seam, which becomes one tick list in FrameSchedule
   - `StereoEyeCamera`
   - `EyeRecords`, the single per-eye registry; see S7
+  - **Done 10-24** (PreyVR-64) as `MainRenderHook`, `StereoEyeCamera` and `EyeRecords`. CameraEditHook.h is gone, and its 12 includers use the narrow headers.
 - **AnimIkTakeover:** hook/setters, rig, `DriveHand` (with a `HandDriveIo` struct), arms, and reports.
 - **BodyFollow:** BodyFollow, RoomScaleMove, `phys::Living` (into PhysicsCalls) and BodyFollowDiagnostics.
 - **AimTakeover:** `GameplayFrame` (producer), the gameplay tick list in FrameSchedule, and the ray override.
@@ -172,7 +179,7 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
 
 ### S6. Misleading names
 - **Module names:**
-  - **CameraEditHook** is the main-render seam and scheduler; its own header (17-20) says the name is historical.
+  - **CameraEditHook** is the main-render seam and scheduler; its own header (17-20) says the name is historical. **Done 10-24:** it is now MainRenderHook, with the schedule in FrameSchedule.
   - **AimTakeover** is the gameplay-frame producer and scheduler.
   - **InputPathProbe** is the production input resolver (InputPost.cpp:53-66 needs it).
   - **InventorySwapchain**, `InventorySwapchainApi` and `kInventoryMinWidth` serve 11 layers. `DestroyUnheldSwapchain` is declared in its header but defined in XrSessionHost.
@@ -208,6 +215,7 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
   7. the swap mapping `gSwapEyes ? 1-eye : eye`, written 4 times
 - The content-addressed lookups are correct by design (H-022), and the per-fix edit/restore steps should stay separate (section F). What is worth sharing:
   - `EyeRecords`, which also folds the identical ring searches `FindBuiltEyeByPosition`/`IsDualFrameCentre` (CameraEditHook:674-716) into one tested template;
+    - **Partly done 10-24:** EyeRecords exists, moved verbatim. The two ring searches are still separate; folding them is open.
   - `int SubmissionEye()` in place of the bool;
   - `constexpr stereo::EyeSign(eye)`. The `eye == 0 ? -half : half` convention appears 7 times [V].
 - **The IPD lives in 5 stores, fed from 2 sources.** The world, near pass and markers use the IPD latched at VR start; inventory parallax uses the live runtime IPD each frame. Changing the IPD mid-session would desynchronise them (latent). Moving to one source is T3.
@@ -337,7 +345,9 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
 
 ### T2: one smoke headset run per batch
 - **FrameSchedule batch:** the four tick lists, the worker loop out of CommandChannel, and the CameraEditHook split.
+  - **Done 10-24:** PreyVR-63 (lists and worker) and PreyVR-64 (the split), both worn OK. See [the scope](FRAME-SCHEDULE-SCOPE-2026-10-24.md).
 - **Hands batch:** `HandWorld` (S2), the AnimIk split with `DriveHand`'s parameter struct and the 5 anchor copies routed through `ArmAnchor`, and the AimTakeover and BodyFollow splits.
+  - **Scoped 10-24:** [HANDS-SCOPE-2026-10-24.md](HANDS-SCOPE-2026-10-24.md), with the torso owner (section 4, item 6) and the `nativeEye` rename. Carry and Grenade are left for the throwing redo.
 - **Physics batch:**
   - Finish B6: `EngineEntity.h`, the EngineMap constants, and Grenade on `phys::`.
   - The base+RVA overload of `hook::HookAt` and the atomic `InstallOnce` for the three old installers.
@@ -514,13 +524,10 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
 - **Formatting:** don't mass-reformat the three densely formatted files (VrOptionsRuntime.cpp, Psychoscope.cpp, BodyEquipment.cpp); it would destroy blame. There is no `.clang-format`.
 
 ## 7. Suggested order
-1. **T1 cleanup, with no headset.** **Mostly done 10-23:**
-   - done: the safe dead code, stale comments and READMEs, the CMake option text, and the `DLL` test flag;
-   - open: `DllTestSupport.h`, CommandChannel characterization tests, and the version string (section 4).
+1. **T1 cleanup, with no headset.** **Done 10-23:** the safe dead code, stale comments and READMEs, the CMake option text, the `DLL` test flag, `DllTestSupport.h`, the CommandChannel characterization test, and the version string.
 2. **T1 abstractions:**
-   - done 10-23: `GameplayFrame.h`, `OnEngineMainThread`, `EnvSwitchOff`, `YawDistance` and `Exports.cpp`;
-   - next: `PhysicalLane.h`, then `PlaySpaceMap`/`Placeable`, the remaining small helpers and `VerifiedCvar`;
-   - then the XrSessionHost pure extractions, the options Spec groundwork, and the renames.
-3. **Your decisions in section 4,** then the approved deletions; the hand-rig cut is one smoke run.
-4. **T2 batches,** one headset smoke run each: FrameSchedule, Hands, Physics, XR, UI.
+   - done 10-23: `GameplayFrame.h`, `OnEngineMainThread`, `EnvSwitchOff`, `YawDistance`, `Exports.cpp`, `PhysicalLane.h`, the play-space functions, the recenter checks, the small helpers and `VerifiedSetting`;
+   - open: the XrSessionHost pure extractions, the options Spec groundwork, the renames, and the `log [0|1]` helper.
+3. **Your decisions in section 4,** then the approved deletions. **Done 10-23.**
+4. **T2 batches,** one headset smoke run each: FrameSchedule, Hands, Physics, XR, UI. **FrameSchedule done 10-24, worn OK on PreyVR-63/64.**
 5. **Last:** the folder move and the ARCHITECTURE.md rewrite.

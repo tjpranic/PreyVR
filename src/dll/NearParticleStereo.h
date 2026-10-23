@@ -12,7 +12,7 @@
 // Three hooks, all prologue-gated and only active for DrawNear particles in a
 // stereo frame:
 //   - `SParticleVertexContext::Init` (0x1AFF70), geometry builder: when the
-//     context's camera is a stereo eye CameraEditHook built, it becomes that
+//     context's camera is a stereo eye MainRenderHook built, it becomes that
 //     eye's cyclops before Init and RenderGeometry use it. With both eyes from
 //     one frame the context already carries the cyclops (the frame's head
 //     camera). Either way the Q-Beam's inner beam (a flat-screen bridge authored

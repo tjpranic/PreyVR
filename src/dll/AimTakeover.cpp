@@ -1,23 +1,13 @@
 #include "AimTakeover.h"
 #include "HookInstall.h"
 #include "EngineAccess.h"
-#include "ArmsLane.h"
-#include "WristLane.h"
+#include "FrameSchedule.h"
 #include "SceneQuery.h"
 #include "ShotRay.h"
-#include "PhysicalInteractions.h"
-#include "ContactLane.h"
-#include "SurfaceStopLane.h"
-#include "SwingLane.h"
 #include "Haptics.h"
-#include "BodyEquipment.h"
-#include "Psychoscope.h"
 #include "PsiMedkit.h"
 #include "WeaponAttachment.h"
 #include "DebugOverlay.h"
-#include "InteractionLane.h"
-#include "CarryLane.h"
-#include "GrenadeLane.h"
 #include "preyvr/AnimIk.h"
 #include "MinHookInit.h"
 #include "preyvr/LatestSnapshot.h"
@@ -292,22 +282,11 @@ void __fastcall UpdateCachedRayWithTakeover(void* player)
         !std::isfinite(frame.yaw)) { gGameplayFrame.Clear(); return; }
     // IK must never reread the mutable cached origin below.
     SolveTwoHandedFrame(frame,haveTracking);
-    // Before publishing: the takeover draws each hand where this puts it.
-    UpdateSurfaceStop(frame,haveTracking&&gEnabled.load());
+    // The frame's stages and then its lanes, in order (FrameSchedule.cpp).
+    schedule::PrepareGameplayFrame(frame,haveTracking&&gEnabled.load());
     frame.publishedNs = MonotonicNanoseconds();
     gGameplayFrame.Publish(frame);
-    UpdatePsiMedkit(frame,haveTracking&&gEnabled.load());
-    UpdatePsychoscopeGesture(frame,haveTracking&&gEnabled.load());
-    UpdateBodyEquipment(frame,haveTracking&&gEnabled.load());
-    // Before contact: a strike tells contact what not to push.
-    UpdateSwingLane(frame,haveTracking&&gEnabled.load());
-    UpdateContactLane(frame,haveTracking&&gEnabled.load());
-    UpdateInteractionLane(frame,haveTracking&&gEnabled.load());
-    UpdateCarryLane(frame,haveTracking&&gEnabled.load());
-    UpdateGrenadeLane(frame,haveTracking&&gEnabled.load());
-    UpdateArmsLane(frame,haveTracking&&gEnabled.load());
-    UpdateWristLane(frame,haveTracking&&gEnabled.load());
-    DebugOverlayGameFrame(frame,haveTracking);
+    schedule::TickGameplayLanes(frame,haveTracking&&gEnabled.load(),haveTracking);
     if (!haveTracking) { gRejNoPose.fetch_add(1); return; }
     // A frame whose play-space yaw is unknown cannot aim, and must not silently
     // aim with the camera-relative yaw the body-yaw mode exists to replace.

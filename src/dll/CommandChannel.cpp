@@ -10,7 +10,9 @@
 #include "DebugOverlay.h"
 #include "preyvr/DebugOverlayScene.h"
 #include "NearFovOverride.h"
-#include "CameraEditHook.h"
+#include "MainRenderHook.h"
+#include "StereoEyeCamera.h"
+#include "EyeRecords.h"
 #include "ConsoleBridgeWin32.h"
 #include "CullCameraWatch.h"
 #include "CullPrepareGuard.h"
@@ -70,7 +72,6 @@ void Log(const std::string& line)
     lifecycle::Log("preyvr_channel " + line);
 }
 
-std::atomic<bool> gRunning{false};
 std::atomic<unsigned long long> gProcessed{0};
 std::atomic<unsigned long long> gRejected{0};
 
@@ -1283,71 +1284,44 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
     gProcessed.fetch_add(1, std::memory_order_relaxed);
 }
 
-DWORD WINAPI PollThread(LPVOID)
+} // namespace
+
+void LogCommandChannelStarted()
+{
+    Log("result=0 detail=started commands=\"" + CommandPath().string() +
+        "\" results=\"" + ResultPath().string() + "\"");
+}
+
+void ServiceCommandFile()
 {
     const auto commands = CommandPath();
     const auto results = ResultPath();
-    Log("result=0 detail=started commands=\"" + commands.string() +
-        "\" results=\"" + results.string() + "\"");
-    while (gRunning.load(std::memory_order_acquire)) {
-        // Once, as soon as the module is pinned: VR or not (CullCameraWatch.h).
-        // The probe also writes its finished windows here, off the game threads.
-        ServiceCullCameraWatch();
-        ServiceFrameProbe();
-        ServiceCullPrepareGuard();
-        TickVrMode();
-        ServiceVrOptions();
-        ServiceFocusHold();
-        ServiceControllerPrompts();
-        // Keys and startup progress are serviced at 50 Hz; disk polling stays 5 Hz.
-        static unsigned poll=0;
-        if (++poll%10!=0) { Sleep(20); continue; }
-        std::error_code error;
-        if (std::filesystem::exists(commands, error) &&
-            std::filesystem::file_size(commands, error) > 0) {
-            std::vector<std::string> lines;
-            {
-                std::ifstream input(commands);
-                std::string line;
-                while (std::getline(input, line)) {
-                    lines.push_back(line);
-                }
+    std::error_code error;
+    if (std::filesystem::exists(commands, error) &&
+        std::filesystem::file_size(commands, error) > 0) {
+        std::vector<std::string> lines;
+        {
+            std::ifstream input(commands);
+            std::string line;
+            while (std::getline(input, line)) {
+                lines.push_back(line);
             }
-            // Truncate **before** executing, so a command that crashes or hangs
-            // is not replayed on the next poll and on every poll after it.
-            { std::ofstream clear(commands, std::ios::trunc); }
-
-            std::ostringstream out;
-            for (const std::string& line : lines) {
-                const auto args = Split(line);
-                if (args.empty() || args[0].empty() || args[0][0] == '#') {
-                    continue;
-                }
-                Execute(args, out);
-                out << '\n';
-            }
-            std::ofstream(results, std::ios::trunc) << out.str();
         }
-        Sleep(20);
-    }
-    return 0;
-}
+        // Truncate **before** executing, so a command that crashes or hangs
+        // is not replayed on the next poll and on every poll after it.
+        { std::ofstream clear(commands, std::ios::trunc); }
 
-} // namespace
-
-DWORD StartCommandChannel()
-{
-    if (gRunning.exchange(true, std::memory_order_acq_rel)) {
-        return 0;   // already running
+        std::ostringstream out;
+        for (const std::string& line : lines) {
+            const auto args = Split(line);
+            if (args.empty() || args[0].empty() || args[0][0] == '#') {
+                continue;
+            }
+            Execute(args, out);
+            out << '\n';
+        }
+        std::ofstream(results, std::ios::trunc) << out.str();
     }
-    const HANDLE thread = CreateThread(nullptr, 0, &PollThread, nullptr, 0, nullptr);
-    if (thread == nullptr) {
-        gRunning.store(false, std::memory_order_release);
-        Log("result=failed detail=create_thread");
-        return 1;
-    }
-    CloseHandle(thread);
-    return 0;
 }
 
 } // namespace preyvr::dll

@@ -79,7 +79,7 @@ Builder BuilderFromReturnRva(std::uint32_t rva);
 //   - geometry: RenderGeometry subtracts the head, the cyclops, which is already
 //     the weapon's convention -- nothing to correct. Only the Q-Beam bridge
 //     (below) still has to be applied; its context camera is recognised as the
-//     frame's centre (CameraEditHook IsDualFrameCentre).
+//     frame's centre (EyeRecords IsDualFrameCentre).
 //   - sprites: the vertices are built once (ComputeVertices jobs, kicked by the
 //     3D engine before either submission) and both submissions draw the same
 //     buffer, so they cannot be moved per eye. The renderer's own
@@ -108,7 +108,7 @@ inline constexpr std::uint32_t kObjectNearest = 0x800000;
 // render object.
 bool KeepNearProjection(bool enabled, bool perEyeSubmission, std::uint32_t objectFlags);
 
-// One stereo eye as CameraEditHook built it: where its camera ended up and the
+// One stereo eye as MainRenderHook built it: where its camera ended up and the
 // cyclops camera it was offset from.
 struct EyeCamera {
     Vec3 position;

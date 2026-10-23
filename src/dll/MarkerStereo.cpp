@@ -1,6 +1,6 @@
 #include "MarkerStereo.h"
 
-#include "CameraEditHook.h"
+#include "MainRenderHook.h"
 #include "EngineAccess.h"
 #include "EnvSwitch.h"
 #include "HookInstall.h"

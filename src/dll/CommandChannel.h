@@ -22,14 +22,18 @@
 // ignores everything else. Console commands still pass through the existing
 // console allowlist, so this adds no reach there.
 //
-// **Nothing happens without a file.** The poll thread starts after the landmark
-// gate has passed, so an unsupported build never gets a channel, and it does
-// nothing at all until someone writes a command file.
+// **Nothing happens without a file.** The worker thread that services it
+// (WorkerThread.h) starts after the landmark gate has passed, so an unsupported
+// build never gets a channel, and it does nothing at all until someone writes a
+// command file.
 namespace preyvr::dll {
 
-// Starts the poll thread. Called from the bootstrap once the build is verified.
-// Safe to call twice.
-DWORD StartCommandChannel();
+// The worker thread's two calls. The first, once as it starts, logs
+// `preyvr_channel result=0 detail=started` with both paths; the launcher waits
+// for that line. The second, at 5 Hz, reads, truncates and executes the command
+// file and writes the result file.
+void LogCommandChannelStarted();
+void ServiceCommandFile();
 
 // Commands are read from `<log directory>/commands.txt` and results written to
 // `<log directory>/results.txt`. The command file is **truncated once read**, so a

@@ -299,7 +299,7 @@ constexpr std::array<std::uint8_t, 33> kRendererSetCamera = {
 
 // CCamera::UpdateFrustum: corners, the six planes at +0x10C, the plane sign
 // tables and the cached position at +0x230. 20 bytes; unique. Already gated
-// privately by CameraEditHook; listed here so the startup gate covers it.
+// privately by MainRenderHook; listed here so the startup gate covers it.
 constexpr std::array<std::uint8_t, 20> kCameraUpdateFrustum = {
     0x48, 0x8B, 0xC4, 0x55, 0x53, 0x48, 0x8D, 0x68,
     0xA1, 0x48, 0x81, 0xEC, 0xF8, 0x00, 0x00, 0x00,

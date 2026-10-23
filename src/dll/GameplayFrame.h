@@ -2,7 +2,8 @@
 
 // The per-frame input every gameplay lane is handed: one XR tracking sample
 // plus the engine's own camera and play-space yaw for the same frame. The aim
-// hook (AimTakeover.cpp) produces and publishes it, then runs the lanes on it.
+// hook (AimTakeover.cpp) produces and publishes it, then hands it to the
+// gameplay schedule (FrameSchedule.h), which runs the lanes on it.
 #include "XrInput.h"
 #include "preyvr/SurfaceStop.h"
 #include "preyvr/TwoHandedAim.h"

@@ -5,11 +5,9 @@
 
 
 #include "Bootstrap.h"
-#include "ConsoleBridgeWin32.h"
-#include "FrameCaptureWin32.h"
 #include "FrameProbe.h"
+#include "FrameSchedule.h"
 #include "Logger.h"
-#include "XrSessionHost.h"
 #include "preyvr/FrameObserver.h"
 
 #include <MinHook.h>
@@ -51,17 +49,9 @@ void __fastcall ObserveEndRendererScene(void* renderer)
         gMilestoneRenderer.store(renderer, std::memory_order_relaxed);
     }
 
-    // Both return on a single atomic load when nothing is armed, so the
-    // observer stays as close to free as it was. They run before the original
-    // so a console command lands at a frame boundary, and so a capture reads the
-    // backbuffer this callback was invoked for.
-    ServiceConsoleQueue();
-    ObserveXrBackbuffer(renderer);
-    ServiceFrameCapture(renderer, count);
-    // The XR frame runs here because this is the render thread and the only
-    // place Prey's backbuffer is valid. Returns on one atomic load when no
-    // session is running.
-    ServiceXrFrame(renderer);
+    // The console queue, frame capture and XR frame (FrameSchedule.cpp), before
+    // the original.
+    schedule::TickRenderThread(renderer, count);
 
     const EndRendererSceneFn original = gOriginal.load(std::memory_order_acquire);
     if (original != nullptr) {

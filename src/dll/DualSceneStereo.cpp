@@ -3,7 +3,8 @@
 #include "HookInstall.h"
 #include "EngineAccess.h"
 
-#include "CameraEditHook.h"
+#include "MainRenderHook.h"
+#include "EyeRecords.h"
 #include "FrameCaptureWin32.h"
 #include "XrSessionHost.h"
 #include "FrameObserverHook.h"

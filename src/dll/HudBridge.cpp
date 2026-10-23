@@ -2,7 +2,7 @@
 #include "SafeMemory.h"
 #include "EngineAccess.h"
 #include "VrOptionsRuntime.h"
-#include "CameraEditHook.h"
+#include "MainRenderHook.h"
 #include "XrSessionHost.h"
 #include "InventoryPointerCapture.h"
 

@@ -20,13 +20,15 @@
 #include "DllTestSupport.h"
 #include "TestSupport.h"
 #include <tlhelp32.h>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
 PREYVR_TEST_CAPTURE_LOG()
 PREYVR_TEST_STUB_MINHOOK()
-// The logger's other entry points. Nothing here reads the command file.
+// The logger's other entry points. The command file test uses this directory.
 std::filesystem::path preyvr::lifecycle::LogPath()
 {
     return std::filesystem::temp_directory_path() / L"PreyVR-command-channel-tests" / L"PreyVR.log";
@@ -56,7 +58,7 @@ std::string InventoryLayerReports()
     return HudLayerReport() + " layerFrames=" + std::to_string(InventoryLayerFrameCount());
 }
 
-// One line, as the poll thread runs it.
+// One line, as the command file step runs it.
 std::string Run(const char* line)
 {
     std::ostringstream out;
@@ -521,7 +523,7 @@ void TestReport()
     Require(at == reply.size(), "the report ends with the channel's counters");
     Require(gLines.size() == 1 && gLines.back() == "preyvr_report " + reply, "and is logged as it is replied");
 
-    // The log takes the whole reply stream so far, as the poll thread builds one
+    // The log takes the whole reply stream so far, as the command file step builds one
     // for every line of a command file -- not only the report.
     std::ostringstream batch;
     batch << "ui.text result=0 cm=140\n";
@@ -543,6 +545,40 @@ void TestLoggedReplies()
             "xr.timing logs its timing");
 }
 
+// The worker thread's two calls into the channel. The start line is the one
+// Start-PreyVR.ps1 waits for before it writes its startup commands; the command
+// file is read whole, truncated before anything runs, and answered one line per
+// command, with comments and blank lines skipped.
+void TestCommandFile()
+{
+    gLines.clear();
+    LogCommandChannelStarted();
+    Require(gLines.size() == 1 && gLines.back().rfind("preyvr_channel result=0 detail=started commands=\"", 0) == 0,
+            "the worker's start line is the one the launcher waits for");
+
+    const auto commands = CommandPath();
+    const auto results = ResultPath();
+    std::error_code error;
+    std::filesystem::create_directories(commands.parent_path(), error);
+    std::filesystem::remove(results, error);
+    std::ofstream(commands, std::ios::trunc) << "# a comment\n\n  bogus\nbogus two\n";
+    const auto rejectedBefore = gRejected.load();
+    ServiceCommandFile();
+    Require(std::filesystem::file_size(commands, error) == 0, "the command file is truncated");
+    std::ostringstream text;
+    text << std::ifstream(results).rdbuf();
+    const std::string reply = "result=rejected verb=\"bogus\" detail=not_a_channel_verb_and_not_allowlisted\n";
+    Require(text.str() == reply + reply, "one reply per command, comments and blank lines skipped");
+    Require(gRejected.load() == rejectedBefore + 2, "and each is counted");
+
+    // An empty file runs nothing and leaves the last results in place.
+    ServiceCommandFile();
+    std::ostringstream again;
+    again << std::ifstream(results).rdbuf();
+    Require(again.str() == reply + reply && gRejected.load() == rejectedBefore + 2, "an empty command file is left alone");
+    std::filesystem::remove(results, error);
+}
+
 } // namespace
 
 int main()
@@ -554,6 +590,7 @@ int main()
     TestTable();
     TestReport();
     TestLoggedReplies();
+    TestCommandFile();
 
     Require(GetModuleHandleW(L"openxr_loader.dll") == nullptr, "no command loaded the OpenXR loader");
     Require(preyvr::test::gMinHookCalls == 0, "no command tried to install a hook");

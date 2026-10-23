@@ -261,7 +261,9 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/InventorySwapchain.cpp
         src/dll/UiPointer.cpp
         src/dll/InventoryPointerCapture.cpp
-        src/dll/CameraEditHook.cpp
+        src/dll/MainRenderHook.cpp
+        src/dll/StereoEyeCamera.cpp
+        src/dll/EyeRecords.cpp
         src/dll/ConsoleBridgeWin32.cpp
         src/dll/CullCameraWatch.cpp
         src/dll/CullPrepareGuard.cpp
@@ -273,6 +275,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/DllMain.cpp
         src/dll/FrameCaptureWin32.cpp
         src/dll/FrameObserverHook.cpp
+        src/dll/FrameSchedule.cpp
         src/dll/HeadTrackingHook.cpp
         src/dll/HudBridge.cpp
         src/dll/HotkeyBridge.cpp
@@ -282,6 +285,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/MinHookInit.cpp
         src/dll/MoveLane.cpp
         src/dll/CommandChannel.cpp
+        src/dll/WorkerThread.cpp
         src/dll/NearFovOverride.cpp
         src/dll/NearViewStereo.cpp
         src/dll/NearParticleStereo.cpp

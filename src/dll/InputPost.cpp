@@ -1,7 +1,7 @@
 #include "InputPost.h"
 #include "VrOptionsRuntime.h"
 
-#include "CameraEditHook.h"
+#include "MainRenderHook.h"
 #include "InputPathProbe.h"
 #include "Logger.h"
 #include "HudBridge.h"

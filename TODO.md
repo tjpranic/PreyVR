@@ -2,8 +2,13 @@
 
 ## TODO
 
+### Controls
+- The X to transfer junk in the recycler doesn't work
+- The movement stoppage bug is still there
+
 ### Graphics
-- Better anti-aliasing
+- Stuff looks a little blurry
+    Might want to increase the resolution
 
 ### UX/Game Feel
 - Rotate to face direction
@@ -22,6 +27,8 @@
     Low-hanging fruit like dead code removal, renaming and de-duplication should be prioritised for the first pass. Next should be low-risk refactors that involve refactoring code that can verified with just tests and no VR headset runs.
     Code should also be reorganized and restructured to be more understandable, where possible.
     One thing I'm particularly concerned about is 1. bad abstractions and 2. logic that should be abstracted but isn't. A lot of hyper-focused work has been done on various issues that may leave similar logic unconnected and ungeneralized when they ought to be.
+- Restructuring
+    Related source files should be grouped with directories.
 - Optimization
     The mod is starting to lag a bit due to all the feature work. Two types of optimizations are needed. Big O optimization of code and actual targeted optimization of bottlenecks (this will require instrumentation). Will need to look for quick wins on both, if any.
 - Tuning parameter cleanup
@@ -47,6 +54,7 @@
     It makes them hard to see. They need to be moved a little closer in.
 - The hand lasers start outside of player hands
     They seem to begin out of nowhere. Something like a fade in along the length (like when the laser fades out in menus when it's not hitting a surface) would make them look a bit nicer.
+    The lasers also render over the top of everything.
 
 ### VR Options Menu
 - Have bindings section let you change your bindings

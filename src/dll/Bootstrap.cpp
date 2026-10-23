@@ -3,10 +3,10 @@
 
 #include "FrameObserverHook.h"
 #include "Logger.h"
-#include "CommandChannel.h"
 #include "OpenXRPreflightWin32.h"
 #include "RuntimeSnapshotWin32.h"
 #include "Version.h"
+#include "WorkerThread.h"
 #include "preyvr/EngineMap.h"
 
 #include <bcrypt.h>
@@ -218,10 +218,11 @@ DWORD RunBootstrap(HMODULE self)
                << " action=none";
     lifecycle::Log(openxrLine.str());
 
-    // The command channel starts only after the landmark gate has passed, so an
-    // unsupported build never gets one. It then does nothing until someone
-    // writes a command file, which is what keeps "always started" acceptable.
-    if (StartCommandChannel() == 0) {
+    // The worker thread, and with it the command channel, starts only after the
+    // landmark gate has passed, so an unsupported build never gets one. The
+    // channel then does nothing until someone writes a command file, which is
+    // what keeps "always started" acceptable.
+    if (StartWorkerThread() == 0) {
         lifecycle::Log("preyvr_channel result=0 detail=armed");
     }
 

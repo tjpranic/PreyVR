@@ -3,7 +3,7 @@
 #include "EngineAccess.h"
 
 #include "AimTakeover.h"
-#include "CameraEditHook.h"
+#include "EyeRecords.h"
 #include "DualSceneStereo.h"
 #include "EnvSwitch.h"
 #include "Logger.h"

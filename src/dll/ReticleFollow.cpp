@@ -6,7 +6,7 @@
 #include "HudLayer.h"
 
 #include "XrSessionHost.h"
-#include "CameraEditHook.h"
+#include "MainRenderHook.h"
 #include "AimTakeover.h"
 #include "HeadTrackingHook.h"
 #include "Logger.h"

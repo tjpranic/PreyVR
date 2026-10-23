@@ -11,7 +11,7 @@
 // The per-eye projection of one stereo frame: what OpenXR says about each eye's
 // frustum, expressed in the fields Prey's CCamera renders with, and back again.
 //
-// CameraEditHook builds each eye's camera with it. Keeping it pure means the
+// StereoEyeCamera builds each eye's camera with it. Keeping it pure means the
 // whole per-eye construction can be checked without a headset, a GPU, or a
 // running Prey -- and it means the hook that executes it is small enough to read
 // in one sitting, which is what you want in code that runs inside someone else's
@@ -20,7 +20,7 @@
 // It deliberately does **not** call CCamera::UpdateFrustum. That is an engine
 // function and this is pure; the caller runs it on each produced camera before
 // the bytes reach the game. Skipping it leaves the cached planes describing the
-// previous camera -- see CameraEditHook for how that is sequenced.
+// previous camera -- see MainRenderHook for how that is sequenced.
 namespace preyvr::stereoframe {
 
 inline constexpr std::size_t kCameraSize = engine::CameraLayout::size;

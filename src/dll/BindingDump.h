@@ -13,7 +13,7 @@
 namespace preyvr::dll {
 
 void RequestBindingDump(bool allKeys);
-// Main thread, once per rendered frame (CameraEditHook, beside the lanes).
+// Main thread, once per rendered frame (FrameSchedule.cpp, beside the lanes).
 void ServiceBindingDump();
 
 // **Prey's own weapon wheel is open**: its `focusmode` action map is enabled

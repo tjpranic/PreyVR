@@ -2,7 +2,7 @@
 
 #include "HeadTrackingHook.h"
 
-#include "CameraEditHook.h"
+#include "MainRenderHook.h"
 #include "ConsoleBridgeWin32.h"
 #include "Logger.h"
 #include "XrSessionHost.h"

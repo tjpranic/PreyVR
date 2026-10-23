@@ -4,7 +4,8 @@
 #include "EngineAccess.h"
 #include "MinHookInit.h"
 
-#include "CameraEditHook.h"
+#include "MainRenderHook.h"
+#include "EyeRecords.h"
 #include "Logger.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/StereoCamera.h"
@@ -258,7 +259,7 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
     // Which eye this VIEW-INFO belongs to, resolved from its own camera.
     //
     // **Not `LastRenderedEye()`.** That is a mutable game-thread global, and
-    // CameraEditHook.h says in its own words that the game and render threads
+    // EyeRecords.h says in its own words that the game and render threads
     // run about a frame apart, so a view-info queued earlier can be packed
     // while the global already names the next eye. Every tag on that path is
     // individually valid, which is exactly why `nearNoEye`, `nearRefused`,

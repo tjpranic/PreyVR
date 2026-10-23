@@ -35,7 +35,7 @@ unsigned ControllerPromptsEnabled();
 // its readback, sets it again if anything else clears it, and logs the
 // frame check's corrections.
 void ServiceControllerPrompts();
-// Prey's main thread, once a frame after the input drains (CameraEditHook's
+// Prey's main thread, once a frame after the input drains (MainRenderHook's
 // CSystem::Render detour). While this lane's 1 is in force: keeps the menus on
 // the pad's scheme. Gated on the setter's, callback's and tracker's bytes; does
 // nothing otherwise.

@@ -18,7 +18,7 @@
 // does), and its sound (Play_Player_Unequip) plays at once. A lowered wrench
 // (EMP, friendly NPCs) keeps Prey's animated stow.
 namespace preyvr::dll {
-// Prey's main thread, once a frame (CameraEditHook's CSystem::Render detour):
+// Prey's main thread, once a frame (MainRenderHook's CSystem::Render detour):
 // gates and installs the hook the first time, then finishes the selections it
 // skipped, each once a whole frame has passed. The hook acts only on this thread.
 void ServiceWrenchDrawFrame();

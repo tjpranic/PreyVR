@@ -4,7 +4,9 @@
 #include "Bootstrap.h"
 #include "EngineAccess.h"
 
-#include "CameraEditHook.h"
+#include "MainRenderHook.h"
+#include "StereoEyeCamera.h"
+#include "EyeRecords.h"
 #include "XrSessionHost.h"
 #include "ConsoleBridgeWin32.h"
 #include "FrameCaptureWin32.h"
@@ -147,7 +149,7 @@ extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetSubmittedConsoleCommandCoun
     return preyvr::dll::SubmittedConsoleCommandCount();
 }
 
-// The CSystem::Render hook (CameraEditHook.h): 0 unavailable, 1 ready, 2 armed
+// The CSystem::Render hook (MainRenderHook.h): 0 unavailable, 1 ready, 2 armed
 // (stereo is editing the camera each frame), 3 failed.
 extern "C" __declspec(dllexport) DWORD PreyVR_GetCameraEditStatus()
 {
