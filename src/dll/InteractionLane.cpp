@@ -566,7 +566,7 @@ void UpdateInteractionLane(const GameplayPoseFrame& frame, bool tracking)
     if (gFilterReset.exchange(false)) { gFilter.Reset(); }
     const auto& left = frame.tracking.hands[static_cast<unsigned>(Hand::left)];
     UsePointer pointer{};
-    if (gLeftHand.load() && tracking && frame.cameraCentreValid && frame.headYawUsable && !(frame.referenceGeneration & 1)) {
+    if (gLeftHand.load() && tracking && frame.cameraCentreValid && frame.headYawUsable && !stereo::Recentering(frame.referenceGeneration)) {
         auto ray = psi::BuildRay(psi::Mode::LeftController, frame.yaw, frame.cameraCentre, frame.tracking.head,
                                  left.aimPose, left.aimValidity);
         // From where the hand is drawn: a hand held back by glass or a wall
@@ -619,13 +619,10 @@ void UpdateInteractionLane(const GameplayPoseFrame& frame, bool tracking)
             // Engine world -> the app's OpenXR space (the inverse of what the
             // controller pose went through), then OpenXR yaw/pitch: -Z forward,
             // +Y up, yaw positive to the left.
-            const Quaternion yaw = stereo::YawQuaternion(frame.yaw);
-            const Quaternion toXr = stereo::kOpenXrToEngine;
-            const Vec3 x = Rotate(Quaternion{-toXr.x, -toXr.y, -toXr.z, toXr.w},
-                                  Rotate(Quaternion{-yaw.x, -yaw.y, -yaw.z, yaw.w}, d));
+            const Vec3 x = stereo::EngineDirToTracking(d, frame.yaw);
             const float h = std::sqrt(x.x * x.x + x.z * x.z);
-            f.yawDeg = std::atan2(-x.x, -x.z) * 57.29578f;
-            f.pitchDeg = std::atan2(x.y, h) * 57.29578f;
+            f.yawDeg = std::atan2(-x.x, -x.z) * kDegreesPerRadian;
+            f.pitchDeg = std::atan2(x.y, h) * kDegreesPerRadian;
         }
         f.ns = MonotonicNanoseconds();
         std::lock_guard lock(gFindMutex);

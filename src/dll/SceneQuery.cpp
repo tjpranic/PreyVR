@@ -79,7 +79,7 @@ void QueryAimScene(const GameplayPoseFrame& frame,aim::Sample& sample){
     if(result){sample.sceneDistance=-1;++refused;
         // Transient lack of player/physics or wrong thread can recover. Bad ABI,
         // malformed output or access faults remain disarmed for this process.
-        if(result!=ERROR_NOT_READY&&result!=ERROR_INVALID_THREAD_ID)fault=true;
+        if(!TransientEngineError(result))fault=true;
     }
 }
 bool QueryDebugRay(const GameplayPoseFrame& frame,Vec3 origin,Vec3 direction,scene::Hit& hit){
@@ -90,7 +90,7 @@ bool QueryDebugRay(const GameplayPoseFrame& frame,Vec3 origin,Vec3 direction,sce
     if(busy)return false;
     busy=true;const auto result=Query(frame,origin,direction,scene::Range,hit);busy=false;
     if(result){lastError=result;++refused;
-        if(result!=ERROR_NOT_READY&&result!=ERROR_INVALID_THREAD_ID)fault=true;
+        if(!TransientEngineError(result))fault=true;
         hit={};hit.distance=-1;
     }
     return result==ERROR_SUCCESS;
@@ -106,7 +106,7 @@ bool QuerySegment(const GameplayPoseFrame& frame,Vec3 a,Vec3 b,scene::Hit& hit){
     if(busy)return false;
     busy=true;const auto result=Query(frame,a,{d.x/length,d.y/length,d.z/length},length,hit);busy=false;
     if(result){lastError=result;++refused;
-        if(result!=ERROR_NOT_READY&&result!=ERROR_INVALID_THREAD_ID)fault=true;
+        if(!TransientEngineError(result))fault=true;
         hit={};hit.distance=-1;
     }
     return result==ERROR_SUCCESS;
@@ -127,7 +127,7 @@ bool QueryObjectsBetween(const GameplayPoseFrame& frame,Vec3 a,Vec3 b,void* skip
     const auto result=Query(frame,a,{d.x/length,d.y/length,d.z/length},length,hit,objectTypes,skip);
     busy=false;
     if(result){lastError=result;++refused;
-        if(result!=ERROR_NOT_READY&&result!=ERROR_INVALID_THREAD_ID)fault=true;
+        if(!TransientEngineError(result))fault=true;
         hit={};hit.distance=-1;
     }
     return result==ERROR_SUCCESS;

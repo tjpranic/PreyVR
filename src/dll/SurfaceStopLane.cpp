@@ -10,6 +10,7 @@
 #include "InputPost.h"
 #include "Logger.h"
 #include "PhysicalInteractions.h"
+#include "PhysicalLane.h"
 #include "PhysicsCalls.h"
 #include "SceneQuery.h"
 #include "XrInput.h"
@@ -101,14 +102,6 @@ const char* MetName(Met m)
     }
     return "unread";
 }
-std::uintptr_t VtableOf(const void* entity)
-{
-    __try {
-        return entity ? *reinterpret_cast<const std::uintptr_t*>(entity) : 0;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return 0;
-    }
-}
 // Each object met is weighed once a frame.
 struct Seen { const void* collider = nullptr; Met met = Met::scenery; float mass = 0; };
 std::array<Seen, 16> seen{};
@@ -119,7 +112,7 @@ Seen Classify(const Objects& o, const void* collider)
         if (seen[i].collider == collider) { return seen[i]; }
     }
     Seen s{collider, Met::scenery, 0};
-    const auto table = o.ready ? VtableOf(collider) : 0;
+    const auto table = o.ready ? phys::VtableOf(collider) : 0;
     if (table && (table == o.rigid || table == o.articulated)) {
         const bool body = table == o.articulated;
         phys::Dynamics d{};
@@ -219,14 +212,6 @@ int TypeOf(const void* collider)
     }
 }
 
-// The play-space -> world map the hands are placed with (animik::ControllerWorldFromHead,
-// on the camera centre): a pose in tracking reference space (engine axes) to the world.
-Pose WorldFromReference(const GameplayPoseFrame& f)
-{
-    const Pose map{{0, 0, std::sin(f.yaw * .5f), std::cos(f.yaw * .5f)}, {}};
-    return {map.orientation, Sub(f.cameraCentre, Rotate(map.orientation, stereo::ToEngineSpace(f.tracking.head.position)))};
-}
-
 // One hand's lane: its solver memory and what that memory belongs to.
 struct HandLane {
     surface::State state{};
@@ -238,18 +223,11 @@ struct HandLane {
     float heldMaxCm = 0;
 };
 std::array<HandLane, 2> lanes{};   // by Hand
-std::uint64_t seenSettings = 0, reportNs = 0, reportSum = 0, logSecondNs = 0;
-const char* reportGate = nullptr;
+std::uint64_t seenSettings = 0, logSecondNs = 0;
 unsigned logLines = 0;
+lane::ReportThrottle reportThrottle;
 
-bool LogBudget()
-{
-    const auto now = MonotonicNanoseconds();
-    if (now - logSecondNs >= 1000000000ull) { logSecondNs = now; logLines = 0; }
-    if (logLines >= kLogLinesPerSecond) { ++dropped; return false; }
-    ++logLines;
-    return true;
-}
+bool LogBudget() { return lane::TakeLine(logSecondNs, logLines, kLogLinesPerSecond, dropped); }
 void Forget(HandLane& lane)
 {
     if (lane.state.valid) { ++resets; }
@@ -276,7 +254,9 @@ bool AddWeapon(const GameplayPoseFrame& f, const WeaponBox& box, surface::Probes
 {
     const auto& right = f.tracking.hands[static_cast<unsigned>(Hand::right)];
     const Pose grip = stereo::ToEngineSpace(right.gripPose);
-    const Pose world = WorldFromReference(f);
+    // The play-space -> world map the hands are placed with (animik::ControllerWorldFromHead,
+    // on the camera centre).
+    const Pose world = stereo::TrackingOriginInWorld(f.yaw, f.cameraCentre, f.tracking.head);
     const Vec3 drawnWith = Rotate(Conjugate(box.worldFromReference.orientation), box.correction);
     const Pose fromGrip = physical::Inverse(box.gripPose);
     std::array<Vec3, 9> now{};
@@ -396,15 +376,8 @@ void Publish(const GameplayPoseFrame& frame, const char* gate, const std::array<
 
 void MaybeReport()
 {
-    const auto now = MonotonicNanoseconds();
-    if (now - reportNs < 10000000000ull) { return; }
-    reportNs = now;
-    const auto sum = frames.load() + refused.load() + holds.load() + resets.load();
-    const char* gate = lastGate.load();
-    if (sum == reportSum && gate == reportGate) { return; }
-    reportSum = sum;
-    reportGate = gate;
-    Log("report" + SurfaceStopReport());
+    const auto counters = [] { return frames.load() + refused.load() + holds.load() + resets.load(); };
+    if (reportThrottle.Due(counters, lastGate)) { Log("report" + SurfaceStopReport()); }
 }
 
 void UpdateImpl(GameplayPoseFrame& frame, bool allowed)
@@ -419,15 +392,8 @@ void UpdateImpl(GameplayPoseFrame& frame, bool allowed)
             " heavyKg=" + std::to_string(heavyKg.load()) + " log=" + std::to_string(eventLog.load()));
     }
     const auto now = MonotonicNanoseconds();
-    const char* why = nullptr;
-    if (!enabled.load()) { why = "off"; }
-    else if (SceneQueryFaulted()) { why = "fault"; }
-    else if (!allowed) { why = "tracking"; }
-    else if (!HudGameplayInputAllowed()) { why = "menu"; }
-    else if (BodyHeadOut()) { why = "head_out"; }
-    else if (!frame.cameraCentreValid || !frame.headYawUsable || !std::isfinite(frame.yaw)) { why = "camera"; }
-    else if (!FreshSample(now, frame.tracking.publishedNs, kFreshNs) ||
-             frame.referenceGeneration != HeadTrackingReferenceGeneration() || (frame.referenceGeneration & 1)) { why = "pose"; }
+    const char* why = lane::GateReason(frame, allowed, enabled.load(), SceneQueryFaulted(), now, kFreshNs);
+    if (!why && stereo::Recentering(frame.referenceGeneration)) { why = "pose"; }   // the surface stop's pose also refuses an odd generation
     std::array<HandNow, 2> hands{};
     std::array<surface::Result, 2> result{};
     lastGate = why ? why : "open";
@@ -448,8 +414,7 @@ void UpdateImpl(GameplayPoseFrame& frame, bool allowed)
         BuildHand(frame, Hand::left, nullptr, hands[static_cast<unsigned>(Hand::left)]);
     }
     if (hands[1].weapon) { ++weaponFrames; }
-    LARGE_INTEGER start{}, end{}, frequency{};
-    QueryPerformanceCounter(&start);
+    const lane::Stopwatch watch;
     const Objects objects = gObjects();
     WorldRays world(frame, objects);
     std::uint64_t rayCount = 0;
@@ -510,13 +475,10 @@ void UpdateImpl(GameplayPoseFrame& frame, bool allowed)
         }
         lane.held = r.correction.blocked;
     }
-    QueryPerformanceCounter(&end);
-    QueryPerformanceFrequency(&frequency);
-    const auto us = static_cast<std::uint64_t>((end.QuadPart - start.QuadPart) * 1000000 / std::max<LONGLONG>(frequency.QuadPart, 1));
+    const auto us = watch.Micros();
     ++frames;
     if (anyHeld) { ++held; }
-    usTotal += us;
-    if (us > usMax.load()) { usMax = us; }
+    lane::AddMicros(us, usTotal, usMax);
     rays += rayCount;
     if (rayCount > raysMax.load()) { raysMax = rayCount; }
     Publish(frame, "open", hands, result, rayCount);
@@ -530,7 +492,7 @@ void UpdateSurfaceStop(GameplayPoseFrame& frame, bool allowed)
         frame.surface = {};
         return;
     }
-    struct Guard { bool& value; explicit Guard(bool& v) : value(v) { value = true; } ~Guard() { value = false; } } guard(busy);
+    const lane::ReentryGuard guard(busy);
     UpdateImpl(frame, allowed);
 }
 void SetSurfaceStop(unsigned v)

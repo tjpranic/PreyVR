@@ -59,7 +59,7 @@ float DirectionAngularDeltaDegrees(
         before.direction.y * after.direction.y +
         before.direction.z * after.direction.z;
     const float cosine = std::clamp(dot / (beforeLength * afterLength), -1.0f, 1.0f);
-    constexpr float radiansToDegrees = 57.29577951308232f;
+    constexpr float radiansToDegrees = kDegreesPerRadian;
     return std::acos(cosine) * radiansToDegrees;
 }
 
@@ -74,7 +74,7 @@ float DirectionYawDeltaDegrees(Vec3 before, Vec3 after)
     if (beforeHorizontal <= 1.0e-12f || afterHorizontal <= 1.0e-12f) {
         return 0.0f;
     }
-    constexpr float radiansToDegrees = 57.29577951308232f;
+    constexpr float radiansToDegrees = kDegreesPerRadian;
     const float crossZ = before.x * after.y - before.y * after.x;
     const float dot = before.x * after.x + before.y * after.y;
     return std::atan2(crossZ, dot) * radiansToDegrees;
@@ -109,7 +109,7 @@ std::optional<CachedReticleState> MakeBoundedYawProbe(
         return std::nullopt;
     }
 
-    constexpr float degreesToRadians = 0.017453292519943295f;
+    constexpr float degreesToRadians = kRadiansPerDegree;
     const float radians = yawDegrees * degreesToRadians;
     const float cosine = std::cos(radians);
     const float sine = std::sin(radians);
@@ -144,7 +144,7 @@ float ExpectedRaySeparation(float distance, float angularDeltaDegrees)
     if (!Finite(distance) || !Finite(angularDeltaDegrees) || distance < 0.0f) {
         return 0.0f;
     }
-    constexpr float degreesToRadians = 0.017453292519943295f;
+    constexpr float degreesToRadians = kRadiansPerDegree;
     return 2.0f * distance *
         std::sin(std::fabs(angularDeltaDegrees) * degreesToRadians * 0.5f);
 }

@@ -3,9 +3,12 @@
 // The generic IPhysicalEntity calls the lanes share, through the slots every
 // physics class has: dynamics status (type 8) and set velocity (type 10). Worn in
 // the carry lane's throws; ContactNative.h hashes the rigid and articulated
-// GetStatus bodies and PhysicalNative.h the rigid Action and QueueAction.
+// GetStatus bodies and PhysicalNative.h the rigid Action and QueueAction. Also
+// the world's broadphase and per-entity box test the contact and swing lanes ask.
 // Header-only so tests that compile a lane's .cpp directly need nothing extra.
 #include "preyvr/ContactNative.h"
+#include "preyvr/ContactQuery.h"
+#include "preyvr/SceneQuery.h"
 #include "preyvr/VrMath.h"
 
 #include <windows.h>
@@ -104,6 +107,41 @@ inline bool VelocityQueueReady(std::uintptr_t base, std::uint32_t* sizeOut = nul
     if (sizeOut) { *sizeOut = size; }
     if (payloadOut) { *payloadOut = payload; }
     return size == sizeof(SetVelocityAction) && payload == 0;
+}
+
+// An engine object's vtable: 0 for none, or when it cannot be read.
+inline std::uintptr_t VtableOf(const void* entity)
+{
+    __try {
+        return entity ? *reinterpret_cast<const std::uintptr_t*>(entity) : 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return 0;
+    }
+}
+
+// The world's broadphase (ContactNative.h GetEntitiesInBox) and per-entity test,
+// CollideEntityWithPrimitive(world, entity, itype, primitive, sweep, hit, ip): the
+// primitive is the itype's (contact::BoxPrimitive, contact::SpherePrimitive).
+using EntitiesInBox = int(__fastcall*)(std::uintptr_t, const Vec3*, const Vec3*, void***, int, int);
+using Collide = int(__fastcall*)(std::uintptr_t, void*, int, void*, const Vec3*, scene::Hit*, void*);
+// The objects of `types` in lo..hi, into the caller's `list` of `capacity`; -1
+// for more than that: the engine then hands back its shared per-caller buffer
+// instead, which another query may overwrite, so it is refused. Faults
+// propagate to the caller's __try.
+inline int Broadphase(EntitiesInBox entitiesInBox, std::uintptr_t world, const Vec3& lo, const Vec3& hi, int types, void** list,
+                      int capacity)
+{
+    void** listed = list;
+    const int count = entitiesInBox(world, &lo, &hi, &listed, types, capacity);
+    return count < 0 || count > capacity || listed != list ? -1 : count;
+}
+// A box against one entity, still or moved along `motion`: true, with `hit`,
+// where it touches. Faults propagate to the caller's __try.
+inline bool CollideBox(Collide collide, std::uintptr_t world, void* entity, const contact::Box& box, const Vec3& motion, scene::Hit& hit)
+{
+    contact::BoxPrimitive primitive = contact::ToPrimitive(box);   // per call: the engine edits it
+    hit = {};
+    return collide(world, entity, contact::native::PrimitiveBox, &primitive, &motion, &hit, nullptr) && contact::Valid(hit, entity);
 }
 
 } // namespace preyvr::dll::phys

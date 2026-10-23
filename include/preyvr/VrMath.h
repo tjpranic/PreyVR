@@ -6,6 +6,10 @@
 namespace preyvr {
 
 inline constexpr float kPi = 3.14159265358979323846f;
+// Degrees to radians, and back: the floats nearest pi/180 and 180/pi. Not
+// 180.0f / kPi, which rounds to the float one below.
+inline constexpr float kRadiansPerDegree = kPi / 180.0f;
+inline constexpr float kDegreesPerRadian = 57.29578f;
 
 struct Vec2 {
     float x = 0.0f;
@@ -50,6 +54,10 @@ inline bool Finite(Vec3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && 
 // How far apart two yaws are, radians, 0..pi; NaN in, NaN out. Not a general
 // wrap: the other yaw wraps differ on NaN and on their thresholds on purpose.
 inline float YawDistance(float a, float b) { return std::fabs(std::remainder(a - b, 2.0f * kPi)); }
+// The share of the way to its target an exponential filter at `perSecond` moves
+// in `dt` seconds: 1 - e^(-dt * perSecond). Not the time-constant form
+// 1 - e^(-dt / tau), which rounds differently.
+inline float ExpAlpha(float dt, float perSecond) { return 1.0f - std::exp(-dt * perSecond); }
 
 // The inverse of a unit quaternion.
 inline Quaternion Conjugate(Quaternion q) { return {-q.x, -q.y, -q.z, q.w}; }

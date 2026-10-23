@@ -672,13 +672,6 @@ void BuildHandRig(std::uint8_t* skeleton, unsigned jointCount, std::uint8_t* rel
 }
 
 
-// Engine world -> the app's OpenXR space: the inverse of ControllerWorldFromHead.
-Vec3 WorldToOpenXr(const GameplayPoseFrame& frame, const Vec3& anchor, const Vec3& world)
-{
-    const Vec3 engine = Rotate(Conjugate(stereo::YawQuaternion(frame.yaw)), Sub(world, anchor));
-    return Add(frame.tracking.head.position, Rotate(Conjugate(stereo::kOpenXrToEngine), engine));
-}
-
 // The wrist rotation (engine world) that puts the game hand's anatomical frame
 // on the player's, given the controller's grip orientation in engine world.
 Quaternion AnatomicalWrist(unsigned hand, const Quaternion& gripWorld, const PoseSettings& settings)
@@ -778,12 +771,11 @@ struct XrMap {
     animik::Location location{};
     Vec3 ToXr(const Vec3& model) const
     {
-        return WorldToOpenXr(*frame, anchor, animik::ModelToWorld(location, model));
+        return stereo::EngineToTracking(animik::ModelToWorld(location, model), anchor, frame->yaw, frame->tracking.head);
     }
     Vec3 ToModel(const Vec3& xr) const
     {
-        const Vec3 engine = Rotate(stereo::kOpenXrToEngine, Sub(xr, frame->tracking.head.position));
-        return animik::WorldToModel(location, Add(anchor, Rotate(stereo::YawQuaternion(frame->yaw), engine)));
+        return animik::WorldToModel(location, stereo::TrackingToEngine(xr, anchor, frame->yaw, frame->tracking.head));
     }
 };
 
@@ -869,8 +861,8 @@ void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& locatio
             ? gLongTwistDeg.load(std::memory_order_relaxed) * 0.01745329f * frame.twoHand.blend : 0.0f;
         shoulderYaw = yaw - twist;
         torso = armpose::TorsoFromYaw(shoulderYaw);
-        gArmStats.torsoYawDeg = shoulderYaw * 57.29578f;
-        gArmStats.headYawDeg = headYaw * 57.29578f;
+        gArmStats.torsoYawDeg = shoulderYaw * kDegreesPerRadian;
+        gArmStats.headYawDeg = headYaw * kDegreesPerRadian;
     }
     const armpose::Body& body = pose.body;
     for (int s = 0; s < 2; ++s) {
@@ -1208,7 +1200,7 @@ void DriveHand(unsigned int hand, std::uint8_t* relative, std::uint8_t* absolute
                 if(gHoldBackOwner!=owner.generation){gHoldBackOwner=owner.generation;gHoldBackEased=0.0f;gHoldBackNs=0;}
                 const float dt=gHoldBackNs&&now>gHoldBackNs?std::min(static_cast<float>(now-gHoldBackNs)*1e-9f,.1f):0.0f;
                 gHoldBackNs=now;
-                gHoldBackEased+=(holdTarget-gHoldBackEased)*(1.0f-std::exp(-dt*8.0f));
+                gHoldBackEased+=(holdTarget-gHoldBackEased)*ExpAlpha(dt,8.0f);
                 if(std::fabs(holdTarget-gHoldBackEased)<.0005f)gHoldBackEased=holdTarget;
                 holdBack=gHoldBackEased;
                 gHoldBackMm.store(static_cast<int>(holdBack*1000.0f),std::memory_order_relaxed);
@@ -1700,7 +1692,7 @@ void CaptureMarks(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsign
     const PoseSettings settings = ReadPoseSettings();
     HandMarks marks{};
     const auto toXr = [&](const Vec3& model) {
-        return WorldToOpenXr(frame, anchor, animik::ModelToWorld(location, model));
+        return stereo::EngineToTracking(animik::ModelToWorld(location, model), anchor, frame.yaw, frame.tracking.head);
     };
     for (int s = 0; s < 2; ++s) {
         if (!rig.valid[s]) { continue; }
@@ -1947,7 +1939,7 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
                         gFreeFistNs = now;
                         for (int s = 0; s < 2; ++s) {
                             const float want = free && s == 1 && CarryHoldingInHand() ? 1.0f : 0.0f;
-                            gFreeFist[s] += (want - gFreeFist[s]) * (1.0f - std::exp(-dt * 14.0f));
+                            gFreeFist[s] += (want - gFreeFist[s]) * ExpAlpha(dt, 14.0f);
                             gFreeFistMilli[s].store(static_cast<int>(gFreeFist[s] * 1000.0f), std::memory_order_relaxed);
                         }
                         // Each free hand's fingers from its controller, eased
@@ -1962,7 +1954,7 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
                             } else {
                                 for (float& curl : want.curl) { curl = poseSettings.curl; }
                             }
-                            const float k = gFingerShapeValid[s] ? 1.0f - std::exp(-dt * 18.0f) : 1.0f;
+                            const float k = gFingerShapeValid[s] ? ExpAlpha(dt, 18.0f) : 1.0f;
                             for (int f = 0; f < handpose::kFingerCount; ++f) {
                                 gFingerShape[s].curl[f] += (want.curl[f] - gFingerShape[s].curl[f]) * k;
                                 gFingerShape[s].fist[f] += (want.fist[f] - gFingerShape[s].fist[f]) * k;
@@ -2448,7 +2440,7 @@ std::string ArmReport()
         << " romDeg=" << p.wrist.flexionMaxDeg << ',' << p.wrist.extensionMaxDeg << ','
         << p.wrist.radialMaxDeg << ',' << p.wrist.ulnarMaxDeg
         << " holdDeg=" << p.wrist.holdSigmaDeg << " poleTauMs=" << p.poleTau * 1000
-        << " torsoDeadzoneDeg=" << p.torsoDeadzone * 57.29578f << " torsoRelax=" << p.torsoRelax
+        << " torsoDeadzoneDeg=" << p.torsoDeadzone * kDegreesPerRadian << " torsoRelax=" << p.torsoRelax
         << " headYawDeg=" << st.headYawDeg << " torsoYawDeg=" << st.torsoYawDeg;
     for (int s = 0; s < 2; ++s) {
         const char* t = s == 0 ? "R" : "L";
@@ -2497,7 +2489,7 @@ float AngleDeg(Vec3 a, Vec3 b)
     const float la = Length(a), lb = Length(b);
     if (la < 1e-6f || lb < 1e-6f) { return -1.0f; }
     const float c = std::clamp((a.x * b.x + a.y * b.y + a.z * b.z) / (la * lb), -1.0f, 1.0f);
-    return std::acos(c) * 57.29578f;
+    return std::acos(c) * kDegreesPerRadian;
 }
 HandMarks LatestMarks() { std::lock_guard lock(gMarksMutex); return gMarks; }
 }
@@ -2513,7 +2505,7 @@ std::string HandPoseReport()
     out << " poseMode=" << settings.mode << " curl=" << settings.curl * 100.0f
         << " along=" << settings.point.alongHand * 1000.0f << " outOfPalmMm=" << settings.point.outOfPalm * 1000.0f
         << " thumbMm=" << settings.point.towardThumb * 1000.0f
-        << " leanDeg=" << settings.tubeLean * 57.29578f
+        << " leanDeg=" << settings.tubeLean * kDegreesPerRadian
         << " reachMode=" << settings.reachMode << " knee=" << settings.knee * 100.0f
         << " weaponRoll=" << (settings.weaponRoll ? 1 : 0) << " stretch=" << settings.stretch * 100.0f
         << " rollDeg=" << gWeaponRollMilliDeg.load(std::memory_order_relaxed) / 1000.0f;
@@ -2553,7 +2545,7 @@ std::string HandPoseReport()
         const Pose& aim = marks.aim[s];
         const Quaternion rel = Normalize(Multiply(Conjugate(aim.orientation), grip.orientation));
         const Vec3 off = Rotate(Conjugate(aim.orientation), Sub(grip.position, aim.position));
-        const float angle = handpose::AngleBetween(aim.orientation, grip.orientation) * 57.29578f;
+        const float angle = handpose::AngleBetween(aim.orientation, grip.orientation) * kDegreesPerRadian;
         out.precision(3);
         out << " gripInAim" << tag << "=q" << rel.x << ',' << rel.y << ',' << rel.z << ',' << rel.w;
         out.precision(1);

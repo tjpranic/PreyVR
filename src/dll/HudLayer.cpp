@@ -15,6 +15,7 @@
 #include "preyvr/UiPanel.h"
 #include "preyvr/InventoryDepth.h"
 #include "preyvr/NativeHudIsolation.h"
+#include "preyvr/StereoCamera.h"
 #include "NativeHudValue.h"
 #include <MinHook.h>
 #include <wrl/client.h>
@@ -589,7 +590,7 @@ void __fastcall StereoMatrix(void* renderer,const void* source,float* output) {
         stereoRefused.fetch_add(1,std::memory_order_relaxed);return;
     }
     std::array<float,16> matrix;std::memcpy(matrix.data(),output,sizeof(matrix));
-    const float eye=(stereoEye==0?-.5f:.5f)*stereoConsumer.eyeSeparation;
+    const float eye=stereo::EyeSign(stereoEye)*.5f*stereoConsumer.eyeSeparation;
     if(inventory::ApplyStereoParallax(matrix,-view[14],stereoConsumer.panelWidth,eye,stereoScale)) {
         std::memcpy(output,matrix.data(),sizeof(matrix));
         stereoMatrices.fetch_add(1,std::memory_order_relaxed);

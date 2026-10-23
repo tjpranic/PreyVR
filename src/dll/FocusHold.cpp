@@ -6,6 +6,7 @@
 #include "FrameObserverHook.h"
 #include "Logger.h"
 #include "MinHookInit.h"
+#include "VerifiedSetting.h"
 #include "preyvr/EngineMap.h"
 #include <MinHook.h>
 #include <atomic>
@@ -96,8 +97,7 @@ std::mutex gMutex;
 bool gInstalled = false, gWanted = false, gPendingLogged = false;
 DWORD gRefusal = kOk;
 // g_pauseOnLoseFocus: -1 is "not set by the hold".
-int gPauseWanted = -1, gPauseApplied = -1, gPauseSending = -1, gPauseFailed = -1;
-unsigned long long gPauseCount = 0;
+VerifiedSetting gPause;   // g_pauseOnLoseFocus
 bool gStateKnown = false, gForeground = false, gMinimized = false;
 
 using AudioDispatchFn = void(__fastcall*)(void* atl, void* request);
@@ -340,8 +340,8 @@ DWORD Advance()
     gHeld.store(true, std::memory_order_release);
     gPendingLogged = false;
     gStateKnown = false;
-    gPauseWanted = 0;
-    gPauseFailed = -1;
+    gPause.wanted = 0;
+    gPause.failed = -1;
     Log("state=held window=" + Hex(window) + " slot=GetActiveWindow@0x1C73A10 throttle=0xDF58F0"
         " pause_on_lose_focus=pending audio=" + (gAudioHooked ? "held" : "native"));
     return kOk;
@@ -352,12 +352,12 @@ void Release()
     gWanted = false;
     gPendingLogged = false;
     // Put back only what the hold changed, or may have.
-    if (gPauseApplied == 0 || gPauseSending == 0 || gPauseFailed == 0) { gPauseWanted = 1; }
-    else { gPauseWanted = -1; }
-    gPauseFailed = -1;
+    if (gPause.applied == 0 || gPause.sending == 0 || gPause.failed == 0) { gPause.wanted = 1; }
+    else { gPause.wanted = -1; }
+    gPause.failed = -1;
     if (gHeld.exchange(false, std::memory_order_acq_rel)) {
         Log("state=released answered=" + std::to_string(gAnswered.load()) + " pause_on_lose_focus=" +
-            (gPauseWanted == 1 ? "restoring" : "native"));
+            (gPause.wanted == 1 ? "restoring" : "native"));
     }
 }
 
@@ -365,29 +365,9 @@ void Release()
 // owners run on this thread, so the next completion after a queue is ours.
 void ServicePause()
 {
-    if (gPauseSending >= 0) {
-        if (VerifiedRendererSettingCount() == gPauseCount) { return; }
-        const bool verified = VerifiedRendererSettingResult() == 0;
-        Log("pause_on_lose_focus=" + std::to_string(gPauseSending) +
-            (verified ? " result=0 detail=verified_readback" : " result=failed detail=readback_timeout_or_mismatch"));
-        if (verified) { gPauseApplied = gPauseSending; }
-        else { gPauseFailed = gPauseSending; }
-        gPauseSending = -1;
-    }
-    if (gPauseWanted < 0 || gPauseWanted == gPauseApplied || gPauseWanted == gPauseFailed) { return; }
-    // Console commands drain on observed frames; queued before that, this would
-    // hold the shared slot for nothing.
-    if (FrameObserverStatus() != static_cast<DWORD>(FrameObserverRuntimeStatus::enabled)) { return; }
-    const auto count = VerifiedRendererSettingCount();
-    const DWORD queued = QueueVerifiedRendererSetting(gPauseWanted == 0 ? "g_pauseOnLoseFocus 0" : "g_pauseOnLoseFocus 1");
-    if (queued == 0) {
-        gPauseSending = gPauseWanted;
-        gPauseCount = count;
-    } else if (queued != static_cast<DWORD>(ConsoleBridgeResult::busy)) {
-        gPauseFailed = gPauseWanted;
-        Log("pause_on_lose_focus=" + std::to_string(gPauseWanted) + " result=" + std::to_string(queued) +
-            " detail=queue_refused");
-    }
+    gPause.Advance("pause_on_lose_focus",
+                   [](int value) { return value == 0 ? "g_pauseOnLoseFocus 0" : "g_pauseOnLoseFocus 1"; },
+                   [](const std::string& line) { Log(line); });
 }
 
 // The evidence a headset run needs: when Windows took focus or minimised the
@@ -453,8 +433,8 @@ std::string FocusHoldReport()
         << " foreground=" << (held && window != nullptr && GetForegroundWindow() == window ? 1 : 0)
         << " minimized=" << (held && window != nullptr && IsIconic(window) ? 1 : 0)
         << " calls=" << gCalls.load() << " answered=" << gAnswered.load()
-        << " pauseOnLoseFocus=" << value(gPauseApplied) << " pauseSending=" << value(gPauseSending)
-        << " pauseFailed=" << value(gPauseFailed)
+        << " pauseOnLoseFocus=" << value(gPause.applied) << " pauseSending=" << value(gPause.sending)
+        << " pauseFailed=" << value(gPause.failed)
         << " audio=" << (gAudioHooked ? "hooked" : gAudioTried ? "refused" : "untried") << " audioCode=" << gAudioRefusal
         << " audioSwallowed=" << gAudioSwallowed.load() << " audioIssued=" << gAudioIssued.load()
         << " audioNative=" << value(gAudioNative.load()) << " audioApplied=" << value(gAudioApplied.load());

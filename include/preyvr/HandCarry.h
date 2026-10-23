@@ -47,9 +47,6 @@ using preyvr::Sub;
 bool Finite(Quaternion q);
 // Rotation of a Matrix34 (row-major 3x4, engine convention), scale removed.
 Quaternion FromMatrix34(const float m[12]);
-// A vector in the app's OpenXR tracking space, in the engine world: the axis
-// change, then the play space's yaw (GameplayPoseFrame::yaw).
-Vec3 TrackingToWorld(Vec3 v, float yawRadians);
 // Engine Z is up.
 Vec3 Horizontal(Vec3 v);
 Quaternion YawRotation(float radians);   // about engine Z

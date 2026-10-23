@@ -11,6 +11,7 @@
 #include "Logger.h"
 #include "MinHookInit.h"
 #include "preyvr/EngineMap.h"
+#include "preyvr/StereoCamera.h"
 
 #include <MinHook.h>
 #include <intrin.h>
@@ -252,7 +253,7 @@ bool BuildEyes(const void* threadInfo, std::uint8_t (&centre)[kCameraSize],
     const float half = static_cast<float>(gHalfIpdMicrometres.load(std::memory_order_relaxed)) * 1e-6f;
     const auto updateFrustum = gUpdateFrustum.load(std::memory_order_acquire);
     for (int eye = 0; eye < 2; ++eye) {
-        const float d = (eye == 0 ? -half : half) / length;
+        const float d = stereo::EyeSign(eye) * half / length;
         float e[12];
         std::memcpy(e, m, sizeof(e));
         e[3] += m[0] * d;

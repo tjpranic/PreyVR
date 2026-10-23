@@ -100,6 +100,30 @@ Vec3 EngineToTracking(const Vec3& world, const Vec3& anchor, float yawRadians, c
     return {head.position.x + local.x, head.position.y + local.y, head.position.z + local.z};
 }
 
+// The operations and their order are ControllerWorldFromHead's and each inline
+// copy these replaced, so the results are bit-identical.
+Vec3 TrackingToEngine(const Vec3& tracking, const Vec3& anchor, float yawRadians, const Pose& head)
+{
+    const Vec3 engine = Rotate(kOpenXrToEngine, Sub(tracking, head.position));
+    return Add(anchor, Rotate(YawQuaternion(yawRadians), engine));
+}
+
+Vec3 TrackingDirToEngine(const Vec3& direction, float yawRadians)
+{
+    return Rotate(YawQuaternion(yawRadians), Rotate(kOpenXrToEngine, direction));
+}
+
+Vec3 EngineDirToTracking(const Vec3& direction, float yawRadians)
+{
+    return Rotate(Conjugate(kOpenXrToEngine), Rotate(Conjugate(YawQuaternion(yawRadians)), direction));
+}
+
+Pose TrackingOriginInWorld(float yawRadians, const Vec3& anchor, const Pose& head)
+{
+    const Quaternion yaw = YawQuaternion(yawRadians);
+    return Pose{yaw, Sub(anchor, Rotate(yaw, ToEngineSpace(head.position)))};
+}
+
 namespace {
 
 // Below this horizontal length the forward axis is too close to vertical for its

@@ -326,7 +326,7 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
     const float half = gZeroDelta.load(std::memory_order_acquire)
                            ? 0.0f
                            : gHalfIpd.load(std::memory_order_relaxed);
-    const float signed_ = (eye == 0) ? -half : half;
+    const float signed_ = stereo::EyeSign(eye) * half;
     const Vec3 delta{right.x * signed_, right.y * signed_, right.z * signed_};
 
     // Snapshot, edit, call, restore. Nothing accumulates and no other consumer of

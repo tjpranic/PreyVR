@@ -5,17 +5,14 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include "DllTestSupport.h"
 #include "TestSupport.h"
 
-namespace preyvr::lifecycle {
-std::vector<std::string> gLines;
-void Log(std::string_view message) { gLines.emplace_back(message); }
-} // namespace preyvr::lifecycle
+PREYVR_TEST_CAPTURE_LOG()
+PREYVR_TEST_STUB_MINHOOK()
 namespace preyvr::dll {
 DWORD gPinned = 1;
 DWORD ModulePinStatus() { return gPinned; }
-bool gMinHook = false;
-bool EnsureMinHook() { return gMinHook; }
 DWORD gObserver = static_cast<DWORD>(FrameObserverRuntimeStatus::enabled);
 DWORD FrameObserverStatus() { return gObserver; }
 std::vector<std::string> gQueued;
@@ -33,25 +30,12 @@ DWORD VerifiedRendererSettingResult() { return gVerifiedResult; }
 
 namespace {
 using namespace preyvr::dll;
-using preyvr::lifecycle::gLines;
+using preyvr::test::gLines;
 using Layout = preyvr::engine::GlobalEnvironmentLayout;
 
+using preyvr::test::Count;
+using preyvr::test::Logged;
 using preyvr::test::Require;
-bool Logged(const char* text)
-{
-    for (const auto& line : gLines) {
-        if (line.find(text) != std::string::npos) return true;
-    }
-    return false;
-}
-std::size_t Count(const char* text)
-{
-    std::size_t n = 0;
-    for (const auto& line : gLines) {
-        if (line.find(text) != std::string::npos) ++n;
-    }
-    return n;
-}
 bool Reports(const char* text) { return FocusHoldReport().find(text) != std::string::npos; }
 
 std::uintptr_t RealGetActiveWindow()
@@ -147,7 +131,7 @@ void Reset()
     gWindow.store(nullptr);
     gRefusal = kOk;
     gPendingLogged = false;
-    gPauseWanted = gPauseApplied = gPauseSending = gPauseFailed = -1;
+    gPause = {};
     gStateKnown = false;
     gQueued.clear();
     gLines.clear();

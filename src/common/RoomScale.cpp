@@ -19,14 +19,13 @@ Vec3 HeadOffsetWorld(const Vec3& headXr, const Vec3& originXr, float playSpaceYa
 {
     const Vec3 local{(headXr.x - originXr.x) * scale, (headXr.y - originXr.y) * scale,
                      (headXr.z - originXr.z) * scale};
-    return Rotate(stereo::YawQuaternion(playSpaceYaw), stereo::ToEngineSpace(local));
+    return stereo::TrackingDirToEngine(local, playSpaceYaw);
 }
 
 Vec3 OriginShift(const Vec3& appliedWorld, float playSpaceYaw, float scale)
 {
     if (!Finite(appliedWorld) || !std::isfinite(playSpaceYaw) || !(scale > 0.0f)) { return {}; }
-    const Vec3 engine = Rotate(stereo::Conjugate(stereo::YawQuaternion(playSpaceYaw)), appliedWorld);
-    const Vec3 xr = Rotate(stereo::Conjugate(stereo::kOpenXrToEngine), engine);
+    const Vec3 xr = stereo::EngineDirToTracking(appliedWorld, playSpaceYaw);
     return {xr.x / scale, xr.y / scale, xr.z / scale};
 }
 

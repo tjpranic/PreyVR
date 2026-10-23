@@ -103,13 +103,6 @@ LatestSnapshot<Occlusion> gScene;
 std::atomic<bool> gCandidate{false};
 std::atomic<unsigned long long> gSceneQueries{0}, gSceneHits{0};
 
-// OpenXR app space -> engine world: the inverse of WorldToOpenXr (AnimIkTakeover).
-Vec3 XrToEngine(const GameplayPoseFrame& f, Vec3 p)
-{
-    const Vec3 engine = Rotate(stereo::kOpenXrToEngine, Sub(p, f.tracking.head.position));
-    return Add(f.cameraCentre, Rotate(stereo::YawQuaternion(f.yaw), engine));
-}
-
 // ---- XR thread state ---------------------------------------------------------
 wrist::Presenter gPresenter;
 long long gLastFrameTime = 0;
@@ -156,7 +149,7 @@ void UpdateWristLane(const GameplayPoseFrame& frame, bool tracking)
     // The centre and both ends along the forearm: an arm half in a wall shows
     // the card over the wall from one end.
     for (const float s : {0.0f, -half, half}) {
-        const Vec3 target = XrToEngine(frame, Add(card.pose.position, Scale(card.axis, s)));
+        const Vec3 target = stereo::TrackingToEngine(Add(card.pose.position, Scale(card.axis, s)), frame.cameraCentre, frame.yaw, frame.tracking.head);
         const Vec3 d = Sub(target, eye);
         const float length = Length(d);
         if (!(length > 0.12f) || length > 2.0f) { continue; }

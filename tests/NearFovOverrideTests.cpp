@@ -5,12 +5,13 @@
 #include <iostream>
 #include <limits>
 #include <vector>
+#include "DllTestSupport.h"
 #include "TestSupport.h"
 
-namespace preyvr::lifecycle { void Log(std::string_view) {} }
+PREYVR_TEST_DROP_LOG()
+PREYVR_TEST_STUB_MINHOOK()
 namespace preyvr::dll {
 DWORD ModulePinStatus() { return 0; }
-bool EnsureMinHook() { return false; }
 }
 
 namespace {

@@ -193,43 +193,6 @@ struct Skip {
 };
 Skip gSkip;
 
-// --- the flight, watched (game thread) ------------------------------------------------
-struct Flight {
-    std::uint32_t entity = 0;
-    char name[64]{};
-    std::uint64_t startNs = 0;
-    unsigned frames = 0;
-    Vec3 spawn{}, expected{};
-    Vec3 v2{};
-    bool haveV2 = false;
-    // Free flight, measured: gravity and damping from each frame's change of
-    // velocity over the physics time it covered (displacement / speed).
-    float gravitySum = 0, dampingSum = 0;
-    unsigned fits = 0;
-    Vec3 last{}, lastV{};
-    std::uint64_t lastNs = 0;
-    bool contact = false;
-    Vec3 contactAt{};
-    float contactSeconds = 0;
-    // On the floor: where the model says it comes down, and where a real ball
-    // thrown with the hand's speed x vrFactor would have.
-    float floorZ = 0;
-    bool haveFloor = false;
-    Vec3 heading{};         // horizontal unit direction of the launch
-    float gameRange = -1, realRange = -1, range = -1, rangeError = -1, lateral = -1;
-    bool onFloor = false;
-    float modelGravity = 0, modelDamping = 0;   // the projectile's own (read), else the settings'
-    bool rest = false;
-    Vec3 restAt{};
-    float restSeconds = 0;
-    unsigned still = 0;
-    bool gone = false;
-    float goneSeconds = 0;
-    float maxHeight = 0;
-    float distance = 0;     // horizontal, spawn -> contact
-};
-Flight gFlight;
-
 // --- report snapshot ------------------------------------------------------------------
 struct Last {
     bool valid = false;
@@ -237,7 +200,6 @@ struct Last {
     std::uint64_t ns = 0;
     float delayMs = -1;     // trigger release -> the projectile
     float pressedMs = -1;   // how long the trigger was held
-    Flight flight{};
 };
 std::mutex gLastMutex;
 Last gLast;
@@ -549,8 +511,8 @@ void Steer(Scope& s, Vec3& position, Vec3& direction)
     // The release's velocity, in the world, from the hand's motion at the trigger.
     const auto& m = s.release.motion;
     const float yaw = s.release.yawValid ? s.release.yaw : s.frame.yaw;
-    s.handWorld = m.valid ? carry::TrackingToWorld(m.velocity, yaw) : Vec3{};
-    s.spinWorld = m.valid ? carry::TrackingToWorld(m.angular, yaw) : Vec3{};
+    s.handWorld = m.valid ? stereo::TrackingDirToEngine(m.velocity, yaw) : Vec3{};
+    s.spinWorld = m.valid ? stereo::TrackingDirToEngine(m.angular, yaw) : Vec3{};
     s.player = PlayerVelocity();
     grenade::ReleaseInput in{};
     in.handVelocity = s.handWorld;
@@ -602,57 +564,6 @@ std::uintptr_t __fastcall CreateHook(std::uintptr_t archetype, float* position, 
     float pos[3]{p.x, p.y, p.z}, dir[3]{d.x, d.y, d.z};
     s->projectile = original(archetype, pos, dir, owner, a5, a6, a7, a8, a9, a10);
     return s->projectile;
-}
-
-void StartFlight(const Scope& s)
-{
-    std::uintptr_t entity = 0;
-    if (!s.projectile || !Read(s.projectile + kProjectileEntity, entity) || !entity) { return; }
-    Flight f{};
-    f.entity = CallEntityId(entity);
-    if (!f.entity) { return; }
-    if (!CopyName(CallArchetypeName(entity), f.name, sizeof(f.name))) { std::snprintf(f.name, sizeof(f.name), "?"); }
-    f.startNs = MonotonicNanoseconds();
-    f.spawn = s.position;
-    f.expected = s.steer ? s.plan.velocity : Vec3{};
-    f.last = s.position;
-    f.lastNs = f.startNs;
-    f.maxHeight = s.position.z;
-    {
-        const auto settings = Settings();
-        f.modelGravity = settings.gravity;
-        f.modelDamping = settings.damping;
-        float g = 0, k = 0;
-        if (s.physicsRead) {
-            f.modelGravity = s.gravity;
-            f.modelDamping = s.damping;
-        } else if (CallFreeFlight(CallPhysics(entity), g, k)) {
-            f.modelGravity = g;
-            f.modelDamping = k;
-        }
-    }
-    Vec3 feet{};
-    if (s.haveFloor) {
-        f.floorZ = s.floorZ;
-        f.haveFloor = true;
-    } else if (PlayerFeet(feet)) {
-        f.floorZ = feet.z;
-        f.haveFloor = true;
-    }
-    if (s.steer) {
-        // Where a real ball would have come down: the grenade's own velocity x
-        // vrFactor (the speed parity aims for), plus the player's.
-        const Vec3 real = Add(Scale(Sub(s.plan.velocity, s.player), s.plan.speed > 1e-4f
-                                                                        ? s.plan.objectSpeed * Settings().vrFactor / s.plan.speed
-                                                                        : 0.0f),
-                              s.player);
-        const float speed = Length(real);
-        if (f.haveFloor && speed > 1e-3f) {
-            f.realRange = grenade::RangeOnFloor(speed, std::asin(std::clamp(real.z / speed, -1.0f, 1.0f)),
-                                                std::max(s.position.z - f.floorZ - kGrenadeRadius, 0.0f), 9.81f, 0.0f);
-        }
-    }
-    gFlight = f;
 }
 
 void __fastcall ThrowHook(std::uintptr_t weapon)
@@ -717,7 +628,6 @@ void __fastcall ThrowHook(std::uintptr_t weapon)
         }
         if (s.haveFrame && s.plan.thrown) { QueueHaptic(Hand::right, haptics::Event::ObjectThrown, s.frame.tracking); }
     }
-    StartFlight(s);
     const float delayMs = s.release.valid ? static_cast<float>(now - s.release.ns) * 1e-6f : -1.0f;
     const float pressedMs = s.release.valid && s.release.pressNs && s.release.ns > s.release.pressNs
                                 ? static_cast<float>(s.release.ns - s.release.pressNs) * 1e-6f
@@ -737,7 +647,7 @@ void __fastcall ThrowHook(std::uintptr_t weapon)
         " motion=" + std::to_string(s.release.motion.valid) + " runtime=" +
         std::to_string(s.release.motion.fromRuntime) + " samples=" + std::to_string(s.release.motion.samples) +
         " physics=" + std::to_string(s.physicsRead) + " gravity=" + Fixed(s.gravity, 2) + " damping=" +
-        Fixed(s.damping, 3) + " entity=" + std::to_string(gFlight.entity) + " name=" + gFlight.name);
+        Fixed(s.damping, 3));
 }
 
 void __fastcall UpdateHook(std::uintptr_t weaponPlus8, std::uintptr_t context)
@@ -879,132 +789,6 @@ void RetryEquip(std::uintptr_t player)
     if (CallEquip(player, p.id) != 0 && last && last != p.id) { CallEquip(player, last); }
 }
 
-// --- the flight watch (game thread) -------------------------------------------------------
-
-void WatchFlight()
-{
-    Flight& f = gFlight;
-    if (!f.entity) { return; }
-    const auto now = MonotonicNanoseconds();
-    const float t = static_cast<float>(now - f.startNs) * 1e-9f;
-    const auto entity = CallGetEntity(f.entity);
-    Vec3 p{}, v{}, w{};
-    if (!entity || !CallWorldPosition(entity, p) || !CallDynamics(CallPhysics(entity), v, w)) {
-        // Gone: it went off (the EMP pulses and removes itself) or was removed.
-        f.gone = true;
-        f.goneSeconds = t;
-        Log("gone entity=" + std::to_string(f.entity) + " t=" + Fixed(t, 2) + " last=" + Point(f.last));
-        std::lock_guard lock(gLastMutex);
-        gLast.flight = f;
-        f = {};
-        return;
-    }
-    ++f.frames;
-    f.maxHeight = std::max(f.maxHeight, p.z);
-    if (f.frames == 1) {
-        const float speed = Length(v);
-        const Vec3 h = carry::Horizontal(v);
-        f.heading = Length(h) > 1e-4f ? Scale(h, 1.0f / Length(h)) : Vec3{};
-        if (f.haveFloor && speed > 1e-3f) {
-            f.gameRange = grenade::RangeOnFloor(speed, std::asin(std::clamp(v.z / speed, -1.0f, 1.0f)),
-                                                std::max(p.z - f.floorZ - kGrenadeRadius, 0.0f), f.modelGravity,
-                                                f.modelDamping);
-        }
-    }
-    if (gTrace.load() && f.frames <= 90) {
-        Log("path entity=" + std::to_string(f.entity) + " frame=" + std::to_string(f.frames) + " t=" + Fixed(t, 4) +
-            " p=" + Point(p) + " v=" + Point(v) + " w=" + Point(w));
-    }
-    if (f.frames == 2) {
-        f.v2 = v;
-        f.haveV2 = true;
-        Log("flight entity=" + std::to_string(f.entity) + " v=" + Point(v) + " speed=" + Fixed(Length(v), 2) +
-            " expected=" + Point(f.expected) + " expectedSpeed=" + Fixed(Length(f.expected), 2) + " pos=" + Point(p));
-    }
-    // Free flight against the measured model: each frame's velocity follows
-    // dv = -(k v + g z) dt over the physics time the frame covered; a jump
-    // away from that is the first contact.
-    if (!f.contact && f.frames > 2) {
-        const float speed = Length(f.lastV);
-        const float dt = speed > 0.3f ? Length(Sub(p, f.last)) / speed : 0.0f;
-        const Vec3 predicted =
-            Sub(f.lastV, Scale(Add(Scale(f.lastV, f.modelDamping), Vec3{0, 0, f.modelGravity}), dt));
-        if (dt > 0.0f && Length(Sub(v, predicted)) > 0.6f) {
-            f.contact = true;
-            f.contactAt = f.last;
-            f.contactSeconds = static_cast<float>(f.lastNs - f.startNs) * 1e-9f;
-            f.distance = Length(carry::Horizontal(Sub(f.contactAt, f.spawn)));
-            f.onFloor = f.haveFloor && std::fabs(f.contactAt.z - f.floorZ) < 0.35f;
-            if (f.onFloor) {
-                const Vec3 d = carry::Horizontal(Sub(f.contactAt, f.spawn));
-                f.range = Dot(d, f.heading);
-                f.lateral = Length(Sub(d, Scale(f.heading, f.range)));
-                if (f.gameRange >= 0) { f.rangeError = f.range - f.gameRange; }
-            }
-            Log("contact entity=" + std::to_string(f.entity) + " t=" + Fixed(f.contactSeconds, 3) + " at=" +
-                Point(f.contactAt) + " distance=" + Fixed(f.distance, 2) + " onFloor=" + std::to_string(f.onFloor) +
-                " range=" + Fixed(f.range, 2) + " gameRange=" + Fixed(f.gameRange, 2) + " realRange=" +
-                Fixed(f.realRange, 2) + " rangeError=" + Fixed(f.rangeError, 3) + " lateral=" + Fixed(f.lateral, 3) +
-                (f.fits ? " gravity=" + Fixed(f.gravitySum / f.fits, 2) + " damping=" +
-                              Fixed(f.dampingSum / f.fits, 3) : std::string()) +
-                " maxRise=" + Fixed(f.maxHeight - f.spawn.z, 2));
-        } else if (dt > 0.002f && std::fabs(v.x) + std::fabs(v.y) > 0.5f) {
-            // k from the horizontal decay, g from the vertical change net of it.
-            const Vec3 h0 = carry::Horizontal(f.lastV), h1 = carry::Horizontal(v);
-            const float k = (Length(h0) - Length(h1)) / (Length(h0) * dt);
-            const float g = -(v.z - f.lastV.z) / dt - k * f.lastV.z;
-            if (std::isfinite(k) && std::isfinite(g)) {
-                f.dampingSum += k;
-                f.gravitySum += g;
-                ++f.fits;
-            }
-        }
-    }
-    if (!f.rest) {
-        f.still = Length(v) < 0.05f ? f.still + 1 : 0;
-        if (f.still >= 10) {
-            f.rest = true;
-            f.restAt = p;
-            f.restSeconds = t;
-            Log("rest entity=" + std::to_string(f.entity) + " t=" + Fixed(t, 2) + " at=" + Point(p) +
-                " fromSpawn=" + Fixed(Length(carry::Horizontal(Sub(p, f.spawn))), 2));
-        }
-    }
-    f.last = p;
-    f.lastV = v;
-    f.lastNs = now;
-    {
-        std::lock_guard lock(gLastMutex);
-        gLast.flight = f;
-    }
-    if (t > 12.0f) { f = {}; }
-}
-
-std::string FlightLine(const Flight& f)
-{
-    std::string out = " flightEntity=" + std::to_string(f.entity) + " flightName=" + f.name +
-                      " flightFrames=" + std::to_string(f.frames) + " spawn=" + Point(f.spawn) +
-                      " expectedV=" + Point(f.expected);
-    if (f.haveV2) { out += " v2=" + Point(f.v2) + " speed2=" + Fixed(Length(f.v2), 2); }
-    if (f.fits) {
-        out += " gravity=" + Fixed(f.gravitySum / f.fits, 2) + " damping=" + Fixed(f.dampingSum / f.fits, 3);
-    }
-    out += " modelGravity=" + Fixed(f.modelGravity, 2) + " modelDamping=" + Fixed(f.modelDamping, 3) +
-           " gameRange=" + Fixed(f.gameRange, 2) + " realRange=" + Fixed(f.realRange, 2);
-    if (f.contact) {
-        out += " contactAt=" + Point(f.contactAt) + " contactT=" + Fixed(f.contactSeconds, 3) +
-               " distance=" + Fixed(f.distance, 2) + " onFloor=" + std::to_string(f.onFloor);
-        if (f.onFloor) {
-            out += " range=" + Fixed(f.range, 2) + " rangeError=" + Fixed(f.rangeError, 3) + " lateral=" +
-                   Fixed(f.lateral, 3);
-        }
-    }
-    if (f.rest) { out += " restAt=" + Point(f.restAt) + " restT=" + Fixed(f.restSeconds, 2); }
-    if (f.gone) { out += " goneT=" + Fixed(f.goneSeconds, 2); }
-    out += " maxRise=" + Fixed(f.maxHeight - f.spawn.z, 2);
-    return out;
-}
-
 // The equipped grenade, now: where the game would spawn it against the hand.
 std::string HoldLine()
 {
@@ -1128,7 +912,6 @@ void UpdateGrenadeLane(const GameplayPoseFrame& frame, bool)
     if (!gInstallTried) { return; }
     RunGive(frame.player);
     RetryEquip(frame.player);
-    WatchFlight();
 }
 
 std::string GrenadeReport()
@@ -1173,7 +956,6 @@ std::string GrenadeReport()
             << " motionValid=" << c.release.motion.valid << " motionRuntime=" << c.release.motion.fromRuntime
             << " motionSamples=" << c.release.motion.samples;
     }
-    out << FlightLine(last.flight);
     return out.str();
 }
 

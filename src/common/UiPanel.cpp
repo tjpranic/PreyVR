@@ -269,7 +269,7 @@ const PopupAnchor* PopupHold::Update(bool shown, std::uint64_t now, const Pose& 
         return nullptr;
     }
     lastShownNs_=now;
-    const bool recentred=reference%2==0 && reference!=reference_;
+    const bool recentred=!stereo::Recentering(reference) && reference!=reference_;
     if ((!anchor_ || recentred) && Valid(head) && Valid(eyes[0]) && Valid(eyes[1])) {
         anchor_=AnchorPopup(head,eyes);
         reference_=reference;

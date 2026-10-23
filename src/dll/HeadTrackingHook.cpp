@@ -269,7 +269,7 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     if (gRoomReference.TryRead(room)) {
         lastRoom = room;
         lastRoomReference = renderReference;
-    } else if (renderReference % 2 == 0 && lastRoomReference == renderReference) {
+    } else if (!stereo::Recentering(renderReference) && lastRoomReference == renderReference) {
         room = lastRoom;
         gRoomReadFallbacks.fetch_add(1, std::memory_order_relaxed);
     } else {
@@ -346,7 +346,7 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     std::memcpy(viewParams + kViewPosition, &world.position, sizeof(world.position));
     // Publish only after BOTH rotation and position were accepted. Partial,
     // rotation-only and non-unit-scale research modes have no world contract.
-    if (gPositionScale.load()==1.f && renderReference%2==0 &&
+    if (gPositionScale.load()==1.f && !stereo::Recentering(renderReference) &&
         renderReference==HeadTrackingReferenceGeneration())
         tRenderedHead={headPose,world,tHeadLastGood.displayTime,renderReference,tHeadLastGood.spaceEpoch,true};
     gPositionApplied.fetch_add(1, std::memory_order_relaxed);
@@ -493,7 +493,7 @@ DWORD RecenterHeadTracking(bool recalibrateHeight)
         return 2;
     }
     std::unique_lock referenceLock(gRecenterMutex, std::try_to_lock);
-    if (!referenceLock.owns_lock() || sampledReference%2 ||
+    if (!referenceLock.owns_lock() || stereo::Recentering(sampledReference) ||
         sampledReference!=gReferenceGeneration.load()) { return 3; }
     Vec3 origin=headPose.position;
     RoomReference previous{};
@@ -524,11 +524,11 @@ DWORD SnapTurnHeadTracking(int steps,unsigned degrees) {
        !FreshSample(MonotonicNanoseconds(),frame.publishedNs) ||
        !IsPoseUsable(frame.head,frame.headValidity,kMaxPoseAgeNs)) return 2;
     std::unique_lock lock(gRecenterMutex,std::try_to_lock);
-    if(!lock.owns_lock() || sampledReference%2 || sampledReference!=gReferenceGeneration.load() ||
+    if(!lock.owns_lock() || !stereo::ReferenceCurrent(sampledReference, gReferenceGeneration.load()) ||
        !gRoomReference.TryRead(room)) return 3;
-    const float delta=static_cast<float>(steps)*static_cast<float>(degrees)*.0174532925199433f;
+    const float delta=static_cast<float>(steps)*static_cast<float>(degrees)*kRadiansPerDegree;
     room.origin=comfort::TurnOriginAboutHead(room.origin,frame.head.position,delta);
-    room.yaw=controller::SnapTurn(room.yaw,steps,degrees*.0174532925199433f);
+    room.yaw=controller::SnapTurn(room.yaw,steps,degrees*kRadiansPerDegree);
     gReferenceGeneration.fetch_add(1);
     gRoomReference.Publish(room);gReferenceYaw.store(room.yaw);gReferenceGeneration.fetch_add(1);
     Log("result=0 detail=snap_turn degrees="+std::to_string(steps*static_cast<int>(degrees)));
@@ -580,7 +580,7 @@ int TurnHeadTrackingReferenceWithNative(const std::function<std::optional<float>
     if(!gHaveReference.load(std::memory_order_acquire)) return 1;
     std::unique_lock lock(gRecenterMutex,std::try_to_lock);
     RoomReference room{};
-    if(!lock.owns_lock() || sampledReference%2 || sampledReference!=gReferenceGeneration.load() ||
+    if(!lock.owns_lock() || !stereo::ReferenceCurrent(sampledReference, gReferenceGeneration.load()) ||
        !gRoomReference.TryRead(room)) return 2;
     const auto turned=turnNative(room.yaw);
     if(!turned) return 3;
@@ -599,7 +599,7 @@ int MoveHeadTrackingOriginWithNative(const Pose& head, float playSpaceYaw,
     if(!gHaveReference.load(std::memory_order_acquire)) return 1;
     std::unique_lock lock(gRecenterMutex,std::try_to_lock);
     RoomReference room{};
-    if(!lock.owns_lock() || sampledReference%2 || sampledReference!=gReferenceGeneration.load() ||
+    if(!lock.owns_lock() || !stereo::ReferenceCurrent(sampledReference, gReferenceGeneration.load()) ||
        !gRoomReference.TryRead(room)) return 2;
     const auto applied=moveNative(roomscale::HeadOffsetWorld(head.position,room.origin,playSpaceYaw,scale));
     if(!applied) return 3;

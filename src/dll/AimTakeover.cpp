@@ -288,8 +288,8 @@ void __fastcall UpdateCachedRayWithTakeover(void* player)
         gNativeEyeMilli[i].store(static_cast<int>(eye * 1000.0f), std::memory_order_relaxed);
         gTrackedHeadMilli[i].store(static_cast<int>(head * 1000.0f), std::memory_order_relaxed);
     }
-    if ((frame.referenceGeneration & 1) ||
-        frame.referenceGeneration != HeadTrackingReferenceGeneration() || !std::isfinite(frame.yaw)) { gGameplayFrame.Clear(); return; }
+    if (!stereo::ReferenceCurrent(frame.referenceGeneration, HeadTrackingReferenceGeneration()) ||
+        !std::isfinite(frame.yaw)) { gGameplayFrame.Clear(); return; }
     // IK must never reread the mutable cached origin below.
     SolveTwoHandedFrame(frame,haveTracking);
     // Before publishing: the takeover draws each hand where this puts it.

@@ -196,12 +196,10 @@ struct Watch {
     unsigned restoredFrame = 0;
 };
 Watch gWatch;
-// carry.impulse: what the release does with the game's own impulse (StopHook).
-// 0 (default): kept, with a zero speed, and compensated; 1: kept, not
-// compensated; 2: skipped through _bFromSerialize -- the object then falls
-// through the floor (measured 2026-10-07, 2 of 2 and 3 of 3; with it kept,
-// 0 of 5), so 1 and 2 are for A/B only.
-std::atomic<int> gImpulseMode{0};
+// The release keeps the game's own impulse, handed a zero speed, and compensates
+// for what is left of it (StopHook). Skipping it through _bFromSerialize drops
+// the object through the floor (measured 2026-10-07, 2 of 2 and 3 of 3; with it
+// kept, 0 of 5). The last mass-clamp scale it was compensated by, for the report:
 std::atomic<float> gLastScale{1.0f};
 // carry.grabpoint 1 (default): a light prop is held by the point the pointing
 // ray met it at (carry::LightHoldAt); 0: its centre in the palm, as before.
@@ -418,7 +416,7 @@ struct HandNow {
 HandNow LeftHandNow(const GameplayPoseFrame& f)
 {
     HandNow h{};
-    if (!f.cameraCentreValid || !f.headYawUsable || (f.referenceGeneration & 1) || !std::isfinite(f.yaw)) { return h; }
+    if (!f.cameraCentreValid || !f.headYawUsable || stereo::Recentering(f.referenceGeneration) || !std::isfinite(f.yaw)) { return h; }
     const auto& left = f.tracking.hands[static_cast<unsigned>(Hand::left)];
     if (!IsPoseUsable(left.gripPose, left.gripValidity, kMaxPoseAgeNs)) { return h; }
     h.grip = animik::ControllerWorldFromHead(f.yaw, f.cameraCentre, f.tracking.head, left.gripPose);
@@ -544,8 +542,8 @@ void Requeue(Pending p)
 void ExecuteRelease(std::uintptr_t carry, const Pending& p, std::uint32_t id)
 {
     const auto yaw = p.yawValid ? p.yaw : 0.0f;
-    const Vec3 hand = p.motion.valid && p.yawValid ? carry::TrackingToWorld(p.motion.velocity, yaw) : Vec3{};
-    const Vec3 spin = p.motion.valid && p.yawValid ? carry::TrackingToWorld(p.motion.angular, yaw) : Vec3{};
+    const Vec3 hand = p.motion.valid && p.yawValid ? stereo::TrackingDirToEngine(p.motion.velocity, yaw) : Vec3{};
+    const Vec3 spin = p.motion.valid && p.yawValid ? stereo::TrackingDirToEngine(p.motion.angular, yaw) : Vec3{};
     const Vec3 player = PlayerVelocity();
     const carry::Release r = carry::ComputeRelease(hand, spin, player, gGrab.kind, Get(gThrow));
     StopOverride o{};
@@ -767,7 +765,6 @@ void __fastcall StopHook(std::uintptr_t carry, float impulse, std::uint8_t angul
         thrown = o.release.thrown ? 1 : 0;
         impulse = 0;
         angular = 0;
-        if (gImpulseMode.load() == 2) { serialize = 1; }
     }
     original(carry, impulse, angular, thrown, serialize);
     char line[160];
@@ -788,13 +785,11 @@ void __fastcall StopHook(std::uintptr_t carry, float impulse, std::uint8_t angul
             // it lands on exactly the release velocity (a standing player:
             // exact; a moving one: one physics step of that difference).
             Vec3 v = o.release.velocity;
-            if (gImpulseMode.load() == 0) {
-                phys::Dynamics d{};
-                phys::QueryDynamics(physics, d);
-                const float k = NativeImpulseScale(physics, d.mass);
-                v = Sub(v, Scale(PlayerVelocity(), k));
-                gLastScale.store(k);
-            }
+            phys::Dynamics d{};
+            phys::QueryDynamics(physics, d);
+            const float k = NativeImpulseScale(physics, d.mass);
+            v = Sub(v, Scale(PlayerVelocity(), k));
+            gLastScale.store(k);
             ApplyVelocity(physics, v, o.setAngular ? &o.release.angular : nullptr, id);
             gReleasesDone.fetch_add(1);
             (o.release.thrown ? gThrows : gDrops).fetch_add(1);
@@ -1010,7 +1005,7 @@ void UpdateCarryLane(const GameplayPoseFrame& frame, bool)
                 const Quaternion q = carry::FromMatrix34(tm);
                 const Quaternion d = Multiply(q, Conjugate(gGrab.targetRotation));
                 const float s = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
-                gGrab.rotationError = 2.0f * std::atan2(s, std::fabs(d.w)) * 57.29578f;
+                gGrab.rotationError = 2.0f * std::atan2(s, std::fabs(d.w)) * kDegreesPerRadian;
             }
             if (gTrace.load()) {
                 static std::uint64_t last = 0;
@@ -1103,7 +1098,7 @@ std::string CarryReport()
         out << " settledDrop=" << Fixed(last.watch.startZ - last.watch.minZ) << " restored=" << last.watch.restored
             << " restoredFrame=" << last.watch.restoredFrame;
     }
-    out << " impulseMode=" << gImpulseMode.load() << " nativeImpulseScale=" << Fixed(gLastScale.load(), 2);
+    out << " nativeImpulseScale=" << Fixed(gLastScale.load(), 2);
     if (last.watch.firstSpeed >= 0) {
         out << " flightV2=" << Point(last.watch.firstVelocity) << " flightSpeed2=" << Fixed(last.watch.firstSpeed, 2)
             << " flightSpeed12=" << Fixed(last.watch.laterSpeed, 2) << " expected=" << Point(last.watch.expected);
@@ -1132,8 +1127,6 @@ bool ExecuteCarryCommand(const std::vector<std::string>& args, std::ostringstrea
         if (args.size() > 1) { result = SetCarryHand(static_cast<unsigned>(arg(1, 1))); }
     } else if (verb == "carry.hold") {
         if (args.size() > 1) { result = SetCarryHoldToHold(static_cast<unsigned>(arg(1, 1))); }
-    } else if (verb == "carry.impulse") {
-        if (args.size() > 1) { gImpulseMode.store(std::clamp(arg(1, 0), 0, 2)); }
     } else if (verb == "carry.grabpoint") {
         if (args.size() > 1) { gGrabPoint.store(arg(1, 1) != 0); }
     } else if (verb == "carry.trace") {

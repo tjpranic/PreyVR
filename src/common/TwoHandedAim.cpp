@@ -91,7 +91,7 @@ Output Solver::Update(const Input& i) {
         const Vec3 localLine=Rotate(Conjugate(i.aim.orientation),line);
         swing_=Swing(socket_,localLine);
     }
-    const float alpha=1-std::exp(-i.dt*25.f);
+    const float alpha=ExpAlpha(i.dt,25.f);
     blend_+=(held_?1-blend_:-blend_)*alpha;
     if(!held_&&blend_<.001f) { blend_=0;swing_={}; }
     const Quaternion local=Mix({},swing_,blend_);

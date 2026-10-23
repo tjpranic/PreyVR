@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
+#include "DllTestSupport.h"
 #include "TestSupport.h"
 namespace {
 struct Event {int kind,x,y;};
@@ -12,7 +13,7 @@ bool optionsOwned=false;
 DWORD modeError=0,cursorError=0,cancelError=0;
 using preyvr::test::Require;
 }
-namespace preyvr::lifecycle {void Log(std::string_view){}}
+PREYVR_TEST_DROP_LOG()
 namespace preyvr::dll {
 bool HudMenuStateKnown(){return menuKnown;}
 bool HudMenuIsOpen(){return menuOpen;}

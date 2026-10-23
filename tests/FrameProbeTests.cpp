@@ -4,16 +4,14 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include "DllTestSupport.h"
 #include "TestSupport.h"
 
-namespace preyvr::lifecycle {
-std::vector<std::string> gLines;
-void Log(std::string_view message) { gLines.emplace_back(message); }
-} // namespace preyvr::lifecycle
+PREYVR_TEST_CAPTURE_LOG()
+PREYVR_TEST_STUB_MINHOOK()
 namespace preyvr::dll {
 DWORD gPinned = 0;
 DWORD ModulePinStatus() { return gPinned; }
-bool EnsureMinHook() { return false; }
 // PassCreationHook's shared R-071 hook: unavailable without Prey.
 bool EnsurePassCreationHook() { return false; }
 // The cull watch's queue indices: a scripted sequence.
@@ -34,7 +32,8 @@ bool CullQueueIndices(std::uint32_t& write, std::uint32_t& read)
 
 namespace {
 using namespace preyvr::dll;
-using preyvr::lifecycle::gLines;
+using preyvr::test::gLines;
+using preyvr::test::Logged;
 using preyvr::test::Require;
 
 void ResetProbe()
@@ -76,13 +75,6 @@ std::vector<std::string> Lines(const char* prefix)
         if (line.rfind(prefix, 0) == 0) out.push_back(line);
     }
     return out;
-}
-bool Logged(const char* text)
-{
-    for (const auto& line : gLines) {
-        if (line.find(text) != std::string::npos) return true;
-    }
-    return false;
 }
 
 void TestOff()

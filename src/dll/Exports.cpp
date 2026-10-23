@@ -20,7 +20,6 @@
 #include "InputPathProbe.h"
 #include "CommandChannel.h"
 #include "NearViewStereo.h"
-#include "RenderFrame.h"
 #include "WeaponAttachment.h"
 #include "DebugWatch.h"
 #include "RuntimeSnapshotWin32.h"

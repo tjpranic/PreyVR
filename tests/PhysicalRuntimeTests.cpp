@@ -2,15 +2,15 @@
 // lane wants it, read back in the world and in tracking space with its grip and
 // weapon, never replaced by an older sample, its bounds logged once per equip.
 #include "../src/dll/PhysicalInteractions.cpp"
+#include "DllTestSupport.h"
 #include "TestSupport.h"
 #include <cmath>
 #include <iostream>
 #include <string>
 #include <vector>
-std::vector<std::string> logLines;
-namespace preyvr::lifecycle {void Log(std::string_view line){logLines.emplace_back(line);}}
+PREYVR_TEST_CAPTURE_LOG()
 namespace {
-unsigned Count(const char* a){unsigned n=0;for(const auto& l:logLines)n+=l.find(a)!=std::string::npos;return n;}
+using preyvr::test::Count;
 bool wanted=false;
 unsigned surfaceStop=0,surfaceWeapon=1;
 }

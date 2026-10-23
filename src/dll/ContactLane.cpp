@@ -12,6 +12,7 @@
 #include "Logger.h"
 #include "MoveLane.h"
 #include "PhysicalInteractions.h"
+#include "PhysicalLane.h"
 #include "PhysicsCalls.h"
 #include "PsiMedkit.h"
 #include "SceneQuery.h"
@@ -54,17 +55,14 @@ std::atomic<DWORD> error{0};
 std::atomic<const char*> lastGate{"none"};
 
 // --- the engine's calls ---------------------------------------------------------
-using EntitiesInBox = int(__fastcall*)(std::uintptr_t, const Vec3*, const Vec3*, void***, int, int);
-// CollideEntityWithPrimitive(world, entity, itype, primitive, sweep, hit, ip): the
-// primitive is the itype's (contact::BoxPrimitive, contact::SpherePrimitive).
-using Collide = int(__fastcall*)(std::uintptr_t, void*, int, void*, const Vec3*, scene::Hit*, void*);
+// The broadphase and the per-entity test (phys::EntitiesInBox, phys::Collide): PhysicsCalls.h.
 using SurfaceParameters = int(__fastcall*)(std::uintptr_t, int, float*, float*, unsigned*);
 struct Natives {
     std::uintptr_t world = 0, rigid = 0, articulated = 0;
     void* player = nullptr;
     void* carried = nullptr;
-    EntitiesInBox entitiesInBox = nullptr;
-    Collide collide = nullptr;
+    phys::EntitiesInBox entitiesInBox = nullptr;
+    phys::Collide collide = nullptr;
     SurfaceParameters surface = nullptr;
     bool push = false;     // the rigid Action, QueueAction and the velocity queue passed
     bool bodies = false;   // and the articulated Action and step slots: corpses push too
@@ -84,23 +82,17 @@ unsigned Query(const Natives& n, const Box& now, const Box* previous, Contact* o
     Vec3 lo{}, hi{};
     contact::Bounds(previous ? *previous : now, now, .02f, lo, hi);
     void* list[kMaxEntities]{};
-    void** listed = list;
-    const int count = n.entitiesInBox(n.world, &lo, &hi, &listed, cn::MovableObjects, static_cast<int>(kMaxEntities));
-    // More than our buffer holds: the engine hands back its shared per-caller
-    // buffer instead, which another query may overwrite. Refuse it.
-    if (count < 0 || count > static_cast<int>(kMaxEntities) || listed != list) { s.error = ERROR_BUFFER_OVERFLOW; return 0; }
+    // More than our buffer holds: the engine's shared buffer, refused (phys::Broadphase).
+    const int count = phys::Broadphase(n.entitiesInBox, n.world, lo, hi, cn::MovableObjects, list, static_cast<int>(kMaxEntities));
+    if (count < 0) { s.error = ERROR_BUFFER_OVERFLOW; return 0; }
     s.entities = static_cast<unsigned>(count);
     const Vec3 still{};
     const Vec3 sweep = previous ? Sub(now.centre, previous->centre) : Vec3{};
     const bool moving = previous && Length(sweep) >= .001f;
     unsigned written = 0;
     auto test = [&](void* entity, int type, const Box& box, const Vec3& motion, Kind kind) {
-        if (written >= capacity) { return; }
-        contact::BoxPrimitive primitive = contact::ToPrimitive(box);   // per call: the engine edits it
-        scene::Hit hit{};
-        if (n.collide(n.world, entity, cn::PrimitiveBox, &primitive, &motion, &hit, nullptr) && contact::Valid(hit, entity)) {
-            out[written++] = {entity, type, kind, hit};
-        }
+        scene::Hit hit;
+        if (written < capacity && phys::CollideBox(n.collide, n.world, entity, box, motion, hit)) { out[written++] = {entity, type, kind, hit}; }
     };
     for (int i = 0; i < count; ++i) {
         void* const entity = list[i];
@@ -225,8 +217,8 @@ DWORD Resolve(const GameplayPoseFrame& frame, Natives& n)
     n.carried = reinterpret_cast<void*>(CarriedPhysics());
     n.rigid = base + cn::RigidVtable;
     n.articulated = base + cn::ArticulatedVtable;
-    n.entitiesInBox = reinterpret_cast<EntitiesInBox>(base + cn::GetEntitiesInBox);
-    n.collide = reinterpret_cast<Collide>(base + cn::CollideEntityWithPrimitive);
+    n.entitiesInBox = reinterpret_cast<phys::EntitiesInBox>(base + cn::GetEntitiesInBox);
+    n.collide = reinterpret_cast<phys::Collide>(base + cn::CollideEntityWithPrimitive);
     n.surface = reinterpret_cast<SurfaceParameters>(base + cn::GetSurfaceParameters);
     return ERROR_SUCCESS;
 }
@@ -294,14 +286,6 @@ BodyRead ReadRigid(void* entity, contact::Body& body, float& mass)
     return Checked(body, mass);
 }
 
-std::uintptr_t VtableOf(const void* entity)
-{
-    __try {
-        return entity ? *reinterpret_cast<const std::uintptr_t*>(entity) : 0;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return 0;
-    }
-}
 // One part of a corpse, for a push: its joint's body, read live where the
 // per-part set velocity writes it (ContactNative.h), and checked against the
 // hashed per-part dynamics status (the same mass, the same centre). A body with a
@@ -512,9 +496,9 @@ using Proxies = std::array<ProxyNow, kProxies>;
 struct Last { Box box{}; std::uint64_t key = 0, sequence = 0, reference = 0, stamp = 0; float yaw = 0; bool valid = false; };
 std::array<Last, kProxies> last{};
 contact::Tracker tracker;
-std::uint64_t seenSettings = 0, reportNs = 0, reportSum = 0, logSecondNs = 0;
-const char* reportGate = nullptr;
+std::uint64_t seenSettings = 0, logSecondNs = 0;
 unsigned logLines = 0;
+lane::ReportThrottle reportThrottle;
 bool loggedGate = false;
 // What is being pushed, and the frame it last was. A velocity-matched object needs
 // no push on frames it already keeps up, so a push lasts until the object goes
@@ -539,14 +523,7 @@ bool PushStarts(const void* collider)
 // The per-event lines (begin, end, push) are off unless `contact log 1` asks for
 // them; the counters, the 10 s report and the settings, gate, ground and fault
 // lines always run. At most kLogLinesPerSecond event lines; the rest are counted.
-bool LogBudget()
-{
-    const auto now = MonotonicNanoseconds();
-    if (now - logSecondNs >= 1000000000ull) { logSecondNs = now; logLines = 0; }
-    if (logLines >= kLogLinesPerSecond) { ++dropped; return false; }
-    ++logLines;
-    return true;
-}
+bool LogBudget() { return lane::TakeLine(logSecondNs, logLines, kLogLinesPerSecond, dropped); }
 std::string TypeName(int type) { return type == cn::TypeArticulated ? "articulated" : type == cn::TypeRigid ? "rigid" : "other"; }
 // What was underfoot stays so while the player's feet stay within kStandStay of
 // where it was last found under them (standing still, the engine lets go of its
@@ -692,17 +669,11 @@ void Publish(const GameplayPoseFrame& frame, const Proxies& proxy, const char* g
 }
 void MaybeReport()
 {
-    const auto now = MonotonicNanoseconds();
-    if (now - reportNs < 10000000000ull) { return; }
-    reportNs = now;
-    const auto sum = queries.load() + refused.load() + found.load() + begins.load() + ends.load() + overflows.load() +
-                     pushes.load() + pushFailed.load() + hostedRefused.load() + immovableRefused.load() +
-                     standingSkipped.load() + pressed.load();
-    const char* gate = lastGate.load();
-    if (sum == reportSum && gate == reportGate) { return; }
-    reportSum = sum;
-    reportGate = gate;
-    Log("report" + ContactReport());
+    const auto counters = [] {
+        return queries.load() + refused.load() + found.load() + begins.load() + ends.load() + overflows.load() + pushes.load() +
+               pushFailed.load() + hostedRefused.load() + immovableRefused.load() + standingSkipped.load() + pressed.load();
+    };
+    if (reportThrottle.Due(counters, lastGate)) { Log("report" + ContactReport()); }
 }
 // One push per touched rigid object, and per touched part of a corpse: its
 // deepest overlap from any proxy, else its sweep. The velocity change keeps its
@@ -855,16 +826,8 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
     }
     const auto now = MonotonicNanoseconds();
     Proxies proxy{};
-    const char* why = nullptr;
-    if (!enabled.load()) { why = "off"; }
-    else if (fault.load()) { why = "fault"; }
-    else if (!allowed) { why = "tracking"; }
-    else if (!HudGameplayInputAllowed()) { why = "menu"; }
-    else if (BodyHeadOut()) { why = "head_out"; }
-    else if (!frame.cameraCentreValid || !frame.headYawUsable || !std::isfinite(frame.yaw)) { why = "camera"; }
-    else if (!FreshSample(now, frame.tracking.publishedNs, kFreshNs) ||
-             frame.referenceGeneration != HeadTrackingReferenceGeneration()) { why = "pose"; }
-    else {
+    const char* why = lane::GateReason(frame, allowed, enabled.load(), fault.load(), now, kFreshNs);
+    if (!why) {
         auto& weapon = proxy[kWeapon];
         WeaponBox sample{};
         if (!TryGetWeaponBox(sample) || !FreshSample(now, sample.publishedNs, kFreshNs)) { weapon.why = "no_weapon"; }
@@ -898,7 +861,7 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
     if (const DWORD ready = gResolve(frame, natives)) {
         ++refused;
         error = ready;
-        if (ready != ERROR_NOT_READY && ready != ERROR_INVALID_THREAD_ID) {
+        if (!TransientEngineError(ready)) {
             fault = true;
             Log("fault error=" + std::to_string(ready) + " detail=resolve");
             EndAll("fault");
@@ -924,8 +887,7 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
     // apart it is not trusted: no velocity, only easing an overlap out.
     std::array<float, kProxies> dt{};
     QueryStats total{};
-    LARGE_INTEGER start{}, end{}, frequency{};
-    QueryPerformanceCounter(&start);
+    const lane::Stopwatch watch;
     for (unsigned p = 0; p < kProxies; ++p) {
         const auto& current = proxy[p];
         auto& was = last[p];
@@ -934,8 +896,7 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
             YawDistance(current.yaw, was.yaw) < .05f && Length(Sub(current.box.centre, was.box.centre)) < .3f) {
             before[p] = was.box;
             previous[p] = &before[p];
-            float d = current.stamp > was.stamp ? static_cast<float>(current.stamp - was.stamp) * 1e-9f : 0.0f;
-            dt[p] = d >= 1.0f / 240.0f && d <= 1.0f / 20.0f ? d : 0.0f;
+            dt[p] = lane::TrustedDt(current.stamp, was.stamp);
         }
         QueryStats stats{};
         unsigned written = 0;
@@ -957,12 +918,9 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
         total.other += stats.other;
         was = {current.box, current.key, current.sequence, current.reference, current.stamp, current.yaw, true};
     }
-    QueryPerformanceCounter(&end);
-    QueryPerformanceFrequency(&frequency);
-    const auto us = static_cast<std::uint64_t>((end.QuadPart - start.QuadPart) * 1000000 / std::max<LONGLONG>(frequency.QuadPart, 1));
+    const auto us = watch.Micros();
     ++queries;
-    usTotal += us;
-    if (us > usMax.load()) { usMax = us; }
+    lane::AddMicros(us, usTotal, usMax);
     entities += total.entities;
     if (total.entities > entitiesMax.load()) { entitiesMax = total.entities; }
     others += total.other;
@@ -972,7 +930,7 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
     // stops short of it, so it is pushed by how far the real hand presses into it.
     for (const Hand hand : {Hand::right, Hand::left}) {
         const auto& press = frame.surface[static_cast<unsigned>(hand)].press;
-        if (!press.object || !(press.depth > 0) || count >= kMaxContacts || VtableOf(press.object) != natives.rigid) { continue; }
+        if (!press.object || !(press.depth > 0) || count >= kMaxContacts || phys::VtableOf(press.object) != natives.rigid) { continue; }
         Contact& c = contacts[count++];
         c = {};
         c.collider = const_cast<void*>(press.object);
@@ -998,7 +956,7 @@ void UpdateContactLane(const GameplayPoseFrame& frame, bool allowed)
 {
     thread_local bool busy = false;
     if (busy || !OnEngineMainThread()) { return; }
-    struct Guard { bool& value; explicit Guard(bool& v) : value(v) { value = true; } ~Guard() { value = false; } } guard(busy);
+    const lane::ReentryGuard guard(busy);
     UpdateImpl(frame, allowed);
 }
 DWORD GateLooseBodies() { return GateBodies(PreyBase()); }

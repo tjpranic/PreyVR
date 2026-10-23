@@ -7,16 +7,14 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include "DllTestSupport.h"
 #include "TestSupport.h"
 
-namespace preyvr::lifecycle {
-std::vector<std::string> gLines;
-void Log(std::string_view message) { gLines.emplace_back(message); }
-} // namespace preyvr::lifecycle
+PREYVR_TEST_CAPTURE_LOG()
+PREYVR_TEST_STUB_MINHOOK()
 namespace preyvr::dll {
 DWORD gPinned = 0;
 DWORD ModulePinStatus() { return gPinned; }
-bool EnsureMinHook() { return false; }
 // The frame probe, as the watch drives it.
 struct ProbeCall {
     ProbeStep step;
@@ -31,7 +29,8 @@ void ProbeRecord(ProbeStep step, std::uint32_t a, std::uint32_t b, std::uint32_t
 
 namespace {
 using namespace preyvr::dll;
-using preyvr::lifecycle::gLines;
+using preyvr::test::gLines;
+using preyvr::test::Logged;
 
 using preyvr::test::Require;
 template <typename T> void Put(std::vector<std::uint8_t>& memory, std::uintptr_t offset, T value)
@@ -41,13 +40,6 @@ template <typename T> void Put(std::vector<std::uint8_t>& memory, std::uintptr_t
 std::uintptr_t At(const std::vector<std::uint8_t>& memory, std::uintptr_t offset = 0)
 {
     return reinterpret_cast<std::uintptr_t>(memory.data()) + offset;
-}
-bool Logged(const char* text)
-{
-    for (const auto& line : gLines) {
-        if (line.find(text) != std::string::npos) return true;
-    }
-    return false;
 }
 std::string LastLine() { return gLines.empty() ? std::string() : gLines.back(); }
 

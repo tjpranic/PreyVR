@@ -27,7 +27,6 @@
 #include "DualOverlay.h"
 #include "NearParticleStereo.h"
 #include "MarkerStereo.h"
-#include "RenderFrame.h"
 #include "ReticleFollow.h"
 #include "SceneQuery.h"
 #include "ShotRay.h"
@@ -104,21 +103,6 @@ bool ParseInt(const std::string& text, int& out)
     try {
         std::size_t consumed = 0;
         const int value = std::stoi(text, &consumed, 0);
-        if (consumed != text.size()) {
-            return false;
-        }
-        out = value;
-        return true;
-    } catch (...) {
-        return false;
-    }
-}
-
-bool ParseU64(const std::string& text, unsigned long long& out)
-{
-    try {
-        std::size_t consumed = 0;
-        const unsigned long long value = std::stoull(text, &consumed, 0);
         if (consumed != text.size()) {
             return false;
         }
@@ -274,10 +258,6 @@ void WriteReport(std::ostringstream& out)
         << " aimNoPlayer=" << AimTakeoverRejectedNoPlayer()
         << " aimCompose=" << AimTakeoverRejectedCompose()
         << " aimNativeMagMilli=" << AimTakeoverNativeDirectionMagnitude()
-        << " frameCaptures=" << RenderFrameCaptureCount()
-        << " frameTracked=" << RenderFrameTrackedCharacters()
-        << " frameOverrideApplied=" << RenderFrameOverrideAppliedCount()
-        << " frameOverrideRefused=" << RenderFrameOverrideRefusedCount()
         << " menuActions=" << MenuNavigationActionCount()
         << " inputPosted=" << InputPostCount()
         << " menuDiscarded=" << InputMenuDiscardedCount()
@@ -639,16 +619,15 @@ bool ExecuteSwing(const std::vector<std::string>& args, std::ostringstream& out)
 // docs/WRENCH-DRAW-ANIMATION-2026-10-20.md: wrench.draw [0|1]. 1 (default) takes
 // the wrench out and puts it away without Prey's draw and stow animations; 0 plays
 // them again.
-// wrench.sound [play 0|1] [capture 0|1]: the draw's sound after a skip (default 1),
-// and the capture that found it (WrenchSound.h; default 0, while on the draw plays).
+// wrench.sound [play 0|1]: the draw's and stow's sound after a skip (WrenchSound.h,
+// default 1).
 bool ExecuteWrenchDraw(const std::vector<std::string>& args, std::ostringstream& out)
 {
     if (args[0] == "wrench.sound") {
         for (std::size_t i = 1; i + 1 < args.size(); i += 2) {
             int on = 1;
             ParseInt(args[i + 1], on);
-            if (args[i] == "capture") { SetWrenchSoundCapture(on != 0); }
-            else if (args[i] == "play") { SetWrenchSoundPlay(on != 0); }
+            if (args[i] == "play") { SetWrenchSoundPlay(on != 0); }
         }
         out << "wrench.sound result=0" << WrenchSoundReport();
         return true;
@@ -1145,42 +1124,6 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         } else {
             out << "hud.probe result=0 " << HudLastProbe();
         }
-    } else if (verb == "frame.capture") {
-        out << "frame.capture result=" << (Valued(args) ? SetRenderFrameCapture(arg(1, 1)) : 0) << NoValue(args);
-    } else if (verb == "frame.character" && args.size() >= 2) {
-        unsigned long long pointer = 0;
-        if (!ParseU64(args[1], pointer)) {
-            out << "frame.character result=2 detail=parse";
-        } else {
-            out << "frame.character result=" << SetRenderFrameOverrideCharacter(pointer);
-        }
-    } else if (verb == "frame.offset") {
-        out << "frame.offset result="
-            << (Valued(args) ? SetRenderFrameOffsetMillimetres(arg(1, 0), arg(2, 0), arg(3, 0)) : 0) << NoValue(args);
-    } else if (verb == "frame.apply") {
-        out << "frame.apply result=" << (Valued(args) ? SetRenderFrameOverrideEnabled(arg(1, 1)) : 0) << NoValue(args)
-            << " applied=" << RenderFrameOverrideAppliedCount()
-            << " refused=" << RenderFrameOverrideRefusedCount();
-    } else if (verb == "frame.propagate") {
-        out << "frame.propagate result="
-            << (Valued(args) ? SetRenderFrameOverridePropagates(arg(1, 1)) : 0) << NoValue(args);
-    } else if (verb == "frame.near") {
-        // Dumps the capture table with RenderCHR's own near verdict per slot
-        // (R-089), so identifying the near character no longer needs an injector
-        // attached to the running game.
-        out << "frame.near result=0";
-        unsigned int listed = 0;
-        for (unsigned int i = 0; i < 8; ++i) {
-            unsigned long long character = 0;
-            bool nearest = false;
-            if (!RenderFrameSlot(i, &character, &nearest)) {
-                continue;
-            }
-            out << " slot" << i << "=0x" << std::hex << character << std::dec
-                << ",near=" << (nearest ? 1 : 0);
-            ++listed;
-        }
-        out << " listed=" << listed;
     } else if (verb == "xr.resolution") {
         // The measured chain: what the runtime asks for, what Prey renders, what
         // is held, and what is submitted. Ratios are given so "soft" has a

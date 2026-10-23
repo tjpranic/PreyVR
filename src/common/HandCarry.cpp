@@ -27,11 +27,6 @@ Quaternion FromMatrix34(const float m[12])
     return QuaternionFromBasis(column[0], column[1], column[2]);
 }
 
-Vec3 TrackingToWorld(Vec3 v, float yawRadians)
-{
-    return Rotate(stereo::YawQuaternion(yawRadians), stereo::ToEngineSpace(v));
-}
-
 Vec3 Horizontal(Vec3 v) { return {v.x, v.y, 0.0f}; }
 Quaternion YawRotation(float radians) { return stereo::YawQuaternion(radians); }
 

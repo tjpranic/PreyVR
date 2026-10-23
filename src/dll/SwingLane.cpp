@@ -12,6 +12,8 @@
 #include "Logger.h"
 #include "MinHookInit.h"
 #include "PhysicalInteractions.h"
+#include "PhysicalLane.h"
+#include "PhysicsCalls.h"
 #include "SceneQuery.h"
 #include "preyvr/ContactNative.h"
 #include "preyvr/ContactQuery.h"
@@ -55,8 +57,7 @@ std::atomic<DWORD> error{0};
 std::atomic<const char*> lastGate{"none"};
 
 // --- the engine's calls ---------------------------------------------------------
-using EntitiesInBox = int(__fastcall*)(std::uintptr_t, const Vec3*, const Vec3*, void***, int, int);
-using Collide = int(__fastcall*)(std::uintptr_t, void*, int, void*, const Vec3*, scene::Hit*, void*);
+// The broadphase and the per-entity test (phys::EntitiesInBox, phys::Collide): PhysicsCalls.h.
 using SurfaceTypeOf = void*(__fastcall*)(void*, int, const char*);
 // The strike's calls (SwingNative.h): the component's hit (RCX component, XMM1
 // angle, R8 weapon, XMM3 scale, a byte on the stack: charged), its fatigue setter
@@ -69,8 +70,8 @@ struct Natives {
     void* player = nullptr;            // the player's own physics: never tested
     void* carried = nullptr;           // what the left hand carries: never tested
     std::uintptr_t playerObject = 0;   // the player (frame.player), for stamina
-    EntitiesInBox entitiesInBox = nullptr;
-    Collide collide = nullptr;
+    phys::EntitiesInBox entitiesInBox = nullptr;
+    phys::Collide collide = nullptr;
     void* entitySystem = nullptr;      // for names; null when unreadable
     void* surfaces = nullptr;          // CSurfaceTypeManager, when its chain checks out
     SurfaceTypeOf surfaceType = nullptr;
@@ -139,8 +140,8 @@ DWORD Resolve(const GameplayPoseFrame& frame, Natives& n)
     n.playerObject = frame.player;
     n.articulated = base + cn::ArticulatedVtable;
     n.wrench = base + physical::native::WrenchVtable;
-    n.entitiesInBox = reinterpret_cast<EntitiesInBox>(base + cn::GetEntitiesInBox);
-    n.collide = reinterpret_cast<Collide>(base + cn::CollideEntityWithPrimitive);
+    n.entitiesInBox = reinterpret_cast<phys::EntitiesInBox>(base + cn::GetEntitiesInBox);
+    n.collide = reinterpret_cast<phys::Collide>(base + cn::CollideEntityWithPrimitive);
     n.componentHit = reinterpret_cast<ComponentHit>(base + sn::ComponentHit);
     n.setFatigue = reinterpret_cast<FatigueSetter>(base + sn::FatigueSetter);
     n.staminaAvailable = reinterpret_cast<StaminaCheck>(base + sn::StaminaAvailable);
@@ -208,22 +209,17 @@ unsigned Query(const Natives& n, const Box& now, const Box* before, const Box& h
     lo = {std::min(lo.x, headLo.x), std::min(lo.y, headLo.y), std::min(lo.z, headLo.z)};
     hi = {std::max(hi.x, headHi.x), std::max(hi.y, headHi.y), std::max(hi.z, headHi.z)};
     void* list[kMaxEntities]{};
-    void** listed = list;
-    const int count = n.entitiesInBox(n.world, &lo, &hi, &listed, sn::StrikeObjects, static_cast<int>(kMaxEntities));
-    // More than our buffer holds: the engine hands back its shared buffer. Refuse it.
-    if (count < 0 || count > static_cast<int>(kMaxEntities) || listed != list) { s.error = ERROR_BUFFER_OVERFLOW; return 0; }
+    // More than our buffer holds: the engine's shared buffer, refused (phys::Broadphase).
+    const int count = phys::Broadphase(n.entitiesInBox, n.world, lo, hi, sn::StrikeObjects, list, static_cast<int>(kMaxEntities));
+    if (count < 0) { s.error = ERROR_BUFFER_OVERFLOW; return 0; }
     s.entities = static_cast<unsigned>(count);
     const Vec3 still{};
     const Vec3 sweep = before ? Sub(now.centre, before->centre) : Vec3{};
     const Vec3 flick = headBefore ? Sub(head.centre, headBefore->centre) : Vec3{};
     unsigned written = 0;
     auto test = [&](void* entity, int type, const Box& box, const Vec3& motion, Kind kind) {
-        if (written >= capacity) { return; }
-        contact::BoxPrimitive primitive = contact::ToPrimitive(box);   // per call: the engine edits it
-        scene::Hit hit{};
-        if (n.collide(n.world, entity, cn::PrimitiveBox, &primitive, &motion, &hit, nullptr) && contact::Valid(hit, entity)) {
-            out[written++] = {entity, type, kind, hit};
-        }
+        scene::Hit hit;
+        if (written < capacity && phys::CollideBox(n.collide, n.world, entity, box, motion, hit)) { out[written++] = {entity, type, kind, hit}; }
     };
     for (int i = 0; i < count; ++i) {
         void* const entity = list[i];
@@ -578,11 +574,11 @@ swing::Passes passes;
 // after a tenth of a second slower than a quarter of it. One line per swing.
 struct Run { bool active = false; float head = 0, centre = 0, quiet = 0; unsigned frames = 0, contacts = 0, strikes = 0; };
 Run run;
-std::uint64_t loggedRig = 0, reportNs = 0, reportSum = 0, logSecondNs = 0;
+std::uint64_t loggedRig = 0, logSecondNs = 0;
 unsigned logLines = 0;
 std::uint64_t seenSettings = 0;
 float chargeBonus = 0;
-const char* reportGate = nullptr;
+lane::ReportThrottle reportThrottle;
 bool loggedGate = false, loggedSelf = false;
 
 swing::StrikeSettings Settings()
@@ -594,14 +590,7 @@ swing::StrikeSettings Settings()
     s.fullSpeed = s.heavySpeed + kFullBonusAbove;
     return s;
 }
-bool LogBudget()
-{
-    const auto now = MonotonicNanoseconds();
-    if (now - logSecondNs >= 1000000000ull) { logSecondNs = now; logLines = 0; }
-    if (logLines >= kLogLinesPerSecond) { ++dropped; return false; }
-    ++logLines;
-    return true;
-}
+bool LogBudget() { return lane::TakeLine(logSecondNs, logLines, kLogLinesPerSecond, dropped); }
 std::string Cms(float speed) { return std::to_string(std::lround(speed * 100)); }
 const char* TypeName(int type) { return type == cn::TypeStatic ? "static" : type == cn::TypeRigid ? "rigid" : "articulated"; }
 void EndRun(const char* why)
@@ -720,16 +709,11 @@ void Publish(const GameplayPoseFrame& frame, const char* gate, const Box* box, c
 }
 void MaybeReport()
 {
-    const auto now = MonotonicNanoseconds();
-    if (now - reportNs < 10000000000ull) { return; }
-    reportNs = now;
-    const auto sum = queries.load() + refused.load() + touches.load() + begins.load() + strikes.load() + tooSlow.load() +
-                     locked.load() + drained.load() + blocked.load() + swings.load();
-    const char* gate = lastGate.load();
-    if (sum == reportSum && gate == reportGate) { return; }
-    reportSum = sum;
-    reportGate = gate;
-    Log("report" + SwingReport());
+    const auto counters = [] {
+        return queries.load() + refused.load() + touches.load() + begins.load() + strikes.load() + tooSlow.load() + locked.load() +
+               drained.load() + blocked.load() + swings.load();
+    };
+    if (reportThrottle.Due(counters, lastGate)) { Log("report" + SwingReport()); }
 }
 // How notable a decision is, for the overlay's one mark a frame.
 int Rank(Decision d)
@@ -756,19 +740,13 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
     const auto now = MonotonicNanoseconds();
     WeaponBox sample{};
     Box box{};
-    const char* why = nullptr;
-    if (!enabled.load()) { why = "off"; }
-    else if (fault.load()) { why = "fault"; }
-    else if (!allowed) { why = "tracking"; }
-    else if (!HudGameplayInputAllowed()) { why = "menu"; }
-    else if (BodyHeadOut()) { why = "head_out"; }
-    else if (!frame.cameraCentreValid || !frame.headYawUsable || !std::isfinite(frame.yaw)) { why = "camera"; }
-    else if (!FreshSample(now, frame.tracking.publishedNs, kFreshNs) ||
-             frame.referenceGeneration != HeadTrackingReferenceGeneration()) { why = "pose"; }
-    else if (!TryGetRealWrench(sample) || !FreshSample(now, sample.publishedNs, kFreshNs)) { why = "no_weapon"; }
-    else if (!sample.wrench) { why = "not_wrench"; }
-    else if (!contact::BoxFromPoints(sample.points, box)) { why = "bad_box"; }
-    else if (sample.reference != frame.referenceGeneration || sample.epoch != frame.tracking.epoch) { why = "reference"; }
+    const char* why = lane::GateReason(frame, allowed, enabled.load(), fault.load(), now, kFreshNs);
+    if (!why) {
+        if (!TryGetRealWrench(sample) || !FreshSample(now, sample.publishedNs, kFreshNs)) { why = "no_weapon"; }
+        else if (!sample.wrench) { why = "not_wrench"; }
+        else if (!contact::BoxFromPoints(sample.points, box)) { why = "bad_box"; }
+        else if (sample.reference != frame.referenceGeneration || sample.epoch != frame.tracking.epoch) { why = "reference"; }
+    }
     lastGate = why ? why : "open";
     if (why) {
         EndRun(why);
@@ -791,8 +769,8 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
         sample.sequence > last.sequence) {
         std::array<Vec3, 9> points{};
         for (std::size_t i = 0; i < points.size(); ++i) { points[i] = physical::Transform(sample.worldFromReference, last.local[i]); }
-        const float d = sample.stamp > last.stamp ? static_cast<float>(sample.stamp - last.stamp) * 1e-9f : 0.0f;
-        if (d >= 1.0f / 240.0f && d <= 1.0f / 20.0f && contact::BoxFromPoints(points, before)) {
+        const float d = lane::TrustedDt(sample.stamp, last.stamp);
+        if (d > 0 && contact::BoxFromPoints(points, before)) {
             previous = &before;
             dt = d;
             gripBefore = physical::Transform(sample.worldFromReference, last.grip);
@@ -807,7 +785,7 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
     if (const DWORD ready = gResolve(frame, natives)) {
         ++refused;
         error = ready;
-        if (ready != ERROR_NOT_READY && ready != ERROR_INVALID_THREAD_ID) {
+        if (!TransientEngineError(ready)) {
             fault = true;
             Log("fault error=" + std::to_string(ready) + " detail=resolve");
         }
@@ -835,11 +813,9 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
     Touch found[kMaxTouches]{};
     unsigned count = 0;
     QueryStats stats{};
-    LARGE_INTEGER start{}, end{}, frequency{};
-    QueryPerformanceCounter(&start);
+    const lane::Stopwatch watch;
     const DWORD result = SafeQuery(natives, box, previous, head, previous ? &headBefore : nullptr, found, kMaxTouches, count, stats);
-    QueryPerformanceCounter(&end);
-    QueryPerformanceFrequency(&frequency);
+    const auto us = watch.Micros();
     if (result == ERROR_BUFFER_OVERFLOW) {
         ++overflows;
         ++refused;
@@ -850,10 +826,8 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
         Log("fault error=" + std::to_string(result) + " detail=query");
         return;
     }
-    const auto us = static_cast<std::uint64_t>((end.QuadPart - start.QuadPart) * 1000000 / std::max<LONGLONG>(frequency.QuadPart, 1));
     ++queries;
-    usTotal += us;
-    if (us > usMax.load()) { usMax = us; }
+    lane::AddMicros(us, usTotal, usMax);
     entities += stats.entities;
     if (stats.entities > entitiesMax.load()) { entitiesMax = stats.entities; }
     statics += stats.statics;
@@ -987,7 +961,7 @@ void UpdateSwingLane(const GameplayPoseFrame& frame, bool allowed)
 {
     thread_local bool busy = false;
     if (busy || !OnEngineMainThread()) { return; }
-    struct Guard { bool& value; explicit Guard(bool& v) : value(v) { value = true; } ~Guard() { value = false; } } guard(busy);
+    const lane::ReentryGuard guard(busy);
     UpdateImpl(frame, allowed);
 }
 bool SwingLaneWanted() { return enabled.load() && !fault.load(); }

@@ -28,6 +28,7 @@
 #include "InteractionLane.h"
 #include "WristLane.h"
 #include "preyvr/DebugOverlayScene.h"
+#include "preyvr/MonotonicClock.h"
 #include "Logger.h"
 #include <atomic>
 #include <filesystem>
@@ -323,7 +324,7 @@ bool ProcessVrOptionsInput(const TrackingFrame& f){
  // Navigation held is not "at rest" when the panel arms.
  i.x=f.menu.navigate.x;i.y=f.menu.navigate.y;
  const auto hand=UiPointerHand();i.trigger=hand<2?f.hands[hand].triggerPressed:false;
- i.dt=previousTime&&f.displayTime>previousTime?static_cast<float>(f.displayTime-previousTime)*1e-9f:0;
+ i.dt=StepSeconds(previousTime,f.displayTime);
  previousTime=f.displayTime;
  // Intersect the current controller sample with the anchored panel; never use
  // a previous frame's hover location to decide a new trigger press.

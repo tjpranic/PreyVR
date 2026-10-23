@@ -1,3 +1,4 @@
+#include "preyvr/AnimIk.h"
 #include "preyvr/CameraEdit.h"
 #include "preyvr/StereoCamera.h"
 #include "TestGeometry.h"
@@ -357,9 +358,72 @@ void TestEngineToTracking()
     Require(NearVec(EngineToTracking(anchor, anchor, 1.2f, head), head.position), "the anchor maps to the head");
 }
 
+bool Same(Vec3 a, Vec3 b) { return a.x == b.x && a.y == b.y && a.z == b.z; }
+
+// A tracked point in the world: exactly where ControllerWorldFromHead puts a
+// controller there, and EngineToTracking's inverse.
+void TestTrackingToEngine()
+{
+    const Pose head{Normalize(Quaternion{0.1f, 0.3f, -0.05f, 0.95f}), {0.4f, 1.6f, -0.2f}};
+    const Vec3 anchor{120.0f, -45.0f, 7.5f};
+    for (const float yaw : {0.0f, 0.7f, -2.4f, 3.1f}) {
+        for (const Vec3 point : {Vec3{0.2f, 1.1f, -0.6f}, Vec3{-0.3f, 1.4f, 0.2f}, head.position}) {
+            const Pose controller{Normalize(Quaternion{0.2f, -0.1f, 0.4f, 0.9f}), point};
+            const Vec3 world = TrackingToEngine(point, anchor, yaw, head);
+            Require(Same(world, animik::ControllerWorldFromHead(yaw, anchor, head, controller).position),
+                    "bit-identical to the controller's world position");
+            Require(NearVec(EngineToTracking(world, anchor, yaw, head), point, 1e-4f), "and back");
+        }
+    }
+    Require(Same(TrackingToEngine(head.position, anchor, 0.9f, head), anchor), "the head is at the anchor");
+}
+
+// Directions need only the yaw; the two are inverses.
+void TestDirections()
+{
+    // OpenXR forward (-Z) is engine forward (+Y); up (+Y) is engine up (+Z).
+    Require(NearVec(TrackingDirToEngine({0, 0, -1}, 0), {0, 1, 0}), "forward");
+    Require(NearVec(TrackingDirToEngine({0, 1, 0}, 0), {0, 0, 1}), "up");
+    Require(NearVec(TrackingDirToEngine({1, 0, 0}, 0), {1, 0, 0}), "right");
+    // The play space turned 90 degrees left: forward is engine -X.
+    Require(NearVec(TrackingDirToEngine({0, 0, -1}, 1.5707963f), {-1, 0, 0}), "yawed");
+    for (const float yaw : {0.0f, 0.7f, -2.4f}) {
+        const Vec3 d{0.3f, -0.5f, -0.8f};
+        Require(Same(TrackingDirToEngine(d, yaw), Rotate(YawQuaternion(yaw), Rotate(kOpenXrToEngine, d))),
+                "the axis change, then the yaw");
+        Require(NearVec(EngineDirToTracking(TrackingDirToEngine(d, yaw), yaw), d), "and back");
+    }
+}
+
+// The tracking origin in the world: composed with a point in engine axes, it is
+// TrackingToEngine.
+void TestTrackingOriginInWorld()
+{
+    const Pose head{Normalize(Quaternion{0.0f, 0.2f, 0.1f, 0.97f}), {-0.3f, 1.7f, 0.5f}};
+    const Vec3 anchor{-12.0f, 30.0f, 2.0f};
+    const float yaw = -1.3f;
+    const Pose origin = TrackingOriginInWorld(yaw, anchor, head);
+    for (const Vec3 p : {head.position, Vec3{0, 0, 0}, Vec3{0.5f, 1.0f, -0.4f}}) {
+        const Vec3 world = Compose(origin, Pose{Quaternion{}, ToEngineSpace(p)}).position;
+        Require(NearVec(world, TrackingToEngine(p, anchor, yaw, head), 1e-4f), "the origin carries tracked points");
+    }
+}
+
+// Odd while a recenter is under way; a sample is current only against the live,
+// even generation.
+void TestReferenceGeneration()
+{
+    Require(!Recentering(0) && Recentering(1) && !Recentering(2) && Recentering(7), "odd is recentering");
+    Require(ReferenceCurrent(4, 4) && !ReferenceCurrent(5, 5) && !ReferenceCurrent(4, 6), "same and even is current");
+}
+
 int main()
 {
     TestEngineToTracking();
+    TestTrackingToEngine();
+    TestDirections();
+    TestTrackingOriginInWorld();
+    TestReferenceGeneration();
     TestRecenterYawTracksYaw();
     TestRecenterYawIgnoresRollAndPitch();
     TestNearVerticalHeadPoseIsRefused();

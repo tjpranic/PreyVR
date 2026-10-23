@@ -38,8 +38,6 @@ namespace {
 
 void Log(const std::string& line) { lifecycle::Log("preyvr_body " + line); }
 
-constexpr float kDegrees = 57.2957795f;
-constexpr float kRadians = 0.0174532925f;
 
 // ArkPlayer::Update(SEntityUpdateContext&, int), primary vtable slot 19; R-021
 // returns into it. RCX the player, RDX the context (frame time at +0x14), R8 the
@@ -109,7 +107,7 @@ constexpr std::size_t kCustomView = 0x12A0 + 0x148;
 constexpr std::size_t kCinematicGate = engine::ArkPlayerLayout::input + engine::ArkPlayerInputLayout::cinematic;
 
 // Closer than this the body is where the torso is.
-constexpr float kMinimumStep = 0.01f * kRadians;
+constexpr float kMinimumStep = 0.01f * kRadiansPerDegree;
 constexpr std::uint64_t kTorsoFreshNs = 100000000ull;
 
 std::mutex gInstallMutex;
@@ -205,7 +203,7 @@ Vec3 gNudgePos{};
 
 int Mdeg(float radians)
 {
-    return std::isfinite(radians) ? static_cast<int>(std::lround(radians * kDegrees * 1000.0f)) : 0;
+    return std::isfinite(radians) ? static_cast<int>(std::lround(radians * kDegreesPerRadian * 1000.0f)) : 0;
 }
 
 bool ReadMemory(const void* at, void* out, std::size_t size)
@@ -784,7 +782,7 @@ void Tick(void* player)
     const float dt = gTorsoNs != 0 && now > gTorsoNs ? static_cast<float>(now - gTorsoNs) * 1e-9f : 0.0f;
     gTorsoNs = now;
     const float head = armpose::HeadYaw(frame.head.orientation);
-    const float torso = gTorso.Update(head, dt, gDeadzoneMilliDeg.load(std::memory_order_relaxed) * 1e-3f * kRadians,
+    const float torso = gTorso.Update(head, dt, gDeadzoneMilliDeg.load(std::memory_order_relaxed) * 1e-3f * kRadiansPerDegree,
                                       gRelaxPerMille.load(std::memory_order_relaxed) * 1e-3f);
     gTorsoSample.Publish(TorsoSample{torso, now});
     gHeadMdeg.store(Mdeg(head), std::memory_order_relaxed);
@@ -819,7 +817,7 @@ void Tick(void* player)
     // and so the head's offset, alone.
     if (turnDue) {
         gTurnRequestMdeg.store(0, std::memory_order_release);
-        const int result = Turn(player, torso, requestMdeg * 1e-3f * kRadians, false);
+        const int result = Turn(player, torso, requestMdeg * 1e-3f * kRadiansPerDegree, false);
         Log("result=" + std::to_string(result) + " detail=turn_done degrees=" + std::to_string(requestMdeg / 1000) +
             " appliedMdeg=" + std::to_string(gLastDeltaMdeg.load()));
     }
@@ -1261,7 +1259,7 @@ std::string BodyFollowReport()
         << " turnedDeg=" << gTurnedMdeg.load() / 1000 << " lastDeltaMdeg=" << gLastDeltaMdeg.load()
         << " readbackMaxMdeg=" << gReadbackMaxMdeg.load()
         << " headDeg=" << gHeadMdeg.load() / 1000.0f << " torsoDeg=" << gTorsoMdeg.load() / 1000.0f
-        << " referenceDeg=" << HeadTrackingReferenceYaw() * kDegrees
+        << " referenceDeg=" << HeadTrackingReferenceYaw() * kDegreesPerRadian
         << " notPlayer=" << gNotPlayer.load() << " noHead=" << gNoHead.load()
         << " notGameplay=" << gNotGameplay.load() << " cameraMode=" << gCameraMode.load()
         << " noReference=" << gNoReference.load() << " busy=" << gBusy.load()

@@ -8,6 +8,7 @@
 #include "preyvr/EngineMap.h"
 #include "preyvr/PsychoscopeNative.h"
 #include "preyvr/LatestSnapshot.h"
+#include "preyvr/MonotonicClock.h"
 #include "Logger.h"
 #include <atomic>
 #include <cstring>
@@ -51,7 +52,7 @@ void UpdatePsychoscopeGesture(const GameplayPoseFrame& frame,bool tracking){
   gesture={};previous=0;zone=false;return;
  }
  if(previous==f.displayTime)return; // one recognition step per coherent XR sample
- const float dt=previous&&f.displayTime>previous?static_cast<float>(f.displayTime-previous)*1e-9f:0;
+ const float dt=StepSeconds(previous,f.displayTime);
  previous=f.displayTime;
  const auto& hand=f.hands[0];
  const bool usable=FreshSample(MonotonicNanoseconds(),f.publishedNs)&&

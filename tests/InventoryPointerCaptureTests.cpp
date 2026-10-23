@@ -2,10 +2,12 @@
 #include "../src/dll/InventoryPointerCapture.cpp"
 #include <cstdlib>
 #include <iostream>
+#include "DllTestSupport.h"
 #include "TestSupport.h"
-namespace preyvr::lifecycle {void Log(std::string_view){}}
+PREYVR_TEST_DROP_LOG()
+PREYVR_TEST_STUB_MINHOOK()
 namespace {DWORD pinned=1;}
-namespace preyvr::dll {DWORD ModulePinStatus(){return pinned;}bool EnsureMinHook(){return false;}bool HudMenuIsOpen(){return true;}}
+namespace preyvr::dll {DWORD ModulePinStatus(){return pinned;}bool HudMenuIsOpen(){return true;}}
 namespace {
 using namespace preyvr::dll;
 unsigned calls=0;

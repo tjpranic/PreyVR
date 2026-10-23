@@ -2,6 +2,7 @@
 #include "../src/dll/VrOptionsRuntime.cpp"
 #include <iostream>
 #include <cstdlib>
+#include "DllTestSupport.h"
 #include "TestSupport.h"
 namespace {
 preyvr::options::Values applied=preyvr::options::Defaults();
@@ -11,7 +12,7 @@ bool supersedeViewForTest=false;
 preyvr::dll::TrackingFrame currentFrame{};
 using preyvr::test::Check;
 }
-namespace preyvr::lifecycle { void Log(std::string_view){} }
+PREYVR_TEST_DROP_LOG()
 namespace preyvr::dll {
 DWORD SetPsiTargetMode(unsigned v){applied[options::PsiTarget]=v;return 0;}unsigned PsiTargetMode(){return applied[options::PsiTarget];}
 DWORD SetMedkitSlot(unsigned v){applied[options::Medkit]=v;return 0;}unsigned MedkitSlotEnabled(){return applied[options::Medkit];}

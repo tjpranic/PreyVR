@@ -20,7 +20,16 @@ This was read-only: five parallel reviews, each covering one slice, with nothing
   - Removed: the legacy hand rig, WeaponAttachment's mount writer, 84 unused exports, AimRayProbe, PassCameraProbe's comparison (its hook is now PassCreationHook), the getters and setters left with no caller, and 19 test-only pure functions with their tests.
   - The version is now `0.6.0-preview`.
   - Size: 78 files, about 4,270 lines removed net. Build passes and 93/93 ctest pass (no target emptied), with no new warnings. The export table is exactly the kept 75.
-  - **Not yet worn and not committed.** It changes no live behaviour, but it deletes hook installers and the IK interlocks, so it needs the usual headset smoke check: IK arms, aim, weapon draw, grab and throw.
+  - **Worn OK on PreyVR-61, and committed by you as `ba6599c`** ("Dead code removal").
+- **2026-10-23, your decisions on section 4:**
+  - Item 6, torso settings: option (a), one owner (BodyFollow). It goes in the Hands batch.
+  - Item 7, the grenade queue check: skipped. **You plan to redo throwing**, so grenade and carry-throw refactors are deprioritised.
+  - Item 4, the reachable diagnostics: all four cut.
+- **2026-10-23, the offline batch is done: the four cuts and the T1 helpers.** See the **Done 10-23 (offline batch)** notes in section 3.
+  - Build passes and 93/93 ctest pass; `render_frame_table` went, `command_channel` is new.
+  - The only warnings are the six pre-existing ones. The DLL's 75 export names are unchanged.
+  - Tracked files: 71 changed, +505/−2,292. New files: PhysicalLane.h, VerifiedSetting.h, DllTestSupport.h and CommandChannelTests.cpp, about 790 lines, 630 of them tests.
+  - **Not yet worn and not committed.** Every change is behaviour-identical by construction except the four cuts, which remove code that only debug commands reached. It needs the usual smoke check.
 
 **How this relates to [the 10-17 audit](DUPLICATION-AUDIT-2026-10-17.md):**
 - The older audit is still the reference for its items. Its "Constraints that shape every fix" and section F ("don't merge") still apply in full.
@@ -258,19 +267,33 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
   The XrInput ones are on the OpenXR action setup, so fixing them is T2.
 
 **Small shared helpers (each header-only, so DLL-including tests keep linking):**
-- **Open:** `PhysicalLane.h` plus `Broadphase`/`CollideBox` (S3), about −190 LOC. It is the next T1 batch.
+- **Done 10-23 (offline batch): `src/dll/PhysicalLane.h`** (namespace `lane`). Contact, Swing and SurfaceStop now share:
+  - `ReentryGuard`, `TakeLine` (the line budget; limits stay 40/40/20), `ReportThrottle`, and `GateReason` (same order, same `why` strings);
+  - `Stopwatch`/`AddMicros` and `TrustedDt`.
+  - PhysicsCalls.h gains `VtableOf`, `Broadphase` and `CollideBox`; SceneQuery.h gains `TransientEngineError` (4 copies in SceneQuery.cpp).
+  - The lanes lose about 100 lines; with the new header's comments, the total is +48.
+  - **Kept separate:** the `SafeQuery` wrappers, Contact's fault handling (it also ends its contacts), the two `TypeOf`s, the proxy velocity spaces, and `CollideSphere`.
 - **Done 10-23:** `OnEngineMainThread()` (InputPost.h) replaces all 10 copies. The three lane `EngineThread()` functions are gone. It is equivalent at every site, including the ones that skipped the `== 0` test, because `GetCurrentThreadId` is never 0.
-- **Open:** `PlaySpaceMap`, `Placeable`, `Recentering` (S2).
+- **Done 10-23 (offline batch): play-space mapping** as free functions beside `stereo::EngineToTracking`, the style StereoCamera.h already used:
+  - `TrackingToEngine` (points), `TrackingDirToEngine`/`EngineDirToTracking` (directions) and `TrackingOriginInWorld`.
+  - They replace the copies in AnimIk (`WorldToOpenXr`, `XrMap::ToModel`), WristLane, DebugOverlay (two wrappers, 7 sites), InteractionLane, RoomScale, PhysicalInteractions and SurfaceStopLane (`WorldFromReference`), and `carry::TrackingToWorld`.
+  - A test checks `TrackingToEngine` is bit-identical to `ControllerWorldFromHead`'s position.
+- **Done 10-23 (offline batch): recenter checks.** `stereo::Recentering(gen)` and `stereo::ReferenceCurrent(sample, live)` replace about 25 hand-written `& 1` / `% 2` checks in 13 files.
+  - No combined `Placeable(frame)` was added: the sites test different subsets of camera, yaw and generation, so one predicate would change some of them.
 - **Done 10-23:** `EnvSwitchOff(L"…")` (src/dll/EnvSwitch.h) replaces all 7 kill-switch copies. The tests that set the variables still pass.
 - **Partly done:**
   - **Done 10-23:** `YawDistance` in VrMath.h replaces ContactLane's and SurfaceStopLane's `AngleBetween`; `2.0f * kPi` is the same float as their literal. `FiniteVec` is now `Finite`.
-  - **Open:** `stereo::EyeSign`, `kRadiansPerDegree` (16 literals) and `ExpAlpha(dt, rate)`.
+  - **Done 10-23 (offline batch):**
+    - `stereo::EyeSign` at 7 sites; multiplying by ±1 is exact.
+    - `kRadiansPerDegree`/`kDegreesPerRadian` for 29 literals, plus BodyFollow's and HandPose's local copies (HandPose's was misnamed `kDegrees`). Only literals that round to the same float were replaced.
+    - **Kept:** `0.01745329f` (AnimIk) and `57.2958f` (ShotRay) are other floats; `180.0f / kPi` rounds one ulp below 57.29578f; `x * pi / 180` evaluates in another order.
+    - `ExpAlpha` at 4 sites.
   - `ExpAlpha` is for AnimIk:1212/1952/1967 and TwoHandedAim:94. Not the `/τ` form at ArmPose:281 and HandCarry:301, which rounds differently.
-- **Open:** `XrStep{Next(displayTime, dt, maxDt)}`.
-- **Open:** `VerifiedCvar(name, on, off)`: the wanted/applied/sending/failed state machine in ControllerPrompts:143-218, FocusHold:350-391 and part of VrMode:157-170. The tests pin the log text.
+- **Done 10-23 (offline batch):** `StepSeconds(previous, displayTime)` in MonotonicClock.h, at 4 sites. Each site keeps its own repeat-skip.
+- **Done 10-23 (offline batch):** `VerifiedSetting` (src/dll/VerifiedSetting.h): the state plus `Advance(key, command, log)`. It is used by ControllerPrompts (`gGlyphs`) and FocusHold (`gPause`), with log lines unchanged. VR start's timed settings loop is a different shape and stays.
 - **Checked and kept 10-23:** the pointer-on-surface helper (B12 row).
 - **Open:** the `log [0|1]` verb helper.
-- **Open:** move HandCarry.h's general math (`Add/Dot/Finite/Horizontal/TrackingToWorld/YawRotation`) into VrMath/StereoCamera. GrenadeLane uses carry's header as its math library.
+- **Partly done 10-23:** `carry::TrackingToWorld` is gone (see play-space mapping above). The rest of HandCarry.h's math waits for the throwing redo.
 - **Done 10-23:** the `phys::` slot aliases (above), and AnimIk's per-frame `GetModuleHandleW` in the IK detour, which now reads `PreyBase()`.
 
 **Pure logic out of XrSessionHost, with new tests (open):**
@@ -297,12 +320,18 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
 **Options groundwork (open):** the constexpr Spec, lanes initialising from it, and range tests (S4). Also `ButtonSpec[]`: button text currently lives in VrOptionsUi.cpp:55-67 while all setting text is in VrOptions.cpp. Also a per-event table for HapticPolicy.h:22-28.
 
 **Test infrastructure:**
-- **Open:** `tests/DllTestSupport.h`. `lifecycle::Log` is stubbed in 19 files, `EnsureMinHook` in 13, `Logged`/`Count` helpers are defined in 11, and the fake-physics `Object/Slot/Put` scaffold is in 4.
+- **Done 10-23 (offline batch): `tests/DllTestSupport.h`.** It provides the captured log with `Logged`/`Count`, and opt-in macros: `PREYVR_TEST_CAPTURE_LOG()`, `PREYVR_TEST_DROP_LOG()` and `PREYVR_TEST_STUB_MINHOOK()`.
+  - 13 tests migrated.
+  - Left alone: HookInstall (real MinHook), the three lane tests (not owned during the batch, but drop-in compatible), and the two receipt-pinned tests.
 - **Done 10-23:** `preyvr_add_test(... DLL ...)`. One flag adds the DLL's lifecycle include and `WIN32_LEAN_AND_MEAN NOMINMAX`.
   - It replaces the 16 repeated `INCLUDES`/`DEFS` pairs and covers every DLL-source test and the 4 replays.
   - The 7 tests that were built **without** the DLL's defines now build the same translation unit the DLL ships, and they still pass.
 - **Open:** D3 and D4.
-- **Open:** **CommandChannel characterization tests, before B9.**
+- **Done 10-23 (offline batch): `tests/CommandChannelTests.cpp`** (ctest `command_channel`).
+  - **What it pins:** 303 command lines over all 13 dispatchers and 175 of about 202 verbs, each with its exact reply and how it was counted. Also the `report` verb's 128 field names, and the A9 fallbacks.
+  - **Build change:** the DLL's sources became an OBJECT library (`preyvr_dll_objects`) that both `preyvr` and the test link. PreyVR.dll built byte-identical with that change alone.
+  - **Safety:** verbs that start sessions or threads, install hooks, post input, read raw memory or capture frames are excluded and listed in the test.
+  - **Oddities pinned as they are** (for B9): see section 5.
 - **Open:** a runner for the 30 `tools/re` verifiers that skips when the game is missing. Today nothing runs them; the `*Native.h`-vs-binary check is manual.
 - **Blocked:** register `test_extract_native_hud.py`. The receipt-pinned `extract_native_hud.py` calls `hashlib.file_digest`, which needs Python 3.11+, and this machine has 3.10.6, so 1 of its 9 tests errors. It also needs pycryptodome. Registering it needs a newer Python on the machine, or a CMake version check that skips it.
 
@@ -391,6 +420,7 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
    - The `carry.impulse` A/B modes; mode 2 drops objects through the floor.
    - `grenade::Landing`, used only by tests.
    - **Not cut 10-23: these are reachable, not unused.** The wrench-sound capture is switched on by `wrench.sound capture`, the grenade flight watch runs on every throw, and `carry.impulse` selects its modes by command. They belong to the TODO's instrumentation and tuning cleanups. `grenade::Landing` was cut with item 5.
+   - **Cut 10-23, your decision:** RenderFrame and its table (`frame.*`), the `carry.impulse` A/B modes (mode 0 is now the only behaviour), the wrench-sound capture (the replay stays), and the grenade flight watch.
 5. **Pure functions used only by tests:**
    - `aim::ProjectToScreen`, `ApplyRadialDeadzone`
    - StereoCamera's `ReferenceFrameForHeadTracking`, `ComposeHeadOntoGameRotation`, `MakeRecenterReference`, `RightOf`, `UpOf`
@@ -417,7 +447,9 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
      - **Kept as test oracles or accessors for live code:** ControllerProfiles `ActionOf`, DebugRegisters `Dr7SlotEnabled`, FrameTiming `BudgetMicroseconds`, ShotRay `ConvergenceErrorMetres`, and the lanes' `*EventLog` getters.
      - **Left:** RenderFrame's matrix capture (`frame.*`, research) is now never read back in production; it goes with the instrumentation cleanup.
 6. **Torso settings: give them one owner (T2/T3).** They are stored twice, in AnimIk `PoseSettings` and BodyFollow `gDeadzoneMilliDeg/gRelaxPerMille`. `arm.torso` writes both, `body.torso` writes only BodyFollow, and the Body Turn Deadzone option goes to AnimIk.
+   - **Decided 10-23: (a).** BodyFollow owns the settings and AnimIk's fallback filter reads them; it goes in the Hands batch.
 7. **Should Grenade get the `VelocityQueueReady` gate** that Carry and Contact use? This changes behaviour, although it is latent on the pinned build.
+   - **Decided 10-23: skip.** Throwing is being redone, so the grenade parts of B6 and the carry/grenade release-snapshot sharing are dropped.
 8. **The instrumentation gate design** (S4: `PREYVR_DEV`, `kDev`, `Diag()`, Audience tags). It is a later TODO item, but the refactors above should be shaped for it.
 9. **The build version string,** added 10-23. CMakeLists:10 says `0.3.1-static-ik-integration`, while the tags are at v0.5.1-preview. It is logged as `preyvr_smoke_start version=`. What should it say?
    - **Done 10-23:** `0.6.0-preview`, following the tag scheme; the last tag is v0.5.1-preview (09-13), 92 commits back.
@@ -425,6 +457,26 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
 ---
 
 ## 5. Possible bugs found along the way (not refactors; none confirmed in the game)
+- **Carry and grenade commands before their lanes install (found 10-23 by the CommandChannel test).**
+  - `CallGetPlayer` calls `gBase + kGetPlayerRva` while `gBase` is still 0 (CarryLane.cpp:243, GrenadeLane.cpp:246), so `carry.report` and the other `carry.*`/`grenade.*` verbs jump to a raw RVA.
+  - The fault guard catches it offline, but in-game that low address could be mapped.
+  - Fix: return 0 when `gBase` is 0. It is two lines and changes behaviour only in that broken case. Not done; your call, given the throwing redo.
+- **CommandChannel oddities pinned by its test (10-23), for B9:**
+  - **Counting:**
+    - Lane-dispatched verbs (about half) count as neither processed nor rejected.
+    - Unknown lane-prefixed verbs reply `result=1` uncounted.
+    - Verbs missing required arguments are rejected as `not_a_channel_verb_and_not_allowlisted`.
+    - A short `hud.call` replies `result=rejected` but counts as processed.
+  - **Parsing:** integers parse with base 0 (`0310` is octal).
+  - **Against A9:**
+    - `wrist.*` uses `atoi`; `carry.*`/`grenade.*` accept partial numbers.
+    - `surface heavy abc` gives 1 kg; `ui.prompts abc` turns prompts on.
+    - `near.fov`, `ik.align`, `dbg.draw`, `aim.shot`, `near.fx` and `markers.depth` refuse malformed values (`ui.offset` too, which is documented).
+  - **Replies:**
+    - `near.fov` turns `near.follow` off even when refused.
+    - Multi-value setters given too few values reply `result=0`.
+    - Several replies lack `result=`.
+  - **The `report` log line** carries every reply in the batch so far.
 - **VR stop doesn't undo everything VR start arms [V].** `StopFeatures` (VrMode.cpp:59-75) never resets these:
   - `SetUseHand`, `SetCarryHand`, `SetGrenadeHand` and `SetAnimIkFreeArms`
   - `SetAimLasers`, `SetUiPanelMode` and `SetMenuNavigationGate`

@@ -933,7 +933,7 @@ std::array<ui::Eye,2> OpticalEyes(const XrView (&views)[2])
 // progress). XR frame thread, under gMutex.
 const ui::MenuAnchor& MenuAnchorFor(const Pose& head, const XrView (&views)[2], std::uint64_t reference)
 {
-    if (!gHost.menuAnchor || (reference % 2 == 0 && reference != gHost.menuAnchorReference)) {
+    if (!gHost.menuAnchor || (!stereo::Recentering(reference) && reference != gHost.menuAnchorReference)) {
         gHost.menuAnchor = ui::AnchorMenu(head, OpticalEyes(views));
         gHost.menuAnchorReference = reference;
     }
@@ -1368,7 +1368,7 @@ bool SubmitStereoPair(
 // changed, or a recenter has completed since it was placed.
 bool MenuPanelsStale(float curve, unsigned long long reference)
 {
-    return !gHost.menuPanel || curve!=gHost.panelAngle || (reference%2==0 && reference!=gHost.panelReference);
+    return !gHost.menuPanel || curve!=gHost.panelAngle || (!stereo::Recentering(reference) && reference!=gHost.panelReference);
 }
 
 // **The game menu's panel**, and the guide card under it when that is on,
@@ -1428,14 +1428,14 @@ void PlaceMenuPanels(const Pose& head, const XrView (&views)[2], unsigned long l
     const int offsetRight=gUiOffsetRight.load(std::memory_order_relaxed);
     const int offsetUp=gUiOffsetUp.load(std::memory_order_relaxed);
     if(gHost.menuPanel && (offsetRight || offsetUp)) {
-        const float right=static_cast<float>(offsetRight)*.01745329252f,up=static_cast<float>(offsetUp)*.01745329252f;
+        const float right=static_cast<float>(offsetRight)*kRadiansPerDegree,up=static_cast<float>(offsetUp)*kRadiansPerDegree;
         gHost.menuPanel->pose=ui::AroundHead(upright,gHost.menuPanel->pose,right,up);
         if(gHost.guidePanel)gHost.guidePanel->pose=ui::AroundHead(upright,gHost.guidePanel->pose,right,up);
     }
     gHost.panelReference=reference;
     gHost.panelAngle=curve;
     ++gHost.surfaceSerial;
-    Log("ui_surface angle_degrees="+std::to_string(curve*57.2957795f)+" distance_m="+std::to_string(distance)+
+    Log("ui_surface angle_degrees="+std::to_string(curve*kDegreesPerRadian)+" distance_m="+std::to_string(distance)+
         " offset_degrees="+std::to_string(offsetRight)+","+std::to_string(offsetUp)+
         " placed="+(gHost.menuPanel?"1":"0"));
 }
@@ -1487,7 +1487,7 @@ bool PlaceLoadingPanel(const XrView (&views)[2])
         Log("result=0 detail=ui_panel active=1 reason=loading_screen");
     }
     const auto reference=HeadTrackingReferenceGeneration();
-    const float curve=gHost.cylinderSupported?static_cast<float>(gUiCurveDegrees.load())*.01745329252f:0;
+    const float curve=gHost.cylinderSupported?static_cast<float>(gUiCurveDegrees.load())*kRadiansPerDegree:0;
     if(MenuPanelsStale(curve,reference))
         PlaceMenuPanels(stereo::CyclopsPose(PoseOf(views[0].pose),PoseOf(views[1].pose)),views,reference,curve);
     return gHost.menuPanel.has_value();
@@ -2135,7 +2135,7 @@ void ServiceXrFrame(void* renderer)
     // fit/serial decision so switching modes also cancels an old curved drag.
     const bool planarInventory=(InventoryStereoEnabled() && HudInventoryIsOpen()) || inventoryRightTexture;
     const float curve=gHost.cylinderSupported && !planarInventory?
-        static_cast<float>(gUiCurveDegrees.load())*.01745329252f:0;
+        static_cast<float>(gUiCurveDegrees.load())*kRadiansPerDegree:0;
     if (wantPanel && MenuPanelsStale(curve,reference)) PlaceMenuPanels(inputHead,views,reference,curve);
     const bool panelActive=wantPanel && gHost.menuPanel.has_value();
     if(panelActive && !gHost.guideAttempted) {
@@ -2604,7 +2604,7 @@ void ServiceXrFrame(void* renderer)
         IsPoseUsable(wristFrame.hands[0].gripPose,wristFrame.hands[0].gripValidity,kMaxPoseAgeNs);
     const unsigned wristGate=(WristDisplayEnabled()?1u:0u)|(haveViews?2u:0u)|(rendered?4u:0u)|(!panelActive?8u:0u)|
         (!optionsActive?16u:0u)|(HudGameplayInputAllowed()?32u:0u)|(!TwoHandedAimHeld()?64u:0u)|
-        (!(reference&1)?128u:0u)|(wristTracking?256u:0u);
+        (!stereo::Recentering(reference)?128u:0u)|(wristTracking?256u:0u);
     const bool wristInput=wristGate==511u;
     NoteWristGate(wristGate);
     // The hologram on the drawn forearm (WristLane), or Funk's grip-anchored
@@ -2722,7 +2722,7 @@ void ServiceXrFrame(void* renderer)
                 }
                 if(context)context->Release();
             }
-            slotActive=gHost.slotReady&&reference==HeadTrackingReferenceGeneration()&&!(reference&1)&&
+            slotActive=gHost.slotReady&&stereo::ReferenceCurrent(reference,HeadTrackingReferenceGeneration())&&
                 slotMessage.Current(MonotonicNanoseconds(),slotFrame.epoch,reference,HudMenuEpoch());
             if(slotActive){const auto& p=*panel;
                 slotLayer.space=gHost.space;slotLayer.eyeVisibility=XR_EYE_VISIBILITY_BOTH;

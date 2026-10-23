@@ -35,7 +35,7 @@ static_assert(contract::Gated(wn::Contracts, wn::PlayAction) && contract::Gated(
 std::atomic<bool> enabled{true}, installed{false}, fault{false};
 std::atomic<const char*> gate{"unchecked"};
 std::atomic<unsigned long> serviceThread{0};
-std::atomic<std::uint64_t> frames{0}, selects{0}, pickups{0}, finished{0}, gone{0}, full{0}, elsewhere{0}, captured{0}, sounds{0};
+std::atomic<std::uint64_t> frames{0}, selects{0}, pickups{0}, finished{0}, gone{0}, full{0}, elsewhere{0}, sounds{0};
 std::atomic<std::uint64_t> stows{0}, stowSounds{0}, stowsLowered{0};
 std::atomic<unsigned> waiting{0};
 
@@ -148,13 +148,8 @@ bool Skip(std::uintptr_t weapon, const Select& s)
 void __fastcall PlayActionHook(std::uintptr_t weapon, std::uintptr_t* slot, float value)
 {
     Select s{};
-    const bool capturing = WrenchSoundCapturing();
-    if ((enabled.load() || capturing) && !fault.load() && ReadSelect(weapon, slot, s)) {
-        if (capturing) {
-            // The sound capture (WrenchSound.h) needs the draw to play: noted, then Prey's.
-            ++captured;
-            WrenchSoundSelectSeen(s.id, s.select);
-        } else if (GetCurrentThreadId() != serviceThread.load()) {
+    if (enabled.load() && !fault.load() && ReadSelect(weapon, slot, s)) {
+        if (GetCurrentThreadId() != serviceThread.load()) {
             // The finish runs on the main thread; anywhere else the draw plays.
             ++elsewhere;
         } else if (Pending* const free = FreePending(); !free) {
@@ -198,7 +193,7 @@ void __fastcall UnequipHook(std::uintptr_t weapon, bool animate)
 {
     std::uint32_t id = 0;
     StowKind kind = StowKind::animate;
-    if (animate && enabled.load() && !fault.load() && !WrenchSoundCapturing() &&
+    if (animate && enabled.load() && !fault.load() &&
         GetCurrentThreadId() == serviceThread.load()) {
         kind = ReadStow(weapon, id);
     }
@@ -277,7 +272,6 @@ void ServiceWrenchDrawFrame()
     serviceThread = GetCurrentThreadId();
     const auto now = ++frames;
     if (!installed.load() && !fault.load()) { Prepare(); }
-    ServiceWrenchSoundFrame();
     for (auto& p : pending) {
         if (!p.id) { continue; }
         // The draw's sound, the next frame, as its clips would have played it
@@ -314,6 +308,6 @@ std::string WrenchDrawReport()
            " waiting=" + std::to_string(waiting.load()) + " full=" + std::to_string(full.load()) + " elsewhere=" +
            std::to_string(elsewhere.load()) + " sounds=" + std::to_string(sounds.load()) + " stows=" + std::to_string(stows.load()) +
            " stowSounds=" + std::to_string(stowSounds.load()) + " stowsLowered=" + std::to_string(stowsLowered.load()) +
-           " captured=" + std::to_string(captured.load()) + " frames=" + std::to_string(frames.load());
+           " frames=" + std::to_string(frames.load());
 }
 } // namespace preyvr::dll

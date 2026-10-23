@@ -340,7 +340,7 @@ void UpdateMoveLane()
             state.x=v.x;state.y=v.y;
         }
     }
-    if(movementReference%2 || movementReference!=HeadTrackingReferenceGeneration()) haveInput=false;
+    if(!stereo::ReferenceCurrent(movementReference, HeadTrackingReferenceGeneration())) haveInput=false;
     if (!haveInput) {
         // A partially delivered X/Y pair can leave one axis held even though
         // the candidate shaper was not committed. Release both owned axes and

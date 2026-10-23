@@ -161,7 +161,7 @@ float WristFlexionDeg(const Vec3& forearm, const Vec3& length, const Vec3& palm)
 {
     // Flexed by a towards the palm, the forearm (in the hand's frame) is
     // length*cos(a) - palm*sin(a).
-    return std::atan2(-Dot(forearm, palm), Dot(forearm, length)) * 57.29578f;
+    return std::atan2(-Dot(forearm, palm), Dot(forearm, length)) * kDegreesPerRadian;
 }
 
 float WristRadialDeg(const Vec3& forearm, const Vec3& length, const Vec3& palm, Side side)
@@ -169,7 +169,7 @@ float WristRadialDeg(const Vec3& forearm, const Vec3& length, const Vec3& palm, 
     // Deviated by d towards the thumb, the hand's length is forearm*cos(d) +
     // thumb*sin(d): the forearm leans away from the thumb.
     const Vec3 thumb = Scale(Unit(Cross(length, palm), Vec3{0, 0, 1}), side >= 0 ? 1.0f : -1.0f);
-    return std::asin(std::clamp(-Dot(Unit(forearm, length), thumb), -1.0f, 1.0f)) * 57.29578f;
+    return std::asin(std::clamp(-Dot(Unit(forearm, length), thumb), -1.0f, 1.0f)) * kDegreesPerRadian;
 }
 
 Vec3 ChooseElbowPole(const Vec3& shoulder, const Vec3& wrist, float upper, float fore, float maxStretch,
@@ -198,7 +198,7 @@ Vec3 ChooseElbowPole(const Vec3& shoulder, const Vec3& wrist, float upper, float
     }
     // 2 (1 - cos a) ~ a^2: a Gaussian in the angle, without a seam at +-180.
     const auto swivel = [](float a, float sigmaDeg) {
-        const float s = sigmaDeg / 57.29578f;
+        const float s = sigmaDeg / kDegreesPerRadian;
         return 2.0f * (1.0f - std::cos(a)) / (s * s);
     };
     const auto cost = [&](float phi) {

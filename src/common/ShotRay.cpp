@@ -43,7 +43,7 @@ float AngleDegrees(Vec3 a, Vec3 b)
     const float c = std::clamp(Dot(a, b) / (la * lb), -1.0f, 1.0f);
     // acos loses precision near 1; the cross product keeps small angles exact.
     const Vec3 cross{a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
-    return std::atan2(Length(cross) / (la * lb), c) * 57.29577951f;
+    return std::atan2(Length(cross) / (la * lb), c) * kDegreesPerRadian;
 }
 
 float DistanceToLine(Vec3 point, Vec3 origin, Vec3 direction)

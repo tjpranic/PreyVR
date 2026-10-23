@@ -111,16 +111,6 @@ void TestGapResets()
 
 // --- frames ---------------------------------------------------------------------------
 
-void TestTrackingToWorld()
-{
-    // OpenXR forward (-Z) is engine forward (+Y); up (+Y) is engine up (+Z).
-    Require(NearV(TrackingToWorld({0, 0, -1}, 0), {0, 1, 0}), "forward");
-    Require(NearV(TrackingToWorld({0, 1, 0}, 0), {0, 0, 1}), "up");
-    Require(NearV(TrackingToWorld({1, 0, 0}, 0), {1, 0, 0}), "right");
-    // The play space turned 90 degrees left: forward is engine -X.
-    Require(NearV(TrackingToWorld({0, 0, -1}, 1.5707963f), {-1, 0, 0}), "yawed");
-}
-
 void TestMatrix()
 {
     const Quaternion q = Normalize(Quaternion{0.2f, -0.4f, 0.1f, 0.85f});
@@ -544,7 +534,6 @@ int main()
     TestRuntimePreferred();
     TestAngular();
     TestGapResets();
-    TestTrackingToWorld();
     TestMatrix();
     TestClassify();
     TestLightHold();

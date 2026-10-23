@@ -1,5 +1,6 @@
 #include "HapticsXr.h"
 #include "HeadTrackingHook.h"
+#include "preyvr/StereoCamera.h"
 #include <atomic>
 namespace preyvr::dll {
 namespace {
@@ -25,7 +26,7 @@ void QueueHaptic(Hand hand,haptics::Event event,const TrackingFrame& frame){
     const auto h=static_cast<unsigned>(hand);
     if(h>=2||!enabled.load()||!strength.load()||!FreshSample(MonotonicNanoseconds(),frame.publishedNs))return;
     const auto reference=HeadTrackingReferenceGeneration();
-    if(reference&1)return;
+    if(stereo::Recentering(reference))return;
     pending[h].Publish({event,++serial,frame.epoch,reference,frame.publishedNs,generation.load()});
 }
 void SetHapticsEnabled(unsigned on){if(enabled.exchange(on!=0)!=(on!=0))++generation;}
@@ -34,7 +35,7 @@ void SetHapticStrength(unsigned value){strength=std::min(value,100u);++generatio
 unsigned HapticStrength(){return strength.load();}
 void ServiceHaptics(XrSession session,XrAction action,const std::array<XrPath,2>& paths,const TrackingFrame& frame,bool focused){
     const auto now=MonotonicNanoseconds(),reference=HeadTrackingReferenceGeneration(),gen=generation.load();
-    const bool allowed=focused&&session&&action&&enabled.load()&&strength.load()&&!(reference&1)&&
+    const bool allowed=focused&&session&&action&&enabled.load()&&strength.load()&&!stereo::Recentering(reference)&&
         FreshSample(now,frame.publishedNs)&&IsPoseUsable(frame.head,frame.headValidity,kMaxPoseAgeNs);
     if(!allowed||frame.epoch!=previousEpoch||reference!=previousReference||gen!=previousGeneration)
         Stop(session,action,paths);

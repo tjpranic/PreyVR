@@ -4,6 +4,7 @@
 #include "FrameObserverHook.h"
 #include "Logger.h"
 #include "SafeMemory.h"
+#include "VerifiedSetting.h"
 #include <atomic>
 #include <cstdint>
 #include <mutex>
@@ -69,8 +70,7 @@ enum : int { kGuardUnchecked = 0, kGuardOn = 1, kGuardRefused = 2, kGuardFaulted
 std::mutex gMutex;
 // -1 is none. `wanted` is what the lane asks for, `applied` the last value read
 // back, `failed` the last one that was not, `sending` the one in the console slot.
-int gWanted = -1, gApplied = -1, gSending = -1, gFailed = -1;
-unsigned long long gCount = 0;
+VerifiedSetting gGlyphs;
 // Command worker, under gMutex: the frame check's bookkeeping.
 unsigned long long gNextReapply = 0, gCorrectedLogged = 0, gNextCorrectionLog = 0;
 bool gGuardLogged = false;
@@ -142,29 +142,7 @@ void ServiceFrame(std::uintptr_t base, SetSchemeFn setScheme, unsigned long long
 // The queue/readback handshake on the shared slot.
 void Advance()
 {
-    if (gSending >= 0) {
-        if (VerifiedRendererSettingCount() == gCount) { return; }
-        const bool verified = VerifiedRendererSettingResult() == 0;
-        Log("force_controller_glyphs=" + std::to_string(gSending) +
-            (verified ? " result=0 detail=verified_readback" : " result=failed detail=readback_timeout_or_mismatch"));
-        if (verified) { gApplied = gSending; }
-        else { gFailed = gSending; }
-        gSending = -1;
-    }
-    if (gWanted < 0 || gWanted == gApplied || gWanted == gFailed) { return; }
-    // Console commands drain on observed frames; queued before that, this would
-    // hold the shared slot for nothing.
-    if (FrameObserverStatus() != static_cast<DWORD>(FrameObserverRuntimeStatus::enabled)) { return; }
-    const auto count = VerifiedRendererSettingCount();
-    const DWORD queued = QueueVerifiedRendererSetting(Command(gWanted));
-    if (queued == 0) {
-        gSending = gWanted;
-        gCount = count;
-    } else if (queued != static_cast<DWORD>(ConsoleBridgeResult::busy)) {
-        gFailed = gWanted;
-        Log("force_controller_glyphs=" + std::to_string(gWanted) + " result=" + std::to_string(queued) +
-            " detail=queue_refused");
-    }
+    gGlyphs.Advance("force_controller_glyphs", Command, [](const std::string& line) { Log(line); });
 }
 
 void LogGuard(unsigned long long now)
@@ -189,14 +167,14 @@ void ServiceLane(unsigned long long now)
     std::lock_guard lock(gMutex);
     // The frame check read the cvar as 0 while this lane had it at 1: something
     // else cleared it. Set again, at most once a second.
-    if (gWanted == 1 && gApplied == 1 && gSending < 0 && gForceSeen.load(std::memory_order_acquire) == 0 &&
+    if (gGlyphs.wanted == 1 && gGlyphs.applied == 1 && gGlyphs.sending < 0 && gForceSeen.load(std::memory_order_acquire) == 0 &&
         now >= gNextReapply) {
         gNextReapply = now + kReapplyIntervalMs;
-        gApplied = -1;
+        gGlyphs.applied = -1;
         Log("force_controller_glyphs=0 detail=cleared_outside_lane reapplying=1");
     }
     Advance();
-    const bool enforce = gWanted == 1 && gApplied == 1 && gSending < 0;
+    const bool enforce = gGlyphs.wanted == 1 && gGlyphs.applied == 1 && gGlyphs.sending < 0;
     if (enforce && !gEnforce.load(std::memory_order_acquire)) { gForceSeen.store(-1, std::memory_order_release); }
     gEnforce.store(enforce, std::memory_order_release);
     LogGuard(now);
@@ -208,19 +186,19 @@ DWORD SetControllerPrompts(unsigned enabled)
     if (enabled > 1) { return 1; }
     std::lock_guard lock(gMutex);
     // Off puts Prey's default back only where this lane set it, or may have.
-    if (enabled) { gWanted = 1; }
+    if (enabled) { gGlyphs.wanted = 1; }
     else {
-        gWanted = gApplied == 1 || gSending == 1 || gFailed == 1 ? 0 : -1;
+        gGlyphs.wanted = gGlyphs.applied == 1 || gGlyphs.sending == 1 || gGlyphs.failed == 1 ? 0 : -1;
         gEnforce.store(false, std::memory_order_release); // the frame check stops now, not next tick
     }
-    gFailed = -1; // a new request is tried again
+    gGlyphs.failed = -1; // a new request is tried again
     return 0;
 }
 
 unsigned ControllerPromptsEnabled()
 {
     std::lock_guard lock(gMutex);
-    return gWanted == 1 ? 1u : 0u;
+    return gGlyphs.wanted == 1 ? 1u : 0u;
 }
 
 void ServiceControllerPrompts() { ServiceLane(GetTickCount64()); }
@@ -238,8 +216,8 @@ std::string ControllerPromptsReport()
     const auto value = [](int v) { return v < 0 ? std::string("none") : std::to_string(v); };
     const char* guards[] = {"unchecked", "on", "refused", "faulted"};
     std::ostringstream out;
-    out << " wanted=" << value(gWanted) << " applied=" << value(gApplied) << " sending=" << value(gSending)
-        << " failed=" << value(gFailed) << " guard=" << guards[gGuard.load(std::memory_order_acquire)]
+    out << " wanted=" << value(gGlyphs.wanted) << " applied=" << value(gGlyphs.applied) << " sending=" << value(gGlyphs.sending)
+        << " failed=" << value(gGlyphs.failed) << " guard=" << guards[gGuard.load(std::memory_order_acquire)]
         << " corrected=" << gCorrected.load(std::memory_order_acquire)
         << " lastFrom=" << value(gLastStray.load(std::memory_order_acquire));
     return out.str();

@@ -5,6 +5,7 @@
 #include "DebugOverlay.h"
 #include "HeadTrackingHook.h"
 #include "HudBridge.h"
+#include "preyvr/StereoCamera.h"
 #include "InputPost.h"
 #include "VrOptionsRuntime.h"
 #include "SlotFeedback.h"
@@ -14,6 +15,7 @@
 #include "preyvr/NativeContract.h"
 #include "preyvr/PsychoscopeNative.h"
 #include "preyvr/LatestSnapshot.h"
+#include "preyvr/MonotonicClock.h"
 #include <atomic>
 #include <algorithm>
 
@@ -114,11 +116,11 @@ void UpdateHolsterInput(const TrackingFrame& f,bool valid){
  }
  const auto ref=HeadTrackingReferenceGeneration();
  if(epoch!=f.epoch||reference!=ref){gesture.Reset();request={};epoch=f.epoch;reference=ref;previous=0;}
- const float dt=previous&&f.displayTime>previous?static_cast<float>(f.displayTime-previous)*1e-9f:0;
+ const float dt=StepSeconds(previous,f.displayTime);
  if(f.displayTime==previous)return;
  previous=f.displayTime;
  const auto& r=f.hands[1];const auto& l=f.hands[0];
- valid=valid&&HolstersEnabled()&&!fault.load()&&HudGameplayInputAllowed()&&!(ref&1)&&
+ valid=valid&&HolstersEnabled()&&!fault.load()&&HudGameplayInputAllowed()&&!stereo::Recentering(ref)&&
   FreshSample(MonotonicNanoseconds(),f.publishedNs)&&
   IsPoseUsable(f.head,f.headValidity,kMaxPoseAgeNs)&&IsPoseUsable(r.gripPose,r.gripValidity,kMaxPoseAgeNs)&&
   !TwoHandedAimHeld()&&l.squeezeValue<.45f&&!r.triggerPressed&&!FaceButtonHeld(r)&&!f.play.special&&!f.play.weaponWheel&&!f.play.psychoscope;

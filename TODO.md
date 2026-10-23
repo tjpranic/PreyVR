@@ -2,6 +2,9 @@
 
 ## TODO
 
+### Graphics
+- Better anti-aliasing
+
 ### UX/Game Feel
 - Rotate to face direction
     Add in an option to rotate the camera in the direction the right hand is facing

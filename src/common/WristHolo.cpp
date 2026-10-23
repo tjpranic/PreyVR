@@ -50,7 +50,7 @@ Card PlaceCard(const Arm& arm, const Pose& head, const Placement& placement)
         // Only while the back is turned towards the eye (within 100 deg): past
         // that the card is hidden anyway, and turning it would only make it flip.
         if (std::fabs(angle) < 1.745f) {
-            const float limit = placement.maxTiltDeg * 0.0174532925f;
+            const float limit = placement.maxTiltDeg * kRadiansPerDegree;
             tilt = std::clamp(angle, -limit, limit);
             face = Add(Scale(dorsal, std::cos(tilt)), Scale(side, std::sin(tilt)));
         }
@@ -64,8 +64,8 @@ Card PlaceCard(const Arm& arm, const Pose& head, const Placement& placement)
     Vec3 level{};
     if (placement.upright > 0 && Unit(Sub(right, Scale(face, Dot(right, face))), level, 1e-3f)) {
         const float angle = std::acos(std::clamp(Dot(axis, level), -1.0f, 1.0f));
-        const float from = placement.uprightFromDeg * 0.0174532925f;
-        const float to = std::max(placement.uprightToDeg * 0.0174532925f, from + 1e-3f);
+        const float from = placement.uprightFromDeg * kRadiansPerDegree;
+        const float to = std::max(placement.uprightToDeg * kRadiansPerDegree, from + 1e-3f);
         const float weight = placement.upright >= 2 ? 1.0f : SmoothStep((angle - from) / (to - from));
         const float sign = Dot(Cross(axis, level), face) >= 0.0f ? 1.0f : -1.0f;
         roll = weight * angle * sign;
@@ -73,11 +73,11 @@ Card PlaceCard(const Arm& arm, const Pose& head, const Placement& placement)
     }
     const Vec3 up = Cross(face, across);   // quad +Y = +Z x +X
     card.pose.orientation = QuaternionFromBasis(across, up, face);
-    card.rollDeg = roll * 57.2957795f;
+    card.rollDeg = roll * kDegreesPerRadian;
     card.pose.position = centre;
     card.axis = axis;
     card.dorsal = dorsal;
-    card.tiltDeg = tilt * 57.2957795f;
+    card.tiltDeg = tilt * kDegreesPerRadian;
     card.valid = true;
     return card;
 }

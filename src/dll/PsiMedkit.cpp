@@ -13,10 +13,12 @@
 #include "MoveLane.h"
 #include "ReticleRayHook.h"
 #include "preyvr/PsiTargeting.h"
+#include "preyvr/StereoCamera.h"
 #include "preyvr/MedkitSlot.h"
 #include "preyvr/NativeContract.h"
 #include "preyvr/PsiMedkitNative.h"
 #include "preyvr/PsychoscopeNative.h"
+#include "preyvr/MonotonicClock.h"
 #include <MinHook.h>
 #include <atomic>
 #include <cmath>
@@ -71,7 +73,7 @@ bool MakeContext(std::uintptr_t component,psi::Context& ctx){
        !TryGetGameplayPoseFrame(f)||f.player!=owner.player||!f.cameraCentreValid||!f.headYawUsable||
        !FreshSample(MonotonicNanoseconds(),f.tracking.publishedNs,100000000)||
        !IsPoseUsable(f.tracking.head,f.tracking.headValidity,100000000)||
-       f.referenceGeneration!=HeadTrackingReferenceGeneration()||(f.referenceGeneration&1))return false;
+       !stereo::ReferenceCurrent(f.referenceGeneration,HeadTrackingReferenceGeneration()))return false;
     const auto& left=f.tracking.hands[0];
     auto ray=psi::BuildRay(static_cast<psi::Mode>(m),f.yaw,f.cameraCentre,
         f.tracking.head,left.aimPose,m==1?f.tracking.headValidity:left.aimValidity);
@@ -291,7 +293,7 @@ void UpdatePsiMedkit(const GameplayPoseFrame& frame,bool valid){
         FreshSample(MonotonicNanoseconds(),f.publishedNs,100000000)&&
         IsPoseUsable(f.head,f.headValidity,100000000)&&
         IsPoseUsable(f.hands[0].gripPose,f.hands[0].gripValidity,100000000)&&
-        !(ref&1)&&ref==HeadTrackingReferenceGeneration();
+        stereo::ReferenceCurrent(ref,HeadTrackingReferenceGeneration());
     const auto menuEpoch=HudMenuEpoch();
     const bool changed=inputOwner!=frame.player||inputEpoch!=f.epoch||inputReference!=ref||inputGeneration!=gen||inputMenu!=menuEpoch;
     if(!valid||changed){
@@ -300,7 +302,7 @@ void UpdatePsiMedkit(const GameplayPoseFrame& frame,bool valid){
         if(!valid)return;
     }
     if(previousTime==f.displayTime)return;
-    const float dt=previousTime&&f.displayTime>previousTime?static_cast<float>(f.displayTime-previousTime)*1e-9f:0;
+    const float dt=StepSeconds(previousTime,f.displayTime);
     previousTime=f.displayTime;
     if(!std::isfinite(dt)||dt<=0||dt>.2f){
         Error(StopOwned());trigger.Reset();slot.Reset();medkitGrip=false;preview={};return;

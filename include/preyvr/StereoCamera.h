@@ -120,6 +120,25 @@ Quaternion YawQuaternion(float radians);
 // (ReferenceFrame). The inverse of how the aim lane carries a tracked pose into
 // the world, so a point along the aim ray lands where the controller points.
 Vec3 EngineToTracking(const Vec3& world, const Vec3& anchor, float yawRadians, const Pose& head);
+// Its inverse: a tracking-space point in the engine world. The position half of
+// animik::ControllerWorldFromHead.
+Vec3 TrackingToEngine(const Vec3& tracking, const Vec3& anchor, float yawRadians, const Pose& head);
+// The same mapping for directions, which need only the yaw.
+Vec3 TrackingDirToEngine(const Vec3& direction, float yawRadians);
+Vec3 EngineDirToTracking(const Vec3& direction, float yawRadians);
+// The tracking origin as a pose in the engine world, in engine axes: what maps
+// ToEngineSpace(p) for a tracking point p to TrackingToEngine(p).
+Pose TrackingOriginInWorld(float yawRadians, const Vec3& anchor, const Pose& head);
+
+// The head-tracking reference generation (HeadTrackingHook) is odd while a
+// recenter is under way, and a sample taken against another generation than the
+// live one was made against a reference that has since moved.
+inline bool Recentering(std::uint64_t generation) { return (generation & 1u) != 0; }
+inline bool ReferenceCurrent(std::uint64_t sample, std::uint64_t live) { return sample == live && !Recentering(sample); }
+
+// Which way an eye sits from the centre along the camera's right axis: eye 0
+// (left) at -1, any other (right) at +1. Times half the IPD, its offset.
+inline constexpr float EyeSign(int eye) { return eye == 0 ? -1.0f : 1.0f; }
 
 // The yaw a recenter should store, extracted from a live head pose.
 //

@@ -28,14 +28,12 @@ void Log(const std::string& line){lifecycle::Log("preyvr_physical "+line);}
 void PublishPhysicalWeapon(const GameplayPoseFrame& frame,const RigIdentity& rig,const animik::Location& location,
                            Pose wrist,const weaponrig::ContactGeometry& shape){
     if(!PhysicalGeometryWanted()||!frame.cameraCentreValid||!frame.headYawUsable||
-       !std::isfinite(frame.yaw)||(frame.referenceGeneration&1)||
+       !std::isfinite(frame.yaw)||stereo::Recentering(frame.referenceGeneration)||
        !IsPoseUsable(frame.tracking.head,frame.tracking.headValidity,100000000)||
        !IsPoseUsable(frame.tracking.hands[1].gripPose,frame.tracking.hands[1].gripValidity,100000000)||
        frame.tracking.displayTime<=0||!std::isfinite(location.s)||location.s<=0||location.s>2)return;
-    const Pose worldFromReference{{0,0,std::sin(frame.yaw*.5f),std::cos(frame.yaw*.5f)}, {}};
     Geometry g{};g.rig=rig;g.wrench=shape.wrench;g.correction=SurfaceOffset(frame,Hand::right);
-    auto& s=g.sample;s.worldFromReference=worldFromReference;
-    s.worldFromReference.position=Sub(frame.cameraCentre,Rotate(worldFromReference.orientation,stereo::ToEngineSpace(frame.tracking.head.position)));
+    auto& s=g.sample;s.worldFromReference=stereo::TrackingOriginInWorld(frame.yaw,frame.cameraCentre,frame.tracking.head);
     const auto referenceFromWorld=Inverse(s.worldFromReference);
     const Pose model=Compose(wrist,shape.weaponInWrist);
     const Pose world{Multiply(location.q,model.orientation),animik::ModelToWorld(location,model.position)};

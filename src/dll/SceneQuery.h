@@ -25,4 +25,8 @@ bool SceneQueryFaulted();
 // Input-drain thread only: the physical world and the player's own physics,
 // after the scene query's thread, player and vtable checks. ERROR_SUCCESS or why not.
 DWORD SceneQueryWorld(const GameplayPoseFrame&,std::uintptr_t& world,void*& player);
+// The errors the query and SceneQueryWorld give that can recover: no player or
+// physics yet, or the wrong thread. Any other (a bad ABI, malformed output, an
+// access fault) latches the caller's fault for this process.
+inline bool TransientEngineError(DWORD error){return error==ERROR_NOT_READY||error==ERROR_INVALID_THREAD_ID;}
 }

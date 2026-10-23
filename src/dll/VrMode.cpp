@@ -28,6 +28,7 @@
 #include "GrenadeLane.h"
 #include "DebugOverlay.h"
 #include "EnvSwitch.h"
+#include "preyvr/StereoCamera.h"
 #include "FocusHold.h"
 #include "ControllerPrompts.h"
 #include "InventoryPointerCapture.h"
@@ -271,7 +272,7 @@ void TickVrMode() {
         }
         const auto owner=AnimIkOwnerGeneration();
         const auto reference=HeadTrackingReferenceGeneration();
-        if(AnimIkOwnerCharacter()!=0 && reference%2==0 &&
+        if(AnimIkOwnerCharacter()!=0 && !stereo::Recentering(reference) &&
            (owner!=calibratedOwner || reference!=calibratedReference) && CalibrateAnimIk()==0) {
             calibratedOwner=owner;
             calibratedReference=reference;

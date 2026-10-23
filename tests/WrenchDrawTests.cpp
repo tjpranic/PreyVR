@@ -2,6 +2,7 @@
 // PlayAction's original, the wrench's and the select action's vtables, the
 // weapon lookup, and the installer.
 #include "../src/dll/WrenchDraw.cpp"
+#include "DllTestSupport.h"
 #include "TestSupport.h"
 #include <cstring>
 #include <iostream>
@@ -9,30 +10,20 @@
 #include <thread>
 #include <vector>
 
-std::vector<std::string> lines;
-namespace preyvr::lifecycle { void Log(std::string_view line) { lines.emplace_back(line); } }
-// The sound capture (WrenchSound.cpp, its own test): what the draw lane asks of it.
-bool capturing = false, soundOk = true;
-std::vector<std::uint32_t> seen;
-unsigned soundFrames = 0, soundPlays = 0, stowPlays = 0;
+PREYVR_TEST_CAPTURE_LOG()
+PREYVR_TEST_STUB_MINHOOK()
+// The sound replay (WrenchSound.cpp, its own test): what the draw lane asks of it.
+bool soundOk = true;
+unsigned soundPlays = 0, stowPlays = 0;
 namespace preyvr::dll {
-bool EnsureMinHook() { return false; }
-bool WrenchSoundCapturing() { return capturing; }
-void WrenchSoundSelectSeen(std::uint32_t item, bool) { seen.push_back(item); }
-void ServiceWrenchSoundFrame() { ++soundFrames; }
 bool WrenchSoundPlayDraw() { ++soundPlays; return soundOk; }
 bool WrenchSoundPlayStow() { ++stowPlays; return soundOk; }
 }
 namespace {
 using namespace preyvr::dll;
 using preyvr::test::Check;
-bool Logged(const char* a, const char* b = "")
-{
-    for (const auto& l : lines) {
-        if (l.find(a) != std::string::npos && l.find(b) != std::string::npos) { return true; }
-    }
-    return false;
-}
+using preyvr::test::gLines;
+using preyvr::test::Logged;
 std::string Report() { return WrenchDrawReport() + " "; }
 bool Reports(const char* field) { return Report().find(std::string(" ") + field + " ") != std::string::npos; }
 void Put(void* base, std::size_t offset, const void* value, std::size_t size)
@@ -253,31 +244,11 @@ int main()
 
     Clear();
 
-    // The sound capture: the draw plays and the capture is told, even with the skip off.
-    capturing = true;
-    auto heard = MakeAction(selectTable, kWrenchId, true);
-    Play(wrench, heard);
-    SetWrenchDrawSkip(0);
-    auto heardOff = MakeAction(selectTable, kWrenchId, false);
-    Play(wrench, heardOff);
-    SetWrenchDrawSkip(1);
-    Check(played.size() == 2 && begun.empty() && seen.size() == 2 && seen[0] == kWrenchId && Reports("captured=2"),
-          "while capturing the draw plays and is reported to the capture");
-    const unsigned playsBefore = soundPlays;
-    ServiceWrenchDrawFrame();
-    ServiceWrenchDrawFrame();
-    Check(soundPlays == playsBefore, "a draw that played makes its own sound: no replay");
-    auto gunHeard = MakeAction(selectTable, kGunId, true);
-    Play(gun, gunHeard);
-    Check(seen.size() == 2, "only the wrench's draw opens a capture");
-    capturing = false;
-    Check(soundFrames > 0, "the capture is serviced every frame");
-
     // The stow: asked to animate, the wrench stows at once and its sound plays.
     const std::uintptr_t fragments = 0x1234;
     Put(&wrench, wn::WeaponFragments, &fragments, 8);
     const auto wrenchAt = reinterpret_cast<std::uintptr_t>(&wrench);
-    lines.clear();
+    gLines.clear();
     UnequipHook(wrenchAt, true);
     Check(unequips.size() == 1 && unequips[0].weapon == wrenchAt && !unequips[0].animate, "the stow is asked not to animate");
     Check(stowPlays == 1 && Reports("stows=1") && Reports("stowSounds=1") && Logged("stow id=7 sound=1"),
@@ -298,23 +269,20 @@ int main()
     UnequipHook(wrenchAt, true);
     Check(unequips.size() == 4 && unequips[3].animate && stowPlays == 1, "without fragments it is Prey's");
     Put(&wrench, wn::WeaponFragments, &fragments, 8);
-    // Off, capturing, or another thread: Prey's animated stow.
+    // Off, or another thread: Prey's animated stow.
     SetWrenchDrawSkip(0);
     UnequipHook(wrenchAt, true);
     SetWrenchDrawSkip(1);
-    capturing = true;
-    UnequipHook(wrenchAt, true);
-    capturing = false;
     std::thread([&] { UnequipHook(wrenchAt, true); }).join();
-    Check(unequips.size() == 7 && unequips[4].animate && unequips[5].animate && unequips[6].animate && stowPlays == 1,
-          "off, capturing or off the main thread the stow animates");
+    Check(unequips.size() == 6 && unequips[4].animate && unequips[5].animate && stowPlays == 1,
+          "off or off the main thread the stow animates");
     // Another weapon's object under this hook: passed on.
     UnequipHook(reinterpret_cast<std::uintptr_t>(&gun), true);
-    Check(unequips.size() == 8 && unequips[7].animate && Reports("stows=1"), "only the wrench is stowed at once");
+    Check(unequips.size() == 7 && unequips[6].animate && Reports("stows=1"), "only the wrench is stowed at once");
     // A sound that could not play: the stow still instant, counted without a sound.
     soundOk = false;
     UnequipHook(wrenchAt, true);
-    Check(unequips.size() == 9 && !unequips[8].animate && Reports("stows=2") && Reports("stowSounds=1") && Logged("sound=0"),
+    Check(unequips.size() == 8 && !unequips[7].animate && Reports("stows=2") && Reports("stowSounds=1") && Logged("sound=0"),
           "the stow does not wait on its sound");
     soundOk = true;
 

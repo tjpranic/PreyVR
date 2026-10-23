@@ -6,12 +6,10 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include "DllTestSupport.h"
 #include "TestSupport.h"
 
-namespace preyvr::lifecycle {
-std::vector<std::string> gLines;
-void Log(std::string_view message) { gLines.emplace_back(message); }
-} // namespace preyvr::lifecycle
+PREYVR_TEST_CAPTURE_LOG()
 namespace preyvr::dll {
 DWORD gObserver = static_cast<DWORD>(FrameObserverRuntimeStatus::enabled);
 DWORD FrameObserverStatus() { return gObserver; }
@@ -30,22 +28,15 @@ DWORD VerifiedRendererSettingResult() { return gVerifiedResult; }
 
 namespace {
 using namespace preyvr::dll;
-using preyvr::lifecycle::gLines;
+using preyvr::test::gLines;
+using preyvr::test::Logged;
 using preyvr::test::Require;
 
-bool Logged(const char* text)
-{
-    for (const auto& line : gLines) {
-        if (line.find(text) != std::string::npos) return true;
-    }
-    return false;
-}
 bool Reports(const char* text) { return ControllerPromptsReport().find(text) != std::string::npos; }
 std::vector<int> gSetCalls;
 void Reset()
 {
-    gWanted = gApplied = gSending = gFailed = -1;
-    gCount = 0;
+    gGlyphs = {};
     gNextReapply = gCorrectedLogged = gNextCorrectionLog = gNextCorrection = 0;
     gGuardLogged = false;
     gEnforce = false;

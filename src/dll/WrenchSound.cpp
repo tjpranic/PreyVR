@@ -1,12 +1,8 @@
 #include "WrenchSound.h"
 #include "EngineAccess.h"
-#include "HookInstall.h"
 #include "Logger.h"
-#include "preyvr/MonotonicClock.h"
 #include "preyvr/NativeContract.h"
-#include "preyvr/TextFormat.h"
 #include "preyvr/WrenchSoundNative.h"
-#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <iterator>
@@ -17,141 +13,16 @@ namespace sn = wrenchsound::native;
 
 void Log(const std::string& line) { lifecycle::Log("preyvr_wrench_sound " + line); }
 
-// Every function hooked through a named RVA, and the slots that lead to them, are
-// ones the gate checks.
-static_assert(contract::Gated(sn::Contracts, sn::PlaySoundEnter) && contract::Gated(sn::Contracts, sn::GetAudioTriggerId) &&
-              contract::Gated(sn::Contracts, sn::TriggerIdByName) && contract::Gated(sn::Contracts, sn::ProxyExecuteTrigger));
+// Every function the replay calls through a slot is one the gate checks.
+static_assert(contract::Gated(sn::Contracts, sn::GetAudioTriggerId) && contract::Gated(sn::Contracts, sn::ProxyExecuteTrigger));
 
-constexpr std::uint64_t kWindowNs = 3000000000ull;
-constexpr unsigned kMaxLines = 200;
-
-std::atomic<bool> wanted{false}, installed{false}, hookFailed{false}, fault{false};
+std::atomic<bool> fault{false};
 std::atomic<const char*> gate{"unchecked"}, audioSystem{"unread"};
-// The open window: its start (0 when none) and end, and the wrench it is for.
-std::atomic<std::uint64_t> windowStart{0}, windowEnd{0};
-std::atomic<std::uint32_t> windowItem{0};
-std::atomic<unsigned> windowLines{0};
-std::atomic<std::uint64_t> windows{0}, clips{0}, resolves{0}, executes{0}, dropped{0};
 
-using ClipEnterFn = void(__fastcall*)(std::uintptr_t, float, float, std::uintptr_t);
 using TriggerIdFn = bool(__fastcall*)(std::uintptr_t, const char*, std::uint32_t*);
 using ExecuteFn = bool(__fastcall*)(std::uintptr_t, std::uint32_t, int, std::uint32_t, const void*);
-using EntityIdFn = std::uint32_t(__fastcall*)(std::uintptr_t);
-std::atomic<ClipEnterFn> originalClipEnter{nullptr};
-std::atomic<TriggerIdFn> originalTriggerId{nullptr};
-std::atomic<ExecuteFn> originalExecute{nullptr};
 
-// --- reads, guarded (engine memory, from any thread) -----------------------------
-// A C string, at most 95 characters: "" for none, "?" when unreadable.
-void CopyName(const char* text, char (&out)[96])
-{
-    __try {
-        std::size_t i = 0;
-        for (; text && i + 1 < sizeof(out) && text[i]; ++i) {
-            out[i] = text[i] > ' ' && text[i] < 127 ? text[i] : '_';
-        }
-        out[i] = 0;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        out[0] = '?';
-        out[1] = 0;
-    }
-}
-// An IEntity's id (its vtable +0x08), or 0.
-std::uint32_t EntityId(std::uintptr_t entity)
-{
-    __try {
-        if (!entity) { return 0; }
-        const auto table = *reinterpret_cast<const std::uintptr_t* const*>(entity);
-        return reinterpret_cast<EntityIdFn>(table[sn::EntityIdSlot / sizeof(void*)])(entity);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return 0;
-    }
-}
-template <class T> T ReadOr(std::uintptr_t at, T fallback)
-{
-    __try {
-        return at ? *reinterpret_cast<const T*>(at) : fallback;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return fallback;
-    }
-}
-struct Clip {
-    std::uintptr_t entity = 0;
-    char start[96]{}, stop[96]{};
-    std::uint32_t joint = 0, flags = 0;
-    bool fireAndForget = false;
-};
-void ReadClip(std::uintptr_t clip, std::uintptr_t params, Clip& c)
-{
-    c.entity = ReadOr<std::uintptr_t>(clip + sn::ClipEntity, 0);
-    CopyName(ReadOr<const char*>(params + sn::StartTrigger, nullptr), c.start);
-    CopyName(ReadOr<const char*>(params + sn::StopTrigger, nullptr), c.stop);
-    c.joint = ReadOr<std::uint32_t>(params + sn::AttachmentJoint, 0);
-    c.flags = ReadOr<std::uint32_t>(params + sn::SoundFlags, 0);
-    c.fireAndForget = ReadOr<std::uint8_t>(params + sn::FireAndForget, 0) != 0;
-}
-
-// --- the window -------------------------------------------------------------------
-// Milliseconds into the open window, counting this line; -1 when none is open or
-// the window has had its lines.
-long long WindowMs()
-{
-    const auto start = windowStart.load();
-    if (!start) { return -1; }
-    const auto now = MonotonicNanoseconds();
-    if (now > windowEnd.load()) { return -1; }
-    if (windowLines.fetch_add(1) >= kMaxLines) {
-        ++dropped;
-        return -1;
-    }
-    return static_cast<long long>((now - start) / 1000000ull);
-}
-std::string Who(std::uint32_t id)
-{
-    if (id == sn::PlayerEntityId) { return "player"; }
-    if (id && id == windowItem.load()) { return "wrench"; }
-    return std::to_string(id);
-}
-std::string Ms(long long ms) { return std::to_string(ms); }
-
-// --- the hooks --------------------------------------------------------------------
-void __fastcall ClipEnterHook(std::uintptr_t clip, float blend, float duration, std::uintptr_t params)
-{
-    if (const auto ms = WindowMs(); ms >= 0) {
-        Clip c{};
-        ReadClip(clip, params, c);
-        ++clips;
-        Log("clip tMs=" + Ms(ms) + " entity=" + Who(EntityId(c.entity)) + " start=" + (c.start[0] ? c.start : "-") +
-            " stop=" + (c.stop[0] ? c.stop : "-") + " fireAndForget=" + std::to_string(c.fireAndForget) +
-            " soundFlags=" + std::to_string(c.flags) + " joint=" + Hex(c.joint) + " blendMs=" +
-            std::to_string(static_cast<int>(blend * 1000)) + " durationMs=" + std::to_string(static_cast<int>(duration * 1000)));
-    }
-    originalClipEnter.load()(clip, blend, duration, params);
-}
-bool __fastcall TriggerIdHook(std::uintptr_t atl, const char* name, std::uint32_t* id)
-{
-    const bool found = originalTriggerId.load()(atl, name, id);
-    if (const auto ms = WindowMs(); ms >= 0) {
-        char text[96]{};
-        CopyName(name, text);
-        ++resolves;
-        Log("resolve tMs=" + Ms(ms) + " name=" + (text[0] ? text : "-") + " id=" +
-            Hex(ReadOr<std::uint32_t>(reinterpret_cast<std::uintptr_t>(id), 0)) + " found=" + std::to_string(found));
-    }
-    return found;
-}
-bool __fastcall ExecuteHook(std::uintptr_t proxy, std::uint32_t id, int lipSync, std::uint32_t local, const void* callbacks)
-{
-    if (const auto ms = WindowMs(); ms >= 0) {
-        ++executes;
-        Log("execute tMs=" + Ms(ms) + " id=" + Hex(id) + " entity=" +
-            Who(EntityId(ReadOr<std::uintptr_t>(proxy + sn::ProxyEntity, 0))) + " proxy=" + std::to_string(local) +
-            " lipSync=" + std::to_string(lipSync));
-    }
-    return originalExecute.load()(proxy, id, lipSync, local, callbacks);
-}
-
-// --- the gate (main thread), shared by the capture and the replay ------------------
+// --- the gate (main thread) --------------------------------------------------------
 std::uintptr_t SlotTarget(std::uintptr_t base, std::uintptr_t table, std::size_t slot)
 {
     return *reinterpret_cast<const std::uintptr_t*>(base + table + slot) - base;
@@ -198,29 +69,8 @@ DWORD Resolve(Natives& n)
     n.proxyVtable = base + sn::EntityAudioProxyVtable;
     return ERROR_SUCCESS;
 }
-bool Install(const Natives& n)
-{
-    void* originals[3]{};
-    const hook::Spec hooks[] = {
-        {reinterpret_cast<void*>(n.base + sn::PlaySoundEnter), reinterpret_cast<void*>(ClipEnterHook), &originals[0]},
-        {reinterpret_cast<void*>(n.base + sn::TriggerIdByName), reinterpret_cast<void*>(TriggerIdHook), &originals[1]},
-        {reinterpret_cast<void*>(n.base + sn::ProxyExecuteTrigger), reinterpret_cast<void*>(ExecuteHook), &originals[2]}};
-    const auto result = hook::InstallAll(hooks, [&] {
-        originalClipEnter = reinterpret_cast<ClipEnterFn>(originals[0]);
-        originalTriggerId = reinterpret_cast<TriggerIdFn>(originals[1]);
-        originalExecute = reinterpret_cast<ExecuteFn>(originals[2]);
-    });
-    if (!result) {
-        Log(std::string("hooks result=") + hook::StepName(result.step) + " status=" + std::to_string(result.status) +
-            " index=" + std::to_string(result.index));
-        return false;
-    }
-    Log("hooks result=0 count=3");
-    return true;
-}
 // Tests replace the engine here.
 DWORD (*gResolve)(Natives&) = Resolve;
-bool (*gInstall)(const Natives&) = Install;
 std::atomic<bool> gated{false};
 // True once the gate holds; refused for good on a mismatch.
 bool Gate()
@@ -323,56 +173,18 @@ bool PlayTriggerSet(const Sound& s)
 }
 } // namespace
 
-void SetWrenchSoundCapture(unsigned on)
-{
-    wanted = on != 0;
-    Log("settings capture=" + std::to_string(wanted.load()));
-}
-bool WrenchSoundCapturing() { return wanted.load(); }
 void SetWrenchSoundPlay(unsigned on)
 {
     playOn = on != 0;
     Log("settings play=" + std::to_string(playOn.load()));
 }
 unsigned WrenchSoundPlay() { return playOn.load() ? 1u : 0u; }
-void WrenchSoundSelectSeen(std::uint32_t item, bool select)
-{
-    if (!wanted.load()) { return; }
-    const auto now = MonotonicNanoseconds();
-    windowItem = item;
-    windowLines = 0;
-    windowEnd = now + kWindowNs;
-    windowStart = now;
-    ++windows;
-    Log("select item=" + std::to_string(item) + " kind=" + (select ? "select" : "pickup") + " window=" +
-        std::to_string(windows.load()) + " hooks=" + std::to_string(installed.load()));
-}
 bool WrenchSoundPlayDraw() { return PlayTriggerSet(kDraw); }
 bool WrenchSoundPlayStow() { return PlayTriggerSet(kStow); }
-void ServiceWrenchSoundFrame()
-{
-    if (wanted.load() && !installed.load() && !hookFailed.load() && Gate()) {
-        if (gInstall(natives)) {
-            installed = true;
-        } else {
-            hookFailed = true;
-        }
-    }
-    const auto start = windowStart.load();
-    if (start && MonotonicNanoseconds() > windowEnd.load()) {
-        windowStart = 0;
-        Log("window end item=" + std::to_string(windowItem.load()) + " lines=" +
-            std::to_string(std::min(windowLines.load(), kMaxLines)) + " dropped=" + std::to_string(dropped.load()));
-    }
-}
 std::string WrenchSoundReport()
 {
     return " play=" + std::to_string(playOn.load()) + " played=" + std::to_string(played.load()) + " playFailed=" +
-           std::to_string(playFailed.load()) + " lastPlay=" + lastPlay.load() + " capture=" + std::to_string(wanted.load()) +
-           " hooks=" + std::to_string(installed.load()) + " hookFailed=" + std::to_string(hookFailed.load()) + " gate=" +
-           gate.load() + " fault=" + std::to_string(fault.load()) + " audioSystem=" + audioSystem.load() + " windows=" +
-           std::to_string(windows.load()) + " clips=" + std::to_string(clips.load()) + " resolves=" +
-           std::to_string(resolves.load()) + " executes=" + std::to_string(executes.load()) + " dropped=" +
-           std::to_string(dropped.load());
+           std::to_string(playFailed.load()) + " lastPlay=" + lastPlay.load() + " gate=" + gate.load() + " fault=" +
+           std::to_string(fault.load()) + " audioSystem=" + audioSystem.load();
 }
 } // namespace preyvr::dll

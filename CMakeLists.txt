@@ -133,7 +133,6 @@ add_library(preyvr_core STATIC
     src/common/TwoHandedAim.cpp
     src/common/VrOptions.cpp
     src/common/OpenXRBootstrap.cpp
-    src/common/RenderFrameTable.cpp
     src/common/RuntimeSnapshot.cpp
     src/common/StereoCamera.cpp
     src/common/StereoFrame.cpp
@@ -224,7 +223,11 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
     target_link_libraries(preyvr_win32_bootstrap PUBLIC preyvr_core advapi32)
     preyvr_enable_warnings(preyvr_win32_bootstrap)
 
-    add_library(preyvr SHARED
+    # The DLL's sources, compiled once: PreyVR.dll links every object, in this
+    # order, and the command channel's test links all but four (see
+    # command_channel below). They are compiled as the SHARED target compiled
+    # them, its export symbol and _WINDLL included, so the objects are the same.
+    add_library(preyvr_dll_objects OBJECT
         src/dll/AimTakeover.cpp
         src/dll/PsiMedkit.cpp
         src/dll/AnimIkTakeover.cpp
@@ -285,7 +288,6 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/MarkerStereo.cpp
         src/dll/DualSceneStereo.cpp
         src/dll/DualOverlay.cpp
-        src/dll/RenderFrame.cpp
         src/dll/WeaponAttachment.cpp
         src/dll/PassCreationHook.cpp
         src/dll/ReticleFollow.cpp
@@ -296,19 +298,26 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/XrSessionHost.cpp
         src/lifecycle/Logger.cpp
     )
-    target_include_directories(preyvr PRIVATE
+    target_include_directories(preyvr_dll_objects PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src/dll"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
         "${CMAKE_CURRENT_BINARY_DIR}/generated"
     )
-    target_compile_definitions(preyvr PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_compile_definitions(preyvr_dll_objects PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX
+        preyvr_EXPORTS ${CMAKE_CXX_SHARED_LIBRARY_COMPILE_DEFINITIONS})
+    # For their headers and definitions; PreyVR.dll names the libraries it links.
+    target_link_libraries(preyvr_dll_objects PRIVATE preyvr_core preyvr_win32_bootstrap preyvr_imgui minhook)
+    preyvr_enable_warnings(preyvr_dll_objects)
+
+    add_library(preyvr SHARED $<TARGET_OBJECTS:preyvr_dll_objects>)
     target_link_libraries(preyvr PRIVATE preyvr_core preyvr_win32_bootstrap preyvr_imgui minhook bcrypt psapi shell32 d3d11 dxgi d3dcompiler gdi32)
     if(PREYVR_BUILD_OPENXR_LOADER AND TARGET openxr_loader)
         # The in-process session host needs the loader. The DLL already ships
         # openxr_loader.dll beside itself for the preflight, so this adds a link
         # dependency rather than a new deployment requirement.
         target_link_libraries(preyvr PRIVATE openxr_loader delayimp)
-        target_compile_definitions(preyvr PRIVATE XR_USE_PLATFORM_WIN32 XR_USE_GRAPHICS_API_D3D11)
+        target_link_libraries(preyvr_dll_objects PRIVATE openxr_loader)
+        target_compile_definitions(preyvr_dll_objects PRIVATE XR_USE_PLATFORM_WIN32 XR_USE_GRAPHICS_API_D3D11)
         # **Delay-loaded on purpose.** A hard import would make PreyVR.dll fail to
         # load at all when openxr_loader.dll is not beside it -- the landmark gate
         # would never run, nothing would reach the log, and the failure would read
@@ -318,7 +327,6 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         # loader into a clean refusal inside StartXrSession instead.
         target_link_options(preyvr PRIVATE /DELAYLOAD:openxr_loader.dll)
     endif()
-    preyvr_enable_warnings(preyvr)
     set_target_properties(preyvr PROPERTIES OUTPUT_NAME PreyVR)
     if(TARGET preyvr_engine_map_probe)
         add_dependencies(preyvr preyvr_engine_map_probe)
@@ -445,7 +453,6 @@ if(PREYVR_BUILD_TESTS)
     preyvr_add_test(xr_hold tests/XrHoldTests.cpp)
     preyvr_add_test(hud_parts tests/HudPartsTests.cpp)
     preyvr_add_test(locomotion tests/LocomotionTests.cpp)
-    preyvr_add_test(render_frame_table tests/RenderFrameTableTests.cpp)
     preyvr_add_test(stereo_camera tests/StereoCameraTests.cpp)
     preyvr_add_test(camera_edit tests/CameraEditTests.cpp)
     preyvr_add_test(frame_dump tests/FrameDumpTests.cpp)
@@ -546,6 +553,20 @@ if(PREYVR_BUILD_TESTS)
                 DLL
                 DEFS XR_USE_PLATFORM_WIN32 XR_USE_GRAPHICS_API_D3D11
                 LIBS d3d11)
+            # The command channel's replies, pinned. The test includes the channel
+            # and links the DLL's other objects but DllMain, with the logger and
+            # MinHook's initialiser stubbed. Built apart from the copied loader, so
+            # a stray OpenXR call fails to delay-load instead of finding a runtime.
+            preyvr_add_test(command_channel tests/CommandChannelTests.cpp
+                SOURCES "$<FILTER:$<TARGET_OBJECTS:preyvr_dll_objects>,EXCLUDE,/(CommandChannel|DllMain|Logger|MinHookInit)[.]obj$>"
+                INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/dll" "${CMAKE_CURRENT_BINARY_DIR}/generated"
+                DLL
+                DEFS XR_USE_PLATFORM_WIN32 XR_USE_GRAPHICS_API_D3D11
+                LIBS preyvr_core preyvr_win32_bootstrap preyvr_imgui minhook bcrypt psapi shell32 d3d11 dxgi
+                    d3dcompiler gdi32 openxr_loader delayimp)
+            target_link_options(preyvr_command_channel_tests PRIVATE /DELAYLOAD:openxr_loader.dll)
+            set_target_properties(preyvr_command_channel_tests PROPERTIES
+                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/command_channel")
 
             preyvr_add_test(openxr_preflight_files tests/OpenXRPreflightWin32Tests.cpp
                 TARGET preyvr_openxr_preflight_tests

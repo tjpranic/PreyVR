@@ -8,6 +8,7 @@
 #include "Logger.h"
 #include "SafeMemory.h"
 #include "preyvr/MarkerDepth.h"
+#include "preyvr/StereoCamera.h"
 #include "preyvr/MonotonicClock.h"
 
 #include <MinHook.h>
@@ -566,7 +567,7 @@ void ApplyMarkerEye(void* root, int eye)
     // The eye camera is the head moved half the IPD along its right axis:
     // left (the first submission) negative, right positive.
     if (!tShift) { return; }
-    const float offset = eye == 0 ? -tHalfIpd : tHalfIpd;
+    const float offset = stereo::EyeSign(eye) * tHalfIpd;
     char path[kPathSize + 16];
     for (std::size_t i = 0; i < tMovedCount; ++i) {
         if (PropertyPath(path, tMoved[i].clip, "_x")) {

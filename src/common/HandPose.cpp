@@ -7,7 +7,6 @@
 namespace preyvr::handpose {
 namespace {
 
-constexpr float kDegrees = kPi / 180.0f;
 
 bool Unit(Vec3& a) {
     const float n = Length(a);
@@ -126,7 +125,7 @@ Quaternion RelaxedRelative(Side side, int joint, float curl)
 {
     if (joint < 0 || joint >= kJointCount) { return {}; }
     const Relaxed& r = kLeft[joint];
-    Quaternion q = Normalize(Multiply(r.rotation, AboutZ(r.flexDegrees * curl * kDegrees)));
+    Quaternion q = Normalize(Multiply(r.rotation, AboutZ(r.flexDegrees * curl * kRadiansPerDegree)));
     if (side == Side::right) {
         // The two hands are mirror images through the local XY plane (thumb on
         // +Z vs -Z; length +X and palm -Y on both): reflect the rotation axis.
@@ -144,7 +143,7 @@ Quaternion ShapeRelative(Side side, int joint, float curl, float fist)
     const Relaxed& open = kLeft[joint];
     const Relaxed& shut = kFist[joint];
     const float flex = open.flexDegrees * curl * (1.0f - closed) + shut.flexDegrees * closed;
-    Quaternion q = Normalize(Multiply(open.rotation, AboutZ(flex * kDegrees)));
+    Quaternion q = Normalize(Multiply(open.rotation, AboutZ(flex * kRadiansPerDegree)));
     if (side == Side::right) { q = {-q.x, -q.y, q.z, q.w}; }
     return q;
 }

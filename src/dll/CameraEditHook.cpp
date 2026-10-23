@@ -314,7 +314,7 @@ bool BuildSyntheticEye(
 
     // Half the IPD along the camera's own right axis.
     const float half = ipdMetres * 0.5f;
-    const Vec3 offset{eye == 0 ? -half : half, 0.0f, 0.0f};
+    const Vec3 offset{stereo::EyeSign(eye) * half, 0.0f, 0.0f};
     const Pose eyePose = stereo::OffsetInLocalFrame(basePose, offset);
     if (!stereo::WriteMatrix(edited, stereo::MatrixFromPose(eyePose))) {
         return false;
@@ -488,7 +488,7 @@ void __fastcall RenderWithCameraEdit(void* system)
         renderContract.pose = renderHead;
         for (int eye = 0; eye < 2; ++eye) {
             renderContract.eyePoses[eye] = Compose(renderHead, Pose{Quaternion{}, Vec3{
-                (eye == 0 ? -.5f : .5f) * renderIpd, 0, 0}});
+                stereo::EyeSign(eye) * .5f * renderIpd, 0, 0}});
         }
         const auto fov = stereoframe::TangentsFromCamera(edited);
         if (fov) renderContract.tangents = {fov->tanLeft, fov->tanRight, fov->tanUp, fov->tanDown};
@@ -518,7 +518,7 @@ void __fastcall RenderWithCameraEdit(void* system)
             // to, so submission never has to wait to find out which one it got.
             renderContract.eye=eye;
             renderContract.pose=Compose(renderHead,Pose{Quaternion{},Vec3{
-                (eye==0 ? -.5f : .5f)*renderIpd,0,0}});
+                stereo::EyeSign(eye)*.5f*renderIpd,0,0}});
             const auto fov=stereoframe::TangentsFromCamera(edited);
             if(fov) renderContract.tangents={fov->tanLeft,fov->tanRight,fov->tanUp,fov->tanDown};
             renderContract.valid=haveRenderHead && fov.has_value();
