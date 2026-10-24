@@ -46,7 +46,14 @@ This was read-only: five parallel reviews, each covering one slice, with nothing
 - **2026-10-24, the XR batch is built** ([its scope](XR-SCOPE-2026-10-24.md), with your decisions: the rename, phase 3 in, one package, the other renderer reads too).
   - B7's pieces (XrPose.h, LayerSwapchain's shared pieces, RendererAccess.h), the overlay sections as functions, and the split of XrSessionHost.cpp into seven files and a private header.
   - Build passes, 97/97 ctest pass, the four `strncpy` warnings are gone, and the 75 export names are unchanged.
-  - **Worn OK on PreyVR-68 (10-24).** Not yet committed.
+  - **Worn OK on PreyVR-68 (10-24), and committed by you as `e74a389`** ("XR refactoring").
+- **2026-10-24, the UI batch's phases 1 and 2 are built** ([its scope](UI-SCOPE-2026-10-24.md)).
+  - The B9 verb table: 165 rows with Audience tags, and the counting and minimum arguments unchanged.
+  - `QueueConsoleRetrying`, and a doc check of the table against TUNING-COMMANDS.md.
+  - B10's HudLayer helpers (`CopyStencil`, `RedirectInto`, `EnsureDepthCopy` reused, `NativeTargets` in CaptureFlash).
+  - Build passes, 97/97 ctest pass, no new warnings, and the 75 export names are unchanged.
+  - Packaged as PreyVR-69, awaiting the headset. Not committed.
+  - Phase 3 (counting, parsing, fallbacks, replies, the lasers) waits on your decisions.
 
 **How this relates to [the 10-17 audit](DUPLICATION-AUDIT-2026-10-17.md):**
 - The older audit is still the reference for its items. Its "Constraints that shape every fix" and section F ("don't merge") still apply in full.
@@ -544,5 +551,5 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
    - done 10-23: `GameplayFrame.h`, `OnEngineMainThread`, `EnvSwitchOff`, `YawDistance`, `Exports.cpp`, `PhysicalLane.h`, the play-space functions, the recenter checks, the small helpers and `VerifiedSetting`;
    - done 10-24 in batch A, worn OK on PreyVR-67: the XrSessionHost pure extractions, the options wiring test, the renames, and the `log [0|1]` helper.
 3. **Your decisions in section 4,** then the approved deletions. **Done 10-23.**
-4. **T2 batches,** one headset smoke run each: FrameSchedule, Hands, Physics, XR, UI. **FrameSchedule done 10-24, worn OK on PreyVR-63/64. Hands done 10-24, worn OK on PreyVR-65/66, committed `84d6c19`. XR done 10-24, worn OK on PreyVR-68.** Next: UI, with Physics after the throwing redo.
+4. **T2 batches,** one headset smoke run each: FrameSchedule, Hands, Physics, XR, UI. **FrameSchedule done 10-24, worn OK on PreyVR-63/64. Hands done 10-24, worn OK on PreyVR-65/66, committed `84d6c19`. XR done 10-24, worn OK on PreyVR-68, committed `e74a389`. UI phases 1 and 2 built 10-24 as PreyVR-69, awaiting the headset; phase 3 awaits decisions.** Physics comes after the throwing redo.
 5. **Last:** the folder move and the ARCHITECTURE.md rewrite.

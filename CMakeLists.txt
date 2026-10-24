@@ -588,6 +588,8 @@ if(PREYVR_BUILD_TESTS)
                 LIBS preyvr_core preyvr_win32_bootstrap preyvr_imgui minhook bcrypt psapi shell32 d3d11 dxgi
                     d3dcompiler gdi32 openxr_loader delayimp)
             target_link_options(preyvr_command_channel_tests PRIVATE /DELAYLOAD:openxr_loader.dll)
+            target_compile_definitions(preyvr_command_channel_tests PRIVATE
+                PREYVR_TUNING_DOC="${CMAKE_CURRENT_SOURCE_DIR}/docs/TUNING-COMMANDS.md")
             set_target_properties(preyvr_command_channel_tests PROPERTIES
                 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/command_channel")
             # VR Options' wiring against the real lanes, linked the same way: the

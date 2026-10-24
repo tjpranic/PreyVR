@@ -367,6 +367,34 @@ void RunVarOps(void* root){
     }
     std::lock_guard lock(varMutex);varLast=out;
 }
+// The stencil's copy in `capture`, made or remade at its size and format; with
+// `width`, refused unless the stencil is that size.
+bool EnsureDepthCopy(ID3D11Device* device,ID3D11DepthStencilView* ds,Capture& capture,UINT width=0,UINT height=0);
+// The native stencil a draw starts from (Flash clips its viewport with it), into
+// `capture`'s copy. Nothing without one.
+void CopyStencil(ID3D11DeviceContext* context,ID3D11DepthStencilView* ds,Capture& capture){
+    if(!ds)return;
+    ComPtr<ID3D11Resource> source;ds->GetResource(&source);
+    context->CopyResource(capture.depth.Get(),source.Get());
+}
+// **Draws into `capture`, cleared first, in place of the redirected target**,
+// inside the HUD's one native callback, and puts the previous redirect back when
+// it goes: the wrist's replay and each part's.
+struct RedirectInto {
+    ID3D11RenderTargetView* previousTarget=activeTarget;
+    ID3D11DepthStencilView* previousDepth=activeDepthView;
+    explicit RedirectInto(Capture& capture){
+        activeTarget=capture.target.Get();activeDepthView=capture.depthView.Get();
+        const float clear[4]{};activeContext->ClearRenderTargetView(activeTarget,clear);
+        originalTargets(activeContext,1,&activeTarget,activeDepthView);
+    }
+    ~RedirectInto(){
+        activeTarget=previousTarget;activeDepthView=previousDepth;
+        originalTargets(activeContext,1,&activeTarget,activeDepthView);
+    }
+    RedirectInto(const RedirectInto&)=delete;
+    RedirectInto& operator=(const RedirectInto&)=delete;
+};
 bool DrawStatusGuarded(void* root){
     __try {originalDisplay(root);return true;}
     __except(EXCEPTION_EXECUTE_HANDLER){return false;}
@@ -377,11 +405,7 @@ void CaptureNativeStatus(void* root){
     hud::Isolation isolation(api);
     bool produced=false,coverage=false;
     if(isolation.Begin()){
-        const auto previousTarget=activeTarget;
-        const auto previousDepth=activeDepthView;
-        activeTarget=nativeWrist.target.Get();activeDepthView=nativeWrist.depthView.Get();
-        const float clear[4]{};activeContext->ClearRenderTargetView(activeTarget,clear);
-        originalTargets(activeContext,1,&activeTarget,activeDepthView);
+        const RedirectInto into(nativeWrist);
         StatusOverride layout;
         if(layout.Apply(root,api.base,WristNativeScalePercent()*.01f,WristNativeBackground()))overrideApplied.fetch_add(1,std::memory_order_relaxed);
         else {layout.Restore(root,api.base);overrideRefused.fetch_add(1,std::memory_order_relaxed);}
@@ -392,8 +416,6 @@ void CaptureNativeStatus(void* root){
         // Require traversal below the common SW ancestor; cached ancestors
         // could otherwise contribute pixels without passing the sprite filter.
         coverage=isolation.Complete();
-        activeTarget=previousTarget;activeDepthView=previousDepth;
-        originalTargets(activeContext,1,&activeTarget,activeDepthView);
     }
     const bool restored=isolation.Release();
     if(!restored||!produced){
@@ -428,7 +450,7 @@ bool PreparePart(PartState& part){
     if(!activeContext || !originalDestination)return false;
     ComPtr<ID3D11Device> device;activeContext->GetDevice(&device);
     if(!device || !EnsureTexture(device.Get(),originalDestination,originalDepth,part.capture))return false;
-    if(originalDepth){ComPtr<ID3D11Resource> source;originalDepth->GetResource(&source);activeContext->CopyResource(part.capture.depth.Get(),source.Get());}
+    CopyStencil(activeContext,originalDepth,part.capture);
     return true;
 }
 // The part alone, into its target, inside the HUD's one native callback: as the
@@ -475,11 +497,7 @@ void ReplayPart(NativeHudApi& api,void* root,PartState& part){
     hud::Isolation isolation(api,part.profile->replay);
     bool produced=false,drawn=false;
     if(isolation.Begin()){
-        const auto previousTarget=activeTarget;
-        const auto previousDepth=activeDepthView;
-        activeTarget=part.capture.target.Get();activeDepthView=part.capture.depthView.Get();
-        const float clear[4]{};activeContext->ClearRenderTargetView(activeTarget,clear);
-        originalTargets(activeContext,1,&activeTarget,activeDepthView);
+        const RedirectInto into(part.capture);
         const auto& list=part.profile->overrides;
         PartOverrides moved;
         if(!list.empty()){
@@ -491,8 +509,6 @@ void ReplayPart(NativeHudApi& api,void* root,PartState& part){
         replayFilter=nullptr;
         moved.Restore(root,api.base,list);
         drawn=isolation.Complete();
-        activeTarget=previousTarget;activeDepthView=previousDepth;
-        originalTargets(activeContext,1,&activeTarget,activeDepthView);
     }
     const bool restored=isolation.Release();
     part.lift.Drew(produced&&drawn);
@@ -601,10 +617,7 @@ void __fastcall StereoMatrix(void* renderer,const void* source,float* output) {
 // the same movie, same frame, into the held first eye -- starting from the
 // stencil the native draw started from, which Flash clips its viewport with.
 void RedrawDisplay(void* root) {
-    if(redrawFromDepth && redrawDepthView) {
-        ComPtr<ID3D11Resource> source;redrawFromDepth->GetResource(&source);
-        redrawContext->CopyResource(redrawDepth.depth.Get(),source.Get());
-    }
+    if(redrawDepthView)CopyStencil(redrawContext,redrawFromDepth,redrawDepth);
     // The native draw is the frame's own backbuffer: the second submission's eye.
     if(redrawMarkers){BeginMarkerEyes(root);ApplyMarkerEye(root,1);}
     originalDisplay(root);
@@ -635,10 +648,7 @@ void __fastcall StereoDisplay(void* root) {
     // outer callback replay, or extra release of the player occurs here.
     for(int eye=0;eye<2;++eye) {
         auto& target=eye==0?captures[1]:inventoryRight;
-        if(originalDepth) {
-            ComPtr<ID3D11Resource> source;originalDepth->GetResource(&source);
-            activeContext->CopyResource(target.depth.Get(),source.Get());
-        }
+        CopyStencil(activeContext,originalDepth,target);
         const float clear[4]{};activeContext->ClearRenderTargetView(target.target.Get(),clear);
         activeTarget=target.target.Get();activeDepthView=target.depthView.Get();
         originalTargets(activeContext,1,&activeTarget,activeDepthView);
@@ -719,20 +729,8 @@ bool EnsureTexture(ID3D11Device* device,ID3D11RenderTargetView* original,
         }
     }
     // Preserve the native stencil contents used to clip Flash into its viewport.
-    if(ds) {
-        ComPtr<ID3D11Resource> dsResource;ds->GetResource(&dsResource);
-        ComPtr<ID3D11Texture2D> dsTexture;if(FAILED(dsResource.As(&dsTexture)))return false;
-        D3D11_TEXTURE2D_DESC dd{},previous{};dsTexture->GetDesc(&dd);if(capture.depth)capture.depth->GetDesc(&previous);
-        if(dd.Width!=d.Width || dd.Height!=d.Height || dd.SampleDesc.Count!=1)return false;
-        if(!capture.depth || previous.Width!=dd.Width || previous.Height!=dd.Height || previous.Format!=dd.Format) {
-            capture.depth.Reset();capture.depthView.Reset();
-            D3D11_DEPTH_STENCIL_VIEW_DESC vd{};ds->GetDesc(&vd);
-            if(FAILED(device->CreateTexture2D(&dd,nullptr,&capture.depth)) ||
-               FAILED(device->CreateDepthStencilView(capture.depth.Get(),&vd,&capture.depthView))) {
-                capture.depth.Reset();capture.depthView.Reset();return false;
-            }
-        }
-    } else {capture.depth.Reset();capture.depthView.Reset();}
+    if(ds)return EnsureDepthCopy(device,ds,capture,d.Width,d.Height);
+    capture.depth.Reset();capture.depthView.Reset();
     return true;
 }
 // **The gate differs by movie, and that is the whole point.** The gameplay HUD
@@ -755,11 +753,11 @@ void* InventoryRoot(void* proxy,std::uintptr_t base) {
         return root && *reinterpret_cast<std::uintptr_t*>(root)==base+0x1EB4B60?root:nullptr;
     } __except(EXCEPTION_EXECUTE_HANDLER) {return nullptr;}
 }
-bool EnsureDepthCopy(ID3D11Device* device,ID3D11DepthStencilView* ds,Capture& capture) {
+bool EnsureDepthCopy(ID3D11Device* device,ID3D11DepthStencilView* ds,Capture& capture,UINT width,UINT height) {
     ComPtr<ID3D11Resource> resource;ds->GetResource(&resource);
     ComPtr<ID3D11Texture2D> texture;if(FAILED(resource.As(&texture)))return false;
     D3D11_TEXTURE2D_DESC d{},previous{};texture->GetDesc(&d);if(capture.depth)capture.depth->GetDesc(&previous);
-    if(d.SampleDesc.Count!=1)return false;
+    if((width && (d.Width!=width || d.Height!=height)) || d.SampleDesc.Count!=1)return false;
     if(!capture.depth || previous.Width!=d.Width || previous.Height!=d.Height || previous.Format!=d.Format) {
         capture.depth.Reset();capture.depthView.Reset();
         D3D11_DEPTH_STENCIL_VIEW_DESC view{};ds->GetDesc(&view);
@@ -811,7 +809,7 @@ bool CaptureText(void* proxy,bool release,std::uintptr_t address,std::uint64_t n
     if(!capture.stamp || capture.thread!=GetCurrentThreadId()) {
         const float clear[4]{};context->ClearRenderTargetView(capture.target.Get(),clear);
     }
-    if(native.ds) {ComPtr<ID3D11Resource> source;native.ds->GetResource(&source);context->CopyResource(capture.depth.Get(),source.Get());}
+    CopyStencil(context,native.ds,capture);
     originalDestination=native.saved[0];originalDepth=native.ds;activeContext=context;
     activeTarget=capture.target.Get();activeDepthView=capture.depthView.Get();
     originalTargets(context,1,&activeTarget,activeDepthView);
@@ -889,19 +887,19 @@ void __fastcall CaptureFlash(void* proxy,bool release) {
     }
     Capture& capture=captures[which];
     const bool captureNormal=which!=0||enabled.load();
+    NativeTargets native; // released when this callback returns
     const auto base=PreyBase();
-    auto renderer=*reinterpret_cast<std::uintptr_t*>(base+engine::RendererLayout::singletonPointerRva);
-    auto device=RendererDevice(renderer);
-    ComPtr<ID3D11DeviceContext> context;device->GetImmediateContext(&context);
-    std::array<ID3D11RenderTargetView*,8> saved{};ID3D11DepthStencilView* ds=nullptr;
-    context->OMGetRenderTargets(8,saved.data(),&ds);
-    bool single=saved[0]!=nullptr;for(unsigned i=1;i<8;++i)single=single && !saved[i];
+    auto* const device=native.device;
+    const auto& context=native.context;
+    auto& saved=native.saved;
+    auto* const ds=native.ds;
+    const bool single=native.single;
     bool ready=single && (!captureNormal||EnsureTexture(device,saved[0],ds,capture));
     if(ready&&which==0&&WantWrist()){
         wristRequest=0; // At most one extra HUD draw per XR consumer request.
         if(EnsureTexture(device,saved[0],ds,nativeWrist)){
             wristRoot=InventoryRoot(proxy,base);
-            if(ds){ComPtr<ID3D11Resource> source;ds->GetResource(&source);context->CopyResource(nativeWrist.depth.Get(),source.Get());}
+            CopyStencil(context.Get(),ds,nativeWrist);
         }
         if(!wristRoot)++wristRefused;
     }
@@ -920,7 +918,7 @@ void __fastcall CaptureFlash(void* proxy,bool release) {
     }
     if(ready) {
         if(captureNormal){
-            if(ds) {ComPtr<ID3D11Resource> source;ds->GetResource(&source);context->CopyResource(capture.depth.Get(),source.Get());}
+            CopyStencil(context.Get(),ds,capture);
             const float clear[4]={0,0,0,0};context->ClearRenderTargetView(capture.target.Get(),clear);
         }
         originalDestination=saved[0];originalDepth=ds;activeContext=context.Get();
@@ -940,7 +938,6 @@ void __fastcall CaptureFlash(void* proxy,bool release) {
             stereoPairs.fetch_add(1);
         }
     }
-    for(auto p:saved)if(p)p->Release();if(ds)ds->Release();
 }
 bool Install() {
     if(installed)return true;

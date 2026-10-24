@@ -57,6 +57,10 @@
     They seem to begin out of nowhere. Something like a fade in along the length (like when the laser fades out in menus when it's not hitting a surface) would make them look a bit nicer.
     The lasers also render over the top of everything.
 - The neuromod cutscene that plays when you first use a neuromod only appears in the right eye
+- Reticle drifts from the actual aim point sometimes
+    Seems to happen after reloading?
+- Interacting with computers and screen is off
+    Depth/pointer offset issues
 
 ### VR Options Menu
 - Have bindings section let you change your bindings

@@ -423,5 +423,4 @@ value report, as described above.
 | `capture [tag]`, `capture.hud [tag]`, `capture.inventory [tag]` | One frame of what the headset receives, to a file. Stalls the GPU once. |
 | `console <command ...>`, or an allowlisted name alone | An engine console command through the fail-closed allowlist. |
 | `mem.peek`, `mem.scan`, `mem.deep`, `mem.watch`, `mem.hits`, `mem.stack`, `mem.str` | Memory inspection and hardware breakpoints. Research only. |
-| `frame.capture`, `frame.character`, `frame.offset`, `frame.apply`, `frame.propagate`, `frame.near` | Per-character render-matrix override. Research. |
 | `weapon.observe [0\|1]` | Passive capture of the equipped weapon's attachment and firing position; `ik.mode` turns it on. The legacy `hand.*` lane and the `weapon.offset/apply/rotate/calibrate` mount writer were removed on 2026-10-23, superseded by `ik.*`. |

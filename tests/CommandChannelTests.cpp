@@ -23,6 +23,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -630,6 +631,76 @@ void TestEventLogSwitches()
     }
 }
 
+// The verb table against docs/TUNING-COMMANDS.md: every verb is documented,
+// every command the doc's tables list is a verb (or a lane's own, under its
+// prefix), and the verbs tagged for players are the ones the doc gives a player:
+// the commands of the VR Options rows, the rows marked **Menu**, the
+// player-facing table, and the VR session's own.
+void TestVerbsDocumented()
+{
+    std::ifstream file(PREYVR_TUNING_DOC);
+    Require(file.good(), "the tuning reference is readable");
+    const auto names = [](const std::string& cell) {
+        std::set<std::string> out;
+        for (std::size_t open = cell.find('`'); open != std::string::npos; open = cell.find('`', open + 1)) {
+            const std::size_t close = cell.find('`', open + 1);
+            if (close == std::string::npos) { break; }
+            const std::string token = cell.substr(open + 1, close - open - 1);
+            const std::string name = token.substr(0, token.find(' '));
+            if (!name.empty()) { out.insert(name); }
+            open = close;
+        }
+        return out;
+    };
+    std::set<std::string> listed, players{"vr.enable", "vr.disable", "vr.status", "vr.recenter", "vr.options",
+                                          "view.recenter", "view.calibrate"};
+    std::string section, line;
+    while (std::getline(file, line)) {
+        if (!line.empty() && line.back() == '\r') { line.pop_back(); }
+        if (line.rfind('#', 0) == 0) { section = line.substr(line.find_first_not_of("# ")); continue; }
+        if (line.rfind('|', 0) != 0 || line.rfind("|---", 0) == 0 || line.rfind("| Command", 0) == 0 ||
+            line.rfind("| Tab", 0) == 0) {
+            continue;
+        }
+        std::vector<std::string> cells;
+        std::string cell;
+        for (std::size_t i = 1; i < line.size(); ++i) {
+            if (line[i] == '\\' && i + 1 < line.size() && line[i + 1] == '|') { cell += '|'; ++i; continue; }
+            if (line[i] == '|') { cells.push_back(cell.substr(cell.find_first_not_of(' ') == std::string::npos ? 0 : cell.find_first_not_of(' '))); cell.clear(); continue; }
+            cell += line[i];
+        }
+        if (cells.empty()) { continue; }
+        if (section == "Settings the VR Options menu saves") {
+            if (cells.back().rfind("menu only", 0) == 0) { continue; }
+            for (const auto& name : names(cells.back())) { listed.insert(name); players.insert(name); }
+            continue;
+        }
+        const bool player = line.find("**Menu") != std::string::npos || section == "Player-facing commands not in the menu";
+        for (const auto& name : names(cells.front())) {
+            listed.insert(name);
+            if (player) { players.insert(name); }
+        }
+    }
+    unsigned failures = 0;
+    std::set<std::string> verbs;
+    for (const Verb& row : kVerbs) {
+        verbs.insert(row.name);
+        if (!listed.count(row.name)) { ++failures; std::cerr << "undocumented verb: " << row.name << '\n'; }
+        if ((row.audience == Audience::player) != (players.count(row.name) > 0)) {
+            ++failures;
+            std::cerr << "audience: " << row.name << " is "
+                      << (row.audience == Audience::player ? "player" : "not player") << " in the table\n";
+        }
+    }
+    for (const auto& name : listed) {
+        const bool lane = name.rfind("carry.", 0) == 0 || name.rfind("grenade.", 0) == 0 ||
+                          name.rfind("arms.", 0) == 0 || name.rfind("mem.", 0) == 0 || name.rfind("wrist.", 0) == 0 ||
+                          name.rfind("arm.", 0) == 0;
+        if (!lane && !verbs.count(name)) { ++failures; std::cerr << "documented, but no such verb: " << name << '\n'; }
+    }
+    Require(failures == 0, "the verb table and the tuning reference agree");
+}
+
 } // namespace
 
 int main()
@@ -644,6 +715,7 @@ int main()
     TestCommandFile();
     TestTorsoOwner();
     TestEventLogSwitches();
+    TestVerbsDocumented();
 
     Require(GetModuleHandleW(L"openxr_loader.dll") == nullptr, "no command loaded the OpenXR loader");
     Require(preyvr::test::gMinHookCalls == 0, "no command tried to install a hook");
