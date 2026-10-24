@@ -2,8 +2,8 @@
 
 // The per-frame input every gameplay lane is handed: one XR tracking sample
 // plus the engine's own camera and play-space yaw for the same frame. The aim
-// hook (AimTakeover.cpp) produces and publishes it, then hands it to the
-// gameplay schedule (FrameSchedule.h), which runs the lanes on it.
+// hook (AimTakeover.cpp) builds it (GameplayFrame.cpp) and publishes it, then
+// hands it to the gameplay schedule (FrameSchedule.h), which runs the lanes on it.
 #include "XrInput.h"
 #include "preyvr/SurfaceStop.h"
 #include "preyvr/TwoHandedAim.h"
@@ -16,13 +16,14 @@ namespace preyvr::dll {
 // Native producer output plus one XR publication, captured before aim writes.
 struct GameplayPoseFrame {
     TrackingFrame tracking{};
-    // Historical name: this holds cachedReticleOrigin, an unprojected
-    // reticle-ray point, NOT the camera centre. A fresh pre-write snapshot does
-    // not make it independent of aim.reticle. The hand anchor is `cameraCentre`
-    // below; see docs/RE-IK-CROSSTALK-2026-09-09.md before treating this as one.
-    Vec3 nativeEye{};
+    // The engine's cachedReticleOrigin: an unprojected reticle-ray point, NOT
+    // the camera centre. A fresh pre-write snapshot does not make it independent
+    // of aim.reticle. The hand anchor is `cameraCentre` below (Anchor::camera,
+    // HandWorld.h); see docs/RE-IK-CROSSTALK-2026-09-09.md before treating this
+    // as one. Called nativeEye until 2026-10-24.
+    Vec3 reticleOrigin{};
     // **The camera centre, which is what a head-relative offset must be rotated
-    // about.** `nativeEye` above is the native cached RETICLE ray origin -- an
+    // about.** `reticleOrigin` above is the native cached RETICLE ray origin -- an
     // unprojected screen point that moves when the reticle moves, and our own
     // reticle lane writes that reticle. Using it as the shared hand anchor feeds
     // the right controller's aim back into BOTH hands' world positions, which is
@@ -61,5 +62,16 @@ inline Vec3 SurfaceOffset(const GameplayPoseFrame& frame, Hand hand)
 
 bool EnsureGameplayPoseObservation();
 bool TryGetGameplayPoseFrame(GameplayPoseFrame& out, bool requireTracking = true);
+
+// The aim hook's frame build (GameplayFrame.cpp), after the engine's own
+// UpdateCachedReticleViewPosAndDir: the cached ray, the view camera, the latest
+// tracking sample and the play-space yaw. Anything but `built` has cleared the
+// published frame: a native ray out of range, or a frame that cannot be placed
+// (a recenter under way, or a yaw that is not finite).
+enum class FrameBuild { built, badNativeRay, notPlaceable };
+FrameBuild BuildGameplayFrame(std::uintptr_t player, GameplayPoseFrame& frame, bool& haveTracking);
+// Stamps and publishes the frame the lanes and the IK read, and clears it.
+void PublishGameplayFrame(GameplayPoseFrame& frame);
+void ClearGameplayFrame();
 
 } // namespace preyvr::dll

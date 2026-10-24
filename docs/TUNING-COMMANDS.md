@@ -161,8 +161,9 @@ A few rows behave differently from their commands:
 
 - Body step distance keeps the zone's stop distance below the new start, which
   `body.zone` requires.
-- Body turn deadzone sets the arms' and the body's copy together, as
-  `arm.torso` does. `body.torso` sets only the body's copy.
+- Body turn deadzone sets the deadzone alone and keeps the settling rate.
+  There is one copy since 2026-10-24: `body.torso`, `arm.torso` and the menu
+  all set the same torso, which the body and the arms both follow.
 - Physical carrying switches on only while the left hand is the use hand
   (`use.hand 1`, which VR start sets). Switching it off always works.
 
@@ -170,7 +171,7 @@ A few rows behave differently from their commands:
 
 | Command | Values | Default | What it does |
 |---|---|---|---|
-| `body.torso <deg> <relax>` | 0–180, 0–10000 ‰/s | 35, 600 | The body's copy of the turn deadzone and how fast it settles. Use `arm.torso` to keep the arms in step. |
+| `body.torso <deg> <relax>` | 0–180, 0–10000 ‰/s | 35, 600 | The turn deadzone and how fast the torso settles, for the body and the arms. The same setting as `arm.torso`. |
 | `body.zone <start> <stop> [followMs]` | start 5–500 mm, stop below start, follow ≤1000 ms | 30, 5, 50 | Room-scale: how far your head moves before the body follows, how close it brings it, how fast. The menu sets start and follow. |
 | `body.radius <mm>` | 100–600 | 350 | Capsule radius for the ray sweep (`body.physics 0`, or the stance test's fallback). |
 | `body.level <0\|1>` | | 1 | Keeps the body's rotation level (no pitch or roll). |
@@ -266,7 +267,7 @@ value report, as described above.
 | `body.follow` | 0/1 | 1 | The body turns to face where you look. **Menu** (Body follows you). |
 | `body.roomscale` | 0/1 | 1 | The body walks with you across the room. **Menu** (turn and move). |
 | `body.zone <start> <stop> [followMs]` | see above | 30 5 50 | Room-scale start, stop and glide. **Menu** (start and glide). |
-| `body.torso <deg> <relax>` | | 35 600 | The body's turn deadzone only. |
+| `body.torso <deg> <relax>` | | 35 600 | The turn deadzone, the same setting as `arm.torso`. |
 | `body.radius` | 100–600 mm | 350 | Capsule radius for the ray sweep, which `body.physics 0` uses and the stance test falls back to. |
 | `body.physics` | 0/1 | 1 | 1: before room-scale moves the body, the engine's own stance test checks it fits, and a move while you walk keeps your speed. 0: the 9-ray sweep and plain move from before 2026-10-19, for A/B. |
 | `body.standaside` | 0/1 | 0 | 0: the body follows your physical turns and steps while you stick-walk too, keeping your walking speed. 1: room-scale waits while the engine moves you faster than 0.25 m/s (stick walking, falling), as up to PreyVR-42. |

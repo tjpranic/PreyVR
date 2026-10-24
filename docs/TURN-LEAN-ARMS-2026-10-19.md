@@ -6,6 +6,7 @@ Status, 2026-10-19:
   See "Fixes 1 and 2 as built".
 - **The body following mid-walk:** worn OK in PreyVR-43. See "following mid-walk".
 - **Fixes 3 and 4 (leaning past furniture):** waiting on a decision.
+  - **2026-10-24:** seen again in PreyVR-65/66 as a fade when leaning over a desk (run `player-20261024-113604`: 3 fades, 86 frames, 0 head hits, with `fitShortened` climbing). It is the 30 cm residual rule fix 3 replaces. You chose to leave it for now.
 
 It covers three TODO items:
 - The movement stop on turn still exists. It is not as bad as before, but it still needs fixing.

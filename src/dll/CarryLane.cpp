@@ -5,6 +5,7 @@
 #include "preyvr/TextFormat.h"
 
 #include "GameplayFrame.h"
+#include "HandWorld.h"
 #include "Haptics.h"
 #include "HeadTrackingHook.h"
 #include "InteractionLane.h"
@@ -12,7 +13,6 @@
 #include "MinHookInit.h"
 #include "PhysicsCalls.h"
 #include "XrInput.h"
-#include "preyvr/AnimIk.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/HandCarry.h"
 #include "preyvr/LatestSnapshot.h"
@@ -419,12 +419,13 @@ HandNow LeftHandNow(const GameplayPoseFrame& f)
     if (!f.cameraCentreValid || !f.headYawUsable || stereo::Recentering(f.referenceGeneration) || !std::isfinite(f.yaw)) { return h; }
     const auto& left = f.tracking.hands[static_cast<unsigned>(Hand::left)];
     if (!IsPoseUsable(left.gripPose, left.gripValidity, kMaxPoseAgeNs)) { return h; }
-    h.grip = animik::ControllerWorldFromHead(f.yaw, f.cameraCentre, f.tracking.head, left.gripPose);
+    if (!HandWorld(f, Hand::left, ControllerPose::grip, Anchor::camera, Placement::controller, h.grip)) { return h; }
     if (!Finite(h.grip.position) || !Finite(h.grip.orientation)) { return h; }
     h.palm = Rotate(h.grip.orientation, stereo::ToEngineSpace(Vec3{1, 0, 0}));
     h.forward = Rotate(h.grip.orientation, stereo::ToEngineSpace(Vec3{0, 0, -1}));
-    if (IsPoseUsable(left.aimPose, left.aimValidity, kMaxPoseAgeNs)) {
-        const Pose aim = animik::ControllerWorldFromHead(f.yaw, f.cameraCentre, f.tracking.head, left.aimPose);
+    Pose aim{};
+    if (IsPoseUsable(left.aimPose, left.aimValidity, kMaxPoseAgeNs) &&
+        HandWorld(f, Hand::left, ControllerPose::aim, Anchor::camera, Placement::controller, aim)) {
         h.aimDirection = Rotate(aim.orientation, stereo::ToEngineSpace(Vec3{0, 0, -1}));
     } else {
         h.aimDirection = h.forward;

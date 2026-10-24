@@ -33,9 +33,15 @@ DWORD SetBodyFollow(unsigned enabled);
 // Write a level rotation (no pitch or roll), on by default: native pitch
 // bends the body mesh, and nothing in VR reads it.
 DWORD SetBodyFollowLevel(unsigned enabled);
-// The shared torso filter: deadzone in degrees, relaxation in per mille per
-// second (arm.torso sets the same filter).
+// The torso filter's settings, the one copy: deadzone in degrees, relaxation in
+// per mille per second. body.torso and arm.torso both set them, and the arms'
+// own filter (AnimIk, only while this lane has no fresh torso) reads them.
 DWORD SetBodyTorso(int deadzoneDegrees, int relaxPerMille);
+// The same settings as the filters use them: radians, and a fraction per second.
+void BodyTorsoSettings(float& deadzoneRadians, float& relax);
+// The Body Turn Deadzone option: the deadzone alone, the relaxation kept.
+DWORD SetTorsoDeadzone(int degrees);
+int TorsoDeadzoneDegrees();
 // Diagnostic: one native turn of `degrees`, with the reference turned by the
 // same angle -- the body turns and the view does not. Even with following off.
 // Runs `delaySeconds` after the request, in gameplay (typed in the tuner, the

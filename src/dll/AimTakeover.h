@@ -54,6 +54,9 @@ bool TwoHandedAimHeld();
 // The left hand is inside the equipped weapon's foregrip region this frame.
 bool SupportGripNear();
 std::string TwoHandedAimStatus();
+// The aim hook's two-hand step (TwoHandHold.cpp), before the frame is published:
+// the foregrip hold, into frame.twoHand.
+void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking);
 
 // Which yaw rotates a head-relative controller offset into the world.
 //
@@ -108,6 +111,7 @@ int AimDirectionMilli(unsigned int axis);
 int AimRawOrientationMilli(unsigned int axis);
 
 DWORD SetAimTakeoverEnabled(unsigned int enabled);
+bool AimTakeoverEnabled();
 // 0 preserves native origin; 1 uses the tracked aim point (diagnostic).
 // The controller point is NOT the authored muzzle; per-weapon barrel alignment
 // and native wall-clip fallback require independent validation.

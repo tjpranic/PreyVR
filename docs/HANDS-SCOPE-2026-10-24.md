@@ -1,6 +1,6 @@
 # Hands batch: scope
 
-Status: **scoped 2026-10-24, not started.** This is the second T2 batch of the [refactor audit](REFACTOR-AUDIT-2026-10-22.md), after [FrameSchedule](FRAME-SCHEDULE-SCOPE-2026-10-24.md). It covers S2 ("no single *where is my hand in the world* abstraction"), the hand parts of S5 (the AnimIk, AimTakeover and BodyFollow god files), the `nativeEye` rename from S6, and your 10-23 decision on the torso settings (option a). Your decisions are at the end.
+Status: **built 2026-10-24 as PreyVR-65 (phases 1-2) and PreyVR-66 (phase 3), and worn OK on both (10-24); not committed.** The one issue seen, the fade when leaning over a desk, is the known 30 cm residual limit (fix 3 in [TURN-LEAN-ARMS-2026-10-19.md](TURN-LEAN-ARMS-2026-10-19.md)); it predates the batch and is left for later. What was built, and where it differs from the plan, is in [Done](#done-2026-10-24) at the end. This is the second T2 batch of the [refactor audit](REFACTOR-AUDIT-2026-10-22.md), after [FrameSchedule](FRAME-SCHEDULE-SCOPE-2026-10-24.md). It covers S2 ("no single *where is my hand in the world* abstraction"), the hand parts of S5 (the AnimIk, AimTakeover and BodyFollow god files), the `nativeEye` rename from S6, and your 10-23 decision on the torso settings (option a). The tables below describe the code before the change.
 
 ## What is there today
 
@@ -199,7 +199,59 @@ Hand 1 reads the primary only when `written` is set, which is what the two `prim
 | Hidden ordering in the AimTakeover detour | The new list keeps the order the code has now; aim_review checks the published ray, the reticle context and the refusals. |
 | Static state shared across new files | The state headers hold the moved variables as `inline` in a named namespace, so there is still one instance of each. |
 
-## Decisions for you
-1. **Are the splits (phase 3) part of this batch?** I'd recommend yes, as a second package after 1-2, like FrameSchedule's split. They are pure moves, but AnimIk and BodyFollow have no offline test, so they need their own smoke run.
-2. **Rename `nativeEye` to `reticleOrigin` now?** I'd recommend yes, in phase 1: with `Anchor::reticle` at every call site, the old name would contradict the code around it.
-3. **Leave Carry and Grenade for the throwing redo?** I'd recommend yes. Converting their four sites is mechanical, but it would touch code you plan to replace.
+## Decisions
+1. **Are the splits (phase 3) part of this batch?** **Yes** (your decision, 10-24), as a second package.
+2. **Rename `nativeEye` to `reticleOrigin` now?** **Yes** (your decision, 10-24).
+3. **Leave Carry and Grenade for the throwing redo?** **No: convert them too** (your decision, 10-24). Their three calls use HandWorld like the rest.
+
+## Done 2026-10-24
+
+Build passes, 94/94 ctest pass (`hand_world` is new), no new warnings, and the DLL's 75 export names are unchanged. **Worn OK on PreyVR-65 and PreyVR-66 (10-24).** Not yet committed.
+
+**PreyVR-65: phases 1 and 2.**
+- **`src/dll/HandWorld.h`:** `Anchor`, `AnchorPoint`, `ControllerPose`, `Placement` and `HandWorld`, as designed.
+  - Every `ControllerWorldFromHead` call in the DLL goes through it: 18 calls in 9 files, Carry and Grenade included. Only PsiTargeting.h's call, in a pure header, stays.
+  - The two reverse-map sites call `AnchorPoint`.
+  - Seven files no longer include preyvr/AnimIk.h, which HandWorld.h now brings in.
+- **`hand_world` test:** 24 compositions (2 hands × 2 poses × 3 anchors × 2 placements), each bit-identical to the hand-written composition. It also checks the refusal without a camera, which leaves the output untouched, and the camera-else-reticle fallback.
+- **AnimIk:** `IkAnchor()` replaces `ArmAnchor` and the four inline copies. `DriveHand` chooses the anchor once and counts it as before.
+- **The rename:** `GameplayPoseFrame::nativeEye` is now `reticleOrigin`, 26 uses in 7 files. Report keys such as `nativeEyeMm` and the `AimNativeEyeMillimetres` getter keep their names.
+- **`DriveHand`** takes `OwnedPose` and `PrimaryHand`; its body is unchanged.
+- **The torso, option (a):**
+  - BodyFollow owns the settings; `BodyTorsoSettings`, `SetTorsoDeadzone` and `TorsoDeadzoneDegrees` live there.
+  - AnimIk's fallback filter and BodyFollow's own filter read the same conversion.
+  - `arm.report` prints BodyFollow's values, and TUNING-COMMANDS.md says there is one copy.
+- **`command_channel` test:** it now pins the one-owner behaviour. `body.torso` and `arm.torso` set what the option reads back, the option keeps the relaxation, and out-of-range values are refused.
+
+**PreyVR-66: phase 3, on top of 65.** Each split was checked line by line against the phase 1-2 file.
+
+| Before | After |
+|---|---|
+| AimTakeover.cpp (606 lines) | AimTakeover.cpp (348): the hook, its counters, the aim override. GameplayFrame.cpp (203): the frame build, the head-yaw hold, the publish, `TryGetGameplayPoseFrame`, the body-yaw setting. TwoHandHold.cpp (134): `SolveTwoHandedFrame`, its state and setters. |
+| BodyFollow.cpp (1,313) | BodyFollow.cpp (498): the hook and gates, the torso, turning, the tick. RoomScaleMove.cpp (489): room-scale moves, the living body's calls, the head-in-wall check, the room-scale settings. BodyFollowDiagnostics.cpp (135): the frame-order probes, `body.report`. BodyFollowState.h (301): the shared constants, state and helpers. |
+| AnimIkTakeover.cpp (2,793) | AnimIkTakeover.cpp (620): the hook, install, setters and getters. AnimIkRig.cpp (371). AnimIkHand.cpp (519). AnimIkArms.cpp (278). AnimIkReports.cpp (647). AnimIkState.h (641): the shared constants, types and state. |
+
+- **The detour.** AimTakeover's detour is now the list the scope described: undo the origin edit, call the original, `BuildGameplayFrame`, `SolveTwoHandedFrame`, prepare, `PublishGameplayFrame`, tick the lanes, `OverrideAimRay`.
+  - The aim replay compiles all three files in one translation unit, so they keep distinct file-local names.
+- **What the line checks show:**
+  - **BodyFollow:** only added declarations, and `inline` on the moved state.
+  - **AnimIk:**
+    - The added declarations and `inline` on the moved state.
+    - One default argument (`PropagateFingers`'s `side = 1`) moved to its declaration.
+    - The second anonymous namespace's closing brace.
+  - **AimTakeover:** the detour's restructuring.
+    - The frame build returns `FrameBuild::badNativeRay`/`notPlaceable`, and the detour counts the refusal as before.
+    - The override reads the player from `frame.player`, the same value.
+    - `SetAimBodyYaw` logs through `lifecycle::Log` with the same prefix.
+- **The shared state headers** (`AnimIkState.h` in `preyvr::dll::ik`, `BodyFollowState.h` in `preyvr::dll::body`) hold the moved variables as `inline`. Each is included only by its own files. A function another file calls is declared there; every other function stays file-local.
+
+**Where this differs from the plan:**
+- **Carry and Grenade were converted too** (your decision 3).
+- **BodyFollow's living-body calls went to RoomScaleMove.cpp, not PhysicsCalls.h.** Room-scale is their only user, and Contact's `ReadFooting` reads the same body in one `__try`, so the two do not share code. PhysicsCalls.h keeps to the calls the lanes share.
+- **Contact's `HandProxy` keeps its own offset addition.** It checks the controller's position is finite *before* adding the surface offset, so it uses `Placement::controller` and adds the offset as before. That keeps the order of the check and the add.
+- **Two switches are read once where they were read twice or with another ordering.**
+  - DriveHand reads `ik.anchor` once per hand (it read it twice), so the aim and the grip can no longer use different anchors in one hand.
+  - The aim override reads the body-yaw switch through `AimBodyYawEnabled()`, a relaxed load where it was an acquire. On x86 the instruction is the same.
+- **Noticed while renaming, not changed:** the arm lift (`PlanTorsoLift`) takes the game's eye height from `reticleOrigin`, the cached reticle-ray origin. With the new name that reads as what it is. The reticle origin sits a few millimetres from the eye, so the lift is barely affected; using the camera's own height instead would be a behaviour change for a later batch.
+
+**Headset smoke:** the lists under Verification above. PreyVR-65 needs package 1's list, including changing BODY TURN DEADZONE in the options; PreyVR-66 adds package 2's (room-scale, head in a wall, `ik.skel`/`pose.marks`).

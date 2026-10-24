@@ -5,13 +5,13 @@
 #include "preyvr/TextFormat.h"
 
 #include "AimTakeover.h"
+#include "HandWorld.h"
 #include "HeadTrackingHook.h"
 #include "Logger.h"
 #include "MinHookInit.h"
 #include "ReticleRayHook.h"
 #include "SceneQuery.h"
 #include "WeaponAttachment.h"
-#include "preyvr/AnimIk.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/FiringPosition.h"
 #include "preyvr/LatestSnapshot.h"
@@ -195,17 +195,17 @@ bool FiringPositionNow(void* weapon, std::uint32_t flags, FiringPosition& out)
 bool AimWorld(const GameplayPoseFrame& frame, Pose& out)
 {
     const auto& hand = frame.tracking.hands[static_cast<unsigned>(Hand::right)];
-    if (!frame.cameraCentreValid || !IsPoseUsable(hand.aimPose, hand.aimValidity, kMaxPoseAgeNs)) { return false; }
-    out = animik::ControllerWorldFromHead(frame.yaw, frame.cameraCentre, frame.tracking.head, hand.aimPose);
-    out.position = Add(out.position, SurfaceOffset(frame, Hand::right));
+    if (!IsPoseUsable(hand.aimPose, hand.aimValidity, kMaxPoseAgeNs) ||
+        !HandWorld(frame, Hand::right, ControllerPose::aim, Anchor::camera, Placement::drawn, out)) { return false; }
     return Finite(out.position);
 }
 bool GripWorld(const GameplayPoseFrame& frame, Vec3& out)
 {
     const auto& hand = frame.tracking.hands[static_cast<unsigned>(Hand::right)];
-    if (!frame.cameraCentreValid || !IsPoseUsable(hand.gripPose, hand.gripValidity, kMaxPoseAgeNs)) { return false; }
-    out = Add(animik::ControllerWorldFromHead(frame.yaw, frame.cameraCentre, frame.tracking.head, hand.gripPose).position,
-              SurfaceOffset(frame, Hand::right));
+    Pose grip{};
+    if (!IsPoseUsable(hand.gripPose, hand.gripValidity, kMaxPoseAgeNs) ||
+        !HandWorld(frame, Hand::right, ControllerPose::grip, Anchor::camera, Placement::drawn, grip)) { return false; }
+    out = grip.position;
     return Finite(out);
 }
 

@@ -1,5 +1,6 @@
 #include "SurfaceStopLane.h"
 #include "AimTakeover.h"
+#include "HandWorld.h"
 #include "BodyFollow.h"
 #include "CarryLane.h"
 #include "ContactLane.h"
@@ -14,7 +15,6 @@
 #include "PhysicsCalls.h"
 #include "SceneQuery.h"
 #include "XrInput.h"
-#include "preyvr/AnimIk.h"
 #include "preyvr/ContactNative.h"
 #include "preyvr/ContactQuery.h"
 #include "preyvr/MonotonicClock.h"
@@ -254,7 +254,7 @@ bool AddWeapon(const GameplayPoseFrame& f, const WeaponBox& box, surface::Probes
 {
     const auto& right = f.tracking.hands[static_cast<unsigned>(Hand::right)];
     const Pose grip = stereo::ToEngineSpace(right.gripPose);
-    // The play-space -> world map the hands are placed with (animik::ControllerWorldFromHead,
+    // The play-space -> world map the hands are placed with (HandWorld.h,
     // on the camera centre).
     const Pose world = stereo::TrackingOriginInWorld(f.yaw, f.cameraCentre, f.tracking.head);
     const Vec3 drawnWith = Rotate(Conjugate(box.worldFromReference.orientation), box.correction);
@@ -290,7 +290,8 @@ void BuildHand(const GameplayPoseFrame& f, Hand hand, const WeaponBox* weapon, H
 {
     const auto& h = f.tracking.hands[static_cast<unsigned>(hand)];
     if (!IsPoseUsable(h.gripPose, h.gripValidity, kMaxPoseAgeNs)) { out.why = "hand_pose"; return; }
-    const Pose grip = animik::ControllerWorldFromHead(f.yaw, f.cameraCentre, f.tracking.head, h.gripPose);
+    Pose grip{};
+    if (!HandWorld(f, hand, ControllerPose::grip, Anchor::camera, Placement::controller, grip)) { out.why = "camera"; return; }
     const auto& q = grip.orientation;
     if (!Finite(grip.position) || !std::isfinite(q.x) || !std::isfinite(q.y) || !std::isfinite(q.z) || !std::isfinite(q.w)) {
         out.why = "hand_pose";

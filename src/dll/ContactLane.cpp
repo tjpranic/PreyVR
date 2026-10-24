@@ -1,5 +1,6 @@
 #include "ContactLane.h"
 #include "AimTakeover.h"
+#include "HandWorld.h"
 #include "BodyFollow.h"
 #include "CarryLane.h"
 #include "DebugOverlay.h"
@@ -18,7 +19,6 @@
 #include "SceneQuery.h"
 #include "SwingLane.h"
 #include "XrInput.h"
-#include "preyvr/AnimIk.h"
 #include "preyvr/ContactNative.h"
 #include "preyvr/ContactQuery.h"
 #include "preyvr/MonotonicClock.h"
@@ -784,14 +784,15 @@ unsigned PushContacts(const GameplayPoseFrame& frame, const Natives& n, const Co
     return applied;
 }
 // A hand's box, from its controller's grip pose mapped into the world as the
-// hands are placed (animik::ControllerWorldFromHead, the carry lane's own route),
+// hands are placed (HandWorld.h, on the camera centre, the carry lane's own route),
 // where the hand is drawn: held back by a surface (SurfaceStopLane.h), it pushes
 // what it visibly touches.
 void HandProxy(const GameplayPoseFrame& f, Hand hand, ProxyNow& out)
 {
     const auto& h = f.tracking.hands[static_cast<unsigned>(hand)];
     if (!IsPoseUsable(h.gripPose, h.gripValidity, kMaxPoseAgeNs)) { out.why = "hand_pose"; return; }
-    Pose grip = animik::ControllerWorldFromHead(f.yaw, f.cameraCentre, f.tracking.head, h.gripPose);
+    Pose grip{};
+    if (!HandWorld(f, hand, ControllerPose::grip, Anchor::camera, Placement::controller, grip)) { out.why = "camera"; return; }
     const auto& q = grip.orientation;
     if (!Finite(grip.position) || !std::isfinite(q.x) || !std::isfinite(q.y) || !std::isfinite(q.z) || !std::isfinite(q.w)) {
         out.why = "hand_pose";

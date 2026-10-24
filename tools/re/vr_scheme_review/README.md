@@ -1,6 +1,7 @@
 # Offline VR scheme integration replay
 
-These executables include the production `MoveLane.cpp`, `AimTakeover.cpp`,
+These executables include the production `MoveLane.cpp`, `AimTakeover.cpp` (with
+the `GameplayFrame.cpp` and `TwoHandHold.cpp` its detour calls into),
 `ReticleFollow.cpp` and `HudBridge.cpp`. External game/input boundaries are stubbed. They do not launch,
 attach to, inject into, or post input to Prey. The movement hook fixture checks
 all five arguments and the native return; the native byte verifier independently

@@ -3,7 +3,11 @@
 #include <windows.h>
 HMODULE WINAPI ReviewModule(LPCWSTR);
 #define GetModuleHandleW ReviewModule
+// The aim hook and the two files its detour calls into: the frame build and the
+// two-handed hold. One translation unit, so their file-local names are distinct.
 #include "../../../src/dll/AimTakeover.cpp"
+#include "../../../src/dll/GameplayFrame.cpp"
+#include "../../../src/dll/TwoHandHold.cpp"
 #undef GetModuleHandleW
 #include <iostream>
 

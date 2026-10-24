@@ -2,8 +2,8 @@
 #include "HookInstall.h"
 #include "EngineAccess.h"
 #include "GameplayFrame.h"
+#include "HandWorld.h"
 #include "ShotRay.h"
-#include "preyvr/AnimIk.h"
 #include <sstream>
 #include "WeaponAttachment.h"
 #include "MinHookInit.h"
@@ -116,9 +116,10 @@ void* __fastcall FiringPositionObserved(void* weapon, void* output, std::uint32_
     const auto& hand = frame.tracking.hands[static_cast<unsigned int>(Hand::right)];
     if (!IsPoseUsable(hand.aimPose, hand.aimValidity, kMaxPoseAgeNs) ||
         !IsPoseUsable(hand.gripPose, hand.gripValidity, kMaxPoseAgeNs)) { return result; }
-    sample.aimOrigin = animik::ControllerWorldFromHead(frame.yaw, frame.nativeEye, frame.tracking.head, hand.aimPose).position;
-    const Pose gripWorld = animik::ControllerWorldFromHead(
-        frame.yaw, frame.nativeEye, frame.tracking.head, hand.gripPose);
+    Pose aimWorld{}, gripWorld{};
+    HandWorld(frame, Hand::right, ControllerPose::aim, Anchor::reticle, Placement::controller, aimWorld);
+    HandWorld(frame, Hand::right, ControllerPose::grip, Anchor::reticle, Placement::controller, gripWorld);
+    sample.aimOrigin = aimWorld.position;
     sample.gripOrigin = gripWorld.position;
     sample.gripOrientation = gripWorld.orientation;
     sample.poseSequence = frame.tracking.sequence;

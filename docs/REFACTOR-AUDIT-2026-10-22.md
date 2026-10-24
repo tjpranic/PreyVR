@@ -34,7 +34,12 @@ This was read-only: five parallel reviews, each covering one slice, with nothing
   - Phases 1-2, the tick lists and the worker thread: **PreyVR-63**.
   - Phase 3, the CameraEditHook split into MainRenderHook, StereoEyeCamera and EyeRecords: **PreyVR-64**, built on top of 63.
   - Build passes, 93/93 ctest pass, no new warnings, and the 75 export names are unchanged.
-  - **Worn OK on PreyVR-63 and PreyVR-64 (10-24).** Not yet committed.
+  - **Worn OK on PreyVR-63 and PreyVR-64 (10-24), and committed by you as `24af274`** ("Frame scheduling refactor").
+- **2026-10-24, the Hands batch is built** ([its scope](HANDS-SCOPE-2026-10-24.md), with your three decisions: the splits in, the rename now, Carry and Grenade converted too).
+  - PreyVR-65 holds HandWorld, `IkAnchor`, the `reticleOrigin` rename, `DriveHand`'s structs and the torso owner. PreyVR-66 adds the AimTakeover, BodyFollow and AnimIk splits.
+  - Build passes, 94/94 ctest pass, no new warnings, and the 75 export names are unchanged.
+  - **Worn OK on PreyVR-65 and PreyVR-66 (10-24).** Not yet committed.
+  - The one issue seen, the fade when leaning over a desk, is the known 30 cm residual limit (fix 3 in [TURN-LEAN-ARMS-2026-10-19.md](TURN-LEAN-ARMS-2026-10-19.md)). It predates the batch, and you left it for later.
 
 **How this relates to [the 10-17 audit](DUPLICATION-AUDIT-2026-10-17.md):**
 - The older audit is still the reference for its items. Its "Constraints that shape every fix" and section F ("don't merge") still apply in full.
@@ -347,7 +352,8 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
 - **FrameSchedule batch:** the four tick lists, the worker loop out of CommandChannel, and the CameraEditHook split.
   - **Done 10-24:** PreyVR-63 (lists and worker) and PreyVR-64 (the split), both worn OK. See [the scope](FRAME-SCHEDULE-SCOPE-2026-10-24.md).
 - **Hands batch:** `HandWorld` (S2), the AnimIk split with `DriveHand`'s parameter struct and the 5 anchor copies routed through `ArmAnchor`, and the AimTakeover and BodyFollow splits.
-  - **Scoped 10-24:** [HANDS-SCOPE-2026-10-24.md](HANDS-SCOPE-2026-10-24.md), with the torso owner (section 4, item 6) and the `nativeEye` rename. Carry and Grenade are left for the throwing redo.
+  - **Scoped 10-24:** [HANDS-SCOPE-2026-10-24.md](HANDS-SCOPE-2026-10-24.md), with the torso owner (section 4, item 6) and the `nativeEye` rename.
+  - **Done 10-24:** PreyVR-65 and PreyVR-66, both worn OK. Carry and Grenade were converted too.
 - **Physics batch:**
   - Finish B6: `EngineEntity.h`, the EngineMap constants, and Grenade on `phys::`.
   - The base+RVA overload of `hook::HookAt` and the atomic `InstallOnce` for the three old installers.
@@ -458,6 +464,7 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
      - **Left:** RenderFrame's matrix capture (`frame.*`, research) is now never read back in production; it goes with the instrumentation cleanup.
 6. **Torso settings: give them one owner (T2/T3).** They are stored twice, in AnimIk `PoseSettings` and BodyFollow `gDeadzoneMilliDeg/gRelaxPerMille`. `arm.torso` writes both, `body.torso` writes only BodyFollow, and the Body Turn Deadzone option goes to AnimIk.
    - **Decided 10-23: (a).** BodyFollow owns the settings and AnimIk's fallback filter reads them; it goes in the Hands batch.
+   - **Done 10-24** (PreyVR-65): `body.torso`, `arm.torso` and the option all set the one copy.
 7. **Should Grenade get the `VelocityQueueReady` gate** that Carry and Contact use? This changes behaviour, although it is latent on the pinned build.
    - **Decided 10-23: skip.** Throwing is being redone, so the grenade parts of B6 and the carry/grenade release-snapshot sharing are dropped.
 8. **The instrumentation gate design** (S4: `PREYVR_DEV`, `kDev`, `Diag()`, Audience tags). It is a later TODO item, but the refactors above should be shaped for it.
@@ -529,5 +536,5 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
    - done 10-23: `GameplayFrame.h`, `OnEngineMainThread`, `EnvSwitchOff`, `YawDistance`, `Exports.cpp`, `PhysicalLane.h`, the play-space functions, the recenter checks, the small helpers and `VerifiedSetting`;
    - open: the XrSessionHost pure extractions, the options Spec groundwork, the renames, and the `log [0|1]` helper.
 3. **Your decisions in section 4,** then the approved deletions. **Done 10-23.**
-4. **T2 batches,** one headset smoke run each: FrameSchedule, Hands, Physics, XR, UI. **FrameSchedule done 10-24, worn OK on PreyVR-63/64.**
+4. **T2 batches,** one headset smoke run each: FrameSchedule, Hands, Physics, XR, UI. **FrameSchedule done 10-24, worn OK on PreyVR-63/64. Hands done 10-24, worn OK on PreyVR-65/66.**
 5. **Last:** the folder move and the ARCHITECTURE.md rewrite.

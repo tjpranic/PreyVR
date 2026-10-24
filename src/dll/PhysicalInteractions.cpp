@@ -12,7 +12,7 @@
 #include <cmath>
 #include <mutex>
 
-// The weapon box, published from the animation takeover (AnimIkTakeover.cpp) for
+// The weapon box, published from the animation takeover (AnimIkHand.cpp) for
 // the drawn weapon, read by the contact lane and the free-swing wrench. The
 // Physical Wrench that once lived here (a gesture gate, nine rays and Prey's own
 // attack) was replaced by the free-swing wrench (SwingLane.cpp) on 2026-10-18.

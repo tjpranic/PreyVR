@@ -229,8 +229,14 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
     # them, its export symbol and _WINDLL included, so the objects are the same.
     add_library(preyvr_dll_objects OBJECT
         src/dll/AimTakeover.cpp
+        src/dll/GameplayFrame.cpp
+        src/dll/TwoHandHold.cpp
         src/dll/PsiMedkit.cpp
         src/dll/AnimIkTakeover.cpp
+        src/dll/AnimIkRig.cpp
+        src/dll/AnimIkHand.cpp
+        src/dll/AnimIkArms.cpp
+        src/dll/AnimIkReports.cpp
         src/dll/Bootstrap.cpp
         src/dll/Exports.cpp
         src/dll/VrMode.cpp
@@ -242,6 +248,8 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/Psychoscope.cpp
         src/dll/BodyEquipment.cpp
         src/dll/BodyFollow.cpp
+        src/dll/RoomScaleMove.cpp
+        src/dll/BodyFollowDiagnostics.cpp
         src/dll/DebugOverlay.cpp
         src/dll/ShotRay.cpp
         src/dll/ReticleRayHook.cpp
@@ -478,6 +486,9 @@ if(PREYVR_BUILD_TESTS)
             DLL
             LIBS preyvr_core)
         preyvr_add_test(surface_stop_lane tests/SurfaceStopLaneTests.cpp
+            DLL
+            LIBS preyvr_core)
+        preyvr_add_test(hand_world tests/HandWorldTests.cpp
             DLL
             LIBS preyvr_core)
         preyvr_add_test(swing_lane tests/SwingLaneTests.cpp

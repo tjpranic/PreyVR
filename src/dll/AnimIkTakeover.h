@@ -61,7 +61,7 @@ DWORD SetAnimIkJointSignature(unsigned int joints);
 // while `ikGoalScaledL` moves, compression is responsible rather than the anchor.
 // **The crosstalk fix.** 1 (default) anchors both hands at the view camera's
 // centre; 0 restores the reticle-derived anchor so a wearer can A/B them.
-// `nativeEye` is the native cached RETICLE ray origin, which our own reticle
+// `reticleOrigin` is the native cached RETICLE ray origin, which our own reticle
 // lane moves, so it carried the right controller's aim into both hands
 // (RE-IK-CROSSTALK-2026-09-09). Refuses the frame when the camera cannot be
 // read rather than falling back, since a silent fallback restores the defect.
@@ -102,10 +102,6 @@ DWORD SetAnimIkLongReach(int enabled, int comfortMm, int maxBackMm, int supportB
 // The same switch alone, keeping the distances and the twist.
 DWORD SetAnimIkLongReachEnabled(unsigned enabled);
 unsigned AnimIkLongReachEnabled();
-// The shared torso filter's deadzone alone (arm.torso without the relax):
-// the arms and the body turn together. Degrees, 0..180.
-DWORD SetTorsoDeadzone(int degrees);
-int TorsoDeadzoneDegrees();
 std::string AnimIkLongReachReport();
 unsigned AnimIkSupportLatch();
 

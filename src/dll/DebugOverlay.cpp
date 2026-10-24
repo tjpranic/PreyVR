@@ -5,6 +5,7 @@
 #include "preyvr/TextFormat.h"
 
 #include "AimTakeover.h"
+#include "HandWorld.h"
 #include "HeadTrackingHook.h"
 #include "HudBridge.h"
 #include "InteractionLane.h"
@@ -17,7 +18,6 @@
 #include "ShotRay.h"
 #include "VrOptionsRuntime.h"
 #include "XrInput.h"
-#include "preyvr/AnimIk.h"
 #include "preyvr/BodyEquipment.h"
 #include "preyvr/DebugDraw.h"
 #include "preyvr/DebugOverlayScene.h"
@@ -612,7 +612,7 @@ void DebugOverlayAim(const GameplayPoseFrame& frame, const aim::Sample& sample)
         ray.origin = right.aimPose.position;
         // The aim sample's ray starts at the native eye (or the hand with
         // aim.origin); its target is converted with the same anchor it was built from.
-        ray.target = EngineToXr(frame, frame.nativeEye, dd::Add(sample.origin, dd::Scale(sample.direction, distance)));
+        ray.target = EngineToXr(frame, frame.reticleOrigin, dd::Add(sample.origin, dd::Scale(sample.direction, distance)));
     }
     ray.hit = hit;
     ray.distance = dd::Length(dd::Sub(ray.target, ray.origin));
@@ -687,8 +687,9 @@ void DebugOverlayGameFrame(const GameplayPoseFrame& frame, bool tracking)
         return;
     }
     const Vec3 forward = Rotate(Normalize(left.aimPose.orientation), {0, 0, -1});
-    const Vec3 anchor = frame.cameraCentreValid ? frame.cameraCentre : frame.nativeEye;
-    const Vec3 originWorld = animik::ControllerWorldFromHead(frame.yaw, anchor, frame.tracking.head, left.aimPose).position;
+    Pose aimWorld{};
+    HandWorld(frame, Hand::left, ControllerPose::aim, Anchor::cameraElseReticle, Placement::controller, aimWorld);
+    const Vec3 originWorld = aimWorld.position;
     const bool psi = PsiTargetMode() == 2;
     float distance = 0;
     const bool hit = Finite(originWorld) && Hit(frame, originWorld, stereo::TrackingDirToEngine(forward, frame.yaw), mask, distance);
@@ -713,7 +714,8 @@ void DebugOverlayForegrip(const GameplayPoseFrame& frame, const twohand::Input& 
     const unsigned mask = gMask.load(std::memory_order_relaxed);
     if (!(mask & dd::kForegrip)) { return; }
     if (!regionReady || !Finite(input.primary) || !Finite(input.visualPrimaryOffset)) { gForegrip.Clear(); return; }
-    const Vec3 anchor = frame.cameraCentreValid ? frame.cameraCentre : frame.nativeEye;
+    Vec3 anchor{};
+    AnchorPoint(frame, Anchor::cameraElseReticle, anchor);
     const Vec3 base = dd::Add(input.primary, input.visualPrimaryOffset);
     const Quaternion aim = Normalize(input.aim.orientation);
     auto toXr = [&](Vec3 local) { return EngineToXr(frame, anchor, dd::Add(base, Rotate(aim, local))); };

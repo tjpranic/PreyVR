@@ -5,6 +5,7 @@
 #include "preyvr/TextFormat.h"
 
 #include "GameplayFrame.h"
+#include "HandWorld.h"
 #include "CarryLane.h"
 #include "Haptics.h"
 #include "Logger.h"
@@ -12,7 +13,6 @@
 #include "SceneQuery.h"
 #include "WeaponAttachment.h"
 #include "XrInput.h"
-#include "preyvr/AnimIk.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/GrenadeThrow.h"
 #include "preyvr/HandCarry.h"
@@ -439,13 +439,11 @@ Vec3 PlayerVelocity()
 bool RightGrip(const GameplayPoseFrame& f, Pose& out)
 {
     const auto& hand = f.tracking.hands[static_cast<unsigned>(Hand::right)];
-    if (!f.cameraCentreValid || !std::isfinite(f.yaw) ||
-        !IsPoseUsable(hand.gripPose, hand.gripValidity, kMaxPoseAgeNs)) {
+    if (!std::isfinite(f.yaw) || !IsPoseUsable(hand.gripPose, hand.gripValidity, kMaxPoseAgeNs)) {
         return false;
     }
-    out = animik::ControllerWorldFromHead(f.yaw, f.cameraCentre, f.tracking.head, hand.gripPose);
     // Where the hand is drawn: a wall holding it back holds the grenade back too.
-    out.position = Add(out.position, SurfaceOffset(f, Hand::right));
+    if (!HandWorld(f, Hand::right, ControllerPose::grip, Anchor::camera, Placement::drawn, out)) { return false; }
     return Finite(out.position) && Finite(out.orientation);
 }
 // The middle of the closed right fist: out of the grip origin through the palm

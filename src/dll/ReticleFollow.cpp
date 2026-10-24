@@ -8,6 +8,7 @@
 #include "XrSessionHost.h"
 #include "MainRenderHook.h"
 #include "AimTakeover.h"
+#include "HandWorld.h"
 #include "HeadTrackingHook.h"
 #include "Logger.h"
 #include "preyvr/EngineMap.h"
@@ -486,7 +487,8 @@ void PublishReticleTarget(const GameplayPoseFrame& frame, const aim::Sample& sam
     distance = std::max(distance, kReticleNearestM);
     // Converted with the anchor the sample was built from, as the debug ray is:
     // the muzzle with aim.shot, else the native eye the ray starts at.
-    const Vec3 anchor = sample.muzzleOrigin && frame.cameraCentreValid ? frame.cameraCentre : frame.nativeEye;
+    Vec3 anchor{};
+    AnchorPoint(frame, sample.muzzleOrigin ? Anchor::cameraElseReticle : Anchor::reticle, anchor);
     const Vec3 world{sample.origin.x + sample.direction.x * distance, sample.origin.y + sample.direction.y * distance,
                      sample.origin.z + sample.direction.z * distance};
     ReticleTarget target{};

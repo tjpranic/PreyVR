@@ -20,6 +20,7 @@
 #include "DllTestSupport.h"
 #include "TestSupport.h"
 #include <tlhelp32.h>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -579,6 +580,32 @@ void TestCommandFile()
     std::filesystem::remove(results, error);
 }
 
+// One torso (your 10-23 decision): body.torso and arm.torso set the one copy
+// BodyFollow owns, which the Body Turn Deadzone option reads back and the arms'
+// fallback filter uses. The option keeps the relaxation, and refuses what
+// arm.torso refuses. Puts the defaults (35 degrees, 600 per mille) back.
+void TestTorsoOwner()
+{
+    float deadzone = 0.0f, relax = 0.0f;
+    Run("body.torso 50 700");
+    BodyTorsoSettings(deadzone, relax);
+    Require(TorsoDeadzoneDegrees() == 50 && std::fabs(relax - 0.7f) < 1e-6f &&
+                std::fabs(deadzone - 50.0f * preyvr::kRadiansPerDegree) < 1e-6f,
+            "body.torso sets the one torso the option reads back");
+    Run("arm.torso 40 650");
+    BodyTorsoSettings(deadzone, relax);
+    Require(TorsoDeadzoneDegrees() == 40 && std::fabs(relax - 0.65f) < 1e-6f, "arm.torso sets the same one");
+    Require(SetTorsoDeadzone(35) == 0 && TorsoDeadzoneDegrees() == 35, "the option sets the deadzone");
+    BodyTorsoSettings(deadzone, relax);
+    Require(std::fabs(relax - 0.65f) < 1e-6f, "and keeps the relaxation");
+    Require(SetTorsoDeadzone(181) != 0 && TorsoDeadzoneDegrees() == 35, "and refuses what arm.torso refuses");
+    Require(Run("arm.torso 181 600") == "arm.torso result=1" + ArmReport() && TorsoDeadzoneDegrees() == 35,
+            "arm.torso still refuses out of range");
+    Run("arm.torso 35 600");
+    BodyTorsoSettings(deadzone, relax);
+    Require(TorsoDeadzoneDegrees() == 35 && std::fabs(relax - 0.6f) < 1e-6f, "the defaults are back");
+}
+
 } // namespace
 
 int main()
@@ -591,6 +618,7 @@ int main()
     TestReport();
     TestLoggedReplies();
     TestCommandFile();
+    TestTorsoOwner();
 
     Require(GetModuleHandleW(L"openxr_loader.dll") == nullptr, "no command loaded the OpenXR loader");
     Require(preyvr::test::gMinHookCalls == 0, "no command tried to install a hook");

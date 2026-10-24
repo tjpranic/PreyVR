@@ -2,20 +2,16 @@
 #include "HookInstall.h"
 #include "EngineAccess.h"
 #include "FrameSchedule.h"
+#include "HandWorld.h"
 #include "SceneQuery.h"
 #include "ShotRay.h"
-#include "Haptics.h"
-#include "PsiMedkit.h"
 #include "WeaponAttachment.h"
 #include "DebugOverlay.h"
 #include "preyvr/AnimIk.h"
 #include "MinHookInit.h"
 #include "preyvr/LatestSnapshot.h"
 
-#include <optional>
-
 #include "HeadTrackingHook.h"
-#include "HudBridge.h"
 #include "Logger.h"
 #include "ReticleFollow.h"
 #include "XrInput.h"
@@ -29,7 +25,6 @@
 #include <cmath>
 #include <cstring>
 #include <sstream>
-#include <span>
 #include <string_view>
 
 namespace preyvr::dll {
@@ -47,19 +42,7 @@ using GetArkPlayerInstanceFn = void*(__fastcall*)();
 void* gTarget = nullptr;
 std::atomic<UpdateCachedRayFn> gOriginal{nullptr};
 bool gInstalled = false;
-LatestSnapshot<GameplayPoseFrame> gGameplayFrame;
 LatestSnapshot<preyvr::aim::Sample> gAimSample;
-LatestSnapshot<SupportGripGeometry> gSupportGeometry;
-LatestSnapshot<twohand::Input> gSupportInput;
-std::atomic<unsigned> gTwoHandGates{0}, gTwoHandGatesSeen{0};
-std::atomic<bool> gTwoHandEnabled{true};
-std::atomic<bool> gTwoHandToggle{false},gTwoHandSnap{true};
-std::atomic<unsigned int> gTwoHandReset{0};
-std::atomic<bool> gTwoHandHeld{false}, gTwoHandRegionReady{false}, gSupportNear{false};
-std::atomic<unsigned long long> gTwoHandFrames{0};
-thread_local twohand::Solver gTwoHandSolver;
-thread_local unsigned int gTwoHandSeenReset=0;
-thread_local std::uint64_t gTwoHandTime=0;
 std::atomic<unsigned long long> gAimSamplePublished{0};
 // The world direction actually published, and the raw controller orientation it
 // came from. Reported so a head sweep says which one moves.
@@ -74,99 +57,17 @@ std::atomic<unsigned long long> gApplied{0};
 std::atomic<unsigned long long> gRejNoPose{0};
 std::atomic<unsigned long long> gRejNoPlayer{0};
 std::atomic<unsigned long long> gRejCompose{0};
-std::atomic<unsigned int> gNativeMagnitude{0};
 // 0 native eye, 1 the tracked hand, 2 the calibrated muzzle.
 std::atomic<unsigned int> gOriginMode{0};
 std::atomic<unsigned long long> gMuzzleOriginApplied{0}, gMuzzleUnavailable{0};
-std::atomic<bool> gBodyYaw{true};
-std::atomic<int> gCamYawMilli{0}, gHeadYawMilli{0}, gPlaySpaceYawMilli{0};
-std::atomic<int> gNativeEyeMilli[3]{0,0,0};
-std::atomic<int> gTrackedHeadMilli[3]{0,0,0};
-// The last head yaw that was defined. Near-vertical, the head's yaw is genuinely
-// undefined but the BODY's has not changed, so holding this keeps the frame
-// correct -- and camera yaw still carries body turning, so the player can look
-// at the ceiling and keep walking in a circle without the hands drifting.
-std::atomic<float> gLastHeadYaw{0.0f};
-std::atomic<bool> gHaveHeadYaw{false};
-std::atomic<unsigned long long> gHeadYawHeld{0}, gHeadYawUnavailable{0};
 std::atomic<unsigned long long> gOriginApplied{0};
 
 using engine::FindLandmark;
 
-void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking)
+// Undoes the origin the last frame's aim override wrote, before the engine
+// rebuilds its own ray from it.
+void UndoOriginEdit(void* player)
 {
-    const auto& right=frame.tracking.hands[static_cast<unsigned int>(Hand::right)];
-    const auto& left=frame.tracking.hands[static_cast<unsigned int>(Hand::left)];
-    const Vec3 anchor=frame.cameraCentreValid?frame.cameraCentre:frame.nativeEye;
-    twohand::Input input{};
-    input.aim=animik::ControllerWorldFromHead(frame.yaw,anchor,frame.tracking.head,right.aimPose);
-    input.primary=animik::ControllerWorldFromHead(frame.yaw,anchor,frame.tracking.head,right.gripPose).position;
-    input.support=animik::ControllerWorldFromHead(frame.yaw,anchor,frame.tracking.head,left.gripPose);
-    input.squeeze=left.squeezeValue;
-    input.toggleGrip=gTwoHandToggle.load();
-    input.reference=frame.referenceGeneration;input.epoch=frame.tracking.epoch;
-    EquippedRig owner{};
-    if(TryGetEquippedRig(frame.player,owner)) input.owner=owner.generation;
-    frame.weaponGeneration=input.owner;
-    const auto now=MonotonicNanoseconds();
-    input.dt=gTwoHandTime && now>gTwoHandTime ? static_cast<float>(now-gTwoHandTime)*1e-9f : .011f;
-    gTwoHandTime=now;
-    const auto reset=gTwoHandReset.load();
-    if(reset!=gTwoHandSeenReset) { gTwoHandSolver={};gTwoHandSeenReset=reset; }
-    // Keep a young geometry sample across publication contention. A missed
-    // try-lock is not tracking loss and must not unlatch a held foregrip.
-    thread_local SupportGripGeometry geometry{};
-    SupportGripGeometry incoming{};
-    if(gSupportGeometry.TryRead(incoming)) geometry=incoming;
-    const bool region=geometry.owner==input.owner&&
-        geometry.reference==input.reference&&geometry.epoch==input.epoch&&
-        FreshSample(now,geometry.publishedNs);
-    if(region) { input.region=geometry.region;input.visualPrimaryOffset=geometry.primaryOffsetWorld; }
-    gTwoHandRegionReady.store(region);
-    // Each gate as a bit, for aim.twohand: which one released a held foregrip.
-    const unsigned gates=(region?0u:1u)|(tracking?0u:2u)|(MedkitOwnsGrip()?4u:0u)|
-        (frame.headYawUsable?0u:8u)|(frame.cameraCentreValid?0u:16u)|
-        (gEnabled.load()&&gTwoHandEnabled.load()?0u:32u)|(HudGameplayInputAllowed()?0u:64u)|
-        (IsPoseUsable(right.aimPose,right.aimValidity,kMaxPoseAgeNs)&&
-         IsPoseUsable(right.gripPose,right.gripValidity,kMaxPoseAgeNs)&&
-         IsPoseUsable(left.gripPose,left.gripValidity,kMaxPoseAgeNs)?0u:128u);
-    gTwoHandGates.store(gates);
-    if(gates) gTwoHandGatesSeen.fetch_or(gates);
-    input.usable=gates==0;
-    frame.twoHand=gTwoHandSolver.Update(input);
-    {
-        Vec3 point{};
-        // The left hand inside the foregrip region: a squeeze there is the
-        // two-hand hold, never a use (InteractionUse.h).
-        gSupportNear.store(region&&input.usable&&twohand::ClosestGrip(input,point));
-    }
-    frame.twoHand.snapSupport=gTwoHandSnap.load();
-    DebugOverlayForegrip(frame,input,frame.twoHand,region);
-    gSupportInput.Publish(input);
-    const bool wasHeld=gTwoHandHeld.exchange(frame.twoHand.held);
-    if(frame.twoHand.held&&!wasHeld)
-        QueueHaptic(Hand::left,haptics::Event::ForegripAttached,frame.tracking);
-    if(frame.twoHand.held) ++gTwoHandFrames;
-}
-
-// The yaw the engine's own view camera is facing. Read live rather than cached,
-// because the whole point is to follow the player's facing as it changes.
-float GameCameraYaw()
-{
-    const std::uint8_t* const camera = LiveViewCamera();
-    if (camera == nullptr) {
-        return 0.0f;
-    }
-    const stereo::Matrix34 matrix =
-        stereo::ReadMatrix(std::span<const std::uint8_t>(camera, engine::CameraLayout::size));
-    return stereo::CameraYawOf(matrix);
-}
-
-void __fastcall UpdateCachedRayWithTakeover(void* player)
-{
-    // Every refusal below invalidates the previous publication immediately.
-    gAimSample.Clear();
-    const UpdateCachedRayFn original = gOriginal.load(std::memory_order_acquire);
     if (player && gLastOriginEdit.owner == reinterpret_cast<std::uintptr_t>(player)) {
         auto* originAt = static_cast<std::uint8_t*>(player) + engine::ArkPlayerLayout::cachedReticleOrigin;
         Vec3 current{};
@@ -176,128 +77,23 @@ void __fastcall UpdateCachedRayWithTakeover(void* player)
         }
         gLastOriginEdit = {};
     }
-    if (original != nullptr) {
-        original(player);   // let the engine build its own ray first
-    }
-    if (player == nullptr || original == nullptr) {
-        gGameplayFrame.Clear();
-        gRejNoPlayer.fetch_add(1, std::memory_order_relaxed);
-        return;
-    }
-    const auto playerAddress = reinterpret_cast<std::uintptr_t>(player);
-    GameplayPoseFrame frame{};
-    frame.player = playerAddress;
-    std::memcpy(&frame.nativeEye, reinterpret_cast<const void*>(
-        playerAddress + engine::ArkPlayerLayout::cachedReticleOrigin), sizeof(Vec3));
-    // The view camera's own translation -- Matrix34, translation in column 3,
-    // so elements 3, 7 and 11. This is the gameplay camera on the game thread,
-    // before the render seam installs a per-eye offset, so it carries no half
-    // IPD (the trap H-005C / FAIL-HAND-037 records for the live render camera).
-    frame.cameraCentreValid = false;
-    if (const std::uint8_t* const view = LiveViewCamera()) {
-        const auto* const camera = reinterpret_cast<const float*>(view + engine::CameraLayout::matrix);
-        const Vec3 centre{camera[3], camera[7], camera[11]};
-        if (std::isfinite(centre.x) && std::isfinite(centre.y) && std::isfinite(centre.z)) {
-            frame.cameraCentre = centre;
-            frame.cameraCentreValid = true;
-        }
-    }
-    Vec3 nativeDirection{};
-    std::memcpy(&nativeDirection, reinterpret_cast<const void*>(
-        playerAddress + engine::ArkPlayerLayout::cachedReticleDirection), sizeof(Vec3));
-    const float nativeLength = Length(nativeDirection);
-    if (!std::isfinite(nativeLength) || nativeLength < 0.9f || nativeLength > 1.1f ||
-        !std::isfinite(frame.nativeEye.x) || !std::isfinite(frame.nativeEye.y) ||
-        !std::isfinite(frame.nativeEye.z)) {
-        gGameplayFrame.Clear();
-        gRejCompose.fetch_add(1, std::memory_order_relaxed);
-        return;
-    }
-    gNativeMagnitude.store(static_cast<unsigned int>(nativeLength * 1000.0f + 0.5f));
-    const bool haveTracking = TryGetTrackingFrame(frame.tracking) &&
-        IsPoseUsable(frame.tracking.head, frame.tracking.headValidity, kMaxPoseAgeNs);
-    frame.referenceGeneration = HeadTrackingReferenceGeneration();
-    frame.referenceYaw = HeadTrackingReferenceYaw();
-    frame.cameraYaw = GameCameraYaw();
-    // Camera yaw is body + (head - reference) because this mod writes head
-    // tracking into that camera. Subtracting the head's own yaw leaves the
-    // body, which is what a head-relative offset must be rotated by; using the
-    // camera directly applies the head twice and the hand follows the headset.
-    frame.yaw = frame.cameraYaw - frame.referenceYaw;   // aim.bodyyaw 0 behaviour
-    // Measured unconditionally. Recording it only on the body-yaw path made the
-    // instrument unable to describe the mode it was meant to be compared
-    // against: an A/B on 2026-09-08 reported a 0-degree head sweep for
-    // `aim.bodyyaw 0` purely because nothing sampled the head there.
-    const auto measuredHeadYaw = haveTracking
-        ? stereo::RecenterYawFromHeadPose(frame.tracking.head)
-        : std::optional<float>{};
-    if (measuredHeadYaw) {
-        gHeadYawMilli.store(static_cast<int>(*measuredHeadYaw * 57295.78f),
-                            std::memory_order_relaxed);
-    }
-    if (gBodyYaw.load(std::memory_order_acquire)) {
-        const auto headYaw = measuredHeadYaw;
-        if (headYaw) {
-            gLastHeadYaw.store(*headYaw, std::memory_order_release);
-            gHaveHeadYaw.store(true, std::memory_order_release);
-            frame.headYaw = *headYaw;
-            frame.headYawUsable = true;
-            frame.yaw = frame.cameraYaw - *headYaw;
-        } else if (gHaveHeadYaw.load(std::memory_order_acquire)) {
-            // Looking near-vertical. **Never fall through to the camera yaw
-            // here**: that is precisely the defect this lane exists to fix, and
-            // silently restoring it would make the hands swing again whenever a
-            // player looked up. Hold the last defined head yaw instead -- the
-            // body has not turned just because the head tilted, and body turning
-            // still arrives through the camera yaw.
-            const float held = gLastHeadYaw.load(std::memory_order_acquire);
-            frame.headYaw = held;
-            frame.headYawUsable = true;
-            frame.yaw = frame.cameraYaw - held;
-            gHeadYawHeld.fetch_add(1, std::memory_order_relaxed);
-        } else {
-            // No head yaw has ever been defined. Reject rather than invent:
-            // consumers below refuse the sample instead of driving from a frame
-            // whose orientation is unknown.
-            frame.headYawUsable = false;
-            gHeadYawUnavailable.fetch_add(1, std::memory_order_relaxed);
-        }
-    }
-    gCamYawMilli.store(static_cast<int>(frame.cameraYaw * 57295.78f), std::memory_order_relaxed);
-    gPlaySpaceYawMilli.store(static_cast<int>(frame.yaw * 57295.78f), std::memory_order_relaxed);
-    // The anchor the hand is placed against, and the tracked head it is measured
-    // from. A 2026-09-08 measurement found the hand still moving 0.74 mm per
-    // degree of head yaw at r = -0.92 with the controller resting motionless,
-    // *after* the play-space yaw was proved decoupled. The remaining suspect is
-    // these two disagreeing: the composition assumes the native eye translates
-    // by the same amount as the tracked head, and if it translates by less, the
-    // difference lands in the hand. Reporting both makes that one measurement.
-    for (unsigned int i = 0; i < 3; ++i) {
-        const float eye = (&frame.nativeEye.x)[i];
-        const float head = (&frame.tracking.head.position.x)[i];
-        gNativeEyeMilli[i].store(static_cast<int>(eye * 1000.0f), std::memory_order_relaxed);
-        gTrackedHeadMilli[i].store(static_cast<int>(head * 1000.0f), std::memory_order_relaxed);
-    }
-    if (!stereo::ReferenceCurrent(frame.referenceGeneration, HeadTrackingReferenceGeneration()) ||
-        !std::isfinite(frame.yaw)) { gGameplayFrame.Clear(); return; }
-    // IK must never reread the mutable cached origin below.
-    SolveTwoHandedFrame(frame,haveTracking);
-    // The frame's stages and then its lanes, in order (FrameSchedule.cpp).
-    schedule::PrepareGameplayFrame(frame,haveTracking&&gEnabled.load());
-    frame.publishedNs = MonotonicNanoseconds();
-    gGameplayFrame.Publish(frame);
-    schedule::TickGameplayLanes(frame,haveTracking&&gEnabled.load(),haveTracking);
+}
+
+// The aim override: the cached ray (and with aim.origin its origin) from the
+// right controller, and the published aim sample.
+void OverrideAimRay(const GameplayPoseFrame& frame, bool haveTracking)
+{
     if (!haveTracking) { gRejNoPose.fetch_add(1); return; }
     // A frame whose play-space yaw is unknown cannot aim, and must not silently
     // aim with the camera-relative yaw the body-yaw mode exists to replace.
-    if (gBodyYaw.load(std::memory_order_acquire) && !frame.headYawUsable) {
+    if (AimBodyYawEnabled() != 0u && !frame.headYawUsable) {
         gRejNoPose.fetch_add(1, std::memory_order_relaxed);
         return;
     }
     if (!gEnabled.load(std::memory_order_acquire)) { return; }
+    const auto playerAddress = frame.player;
     const auto& controller = frame.tracking.hands[static_cast<unsigned int>(Hand::right)];
-    const auto& headPose = frame.tracking.head;
-    const Vec3 engineOrigin = frame.nativeEye;
+    const Vec3 engineOrigin = frame.reticleOrigin;
     stereo::ReferenceFrame reference{};
     reference.yawRadians = frame.yaw;
     reference.worldPosition = engineOrigin;
@@ -327,8 +123,8 @@ void __fastcall UpdateCachedRayWithTakeover(void* player)
     preyvr::aim::Sample sample{};
     sample.origin = engineOrigin;
     sample.direction = ray->direction;
-    Pose hand = animik::ControllerWorldFromHead(
-        reference.yawRadians, engineOrigin, headPose, controller.aimPose);
+    Pose hand{};
+    HandWorld(frame, Hand::right, ControllerPose::aim, Anchor::reticle, Placement::controller, hand);
     if(frame.twoHand.blend>0) hand.orientation=frame.twoHand.orientation;
     sample.orientation = hand.orientation; // world space, like the direction
     sample.confidence = preyvr::aim::Confidence::origin;
@@ -357,8 +153,8 @@ void __fastcall UpdateCachedRayWithTakeover(void* player)
             // The GRIP pose is used, not the aim pose, because the calibration
             // was measured against the grip: an offset is only meaningful in
             // the frame it was captured in.
-            Pose grip = animik::ControllerWorldFromHead(
-                reference.yawRadians, engineOrigin, headPose, controller.gripPose);
+            Pose grip{};
+            HandWorld(frame, Hand::right, ControllerPose::grip, Anchor::reticle, Placement::controller, grip);
             if(frame.twoHand.blend>0) grip.orientation=Normalize(Multiply(frame.twoHand.correction,grip.orientation));
             Vec3 muzzle{};
             if (IsPoseUsable(controller.gripPose, controller.gripValidity, kMaxPoseAgeNs) &&
@@ -407,6 +203,36 @@ void __fastcall UpdateCachedRayWithTakeover(void* player)
     // Screen projection is deferred until CSystem::Render has installed the
     // actual eye camera. Here the global camera still has gameplay projection;
     // the per-eye projection is transient and restored after each render.
+}
+
+void __fastcall UpdateCachedRayWithTakeover(void* player)
+{
+    // Every refusal below invalidates the previous publication immediately.
+    gAimSample.Clear();
+    const UpdateCachedRayFn original = gOriginal.load(std::memory_order_acquire);
+    UndoOriginEdit(player);
+    if (original != nullptr) {
+        original(player);   // let the engine build its own ray first
+    }
+    if (player == nullptr || original == nullptr) {
+        ClearGameplayFrame();
+        gRejNoPlayer.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    GameplayPoseFrame frame{};
+    bool haveTracking = false;
+    switch (BuildGameplayFrame(reinterpret_cast<std::uintptr_t>(player), frame, haveTracking)) {
+    case FrameBuild::badNativeRay: gRejCompose.fetch_add(1, std::memory_order_relaxed); return;
+    case FrameBuild::notPlaceable: return;
+    case FrameBuild::built: break;
+    }
+    // IK must never reread the mutable cached origin below.
+    SolveTwoHandedFrame(frame,haveTracking);
+    // The frame's stages and then its lanes, in order (FrameSchedule.cpp).
+    schedule::PrepareGameplayFrame(frame,haveTracking&&gEnabled.load());
+    PublishGameplayFrame(frame);
+    schedule::TickGameplayLanes(frame,haveTracking&&gEnabled.load(),haveTracking);
+    OverrideAimRay(frame, haveTracking);
 }
 
 bool Install()
@@ -475,85 +301,7 @@ unsigned long long AimSamplePublishedCount()
 }
 
 bool EnsureGameplayPoseObservation() { return Install(); }
-
-void PublishSupportGripGeometry(const SupportGripGeometry& geometry) { gSupportGeometry.Publish(geometry); }
-DWORD SetTwoHandedAim(unsigned int enabled) {
-    if(enabled>1) return 1;
-    gTwoHandEnabled.store(enabled!=0);++gTwoHandReset;
-    return 0;
-}
-unsigned int TwoHandedAimEnabled() { return gTwoHandEnabled.load()?1u:0u; }
-DWORD SetTwoHandGripToggle(unsigned enabled) {
-    if(enabled>1)return ERROR_INVALID_PARAMETER;
-    if(gTwoHandToggle.exchange(enabled!=0)!=(enabled!=0))++gTwoHandReset;
-    return 0;
-}
-DWORD SetTwoHandSupportSnap(unsigned enabled) {
-    if(enabled>1)return ERROR_INVALID_PARAMETER;
-    gTwoHandSnap.store(enabled!=0);return 0;
-}
-bool TwoHandGripToggle(){return gTwoHandToggle.load();}
-bool TwoHandSupportSnap(){return gTwoHandSnap.load();}
-bool TwoHandedAimHeld(){return gTwoHandEnabled.load()&&gTwoHandHeld.load();}
-bool SupportGripNear(){return gTwoHandEnabled.load()&&gSupportNear.load();}
-std::string TwoHandedAimStatus() {
-    std::ostringstream out;
-    out<<" enabled="<<TwoHandedAimEnabled()<<" held="<<gTwoHandHeld.load()
-       <<" regionReady="<<gTwoHandRegionReady.load()<<" frames="<<gTwoHandFrames.load()
-       // 1 region 2 tracking 4 medkit 8 headYaw 16 camera 32 disabled 64 hud 128 poses
-       <<" gates="<<gTwoHandGates.load()<<" gatesSeen="<<gTwoHandGatesSeen.exchange(0);
-    SupportGripGeometry geometry{};
-    if(gSupportGeometry.TryRead(geometry)) out<<" owner="<<geometry.owner
-        <<" supportMm="<<geometry.region.start.x*1000<<","<<geometry.region.start.y*1000<<","<<geometry.region.start.z*1000;
-    twohand::Input input{};
-    if(gSupportInput.TryRead(input)) {
-        Vec3 point{};
-        out<<" usable="<<input.usable<<" near="<<twohand::ClosestGrip(input,point)<<" squeeze="<<input.squeeze<<" dt="<<input.dt;
-        const Quaternion inverse{-input.aim.orientation.x,-input.aim.orientation.y,-input.aim.orientation.z,input.aim.orientation.w};
-        const Vec3 local=Rotate(inverse,Vec3{input.support.position.x-input.primary.x-input.visualPrimaryOffset.x,
-            input.support.position.y-input.primary.y-input.visualPrimaryOffset.y,input.support.position.z-input.primary.z-input.visualPrimaryOffset.z});
-        out<<" handLocalMm="<<local.x*1000<<","<<local.y*1000<<","<<local.z*1000;
-    }
-    return out.str();
-}
-
-bool TryGetGameplayPoseFrame(GameplayPoseFrame& out, bool requireTracking)
-{
-    if (!gGameplayFrame.TryRead(out)) { return false; }
-    if (!FreshSample(MonotonicNanoseconds(), out.publishedNs)) { return false; }
-    if (!requireTracking) { return true; }
-    TrackingFrame current{};
-    // Also require a currently focused publication. A cleared XR slot must
-    // invalidate an otherwise young cached gameplay frame immediately.
-    if (!TryGetTrackingFrame(current) || out.tracking.epoch != current.epoch ||
-        out.referenceGeneration != HeadTrackingReferenceGeneration()) { return false; }
-    const auto now = MonotonicNanoseconds();
-    if (!FreshSample(now, out.tracking.publishedNs)) { return false; }
-    const auto age = now - out.tracking.publishedNs;
-    out.tracking.headValidity.ageNanoseconds = age;
-    for (auto& hand : out.tracking.hands) {
-        hand.gripValidity.ageNanoseconds = age;
-        hand.aimValidity.ageNanoseconds = age;
-    }
-    return IsPoseUsable(out.tracking.head, out.tracking.headValidity, kMaxPoseAgeNs);
-}
-
-DWORD SetAimBodyYaw(unsigned int enabled)
-{
-    if (enabled > 1) { return 1; }
-    gBodyYaw.store(enabled != 0u, std::memory_order_release);
-    Log(std::string("result=0 detail=body_yaw value=") + (enabled ? "1" : "0"));
-    return 0;
-}
-
-unsigned int AimBodyYawEnabled() { return gBodyYaw.load(std::memory_order_relaxed) ? 1u : 0u; }
-unsigned long long AimHeadYawHeldCount() { return gHeadYawHeld.load(std::memory_order_relaxed); }
-unsigned long long AimHeadYawUnavailableCount() { return gHeadYawUnavailable.load(std::memory_order_relaxed); }
-int AimCameraYawMilliDegrees() { return gCamYawMilli.load(std::memory_order_relaxed); }
-int AimHeadYawMilliDegrees() { return gHeadYawMilli.load(std::memory_order_relaxed); }
-int AimPlaySpaceYawMilliDegrees() { return gPlaySpaceYawMilli.load(std::memory_order_relaxed); }
-int AimNativeEyeMillimetres(unsigned int axis) { return axis < 3 ? gNativeEyeMilli[axis].load(std::memory_order_relaxed) : 0; }
-int AimTrackedHeadMillimetres(unsigned int axis) { return axis < 3 ? gTrackedHeadMilli[axis].load(std::memory_order_relaxed) : 0; }
+bool AimTakeoverEnabled() { return gEnabled.load(); }
 
 DWORD SetAimOriginFromHand(unsigned int mode)
 {
@@ -597,9 +345,4 @@ unsigned long long AimTakeoverAppliedCount() { return gApplied.load(std::memory_
 unsigned long long AimTakeoverRejectedNoPose() { return gRejNoPose.load(std::memory_order_relaxed); }
 unsigned long long AimTakeoverRejectedNoPlayer() { return gRejNoPlayer.load(std::memory_order_relaxed); }
 unsigned long long AimTakeoverRejectedCompose() { return gRejCompose.load(std::memory_order_relaxed); }
-DWORD AimTakeoverNativeDirectionMagnitude()
-{
-    return gNativeMagnitude.load(std::memory_order_relaxed);
-}
-
 } // namespace preyvr::dll
