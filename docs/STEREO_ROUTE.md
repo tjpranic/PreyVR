@@ -13,9 +13,8 @@ The artifact `BN-STE-001` names as its exit proof.
 > marker depth, UI in VR space. See
 > [`STEREO-DUAL-SUBMISSION-2026-10-10.md`](STEREO-DUAL-SUBMISSION-2026-10-10.md).
 > **2026-10-11 (branch `playability-improvements`):** body yaw is closed, and
-> room-scale with it. The body turns and walks with the player without moving the
-> view ([`BODY-YAW-2026-10-11.md`](BODY-YAW-2026-10-11.md),
-> [`ROOMSCALE-2026-10-11.md`](ROOMSCALE-2026-10-11.md)).
+> room-scale with it. The body turns with the player without moving the view; room-scale
+> was removed on 2026-10-24 ([`BODY-FOLLOW.md`](BODY-FOLLOW.md)).
 
 **Rung 1b has been opened by the CryEngine source and is not yet priced.** See
 `CRYENGINE_SOURCE_FINDINGS.md`: `CD3DStereoRenderer::RenderScene` traverses the

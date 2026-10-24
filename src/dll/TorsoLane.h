@@ -25,11 +25,10 @@
 //    made after the frame's render (ServiceBodyFollow): the frame's animation
 //    had already started, posed for the body as it was, so a body turned before
 //    the render was drawn with a pose meant for the old facing
-//    (docs/TURN-STOP-FLASH-2026-10-24.md).
+//    (docs/BODY-FOLLOW.md).
 // Body Follows You followed every frame regardless and also moved the capsule
-// under the head (docs/BODY-YAW-2026-10-11.md, docs/ROOMSCALE-2026-10-11.md);
-// both were removed on 2026-10-24, because with either on, smooth turning
-// jittered.
+// under the head; both were removed on 2026-10-24, because with either on,
+// smooth turning jittered.
 namespace preyvr::dll {
 
 // Installs the hook; VR mode calls it. 0 on success, 1 no PreyDll, 2 a byte or

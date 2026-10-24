@@ -14,7 +14,7 @@ world head position even when leaning away from the calibrated origin. The nativ
 body yaw is not directly rewritten. Movement uses head yaw relative to this same
 reference, so forward follows the resulting view after a snap. (Superseded
 2026-10-11: the body now turns to the torso after a snap or a physical turn; see
-[BODY-YAW-2026-10-11.md](BODY-YAW-2026-10-11.md).)
+[BODY-FOLLOW.md](BODY-FOLLOW.md).)
 
 `move.headrelative 1` is enabled by default. `move.headrelative 0` restores native
 body-axis inputs. Directional engine speed modifiers are preserved by default.

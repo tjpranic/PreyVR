@@ -166,7 +166,7 @@ int TurnHeadTrackingReferenceWithNative(const std::function<std::optional<float>
 // view and turns the head (the `#camera` attachment) to make up the difference,
 // and that frame's animation was computed before the turn -- so the composed
 // view would carry the old lag on top of the turned body, the one bad frame of
-// docs/TURN-STOP-FLASH-2026-10-24.md. Consumed by the next view; not while
+// docs/BODY-FOLLOW.md. Consumed by the next view; not while
 // Prey's focus camera (player +0x9B0) supplies the view.
 void UseNativeViewYawOnce();
 

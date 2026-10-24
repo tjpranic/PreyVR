@@ -263,7 +263,7 @@ bool TurnToTorso(void* player, float torso, float maxStep, std::atomic<unsigned 
     if (result == 0) {
         turns.fetch_add(1, std::memory_order_relaxed);
         if (&turns == &gSnapTurns) { gLastSnapTurnMdeg.store(Mdeg(applied), std::memory_order_relaxed); }
-        // The one bad frame (docs/TURN-STOP-FLASH-2026-10-24.md): this view
+        // The one bad frame (docs/BODY-FOLLOW.md): this view
         // takes Prey's yaw from m_rotation, not the head posed for the lag.
         if (std::fabs(lag) > kLagEpsilon) { UseNativeViewYawOnce(); }
     }

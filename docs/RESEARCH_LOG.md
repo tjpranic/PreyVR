@@ -3695,7 +3695,7 @@ stale. `tools/re/verify_view_rotation.py` pins the seam.
 - the view's yaw stepped at most 0.001° on a frame the body turned, against 0 on idle frames;
 - no hand flash.
 
-See [body yaw](BODY-YAW-2026-10-11.md).
+See [body follow](BODY-FOLLOW.md).
 
 ## 2026-10-11 — Room-scale: the body walks with the player
 
@@ -3730,7 +3730,7 @@ player's stance change moves the player with this same pair after a ceiling rayc
 - 9 head-out events and 872 fade frames;
 - no faults.
 
-See [room-scale](ROOMSCALE-2026-10-11.md).
+See [body follow](BODY-FOLLOW.md), Room-scale.
 
 ## 2026-10-17 — The 0x27EC40 job-worker crash: a freed pass camera in the cull queue
 

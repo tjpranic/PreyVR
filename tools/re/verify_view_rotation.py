@@ -2,7 +2,7 @@
 
 Usage: py -3 tools/re/verify_view_rotation.py [out.json]
 PREYVR_PREYDLL overrides the module path (preydll.resolve_module).
-Static byte contracts for docs/BODY-YAW-2026-10-11.md: they say what the setter writes,
+Static byte contracts for docs/BODY-FOLLOW.md: they say what the setter writes,
 not that calling it per frame is safe, nor how the body looks in a headset.
 """
 import json,struct,sys
@@ -45,7 +45,7 @@ def verify():
  proof('save game serialises +0x13F0 as "rotation"',0x157c490,'4d8d86f01300004533c9488d153f1c7400488b01ff90c8000000')
  proof('"rotation" name string',0x1cbe0e0,'726f746174696f6e00')
  proof('UpdateView reads the camera +0x150 quaternion',0x148b927,'4881c750010000')
- # The concrete CEntity transform (docs/ROOMSCALE-2026-10-11.md). Its vtable is the
+ # The concrete CEntity transform (room-scale's, docs/BODY-FOLLOW.md). Its vtable is the
  # one holding the hash-gated GetPhysics (SceneQueryNative.h) at +0x228.
  ENTITY=0x1d30bd0
  slot('CEntity +0x228 is the hash-gated GetPhysics 0x9042B0',ENTITY,0x228//8,0x9042b0)

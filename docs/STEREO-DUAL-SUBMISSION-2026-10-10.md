@@ -247,7 +247,7 @@ Fix candidates: drive the player entity's yaw toward that torso yaw and subtract
 the same rotation from the head-tracking reference so the view does not jump (aim,
 head-relative movement and IK all read the body frame, so check each), or hide
 the body mesh in VR. Investigated, with a native seam and a design, in
-[BODY-YAW-2026-10-11.md](BODY-YAW-2026-10-11.md).
+[BODY-FOLLOW.md](BODY-FOLLOW.md).
 
 ### Smaller items
 
@@ -302,9 +302,8 @@ the body mesh in VR. Investigated, with a native seam and a design, in
    second submission and the overlay redraws while the menu panel is up; decide
    whether shadow maps and other per-frame work can be shared between submissions.
 2. ~~Body yaw following the headset, or hiding the body.~~ Done on
-   `playability-improvements`: the body turns with the player
-   ([BODY-YAW-2026-10-11.md](BODY-YAW-2026-10-11.md)) and walks with them
-   ([ROOMSCALE-2026-10-11.md](ROOMSCALE-2026-10-11.md)).
+   `playability-improvements`: the body turns with the player, and walked with them until
+   room-scale was removed on 2026-10-24 ([BODY-FOLLOW.md](BODY-FOLLOW.md)).
 3. Marker depth, if markers look wrong in play (see the limits above).
 4. A proper fix for UI in VR space, the crosshair included (the VR reticle was
    removed ahead of it).
