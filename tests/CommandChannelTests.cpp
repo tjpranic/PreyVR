@@ -127,9 +127,9 @@ const Case kCases[] = {
     {"arm.report", "arm.report result=0", ArmReport, processed},
     {"body.report", "body.report result=0", TorsoLaneReport, processed},
     {"body.torso 1", "body.torso result=87", TorsoLaneReport, processed},   // needs 2
-    // Body Follows You and room-scale, removed 2026-10-24: their verbs are gone.
-    {"body.follow", "result=rejected verb=\"body.follow\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
-     rejected},
+    {"body.follow", "body.follow result=0 enabled=1", nullptr, processed},
+    {"body.follow 2", "body.follow result=87 enabled=1", nullptr, processed},
+    // Room-scale, removed 2026-10-24: its verbs are gone.
     {"body.roomscale", "result=rejected verb=\"body.roomscale\" detail=not_a_channel_verb_and_not_allowlisted",
      nullptr, rejected},
     {"arm.lift", "arm.lift result=0", ArmReport, processed},

@@ -104,11 +104,11 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
 
 - **Comfort:** snap angle / smooth turning, head-relative movement, smooth-turn
   speed, the move and turn stick deadzones, and sideways and backward walking
-  speed. The character's body keeps the game's own facing: it turns with the
-  stick, and each snap turn turns it to face where you face. Both turn you
-  about the body, so you keep your place on it; if you have stepped away from
-  it, a snap swings you round it. Turning round in the room does not turn it
-  until your next snap, and it does not walk with you. (Body Follows You did both until 2026-10-24; it made smooth turning
+  speed. The character's body turns to face where you face: with the stick,
+  with each snap turn, and as you turn round in the room (looking over your
+  shoulder does not turn it; turning further does). The stick and snap turns
+  turn you about the body, so you keep your place on it; if you have stepped
+  away from it, a snap swings you round it. It does not walk with you. (Body Follows You did both until 2026-10-24; it made smooth turning
   jitter and was removed.)
 
   Reset VR view is on the Setup page.

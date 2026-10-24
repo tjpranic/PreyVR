@@ -271,19 +271,25 @@ value report, as described above.
 ### Body
 
 Body Follows You was removed on 2026-10-24, with its menu row, its three
-tuning rows and the `body.follow`, `body.roomscale`, `body.zone`,
-`body.radius`, `body.physics`, `body.standaside`, `body.level`, `body.turn`
-and `body.nudge` commands. It turned the body to face you and moved it under
-you as you walked, and with either part on, smooth turning jittered. The body
-now keeps the game's own facing: it turns with the stick, and after each snap
-turn it turns to face your torso once. It does not follow you turning round in
-the room until your next snap. A snap turns the view about the body, as smooth
-turning does, so the camera keeps its place on the model; it turns about your
-head only if the body cannot be turned (`snapBodyTurn=0`).
+tuning rows and the `body.roomscale`, `body.zone`, `body.radius`,
+`body.physics`, `body.standaside`, `body.level`, `body.turn` and `body.nudge`
+commands (`body.follow` came back for the new following, below). It turned the body to face you and moved it under
+you as you walked, and with either part on, smooth turning jittered.
+
+The body turns to face your torso again, without the jitter:
+- **With the stick:** Prey turns it, as always.
+- **After each snap turn:** at once. A snap turns the view about the body, as
+  smooth turning does, so the camera keeps its place on the model; it turns
+  about your head only if the body cannot be turned (`snapBodyTurn=0`).
+- **As you turn round in the room:** every frame, no faster than 360 degrees a
+  second, but never while Prey is turning the player itself (a smooth turn),
+  nor for 150 ms after. A physical turn made during a smooth turn is caught up
+  after it. It does not move the body under you: room-scale did that.
 
 | Command | Values | Default | What it does |
 |---|---|---|---|
-| `body.report` | report | | The shared torso the shoulders and body slots sit on: `hooked`, `active`, `torsoDeadzoneDeg`, `torsoRelax`, `ticks`, `notPlayer`, `noHead`, `headDeg`, `torsoDeg`. The snap's body turn: `snapBodyTurn` (1 when it can run), `turnFault`, `snapTurns` (turns made), `lastSnapTurnMdeg`, `snapWaits` (frames a turn waited for gameplay or a busy reference) and `readbackMaxMdeg` (how far the engine's rotation differed from the one asked for). The status line carries the same as `torso={...}`. |
+| `body.follow` | 0/1 | 1 | The body turns as you turn round in the room. 0 leaves it to the stick and snap turns, for an A/B. Not saved. |
+| `body.report` | report | | The shared torso the shoulders and body slots sit on: `hooked`, `active`, `torsoDeadzoneDeg`, `torsoRelax`, `ticks`, `notPlayer`, `noHead`, `headDeg`, `torsoDeg`. The body's turn: `snapBodyTurn` (1 when it can run), `turnFault`, `snapTurns` (turns after a snap), `lastSnapTurnMdeg`, `snapWaits` (frames a snap's turn waited for gameplay or a busy reference), `follow`, `followTurns` (frames the body followed a physical turn), `followPaused` (frames it waited because Prey was turning the player) and `readbackMaxMdeg` (how far the engine's rotation differed from the one asked for). The status line carries the same as `torso={...}`. |
 
 ### Arms and hands (IK)
 

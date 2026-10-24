@@ -50,4 +50,18 @@ Step TorsoStep(float referenceYaw, float torsoYaw, float minimum)
     return {delta, std::fabs(delta) > minimum};
 }
 
+Step Limited(Step step, float maxStep)
+{
+    if (maxStep > 0.0f && std::fabs(step.delta) > maxStep) { step.delta = std::copysign(maxStep, step.delta); }
+    return step;
+}
+
+bool NativeTurnWatch::Update(float yaw, std::uint64_t nowNs, float epsilon, std::uint64_t holdNs)
+{
+    if (!std::isfinite(yaw)) { return true; }
+    if (valid_ && std::fabs(controller::WrapAngle(yaw - left_)) > epsilon) { untilNs_ = nowNs + holdNs; }
+    Left(yaw);
+    return nowNs < untilNs_;
+}
+
 } // namespace preyvr::bodyturn

@@ -93,10 +93,10 @@ struct Model {
     float P() const { return Wrap(G() - reference); }
     // As SnapTurnHeadTracking does it: the reference only.
     void Snap(float degrees) { reference = Wrap(reference - degrees * kDeg); }
-    // As TorsoLane does after a snap.
-    void TurnToTorso(float torso)
+    // As TorsoLane does: at once after a snap, capped as the player turns.
+    void TurnToTorso(float torso, float maxStep = 0.0f)
     {
-        const Step step = TorsoStep(reference, torso, 0.01f * kDeg);
+        const Step step = Limited(TorsoStep(reference, torso, 0.01f * kDeg), maxStep);
         if (!step.apply) { return; }
         const float before = G();
         native = *LevelledTurn(native, step.delta);
@@ -133,6 +133,107 @@ void TestSnapFacesTheTorso()
     m.TurnToTorso(torso);
     Require(NearAngle(m.G(), Wrap(m.P() + torso), 1e-4f), "after a snap the body faces the torso");
     Require(NearAngle(m.P(), p0 + 30.0f * kDeg, 1e-4f), "and the view is where the snap put it");
+}
+
+void TestLimited()
+{
+    const Step s{0.5f, true};
+    Require(Limited(s, 0.1f).apply && NearAngle(Limited(s, 0.1f).delta, 0.1f, 1e-6f), "capped");
+    Require(NearAngle(Limited(Step{-0.5f, true}, 0.1f).delta, -0.1f, 1e-6f), "either way");
+    Require(Limited(s, 0.0f).delta == 0.5f && Limited(Step{0.05f, true}, 0.1f).delta == 0.05f,
+            "no cap, or a shorter step, leaves it whole");
+}
+
+void TestNativeTurnWatch()
+{
+    NativeTurnWatch w;
+    const float e = 0.02f * kDeg;
+    const std::uint64_t hold = 150000000ull;
+    Require(!w.Update(0.3f, 1000, e, hold), "the first frame is no turn");
+    Require(!w.Update(0.3f, 2000, e, hold), "a still player is not turning");
+    w.Left(0.5f);   // this lane turned it
+    Require(!w.Update(0.5f, 3000, e, hold), "nor is one this lane turned");
+    Require(w.Update(0.52f, 4000, e, hold), "the game turning it is");
+    Require(w.Update(0.52f, 4000 + hold - 1, e, hold), "and for the hold after it stops");
+    Require(!w.Update(0.52f, 4000 + hold, e, hold), "then not");
+    Require(w.Update(NAN, 5000 + hold, e, hold), "an unreadable yaw counts as turning");
+}
+
+// The lane's frame, reduced to its arithmetic: the torso follows the head, and
+// the body the torso, unless the game is turning the player itself.
+struct Follower : Model {
+    armpose::TorsoYaw torso;
+    NativeTurnWatch watch;
+    std::uint64_t now = 1;
+    static constexpr float kDt = 1.0f / 90.0f;
+    // `head` the tracking-space yaw; `nativeDegrees` how far the game turns the
+    // player this frame, as a smooth turn does.
+    void Frame(float head, float nativeDegrees = 0.0f)
+    {
+        if (nativeDegrees != 0.0f) {
+            native = Normalize(Multiply(stereo::YawQuaternion(nativeDegrees * kDeg), native));
+        }
+        now += 11111111ull;
+        const float t = torso.Update(head, kDt, 35.0f * kDeg, 0.6f);
+        if (watch.Update(G(), now, 0.02f * kDeg, 150000000ull)) { return; }
+        TurnToTorso(t, 360.0f * kDeg * kDt);
+        watch.Left(G());
+    }
+};
+
+void TestPhysicalTurnTurnsTheBody()
+{
+    Follower m;
+    m.native = View(40.0f * kDeg, -12.0f * kDeg);   // a save made looking down a little
+    const float p0 = m.P();
+    // A physical 180-degree turn over two seconds, then standing still.
+    for (int i = 0; i <= 900; ++i) {
+        m.Frame(static_cast<float>(i < 180 ? i : 180) * kDeg);
+        Require(NearAngle(m.P(), p0, 1e-4f), "the play space does not move while the body follows");
+    }
+    Require(NearAngle(m.G(), Wrap(p0 + 180.0f * kDeg), 0.5f * kDeg), "after a 180 the body faces the view");
+    Require(std::fabs(Rotate(m.native, Vec3{0, 1, 0}).z) < 1e-5f, "native pitch levelled");
+}
+
+void TestGlanceBarelyTurnsTheBody()
+{
+    Follower m;
+    for (int i = 0; i < 90; ++i) { m.Frame(0.0f); }
+    const float g0 = m.G();
+    for (int i = 0; i < 22; ++i) { m.Frame(30.0f * kDeg); }   // a quarter-second glance
+    Require(std::fabs(Wrap(m.G() - g0)) < 5.0f * kDeg, "a glance inside the deadzone barely turns the body");
+    for (int i = 0; i < 22; ++i) { m.Frame(80.0f * kDeg); }
+    Require(std::fabs(Wrap(m.G() - g0)) >= 45.0f * kDeg - 1e-3f, "past the deadzone the body comes round");
+}
+
+void TestSmoothTurnPausesTheBody()
+{
+    Follower m;
+    for (int i = 0; i < 90; ++i) { m.Frame(0.0f); }
+    const float p0 = m.P();
+    // Turned round 90 degrees in the room while the stick turns the player 2
+    // degrees a frame: only the game turns the body.
+    float g = m.G();
+    for (int i = 0; i < 90; ++i) {
+        m.Frame(static_cast<float>(i + 1) * kDeg, 2.0f);
+        Require(NearAngle(m.G(), g + 2.0f * kDeg, 1e-4f), "while the game turns the player, only it turns the body");
+        g = m.G();
+    }
+    Require(NearAngle(m.P(), p0 + 180.0f * kDeg, 1e-3f), "the smooth turn turned the view");
+    // Let go: the hold, then the body catches up, no faster than the cap.
+    const float released = m.G();
+    for (int i = 0; i < 13; ++i) { m.Frame(90.0f * kDeg); }   // 144 ms, inside the 150 ms hold
+    Require(NearAngle(m.G(), released, 1e-5f), "not within the hold");
+    float last = m.G();
+    bool capped = true;
+    for (int i = 0; i < 900; ++i) {
+        m.Frame(90.0f * kDeg);
+        capped = capped && std::fabs(Wrap(m.G() - last)) <= 4.0f * kDeg + 1e-4f;
+        last = m.G();
+    }
+    Require(capped, "catching up no faster than 360 degrees a second");
+    Require(NearAngle(m.G(), Wrap(m.P() + m.torso.yaw), 0.05f * kDeg), "then the body faces the torso");
+    Require(NearAngle(m.P(), p0 + 180.0f * kDeg, 1e-3f), "and the view never moved for it");
 }
 
 // Where the camera sits, as the view hook composes it (HeadTrackingHook.cpp):
@@ -222,6 +323,11 @@ int main()
     TestSnapFacesTheTorso();
     TestSnapKeepsTheCameraOnTheBody();
     TestNativeTurnIsKept();
+    TestLimited();
+    TestNativeTurnWatch();
+    TestPhysicalTurnTurnsTheBody();
+    TestGlanceBarelyTurnsTheBody();
+    TestSmoothTurnPausesTheBody();
     std::cout << "body_turn: all tests passed\n";
     return 0;
 }

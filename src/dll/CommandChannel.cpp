@@ -499,6 +499,11 @@ constexpr Verb kVerbs[] = {
         // The shared torso the shoulders and body slots sit on (TorsoLane.h).
         out << "body.report result=0" << TorsoLaneReport();
     }},
+    {"body.follow", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
+        // The body turning as you turn round in the room: 1 (default), 0 for an A/B.
+        out << "body.follow result=" << (Valued(args) ? SetBodyFollow(static_cast<unsigned>(Arg(args, 1, 1))) : 0)
+            << " enabled=" << BodyFollowEnabled();
+    }},
     {"body.torso", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
         // body.torso <deadzoneDeg> <relax per mille per second>; arm.torso sets the same filter.
         out << "body.torso result=" << (args.size() > 2 ? SetBodyTorso(Arg(args, 1, 35), Arg(args, 2, 600)) : TooFewValues(args))

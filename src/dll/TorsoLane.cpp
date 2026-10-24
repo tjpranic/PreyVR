@@ -13,6 +13,7 @@
 #include "preyvr/MonotonicClock.h"
 #include "preyvr/MotionController.h"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cmath>
@@ -65,6 +66,13 @@ constexpr std::size_t kCustomView = 0x12A0 + 0x148;
 constexpr std::size_t kCinematicGate = engine::ArkPlayerLayout::input + engine::ArkPlayerInputLayout::cinematic;
 // Closer than this the body is where the torso is.
 constexpr float kMinimumStep = 0.01f * kRadiansPerDegree;
+// Following physical turns: never faster than this, so the catch-up after a
+// smooth turn is a turn rather than a jump; and not while the game is turning
+// the player itself -- its yaw moved more than the epsilon since this lane left
+// it -- nor for the hold after (preyvr/BodyTurn.h NativeTurnWatch).
+constexpr float kFollowRate = 360.0f * kRadiansPerDegree;   // per second
+constexpr float kNativeTurnEpsilon = 0.02f * kRadiansPerDegree;
+constexpr std::uint64_t kNativeTurnHoldNs = 150000000ull;
 
 std::mutex gInstallMutex;
 std::atomic<bool> gInstalled{false}, gActive{false}, gResetTorso{false};
@@ -79,11 +87,14 @@ std::atomic<int> gDeadzoneMilliDeg{35000};
 std::atomic<int> gRelaxPerMille{600};
 // The snap turns the body has been turned after (HeadTrackingSnapCount).
 std::atomic<unsigned long long> gSnapsSeen{0};
+// The body follows physical turns (body.follow; on by default).
+std::atomic<bool> gFollow{true};
 
 // The main thread's own.
 armpose::TorsoYaw gTorso;
 std::uint64_t gTorsoNs = 0;
 unsigned long long gTorsoEpoch = ~0ull;
+bodyturn::NativeTurnWatch gWatch;
 
 struct TorsoSample {
     float yaw = 0.0f;
@@ -93,6 +104,7 @@ LatestSnapshot<TorsoSample> gTorsoSample;
 
 std::atomic<unsigned long long> gTicks{0}, gNotPlayer{0}, gNoHead{0};
 std::atomic<unsigned long long> gSnapTurns{0}, gSnapWaits{0}, gReadbackMaxMdeg{0};
+std::atomic<unsigned long long> gFollowTurns{0}, gFollowPaused{0};
 std::atomic<int> gHeadMdeg{0}, gTorsoMdeg{0}, gLastSnapTurnMdeg{0};
 
 int Mdeg(float radians)
@@ -164,18 +176,29 @@ bool InGameplay(void* player)
            ReadAt(player, kCinematicGate, cinematic) && mode == 0 && customView == 0 && cinematic == 0;
 }
 
-// After a snap turn, the native player is turned to the torso and the reference
-// with it, by what the setter actually applied: the body faces the player again
-// and the view stays where the snap put it (preyvr/BodyTurn.h). True when there
-// is nothing more to do; false to try again next frame -- outside gameplay, or
-// while a recenter or another reference change holds the lock.
-bool TurnToTorso(void* player, float torso)
+// Whether the game is turning the player itself this frame, or was within the
+// hold: the native yaw moved since this lane last left it.
+bool NativeTurning(void* player, std::uint64_t now)
+{
+    Quaternion rotation{};
+    if (gGet.load(std::memory_order_acquire) == nullptr || !CallGet(player, &rotation)) { return true; }
+    const auto yaw = bodyturn::EngineYawOf(rotation);
+    return gWatch.Update(yaw ? *yaw : NAN, now, kNativeTurnEpsilon, kNativeTurnHoldNs);
+}
+
+// The native player is turned to the torso -- no further than `maxStep`, 0 for
+// all the way -- and the reference with it, by what the setter actually
+// applied: the body faces the player and the view stays where it was
+// (preyvr/BodyTurn.h). `turns` counts the turns made. True when there is nothing
+// more to do; false to try again next frame -- outside gameplay, or while a
+// recenter or another reference change holds the lock.
+bool TurnToTorso(void* player, float torso, float maxStep, std::atomic<unsigned long long>& turns)
 {
     if (gSet.load(std::memory_order_acquire) == nullptr || gTurnFault.load(std::memory_order_acquire)) { return true; }
     if (!InGameplay(player)) { return false; }
     float applied = 0.0f;
     const int result = TurnHeadTrackingReferenceWithNative([&](float reference) -> std::optional<float> {
-        const auto step = bodyturn::TorsoStep(reference, torso, kMinimumStep);
+        const auto step = bodyturn::Limited(bodyturn::TorsoStep(reference, torso, kMinimumStep), maxStep);
         if (!step.apply) { return std::nullopt; }   // already facing the torso
         Quaternion before{};
         if (!CallGet(player, &before)) {
@@ -196,13 +219,14 @@ bool TurnToTorso(void* player, float torso)
         }
         const auto afterYaw = bodyturn::EngineYawOf(after);
         applied = afterYaw ? controller::WrapAngle(*afterYaw - *beforeYaw) : step.delta;
+        if (afterYaw) { gWatch.Left(*afterYaw); }   // this turn is not the game's
         const auto readback = static_cast<unsigned long long>(std::abs(Mdeg(controller::WrapAngle(applied - step.delta))));
         if (readback > gReadbackMaxMdeg.load(std::memory_order_relaxed)) { gReadbackMaxMdeg.store(readback); }
         return applied;
     });
     if (result == 0) {
-        gSnapTurns.fetch_add(1, std::memory_order_relaxed);
-        gLastSnapTurnMdeg.store(Mdeg(applied), std::memory_order_relaxed);
+        turns.fetch_add(1, std::memory_order_relaxed);
+        if (&turns == &gSnapTurns) { gLastSnapTurnMdeg.store(Mdeg(applied), std::memory_order_relaxed); }
     }
     return result != 2;
 }
@@ -227,6 +251,7 @@ void Tick(void* player)
     const auto epoch = HeadTrackingRecenterEpoch();
     if (epoch != gTorsoEpoch || gResetTorso.exchange(false)) {
         gTorso.Reset();
+        gWatch.Reset();
         gTorsoEpoch = epoch;
     }
     const float dt = gTorsoNs != 0 && now > gTorsoNs ? static_cast<float>(now - gTorsoNs) * 1e-9f : 0.0f;
@@ -239,12 +264,25 @@ void Tick(void* player)
     gHeadMdeg.store(Mdeg(head), std::memory_order_relaxed);
     gTorsoMdeg.store(Mdeg(torso), std::memory_order_relaxed);
 
-    // Only after a snap: turning the body every frame made smooth turning jitter.
+    // Read every frame, so the watch sees each frame the game turns the player.
+    const bool nativeTurning = NativeTurning(player, now);
+    // After a snap, at once and all the way: the snap turned the view about the
+    // body, which must turn with it (SetSnapTurnsAboutBody).
     const auto snaps = HeadTrackingSnapCount();
     if (snaps != gSnapsSeen.load(std::memory_order_relaxed)) {
-        if (TurnToTorso(player, torso)) { gSnapsSeen.store(snaps, std::memory_order_relaxed); }
+        if (TurnToTorso(player, torso, 0.0f, gSnapTurns)) { gSnapsSeen.store(snaps, std::memory_order_relaxed); }
         else { gSnapWaits.fetch_add(1, std::memory_order_relaxed); }
+        return;
     }
+    // As the player turns round in the room -- but never while the game is
+    // turning the player itself: turning the body every frame during a smooth
+    // turn made the view jitter (2026-10-24). The catch-up after it is capped.
+    if (!gFollow.load(std::memory_order_acquire)) { return; }
+    if (nativeTurning) {
+        gFollowPaused.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    TurnToTorso(player, torso, kFollowRate * std::clamp(dt, 0.001f, 0.1f), gFollowTurns);
 }
 
 void __fastcall PlayerUpdateDetour(void* player, void* context, int slot)
@@ -330,6 +368,16 @@ void BodyTorsoSettings(float& deadzoneRadians, float& relax)
     relax = gRelaxPerMille.load(std::memory_order_relaxed) * 1e-3f;
 }
 
+DWORD SetBodyFollow(unsigned enabled)
+{
+    if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
+    gFollow.store(enabled != 0, std::memory_order_release);
+    Log(std::string("result=0 detail=follow value=") + (enabled ? "1" : "0"));
+    return 0;
+}
+
+unsigned BodyFollowEnabled() { return gFollow.load(std::memory_order_acquire) ? 1u : 0u; }
+
 bool BodyTorsoYaw(float& yaw)
 {
     if (!gActive.load(std::memory_order_acquire)) { return false; }
@@ -351,7 +399,8 @@ std::string TorsoLaneReport()
         << " headDeg=" << gHeadMdeg.load() / 1000.0 << " torsoDeg=" << gTorsoMdeg.load() / 1000.0
         << " snapBodyTurn=" << (gSet.load() != nullptr && !gTurnFault.load()) << " turnFault=" << gTurnFault.load()
         << " snapTurns=" << gSnapTurns.load() << " lastSnapTurnMdeg=" << gLastSnapTurnMdeg.load()
-        << " snapWaits=" << gSnapWaits.load() << " readbackMaxMdeg=" << gReadbackMaxMdeg.load();
+        << " snapWaits=" << gSnapWaits.load() << " follow=" << gFollow.load() << " followTurns=" << gFollowTurns.load()
+        << " followPaused=" << gFollowPaused.load() << " readbackMaxMdeg=" << gReadbackMaxMdeg.load();
     return out.str();
 }
 

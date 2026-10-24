@@ -12,16 +12,20 @@
 // vtable slot 19), where a snap turn queued last frame also lands
 // (HeadTrackingHook.h ApplyQueuedSnapTurn): before the frame's view and arm IK.
 //
-// **After each snap turn the body is turned to the torso**, through the
-// engine's own view-rotation setter, with the reference turned by the same
-// angle (preyvr/BodyTurn.h): the body faces the player again and the view stays
-// where the snap put it. One turn per snap. While it can, the snap turns the
-// view about the body rather than the head (SetSnapTurnsAboutBody), so the two
-// together are one turn about the capsule, as a smooth turn's is, and the camera
-// keeps its place on the model. Body Follows You did it every frame
-// and also moved the capsule under the head (docs/BODY-YAW-2026-10-11.md,
-// docs/ROOMSCALE-2026-10-11.md); both were removed on 2026-10-24, because with
-// either on, smooth turning jittered.
+// **The body is turned to the torso**, through the engine's own view-rotation
+// setter, with the reference turned by the same angle (preyvr/BodyTurn.h): the
+// body faces the player and the view stays where it was.
+//  - After each snap turn, at once. While it can, the snap turns the view about
+//    the body rather than the head (SetSnapTurnsAboutBody), so the two together
+//    are one turn about the capsule, as a smooth turn's is, and the camera keeps
+//    its place on the model.
+//  - As the player turns round in the room, every frame, no faster than
+//    360 degrees a second -- but never while the game is turning the player
+//    itself (smooth turning), nor for 150 ms after.
+// Body Follows You followed every frame regardless and also moved the capsule
+// under the head (docs/BODY-YAW-2026-10-11.md, docs/ROOMSCALE-2026-10-11.md);
+// both were removed on 2026-10-24, because with either on, smooth turning
+// jittered.
 namespace preyvr::dll {
 
 // Installs the hook; VR mode calls it. 0 on success, 1 no PreyDll, 2 a byte or
@@ -33,6 +37,10 @@ DWORD SetTorsoLaneActive(unsigned active);
 DWORD SetBodyTorso(int deadzoneDegrees, int relaxPerMille);
 // The same settings as the filters use them: radians, and a fraction per second.
 void BodyTorsoSettings(float& deadzoneRadians, float& relax);
+// The body follows physical turns (1, the default); 0 leaves it to the stick
+// and snap turns, for an A/B (body.follow). Not saved.
+DWORD SetBodyFollow(unsigned enabled);
+unsigned BodyFollowEnabled();
 // The torso yaw (tracking space, armpose::YawOf convention), when the lane
 // estimated one within the last 100 ms.
 bool BodyTorsoYaw(float& yaw);
