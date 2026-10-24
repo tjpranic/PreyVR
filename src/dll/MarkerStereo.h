@@ -10,7 +10,7 @@
 // preyvr/MarkerDepth.h.
 //
 // Two halves:
-//   - game thread, CArkUIHUD::OnPreRender: each marker's projection is
+//   - main thread, CArkUIHUD::OnPreRender: each marker's projection is
 //     recorded with its depth, and paired with the marker's clip (the movie
 //     names each clip after the ID the engine passes it). The table holds, per
 //     clip, how far it moves per metre of eye offset.
@@ -28,7 +28,7 @@ unsigned MarkerDepthEnabled();
 // draws and put back after. 100 leaves them at Prey's size.
 DWORD SetMarkerSizePercent(unsigned percent);
 unsigned MarkerSizePercent();
-// Installs the game-thread hooks. Called when VR starts; a failure leaves the
+// Installs the main-thread hooks. Called when VR starts; a failure leaves the
 // markers native and is reported, never fatal.
 void EnsureMarkerDepth();
 

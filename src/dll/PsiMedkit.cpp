@@ -4,7 +4,7 @@
 #include "GameplayFrame.h"
 #include "BodyFollow.h"
 #include "HeadTrackingHook.h"
-#include "HudBridge.h"
+#include "UiMode.h"
 #include "InputPost.h"
 #include "Haptics.h"
 #include "SlotFeedback.h"

@@ -585,5 +585,93 @@ int main() {
         for(float out=0;out<1;out+=.01f)Require(ui::LaserFade(out+.01f)<=ui::LaserFade(out)+1e-6f,"it only fades going out");
     }
 
-    std::cout<<"UI panel geometry, frame layers, panel dragging and laser quads passed\n";
+    // --- the menu stack, the panel decision and the fade (XrSessionHost's) ---
+    {
+        std::array<ui::Eye,2> view{};
+        for(int e=0;e<2;++e){view[e].pose={{0,0,0,1},{e?.032f:-.032f,0,0}};
+            view[e].left=-1;view[e].right=1;view[e].up=.9f;view[e].down=-.9f;}
+        constexpr float guideRatio=270.f/1024,gapRatio=.015f,aspect=16.f/9;
+        const auto identical=[](const ui::Panel& a,const ui::Panel& b){
+            return a.width==b.width&&a.height==b.height&&a.pose.position.x==b.pose.position.x&&
+                a.pose.position.y==b.pose.position.y&&a.pose.position.z==b.pose.position.z&&
+                a.pose.orientation.x==b.pose.orientation.x&&a.pose.orientation.y==b.pose.orientation.y&&
+                a.pose.orientation.z==b.pose.orientation.z&&a.pose.orientation.w==b.pose.orientation.w;};
+        // The loop as PlaceMenuPanels had it, for the bit-for-bit comparison.
+        const auto before=[&](ui::Panel layout,bool wantGuide,float curve,float margin,
+                              std::optional<ui::Panel>& menuOut,std::optional<ui::Panel>& guideOut){
+            for(int attempt=0;attempt<80;++attempt) {
+                auto menu=layout,guide=layout;
+                menu.height=menu.width/aspect;
+                guide.height=guide.width*guideRatio;
+                const float gap=menu.width*gapRatio;
+                if(wantGuide) {
+                    menu.pose=Compose(layout.pose,Pose{{},{0,(guide.height+gap)*.5f,0}});
+                    guide.pose=Compose(layout.pose,Pose{{},{0,-(menu.height+gap)*.5f,0}});
+                } else menu.pose=layout.pose;
+                if(ui::SurfaceVisible({menu,curve},view,margin)&&(!wantGuide||ui::SurfaceVisible({guide,0},view,margin))) {
+                    menuOut=menu;if(wantGuide)guideOut=guide;return;
+                }
+                layout.width*=.95f;layout.height*=.95f;
+            }
+        };
+        const Pose turned{{0,.2f,0,std::sqrt(.96f)},{.3f,-.1f,.2f}};
+        for(const bool wantGuide:{false,true})for(const float curve:{0.f,.6f})for(const float width:{.5f,3.f,9.f,1e6f}){
+            const ui::Panel layout{Compose(turned,Pose{{},{0,0,-2}}),width,width/aspect};
+            const auto stack=ui::FitMenuStack(layout,aspect,guideRatio,gapRatio,wantGuide,curve,view,ui::kDefaultFitMargin);
+            std::optional<ui::Panel> oldMenu,oldGuide;
+            before(layout,wantGuide,curve,ui::kDefaultFitMargin,oldMenu,oldGuide);
+            Require(stack.has_value()==oldMenu.has_value()&&(!stack||(identical(stack->menu,*oldMenu)&&
+                    stack->guide.has_value()==oldGuide.has_value()&&(!oldGuide||identical(*stack->guide,*oldGuide)))),
+                    "the menu stack is the loop it replaced, bit for bit");
+            if(width==1e6f)Require(!stack,"nothing fits after 80 shrinks");
+            if(!stack)continue;
+            Require(stack->guide.has_value()==wantGuide,"the card only with the guide on");
+            Require(stack->menu.height==stack->menu.width/aspect,"the menu at its own aspect");
+            if(width==9.f)Require(stack->menu.width<9.f,"an oversized stack shrinks until it is seen");
+            if(width==.5f)Require(stack->menu.width==.5f,"a stack that is seen keeps its size");
+            if(wantGuide){
+                const auto up=Rotate(turned.orientation,{0,1,0});
+                const auto d=Vec3{stack->menu.pose.position.x-stack->guide->pose.position.x,
+                    stack->menu.pose.position.y-stack->guide->pose.position.y,stack->menu.pose.position.z-stack->guide->pose.position.z};
+                const float apart=(stack->menu.height+stack->guide->height)*.5f+stack->menu.width*gapRatio;
+                Require(near(d.x,up.x*apart)&&near(d.y,up.y*apart)&&near(d.z,up.z*apart),
+                        "the card sits under the menu, a gap apart, in the layout's own up");
+            } else Require(identical(ui::Panel{layout.pose,stack->menu.width,stack->menu.height},stack->menu),
+                           "without the card the menu sits where the layout is");
+        }
+        // ui.panel: 0 never, 2 always, 1 with a game menu -- the last answer while its state is unknown.
+        for(unsigned mode=0;mode<4;++mode)for(int bits=0;bits<16;++bits){
+            const bool views=(bits&1)!=0,known=(bits&2)!=0,open=(bits&4)!=0,was=(bits&8)!=0;
+            const bool modalForDisplay=known?open:was;
+            Require(ui::WantMenuPanel(mode,views,known,open,was)==(views&&(mode==2||(mode==1&&modalForDisplay))),
+                    "the panel decision is the expression it replaced");
+        }
+        Require(!ui::WantMenuPanel(2,false,true,true,true),"never without located views");
+        Require(ui::WantMenuPanel(1,true,false,false,true)&&!ui::WantMenuPanel(1,true,false,true,false),
+                "an unknown menu state keeps what was shown");
+        // The fade: 0.1 s to black, 0.2 s back, steps capped at 0.1 s, 8 levels.
+        ui::Fade fade{};
+        Require(ui::StepFade(fade,1000,true)==0&&fade.alpha==0&&fade.time==1000,"no step on the first frame");
+        Require(ui::StepFade(fade,1000+50000000,true)==4&&near(fade.alpha,.5f),"half black after 50 ms");
+        Require(ui::StepFade(fade,1000+50000000,true)==4&&near(fade.alpha,.5f),"a frame whose time did not advance holds");
+        Require(ui::StepFade(fade,2000000000,true)==8&&fade.alpha==1,"a long step counts as 0.1 s, and black is 1");
+        Require(ui::StepFade(fade,2100000000,false)==4&&near(fade.alpha,.5f),"0.1 s clears half of it");
+        Require(ui::StepFade(fade,2200000000,false)==0&&near(fade.alpha,0),"and 0.2 s all of it");
+        Require(ui::StepFade(fade,1500000000,true)==0&&fade.time==1500000000,"time going back takes the new time, no step");
+        // Against the expression it replaced, bit for bit, over an uneven run.
+        ui::Fade stepped{};float alpha=0;long long time=0;
+        const long long steps[]={0,11111111,8333333,90000000,250000000,-3000000,16666666,1,500000000,7000000};
+        long long now=123456789;unsigned n=0;
+        for(int round=0;round<40;++round){
+            now+=steps[round%10];const bool wanted=(round/3)%2==0;
+            const float dt=time&&now>time?std::min(.1f,static_cast<float>(now-time)*1e-9f):0.f;
+            time=now;
+            alpha=wanted?std::min(1.f,alpha+dt/.1f):std::max(0.f,alpha-dt/.2f);
+            const int level=ui::StepFade(stepped,now,wanted);
+            n+=level==static_cast<int>(alpha*8u+.5f)&&stepped.alpha==alpha&&stepped.time==time;
+        }
+        Require(n==40,"the fade is the expression it replaced");
+    }
+
+    std::cout<<"UI panel geometry, frame layers, panel dragging, laser quads, the menu stack and the fade passed\n";
 }

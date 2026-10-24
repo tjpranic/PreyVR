@@ -2,7 +2,7 @@
 #include <string>
 
 // The free-swing wrench (docs/FREE-SWING-WRENCH-SCOPE-2026-10-18.md). Once a
-// gameplay frame, on the input-drain thread, the drawn wrench's box is tested
+// gameplay frame, on the main thread, the drawn wrench's box is tested
 // against everything Prey's own melee asks for (scenery, glass, props, bodies,
 // live characters). A contact strikes when it is fast enough, the first of its
 // pass, in clear sight of the head and with stamina to spare: Prey's own hit is

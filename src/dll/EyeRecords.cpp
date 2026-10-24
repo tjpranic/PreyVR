@@ -1,6 +1,7 @@
 #include "EyeRecords.h"
 
 #include "Logger.h"
+#include "preyvr/PositionRing.h"
 
 #include <array>
 #include <atomic>
@@ -34,7 +35,7 @@ std::atomic<unsigned long long> gFrameCentreCount{0};
 // ---------------------------------------------------------------------------
 //
 // **The problem this replaces.** The submission path used to identify the eye by
-// asking and waiting: set the lock, hold it for N frames so the game thread's
+// asking and waiting: set the lock, hold it for N frames so the main thread's
 // camera edit could reach the render thread, then take the image. That works,
 // and it is why the first stereo test was unambiguous -- but the wait is the
 // whole cost. A full left-right cycle took 2*N rendered frames, so at a dwell of
@@ -44,7 +45,7 @@ std::atomic<unsigned long long> gFrameCentreCount{0};
 // work but does not *reorder* it: the camera built for frame N is rendered
 // before the camera built for frame N+1. So the eye does not need to be
 // searched for or waited on -- it only needs to be carried alongside the frame.
-// The game thread pushes the eye it just built, the render thread pops one per
+// The main thread pushes the eye it just built, the render thread pops one per
 // finished frame, and identity is exact with no dwell at all. Each eye then
 // refreshes every 2 frames instead of every 2*N.
 //
@@ -134,27 +135,18 @@ void PublishFrameCentre(const stereo::Matrix34& m)
     gFrameCentreCount.store(serial, std::memory_order_release);
 }
 
+// Exact-ish: the render view holds a by-value copy of the camera we built, so
+// the bits should be identical. A small tolerance covers a copy that passed
+// through a float conversion without admitting a different eye -- the two eyes
+// are an IPD apart, which is orders of magnitude wider.
+constexpr float kPositionTolerance = 1e-4f;
+
 bool FindBuiltEyeByPosition(const float position[3], BuiltEye& out)
 {
     const unsigned long long count = gBuiltEyeCount.load(std::memory_order_acquire);
-    if (count == 0) { gBuiltEyeMisses.fetch_add(1, std::memory_order_relaxed); return false; }
-    // Exact-ish: the render view holds a by-value copy of the camera we built,
-    // so the bits should be identical. A small tolerance covers a copy that
-    // passed through a float conversion without admitting a different eye --
-    // the two eyes are an IPD apart, which is orders of magnitude wider.
-    constexpr float kTolerance = 1e-4f;
-    const unsigned long long newest = count;
-    const unsigned long long oldest = newest > kBuiltEyeSlots ? newest - kBuiltEyeSlots + 1 : 1;
-    for (unsigned long long serial = newest; serial >= oldest; --serial) {
-        const BuiltEye& candidate = gBuiltEyes[serial % kBuiltEyeSlots];
-        if (candidate.serial != serial) { continue; }
-        if (std::fabs(candidate.position[0] - position[0]) <= kTolerance &&
-            std::fabs(candidate.position[1] - position[1]) <= kTolerance &&
-            std::fabs(candidate.position[2] - position[2]) <= kTolerance) {
-            out = candidate;
-            return true;
-        }
-        if (serial == 1) { break; }
+    if (const BuiltEye* found = ring::FindNewest(gBuiltEyes, count, position, kPositionTolerance)) {
+        out = *found;
+        return true;
     }
     gBuiltEyeMisses.fetch_add(1, std::memory_order_relaxed);
     return false;
@@ -163,19 +155,7 @@ bool FindBuiltEyeByPosition(const float position[3], BuiltEye& out)
 bool IsDualFrameCentre(const float position[3])
 {
     const unsigned long long newest = gFrameCentreCount.load(std::memory_order_acquire);
-    // Same tolerance as FindBuiltEyeByPosition: a by-value copy of the camera.
-    constexpr float kTolerance = 1e-4f;
-    const unsigned long long oldest = newest > kFrameCentreSlots ? newest - kFrameCentreSlots + 1 : 1;
-    for (unsigned long long serial = newest; serial >= oldest && serial != 0; --serial) {
-        const FrameCentre& candidate = gFrameCentres[serial % kFrameCentreSlots];
-        if (candidate.serial == serial &&
-            std::fabs(candidate.position[0] - position[0]) <= kTolerance &&
-            std::fabs(candidate.position[1] - position[1]) <= kTolerance &&
-            std::fabs(candidate.position[2] - position[2]) <= kTolerance) {
-            return true;
-        }
-    }
-    return false;
+    return ring::FindNewest(gFrameCentres, newest, position, kPositionTolerance) != nullptr;
 }
 
 unsigned long long BuiltEyeLookupMissCount()

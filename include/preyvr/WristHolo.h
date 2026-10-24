@@ -66,6 +66,27 @@ struct Thresholds {
     float fadeIn = 0.14f, fadeOut = 0.20f, fastOut = 0.07f; // s
 };
 
+// **When the card may show at all**, before the look test (XrSessionHost): each
+// condition, with the bit `wrist.report gate=` shows it as. 511, every bit, is open.
+struct Gate {
+    bool display = false;    //   1 the Wrist Status option
+    bool views = false;      //   2 both eyes located this frame
+    bool rendered = false;   //   4 the frame is rendered
+    bool noMenu = false;     //   8 no game menu on its panel
+    bool noOptions = false;  //  16 VR Options closed
+    bool gameplay = false;   //  32 gameplay input allowed
+    bool oneHanded = false;  //  64 no two-handed aim held
+    bool settled = false;    // 128 the reference not mid-recenter
+    bool tracking = false;   // 256 this frame's head and left grip, fresh and usable
+    static constexpr unsigned kOpen = 511;
+    unsigned Bits() const
+    {
+        return (display ? 1u : 0u) | (views ? 2u : 0u) | (rendered ? 4u : 0u) | (noMenu ? 8u : 0u) |
+               (noOptions ? 16u : 0u) | (gameplay ? 32u : 0u) | (oneHanded ? 64u : 0u) | (settled ? 128u : 0u) |
+               (tracking ? 256u : 0u);
+    }
+};
+
 // Per XR frame inputs beyond the view.
 struct Conditions {
     bool eligible = false;  // gameplay, tracking, no menu, not aiming two-handed, arm known

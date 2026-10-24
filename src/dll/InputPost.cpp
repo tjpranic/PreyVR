@@ -2,9 +2,9 @@
 #include "VrOptionsRuntime.h"
 
 #include "MainRenderHook.h"
-#include "InputPathProbe.h"
+#include "InputPath.h"
 #include "Logger.h"
-#include "HudBridge.h"
+#include "UiMode.h"
 
 #include "preyvr/InputEvent.h"
 #include "preyvr/InputQueue.h"

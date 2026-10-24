@@ -7,7 +7,6 @@
 #include "DebugOverlay.h"
 #include "EngineAccess.h"
 #include "HeadTrackingHook.h"
-#include "HudBridge.h"
 #include "InputPost.h"
 #include "Logger.h"
 #include "PhysicalInteractions.h"

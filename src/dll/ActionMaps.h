@@ -1,7 +1,11 @@
 #pragma once
 
-// **Prey's live gamepad bindings, into the log** (preyvr/ActionMapWalk.h): which
-// game action each `xi_*` key drives, read from the running CActionMapManager.
+// **Prey's live action maps** (preyvr/ActionMapWalk.h), read from the running
+// CActionMapManager for two things: the bindings, into the log, and whether the
+// weapon wheel's map is enabled (PreyWheelOpen, which MoveLane reads every
+// frame). Called BindingDump until 2026-10-24.
+//
+// **The bindings, into the log:** which game action each `xi_*` key drives.
 // A valid key that nothing is bound to reads exactly like a working one in the
 // mod's own counters (R-124), so a key the mod posts is proven by this list,
 // not by being accepted.

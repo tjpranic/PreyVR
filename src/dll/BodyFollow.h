@@ -18,7 +18,7 @@
 // change of the reference is a gap between it and the torso, which the next
 // frame closes by turning the body.
 //
-// On the game thread, at the entry of ArkPlayer::Update (R-021's function,
+// On the main thread, at the entry of ArkPlayer::Update (R-021's function,
 // vtable slot 19): before the frame's view. Whether it is also before the
 // frame's arm IK is measured, not assumed (body.report ik*): a turn applied
 // after the IK draws the hands off by the turn for one frame.

@@ -7,7 +7,7 @@
 // World markers (DanielleMarkers: objectives, repair and danger icons, enemy
 // awareness, points of interest) at the depth of what they mark.
 //
-// **The defect.** Prey places every world marker on the game thread, in
+// **The defect.** Prey places every world marker on the main thread, in
 // CArkUIHUD::OnPreRender (0x1667440): it builds one view-projection from the
 // frame's camera -- the head, with both eyes rendered from one frame -- and
 // projects each marker's world point through 0x16659F0 to a normalized screen

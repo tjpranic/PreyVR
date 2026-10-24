@@ -268,7 +268,7 @@ bool WriteReticleForCamera(void* player, const Vec3& rayOrigin,
     // movie's scale away from centre: viewport fractions versus a fitted HUD
     // canvas remain a separate consumer contract to verify.
     //
-    // Dispatch runs on the main game thread, after the render seam installs
+    // Dispatch runs on the main thread, after the render seam installs
     // this eye's camera. It is separately
     // switchable so that a crosshair which does not move can be attributed --
     // dispatch off isolates the write, dispatch on adds the movie call.

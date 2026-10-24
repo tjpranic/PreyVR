@@ -5,7 +5,7 @@
 #include "ArmsLane.h"
 #include "AimTakeover.h"
 #include "BodyEquipment.h"
-#include "BindingDump.h"
+#include "ActionMaps.h"
 #include "BodyFollow.h"
 #include "InteractionLane.h"
 #include "CarryLane.h"
@@ -15,7 +15,7 @@
 
 #include "InputPost.h"
 #include "HeadTrackingHook.h"
-#include "HudBridge.h"
+#include "UiMode.h"
 #include "Logger.h"
 #include "MinHookInit.h"
 #include "XrInput.h"
@@ -127,7 +127,7 @@ ActionBinding gActions[kActionCount] = {
     // button, so Y is free to be Prey's.
     {{input::kMouse3}, {0}, {0}, {0}, false},    // wheel     <- unbound (Prey's own wheel is Y held)
     // Prey's own gamepad buttons (the key ids read from this build; which
-    // action each drives is logged by BindingDump in play).
+    // action each drives is logged by ActionMaps in play).
     {{input::kButtonY}, {0}, {0}, {0}, false},   // Prey's Y  <- Y
     {{input::kThumbL}, {0}, {0}, {0}, false},    // sprint    <- left stick click
     {{input::kThumbR}, {0}, {0}, {0}, false},    // psychoscope <- right stick click

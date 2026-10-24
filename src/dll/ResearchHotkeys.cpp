@@ -1,4 +1,4 @@
-#include "HotkeyBridge.h"
+#include "ResearchHotkeys.h"
 
 #include "HeadTrackingHook.h"
 

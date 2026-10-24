@@ -19,7 +19,7 @@
 #include "FrameProbe.h"
 #include "FocusHold.h"
 #include "ControllerPrompts.h"
-#include "HotkeyBridge.h"
+#include "ResearchHotkeys.h"
 #include "preyvr/ConsolePolicy.h"
 #include "FrameObserverHook.h"
 #include "HeadTrackingHook.h"
@@ -36,6 +36,7 @@
 #include "CarryLane.h"
 #include "GrenadeLane.h"
 #include "ArmsLane.h"
+#include "MemoryCommands.h"
 #include "PhysicalInteractions.h"
 #include "ContactLane.h"
 #include "SurfaceStopLane.h"
@@ -51,7 +52,7 @@
 #include "FrameCaptureWin32.h"
 #include "InputPost.h"
 #include "MoveLane.h"
-#include "BindingDump.h"
+#include "ActionMaps.h"
 #include "WeaponAttachment.h"
 #include "XrInput.h"
 #include "XrSessionHost.h"
@@ -167,7 +168,7 @@ void WriteReport(std::ostringstream& out)
         << " fovDiverged=" << EyeContractsRefusedCount()
         << " projectionPolicy=" << (NativeProjectionEnabled() ? "prey_native" : "synthetic")
         << " cameraEdit=" << CameraEditStatusValue()
-        << " lastEye=" << LastRenderedEye()
+        << " lastEye=" << LastBuiltEye()
         << " viewObserved=" << ViewHookObservedCount()
         << " viewApplied=" << ViewHookAppliedCount()
         << " viewPoseFallback=" << HeadTrackingPoseReadFallbacks()
@@ -326,6 +327,16 @@ const char* ObserverStatusName(DWORD value)
 // Valued, and then shows what is set where its lane exposes that, or says that
 // nothing changed (NoValue).
 bool Valued(const std::vector<std::string>& args) { return args.size() > 1; }
+// `<verb> log [0|1]`: a lane's per-event lines, on unless 0 follows. False, and
+// `on` untouched, when the second word is not `log`.
+bool EventLogSwitch(const std::vector<std::string>& args, bool& on)
+{
+    if (args.size() < 2 || args[1] != "log") { return false; }
+    int value = 1;
+    if (args.size() > 2) { ParseInt(args[2], value); }
+    on = value != 0;
+    return true;
+}
 const char* NoValue(const std::vector<std::string>& args)
 {
     return Valued(args) ? "" : " note=no_value_nothing_changed";
@@ -575,11 +586,7 @@ bool ExecuteContact(const std::vector<std::string>& args, std::ostringstream& ou
 {
     if (args[0] != "contact") { return false; }
     // contact log [0|1]: the per-event begin, end and push lines.
-    if (args.size() > 1 && args[1] == "log") {
-        int on = 1;
-        if (args.size() > 2) { ParseInt(args[2], on); }
-        SetContactEventLog(on != 0);
-    }
+    if (bool on = true; EventLogSwitch(args, on)) { SetContactEventLog(on); }
     out << "contact" << ContactReport();
     return true;
 }
@@ -608,11 +615,7 @@ bool ExecuteSwing(const std::vector<std::string>& args, std::ostringstream& out)
 {
     if (args[0] != "swing") { return false; }
     // swing log [0|1]: the per-event begin, strike and swing lines.
-    if (args.size() > 1 && args[1] == "log") {
-        int on = 1;
-        if (args.size() > 2) { ParseInt(args[2], on); }
-        SetSwingEventLog(on != 0);
-    }
+    if (bool on = true; EventLogSwitch(args, on)) { SetSwingEventLog(on); }
     out << "swing" << SwingReport();
     return true;
 }
@@ -728,7 +731,7 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
         return value;
     };
 
-    if (ExecutePose(args, out) || ExecuteCarryCommand(args, out) || ExecuteGrenadeCommand(args, out) || ExecuteArmsCommand(args, out) ||
+    if (ExecutePose(args, out) || ExecuteCarryCommand(args, out) || ExecuteGrenadeCommand(args, out) || ExecuteArmsCommand(args, out) || ExecuteMemoryCommand(args, out) ||
         ExecuteWristCommand(args, out) || ExecuteDualCommand(args, out) || ExecuteReticle(args, out) ||
         ExecutePrompts(args, out) || ExecuteContact(args, out) || ExecuteSurface(args, out) || ExecuteSwing(args, out) ||
         ExecuteWrenchDraw(args, out)) {
@@ -1221,7 +1224,7 @@ void Execute(const std::vector<std::string>& args, std::ostringstream& out)
             << " dropped=" << InputQueueDroppedCount()
             << " drainThread=" << InputDrainThreadId();
     } else if (verb == "input.binds") {
-        // Prey's live gamepad bindings into PreyVR.log (BindingDump); `all`
+        // Prey's live gamepad bindings into PreyVR.log (ActionMaps); `all`
         // logs the keyboard's and mouse's too. Read on the next frame.
         RequestBindingDump(args.size() >= 2 && args[1] == "all");
         out << "input.binds result=0 (next frame; see PreyVR.log: preyvr_bindings)";

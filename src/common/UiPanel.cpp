@@ -240,6 +240,31 @@ std::optional<Panel> PlaceMenu(const MenuAnchor& anchor, float aspect, float dis
     if(panel)panel->pose=AroundHead(anchor.upright,panel->pose,right,up);
     return panel;
 }
+std::optional<MenuStack> FitMenuStack(Panel layout, float aspect, float guideRatio, float gapRatio, bool guide,
+                                      float curve, const std::array<Eye,2>& eyes, float margin) {
+    for(int attempt=0;attempt<80;++attempt) {
+        auto menu=layout,card=layout;
+        menu.height=menu.width/aspect;
+        card.height=card.width*guideRatio;
+        const float gap=menu.width*gapRatio;
+        if(guide) {
+            menu.pose=Compose(layout.pose,Pose{{},{0,(card.height+gap)*.5f,0}});
+            card.pose=Compose(layout.pose,Pose{{},{0,-(menu.height+gap)*.5f,0}});
+        } else {
+            menu.pose=layout.pose;
+        }
+        if(SurfaceVisible({menu,curve},eyes,margin)&&(!guide||SurfaceVisible({card,0},eyes,margin))) {
+            MenuStack stack{menu};
+            if(guide)stack.guide=card;
+            return stack;
+        }
+        layout.width*=.95f;layout.height*=.95f;
+    }
+    return std::nullopt;
+}
+bool WantMenuPanel(unsigned mode, bool haveViews, bool menuKnown, bool menuOpen, bool wasShown) {
+    return haveViews && (mode==2 || (mode==1 && (menuKnown?menuOpen:wasShown)));
+}
 Panel ScaleAbout(const Panel& panel, const Vec3& eye, float ratio) {
     if(!std::isfinite(ratio)||!(ratio>0))return panel;
     const auto& p=panel.pose.position;
@@ -379,5 +404,12 @@ FrameLayers ComposeFrame(const FrameShown& s)
     if(s.slot)add(FrameLayer::slot);
     if(s.fade)add(FrameLayer::fade);
     return out;
+}
+int StepFade(Fade& fade, long long now, bool wanted)
+{
+    const float dt=fade.time&&now>fade.time?std::min(.1f,static_cast<float>(now-fade.time)*1e-9f):0.f;
+    fade.time=now;
+    fade.alpha=wanted?std::min(1.f,fade.alpha+dt/.1f):std::max(0.f,fade.alpha-dt/.2f);
+    return static_cast<int>(fade.alpha*kFadeLevels+.5f);
 }
 }

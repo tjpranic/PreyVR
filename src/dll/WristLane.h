@@ -38,7 +38,7 @@ struct WristArmFrame {
 // Animation thread (AnimIkTakeover), once per owned frame.
 void PublishWristArm(const WristArmFrame& frame);
 
-// Game thread, once per gameplay frame.
+// Main thread, once per gameplay frame.
 void UpdateWristLane(const GameplayPoseFrame& frame, bool tracking);
 
 struct WristDecision {

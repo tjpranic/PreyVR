@@ -2,7 +2,7 @@
 #include "GameplayFrame.h"
 #include "DebugOverlay.h"
 #include "HeadTrackingHook.h"
-#include "HudBridge.h"
+#include "UiMode.h"
 #include "PsiMedkit.h"
 #include "VrOptionsRuntime.h"
 #include <windows.h>

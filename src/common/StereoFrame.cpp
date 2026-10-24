@@ -124,6 +124,21 @@ EyeFovAngles AnglesFromTangents(const EyeView& view)
     return angles;
 }
 
+EyeFovAngles ScaleFov(const EyeFovAngles& fov, unsigned percent)
+{
+    if (percent == 100u) { return fov; }
+    const float scale = static_cast<float>(percent) * 0.01f;
+    const auto grow = [scale](float angle) {
+        return std::atan(std::tan(angle) * scale);
+    };
+    EyeFovAngles out{};
+    out.angleLeft = grow(fov.angleLeft);
+    out.angleRight = grow(fov.angleRight);
+    out.angleUp = grow(fov.angleUp);
+    out.angleDown = grow(fov.angleDown);
+    return out;
+}
+
 std::optional<EyeProjection> ProjectionFromTangents(const EyeView& view, float nearPlane)
 {
     if (!TangentsAreSane(view) || !std::isfinite(nearPlane) || nearPlane <= 0.0f) {

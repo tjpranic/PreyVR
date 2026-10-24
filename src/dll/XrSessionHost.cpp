@@ -13,7 +13,7 @@
 #include "EyeRecords.h"
 #include "HeadTrackingHook.h"
 #include "XrInput.h"
-#include "HudBridge.h"
+#include "UiMode.h"
 #include "UiGuide.h"
 #include "UiPointer.h"
 #include "HudLayer.h"
@@ -34,6 +34,7 @@
 #include "preyvr/HudCapturePair.h"
 #include "preyvr/StereoCamera.h"
 #include "preyvr/StereoFrame.h"
+#include "preyvr/WristHolo.h"
 #include "preyvr/XrSwapchainFormat.h"
 
 #include <d3d11.h>
@@ -263,8 +264,7 @@ struct Host {
     DXGI_FORMAT fadeFormat=DXGI_FORMAT_UNKNOWN;
     bool fadeAttempted=false;
     int fadePainted=-1;
-    float fadeAlpha=0;
-    long long fadeTime=0;
+    ui::Fade fade{};
     bool guideReady = false, guideAttempted = false;
     std::vector<ID3D11Texture2D*> images;
 
@@ -1128,17 +1128,12 @@ XrFovf ScaleDeclaredFov(const XrFovf& fov)
 {
     const unsigned int percent = gMirrorFovPercent.load(std::memory_order_acquire);
     if (percent == 100u) { return fov; }
-    // Scaling the TANGENT, not the angle: the projection is linear in tangent
-    // space, so doubling the angle would not double the apparent size.
-    const float scale = static_cast<float>(percent) * 0.01f;
-    const auto grow = [scale](float angle) {
-        return std::atan(std::tan(angle) * scale);
-    };
+    const auto scaled = stereoframe::ScaleFov({fov.angleLeft, fov.angleRight, fov.angleDown, fov.angleUp}, percent);
     XrFovf out{};
-    out.angleLeft = grow(fov.angleLeft);
-    out.angleRight = grow(fov.angleRight);
-    out.angleUp = grow(fov.angleUp);
-    out.angleDown = grow(fov.angleDown);
+    out.angleLeft = scaled.angleLeft;
+    out.angleRight = scaled.angleRight;
+    out.angleUp = scaled.angleUp;
+    out.angleDown = scaled.angleDown;
     return out;
 }
 
@@ -1233,7 +1228,7 @@ bool SubmitStereoPair(
     // to the frame just finished. Every rendered frame therefore updates an eye,
     // so a pair refreshes every 2 frames rather than every 2*dwell.
     //
-    // -1 means the game thread has not published yet -- starting up, or the
+    // -1 means the main thread has not published yet -- starting up, or the
     // render thread ran ahead. Hold the existing pair for a frame rather than
     // copying a backbuffer whose eye is unknown, which would be a coin flip.
     //
@@ -1403,24 +1398,9 @@ void PlaceMenuPanels(const Pose& head, const XrView (&views)[2], unsigned long l
         static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f,margin);
     if(layout) {
         gHost.menuPanel.reset();gHost.guidePanel.reset();
-        for(int attempt=0;attempt<80;++attempt) {
-            auto menu=*layout,guide=*layout;
-            menu.height=menu.width/aspect;
-            guide.height=guide.width*guideRatio;
-            const float gap=menu.width*gapRatio;
-            if(wantGuide) {
-                menu.pose=Compose(layout->pose,Pose{{},{0,(guide.height+gap)*.5f,0}});
-                guide.pose=Compose(layout->pose,Pose{{},{0,-(menu.height+gap)*.5f,0}});
-            } else {
-                menu.pose=layout->pose;
-            }
-            if(ui::SurfaceVisible({menu,curve},optical,margin)&&
-               (!wantGuide||ui::SurfaceVisible({guide,0},optical,margin))) {
-                gHost.menuPanel=menu;
-                if(wantGuide)gHost.guidePanel=guide;
-                break;
-            }
-            layout->width*=.95f;layout->height*=.95f;
+        if(const auto stack=ui::FitMenuStack(*layout,aspect,guideRatio,gapRatio,wantGuide,curve,optical,margin)) {
+            gHost.menuPanel=stack->menu;
+            gHost.guidePanel=stack->guide;
         }
     }
     // ui.offset carries the fitted stack around the head as one piece. After
@@ -2062,6 +2042,9 @@ void ServiceXrFrame(void* renderer)
     // and the eyes describe the same instant.
     Pose inputHead{};
     PoseValidity inputHeadValidity{};
+    // The distance between the two located views; also what the inventory
+    // layer's parallax uses below.
+    float runtimeIpd = 0.0f;
 
     if (haveViews) {
         const Pose left{
@@ -2075,8 +2058,9 @@ void ServiceXrFrame(void* renderer)
         inputHead = stereo::CyclopsPose(left, right);
         const Vec3 separation{right.position.x-left.position.x,
                               right.position.y-left.position.y,right.position.z-left.position.z};
-        gRuntimeIpd.store(std::sqrt(separation.x*separation.x + separation.y*separation.y +
-                                   separation.z*separation.z));
+        runtimeIpd = std::sqrt(separation.x*separation.x + separation.y*separation.y +
+                               separation.z*separation.z);
+        gRuntimeIpd.store(runtimeIpd);
         for (int eye=0;eye<2;++eye) {
             gHost.requestedFov[eye]=views[eye].fov;
             gHost.requestedFovValid[eye]=true;
@@ -2115,13 +2099,9 @@ void ServiceXrFrame(void* renderer)
         gHost.panelSettingsGeneration=panelSettingsGeneration;
     }
     const auto panelMode=gUiPanelMode.load();
-    // A delayed main-thread poll is unknown, not proof that a menu closed.
-    // Preserve its presentation through a stall; pointer/gameplay input still
-    // requires a fresh modal sample. Otherwise a busy frame flashes projection
-    // and reanchors the screen when the next sample arrives.
-    const bool modalForDisplay=HudMenuStateKnown()?HudMenuIsOpen():gHost.panelWasActive;
-    const bool wantPanel=haveViews && (panelMode==2 ||
-        (panelMode==1 && modalForDisplay));
+    // Through a stalled menu poll the panel keeps its presentation (WantMenuPanel);
+    // pointer and gameplay input still require a fresh modal sample.
+    const bool wantPanel=ui::WantMenuPanel(panelMode,haveViews,HudMenuStateKnown(),HudMenuIsOpen(),gHost.panelWasActive);
     if (wantPanel != gHost.panelWasActive) {
         gHost.menuPanel.reset();
         gHost.guidePanel.reset();
@@ -2603,10 +2583,10 @@ void ServiceXrFrame(void* renderer)
         FreshSample(MonotonicNanoseconds(),wristFrame.publishedNs)&&
         IsPoseUsable(wristFrame.head,wristFrame.headValidity,kMaxPoseAgeNs)&&
         IsPoseUsable(wristFrame.hands[0].gripPose,wristFrame.hands[0].gripValidity,kMaxPoseAgeNs);
-    const unsigned wristGate=(WristDisplayEnabled()?1u:0u)|(haveViews?2u:0u)|(rendered?4u:0u)|(!panelActive?8u:0u)|
-        (!optionsActive?16u:0u)|(HudGameplayInputAllowed()?32u:0u)|(!TwoHandedAimHeld()?64u:0u)|
-        (!stereo::Recentering(reference)?128u:0u)|(wristTracking?256u:0u);
-    const bool wristInput=wristGate==511u;
+    const wrist::Gate gate{WristDisplayEnabled(),haveViews,rendered,!panelActive,!optionsActive,HudGameplayInputAllowed(),
+        !TwoHandedAimHeld(),!stereo::Recentering(reference),wristTracking};
+    const unsigned wristGate=gate.Bits();
+    const bool wristInput=wristGate==wrist::Gate::kOpen;
     NoteWristGate(wristGate);
     // The hologram on the drawn forearm (WristLane), or Funk's grip-anchored
     // card (wrist.anchor 0). Both composite the same native status texture.
@@ -2743,14 +2723,9 @@ void ServiceXrFrame(void* renderer)
         // InventorySwapchain's default floor is 640x480 (Supported): the first
         // fade, at 4x4, was refused at creation and never drew. Repainted per
         // level change only, so the size costs nothing per frame.
-        constexpr unsigned kFadeWidth=640, kFadeHeight=480, kFadeLevels=8;
-        const long long fadeNow=frameState.predictedDisplayTime;
-        const float fadeDt=gHost.fadeTime&&fadeNow>gHost.fadeTime?
-            std::min(.1f,static_cast<float>(fadeNow-gHost.fadeTime)*1e-9f):0.f;
-        gHost.fadeTime=fadeNow;
+        constexpr unsigned kFadeWidth=640, kFadeHeight=480, kFadeLevels=ui::kFadeLevels;
         const bool fadeWanted=rendered&&haveViews&&!panelActive&&!optionsActive&&BodyHeadOut();
-        gHost.fadeAlpha=fadeWanted?std::min(1.f,gHost.fadeAlpha+fadeDt/.1f):std::max(0.f,gHost.fadeAlpha-fadeDt/.2f);
-        const int level=static_cast<int>(gHost.fadeAlpha*kFadeLevels+.5f);
+        const int level=ui::StepFade(gHost.fade,frameState.predictedDisplayTime,fadeWanted);
         if(level>0&&rendered&&haveViews){
             if(!gHost.fadeAttempted){
                 gHost.fadeAttempted=true;
@@ -2839,12 +2814,11 @@ void ServiceXrFrame(void* renderer)
     const auto endResult=xrEndFrame(gHost.session, &endInfo);
     // Arm only after a complete successful frame. Until then the native movie
     // keeps rendering normally and the existing full-menu panel remains usable.
+    // inventoryPrepared needs the menu panel, which needs located views: the
+    // runtime IPD above is this frame's.
     if (rendered && endResult == XR_SUCCESS && inventoryPrepared && !gStopRequested.load() && InventoryCaptureEnabled()) {
-        const auto dx=views[1].pose.position.x-views[0].pose.position.x;
-        const auto dy=views[1].pose.position.y-views[0].pose.position.y;
-        const auto dz=views[1].pose.position.z-views[0].pose.position.z;
         SetInventoryConsumerReady(&inventoryDescription,gHost.menuPanel?gHost.menuPanel->width:0,
-            std::sqrt(dx*dx+dy*dy+dz*dz),inventoryStereoPrepared);
+            runtimeIpd,inventoryStereoPrepared);
     }
     if (timing) {
         const std::uint64_t now = preyvr::timing::MonotonicNanoseconds();

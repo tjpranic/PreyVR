@@ -5,7 +5,7 @@
 #include "Bootstrap.h"
 #include "MinHookInit.h"
 #include "Logger.h"
-#include "HudBridge.h"
+#include "UiMode.h"
 #include "XrSessionHost.h"
 #include "InventorySwapchain.h"
 #include "MarkerStereo.h"

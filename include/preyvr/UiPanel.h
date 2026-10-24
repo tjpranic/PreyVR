@@ -69,6 +69,21 @@ MenuAnchor AnchorMenu(const Pose& head, const std::array<Eye,2>& eyes);
 // (AroundHead). Nothing when the fit refuses.
 std::optional<Panel> PlaceMenu(const MenuAnchor& anchor, float aspect, float distance, float scale,
                                float margin, float right, float up);
+// **The game menu and its guide card, fitted as one stack** (XrSessionHost),
+// from `layout`, FitPanel's answer for the whole stack: the menu at `aspect`
+// and, with `guide` on, the card under it at `guideRatio` (height over width),
+// `gapRatio` of the menu's width apart, the pair centred where `layout` is.
+// Shrunk by 5% up to 80 times, until the menu (curved by `curve`) and the flat
+// card are both visible to `eyes`. Nothing when no size fits.
+struct MenuStack { Panel menu{}; std::optional<Panel> guide; };
+std::optional<MenuStack> FitMenuStack(Panel layout, float aspect, float guideRatio, float gapRatio, bool guide,
+                                      float curve, const std::array<Eye,2>& eyes, float margin);
+// **Is the game's menu shown on a panel** (`ui.panel`): mode 2 always, mode 1
+// while a game menu is open, never without located views. With the menu state
+// unknown -- a delayed main-thread poll -- mode 1 keeps what it showed
+// (`wasShown`): unknown is no proof that a menu closed, and a stalled frame
+// must not flash the world and re-anchor the screen.
+bool WantMenuPanel(unsigned mode, bool haveViews, bool menuKnown, bool menuOpen, bool wasShown);
 // **`panel` scaled about `eye` by `ratio`**: its centre `ratio` times as far
 // along the line from the eye, its width and height `ratio` times as big, facing
 // the same way. From `eye` it covers the same angle, so it looks the same size.
@@ -213,4 +228,12 @@ struct FrameShown {
 };
 struct FrameLayers { std::array<FrameLayer,12> layers{}; unsigned count=0; };
 FrameLayers ComposeFrame(const FrameShown& shown);
+// **The head-in-wall fade** (XrSessionHost, BodyHeadOut): black over 0.1 s while
+// `wanted`, clear again over 0.2 s. `now` is the frame's display time (ns);
+// the step is capped at 0.1 s, and there is none on the first frame or one
+// whose time did not advance. Returns the alpha in kFadeLevels steps, rounded:
+// the layer is repainted only when that changes.
+struct Fade { long long time=0; float alpha=0; };
+inline constexpr unsigned kFadeLevels=8;
+int StepFade(Fade& fade, long long now, bool wanted);
 }

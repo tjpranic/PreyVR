@@ -10,7 +10,7 @@
 
 #include "preyvr/MenuNavigator.h"
 
-#include "HudBridge.h"
+#include "UiMode.h"
 
 #include "Logger.h"
 

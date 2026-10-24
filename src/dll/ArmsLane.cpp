@@ -4,10 +4,10 @@
 
 #include "GameplayFrame.h"
 #include "AnimIkTakeover.h"
-#include "DebugWatch.h"
 #include "InputPost.h"
 #include "InteractionLane.h"
 #include "Logger.h"
+#include "MemoryCommands.h"
 #include "WeaponAttachment.h"
 #include "preyvr/EngineMap.h"
 
@@ -16,7 +16,6 @@
 #include <cstring>
 #include <array>
 #include <atomic>
-#include <iomanip>
 
 namespace preyvr::dll {
 namespace {
@@ -101,31 +100,9 @@ int DrawNative(std::uintptr_t base, std::uintptr_t player, std::uint32_t id)
     } __except (EXCEPTION_EXECUTE_HANDLER) { return 5; }
 }
 
-bool ParseHex(const std::string& text, std::uint64_t& value)
-{
-    try {
-        std::size_t used = 0;
-        value = std::stoull(text, &used, 16);
-        return used == text.size();
-    } catch (...) {
-        return false;
-    }
-}
-
 bool Copy(std::uint64_t address, void* out, std::size_t size)
 {
     return SafeCopy(out, reinterpret_cast<const void*>(address), size);
-}
-
-std::string ReadText(std::uint64_t address)
-{
-    std::string text;
-    for (unsigned i = 0; i < 96 && address != 0; ++i) {
-        char c = 0;
-        if (!Copy(address + i, &c, 1) || c == 0) { break; }
-        text.push_back(c >= 32 && c < 127 ? c : '?');
-    }
-    return text;
 }
 
 // The character's attachment manager (character+0x18) keeps a DynArray of IAttachment* at
@@ -152,31 +129,6 @@ bool SetHiddenBits(std::uint64_t attachment, bool hide)
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
-}
-
-// Resolves "player", "arms", "dll" or a hex address, plus an optional +hex offset.
-bool Resolve(const std::string& text, std::uint64_t& value)
-{
-    std::string base = text;
-    std::uint64_t offset = 0;
-    if (const auto plus = text.find('+'); plus != std::string::npos) {
-        base = text.substr(0, plus);
-        if (!ParseHex(text.substr(plus + 1), offset)) { return false; }
-    }
-    if (base == "player") {
-        GameplayPoseFrame frame{};
-        if (!TryGetGameplayPoseFrame(frame, false) || frame.player == 0) { return false; }
-        value = frame.player;
-    } else if (base == "arms") {
-        value = AnimIkOwnerCharacter();
-    } else if (base == "dll") {
-        value = PreyBase();
-    } else if (!ParseHex(base, value)) {
-        return false;
-    }
-    if (value == 0) { return false; }
-    value += offset;
-    return true;
 }
 
 }  // namespace
@@ -212,7 +164,7 @@ int AttachmentJoint(std::uint64_t character, std::string_view name)
     for (unsigned i = 0; i < list.count; ++i) {
         std::uint64_t namePtr = 0;
         int joint = -1;
-        if (Copy(list.items[i] + 0x10, &namePtr, 8) && ReadText(namePtr) == name && Copy(list.items[i] + 0x15C, &joint, 4)) {
+        if (Copy(list.items[i] + 0x10, &namePtr, 8) && SafeText(namePtr) == name && Copy(list.items[i] + 0x15C, &joint, 4)) {
             return joint;
         }
     }
@@ -231,113 +183,12 @@ std::string ArmsReport()
 bool ExecuteArmsCommand(const std::vector<std::string>& args, std::ostringstream& out)
 {
     const std::string& verb = args[0];
-    if (verb.rfind("mem.", 0) != 0 && verb.rfind("arms.", 0) != 0) { return false; }
+    if (verb.rfind("arms.", 0) != 0) { return false; }
     const std::uint64_t dll = PreyBase();
-    if (verb == "mem.peek") {
-        // mem.peek <addr> [bytes 64]: qwords, with the PreyDll RVA of any that point into it.
-        std::uint64_t address = 0, size = 64;
-        if (args.size() < 2 || !Resolve(args[1], address)) { out << "mem.peek result=87"; return true; }
-        if (args.size() > 2) { ParseHex(args[2], size); }
-        size = (std::min<std::uint64_t>)(size, 0x1000) & ~7ull;
-        out << "mem.peek result=0 at=0x" << std::hex << address;
-        for (std::uint64_t o = 0; o < size; o += 8) {
-            std::uint64_t q = 0;
-            if (!Copy(address + o, &q, 8)) { out << " +" << o << "=??"; break; }
-            out << "\n+" << std::setw(4) << std::setfill('0') << o << " " << std::setw(16) << q;
-            float f[2];
-            std::memcpy(f, &q, 8);
-            out << std::dec << "  f=" << f[0] << "," << f[1] << std::hex;
-            if (dll && q >= dll && q < dll + 0x3000000) { out << "  rva=0x" << (q - dll); }
-        }
-        out << std::dec;
-    } else if (verb == "mem.scan") {
-        // mem.scan <addr> <bytes> <value>: offsets of 8-byte-aligned qwords equal to value.
-        std::uint64_t address = 0, size = 0, value = 0;
-        if (args.size() < 4 || !Resolve(args[1], address) || !ParseHex(args[2], size) || !Resolve(args[3], value)) {
-            out << "mem.scan result=87";
-            return true;
-        }
-        size = (std::min<std::uint64_t>)(size, 0x100000);
-        out << "mem.scan result=0 at=0x" << std::hex << address << " value=0x" << value << " hits=";
-        unsigned hits = 0;
-        for (std::uint64_t o = 0; o + 8 <= size; o += 8) {
-            std::uint64_t q = 0;
-            if (!Copy(address + o, &q, 8)) { out << "[fault+" << o << "]"; break; }
-            if (q == value && hits++ < 64) { out << "+" << o << " "; }
-        }
-        out << std::dec << " count=" << hits;
-    } else if (verb == "mem.deep") {
-        // mem.deep <addr> <bytes> <innerBytes> <value>: every pointer in the outer block whose
-        // target holds value within innerBytes; prints outer+inner offsets.
-        std::uint64_t address = 0, size = 0, inner = 0, value = 0;
-        if (args.size() < 5 || !Resolve(args[1], address) || !ParseHex(args[2], size) || !ParseHex(args[3], inner) ||
-            !Resolve(args[4], value)) {
-            out << "mem.deep result=87";
-            return true;
-        }
-        size = (std::min<std::uint64_t>)(size, 0x10000);
-        inner = (std::min<std::uint64_t>)(inner, 0x4000);
-        out << "mem.deep result=0 value=0x" << std::hex << value << " hits=";
-        unsigned hits = 0;
-        for (std::uint64_t o = 0; o + 8 <= size; o += 8) {
-            std::uint64_t p = 0;
-            if (!Copy(address + o, &p, 8)) { break; }
-            if (p < 0x10000 || (p & 7) != 0 || p > 0x7FFFFFFFFFFF) { continue; }
-            if (p == value) { out << "+" << o << "=self "; continue; }
-            for (std::uint64_t i = 0; i + 8 <= inner; i += 8) {
-                std::uint64_t q = 0;
-                if (!Copy(p + i, &q, 8)) { break; }
-                if (q == value && hits++ < 64) { out << "+" << o << "->0x" << p << "+" << i << " "; }
-            }
-        }
-        out << std::dec << " count=" << hits;
-    } else if (verb == "mem.watch") {
-        // mem.watch <slot> <addr> <w4|w8|x> [captures 64]; mem.watch <slot> off
-        unsigned slot = args.size() > 1 ? static_cast<unsigned>(std::atoi(args[1].c_str())) : 99;
-        if (args.size() > 2 && args[2] == "off") {
-            out << "mem.watch result=" << DisarmWatch(slot);
-            return true;
-        }
-        std::uint64_t address = 0;
-        if (args.size() < 4 || slot > 3 || !Resolve(args[2], address)) { out << "mem.watch result=87"; return true; }
-        const WatchKind kind = args[3] == "x" ? WatchKind::execute : args[3] == "w8" ? WatchKind::write8 : WatchKind::write4;
-        const unsigned captures = args.size() > 4 ? static_cast<unsigned>(std::atoi(args[4].c_str())) : 64;
-        out << "mem.watch result=" << ArmWatch(slot, address, kind, captures) << " at=0x" << std::hex << address
-            << std::dec;
-    } else if (verb == "mem.hits") {
-        // mem.hits [clear]: every capture, RIP as an RVA, with rcx/rdx/r8 and the stack top.
-        out << "mem.hits result=0 count=" << WatchCaptureCount() << " slots=" << WatchHitCount(0) << ","
-            << WatchHitCount(1) << "," << WatchHitCount(2) << "," << WatchHitCount(3) << std::hex;
-        for (unsigned i = 0; i < WatchCaptureCount() && i < 64; ++i) {
-            WatchCapture c{};
-            if (!ReadWatchCapture(i, c)) { continue; }
-            out << "\n s" << c.slot << " rip=" << (c.rip >= dll ? c.rip - dll : c.rip) << " rcx=" << c.rcx
-                << " rdx=" << c.rdx << " r8=" << c.r8 << " rbx=" << c.rbx << " rdi=" << c.rdi << " rsi=" << c.rsi
-                << " top=" << (c.stackTop >= dll && c.stackTop < dll + 0x3000000 ? c.stackTop - dll : c.stackTop)
-                << " tid=" << std::dec << c.threadId << std::hex;
-        }
-        out << std::dec;
-        if (args.size() > 1 && args[1] == "clear") { ClearWatchCaptures(); }
-    } else if (verb == "mem.stack") {
-        // mem.stack <slotCapture>: return-address candidates (PreyDll RVAs) on the stack of capture N.
-        const unsigned index = args.size() > 1 ? static_cast<unsigned>(std::atoi(args[1].c_str())) : 0;
-        WatchCapture c{};
-        if (!ReadWatchCapture(index, c)) { out << "mem.stack result=2"; return true; }
-        out << "mem.stack result=0 (stack may have moved since the trap)" << std::hex;
-        for (unsigned i = 0; i < 64; ++i) {
-            std::uint64_t q = 0;
-            if (!Copy(c.rsp + i * 8, &q, 8)) { break; }
-            if (q >= dll && q < dll + 0x1E00000) { out << " +" << i * 8 << ":" << (q - dll); }
-        }
-        out << std::dec;
-    } else if (verb == "mem.str") {
-        std::uint64_t address = 0;
-        if (args.size() < 2 || !Resolve(args[1], address)) { out << "mem.str result=87"; return true; }
-        out << "mem.str result=0 \"" << ReadText(address) << "\"";
-    } else if (verb == "arms.att") {
+    if (verb == "arms.att") {
         // arms.att [character]: every attachment of the arms (or the given character).
         std::uint64_t character = AnimIkOwnerCharacter();
-        if (args.size() > 1) { Resolve(args[1], character); }
+        if (args.size() > 1) { ResolveAddress(args[1], character); }
         AttachmentList list{};
         if (!ReadAttachments(character, list)) { out << "arms.att result=2"; return true; }
         out << "arms.att result=0 character=0x" << std::hex << character << std::dec << " count=" << list.count;
@@ -352,7 +203,7 @@ bool ExecuteArmsCommand(const std::vector<std::string>& args, std::ostringstream
             Copy(a + 0x20, &binding, 8);
             Copy(a + 0x15C, &joint, 4);
             out << "\n " << i << " vt=0x" << std::hex << (vt >= dll ? vt - dll : vt) << " flags=0x" << flags
-                << " binding=0x" << binding << std::dec << " joint=" << joint << " name=" << ReadText(namePtr);
+                << " binding=0x" << binding << std::dec << " joint=" << joint << " name=" << SafeText(namePtr);
         }
     } else if (verb == "arms.hide") {
         // arms.hide <index> <0|1>: HideAttachment's own bits (0x70000) on one attachment (test only).
@@ -376,7 +227,7 @@ bool ExecuteArmsCommand(const std::vector<std::string>& args, std::ostringstream
         for (int j = 0; j < count; ++j) {
             std::uint64_t namePtr = 0;
             Copy(joints + static_cast<std::uint64_t>(j) * 0xA8, &namePtr, 8);
-            const std::string name = ReadText(namePtr);
+            const std::string name = SafeText(namePtr);
             if (filter != "all" && name.find(filter) == std::string::npos) { continue; }
             float qt[7]{};
             Copy(absolute + static_cast<std::uint64_t>(j) * 28, qt, sizeof(qt));

@@ -38,7 +38,7 @@ bool Recording()
 
 // --- the table: per clip, canvas units per metre of eye offset ---------------
 //
-// Written on the game thread as Prey places each marker, read on the render
+// Written on the main thread as Prey places each marker, read on the render
 // thread when the movie is drawn. Keyed by the clip's path, so a marker keeps
 // its depth across a frame the two threads see differently; one that is no
 // longer placed expires.
@@ -56,7 +56,7 @@ std::array<Entry, kMaxMarkers> gTable{};
 std::size_t gTableCount = 0;
 std::atomic<unsigned long long> gNoted{0}, gTableFull{0};
 
-// Game thread. `clip` is the marker's clip path, e.g. "_root.ar_mc.objectives.Obj1".
+// Main thread. `clip` is the marker's clip path, e.g. "_root.ar_mc.objectives.Obj1".
 void NoteMarker(const char* clip, float perMetre, std::uint64_t now)
 {
     const std::size_t length = strnlen(clip, kPathSize);
@@ -88,7 +88,7 @@ void NoteMarker(const char* clip, float perMetre, std::uint64_t now)
 
 // --- the game side: which marker is at which depth -----------------------------
 //
-// Prey places each marker in two steps on the game thread: it projects the
+// Prey places each marker in two steps on the main thread: it projects the
 // world point (0x16659F0, through 0x16658C0 or followed by 0x16657C0 for the
 // canvas units), then hands the movie the marker's ID with that canvas X/Y,
 // bit-identical, through the element's CallFunction (+0x210, 0x2F8E70) or

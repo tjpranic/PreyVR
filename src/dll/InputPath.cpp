@@ -1,4 +1,4 @@
-#include "InputPathProbe.h"
+#include "InputPath.h"
 #include "SafeMemory.h"
 #include "EngineAccess.h"
 #include "preyvr/TextFormat.h"

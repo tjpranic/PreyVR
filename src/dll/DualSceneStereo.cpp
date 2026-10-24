@@ -358,7 +358,7 @@ void Refuse(const char* reason)
     // the model of this function is wrong, and the next frame would be the same.
     const unsigned int was = gMode.exchange(0, std::memory_order_acq_rel);
     if (was == 3) {
-        // The headset path must not go dark: return the game thread to
+        // The headset path must not go dark: return the main thread to
         // alternate-eye contracts, which need no second submission.
         SetDualStereoContract(0);
     }
@@ -449,7 +449,7 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
     const bool topLevel = tDepth == 0 && type != kViewTypeRecursive && view != nullptr &&
                           threadInfo != nullptr;
     const unsigned int mode = gMode.load(std::memory_order_acquire);
-    // Mode 3 doubles exactly while the game thread is publishing both-eyes
+    // Mode 3 doubles exactly while the main thread is publishing both-eyes
     // contracts with stereo armed, and is not budgeted: it is the headset path.
     const bool doubleIt = topLevel &&
         (((mode == 1 || mode == 2) && gBudget.load(std::memory_order_acquire) > 0) ||
@@ -493,7 +493,7 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
         const bool built = mode == 3 ? BuildHeadsetEyes(threadInfo, centre, eyes)
                                      : BuildEyes(threadInfo, centre, eyes);
         if (!built && mode == 3) {
-            // Transient (stereo disarmed between the game thread's contract and
+            // Transient (stereo disarmed between the main thread's contract and
             // this submission, or an unsafe eye): draw this frame once. Its
             // both-eyes contract finds no held first eye and is refused, which
             // costs one frame rather than the mode.

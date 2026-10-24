@@ -1,5 +1,7 @@
 #pragma once
 
+#include "UiMode.h"
+
 #include <windows.h>
 
 #include <string>
@@ -169,36 +171,10 @@ DWORD QueueHudFit(bool maximise);
 DWORD QueueHudProbe(float screenX, float screenY);
 std::string HudLastProbe();
 
-// **Is a menu actually open?** The controller menu navigator posts D-pad taps,
-// and in gameplay Prey's D-pad is the weapon quick-select -- so an unguarded
-// navigator changes weapons every time the right stick moves, which is exactly
-// what a wearer reported: stick forward gave the torch, back the GLOO gun, left
-// and right the wrench and pistol. R-116 saw the navigator was a second
-// right-stick producer; this is the routing predicate it said was missing.
-//
-// Sampled on the MAIN thread by `HudRefreshMenuOpenState` and read as a plain
-// value by the frame service, because the navigator runs there and entering
-// Scaleform off the main thread is the hazard the HUD queue exists for.
-//
-// A poll where nothing resolved leaves the previous value alone rather than
-// reporting "no menu": during a load, every element is absent, and that must not
-// read as gameplay and re-arm the very taps this suppresses.
+// **The menu state's sample** (UiMode.h reads it). On the MAIN thread, from
+// DrainQueuedHudCalls, because the navigator runs there and entering Scaleform
+// off the main thread is the hazard the HUD queue exists for.
 DWORD HudRefreshMenuOpenState();
-bool HudMenuIsOpen();
-bool HudMenuStateKnown();
-// PDA is visible without another known modal screen/dialog covering it.
-bool HudInventoryIsOpen();
-unsigned long long HudMenuEpoch();
-// The game is showing gameplay: the menu state is known and no native menu is
-// up. What the HUD, text and note captures gate on (HudLayer). Unlike the input
-// gate below it ignores VR Options, which takes the controllers but leaves the
-// game running: the movies must stay captured under it, or they fall back into
-// the game's own image -- both eyes, fixed to the head, behind the panel.
-bool HudGameplayShown();
-// HudGameplayShown, and VR Options does not own the controllers: what every
-// gameplay input lane waits for.
-bool HudGameplayInputAllowed();
-unsigned long long HudMenuStateSampleCount();
 
 unsigned long long HudElementPointer();
 unsigned long long HudCallCount();

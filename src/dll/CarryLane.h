@@ -43,14 +43,14 @@ void RecordCarryMotion(const TrackingFrame& frame);
 // A hand's release motion as of its newest sample (the peak of the last
 // ~0.12 s, tracking space): what a throw leaves with. False without history.
 bool EstimateHandMotion(unsigned hand, carry::Motion& out);
-// Game thread, once per gameplay frame (after the interaction lane).
+// Main thread, once per gameplay frame (after the interaction lane).
 void UpdateCarryLane(const GameplayPoseFrame& frame, bool tracking);
 // Input lane: the grip that holds something opened (or a press asked to let
 // go). Executed inside the next native carry update.
 void RequestCarryRelease();
 // The hand holds something the lane placed (the pointer hides, the fingers close).
 bool CarryHoldingInHand();
-// Input-drain thread, as UpdateCarryLane: the physics of what is carried, or 0
+// Main thread, as UpdateCarryLane: the physics of what is carried, or 0
 // (physical contact skips it).
 std::uintptr_t CarriedPhysics();
 

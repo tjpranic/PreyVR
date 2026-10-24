@@ -7,7 +7,7 @@
 #include "GameplayFrame.h"
 #include "CarryLane.h"
 #include "HeadTrackingHook.h"
-#include "HudBridge.h"
+#include "UiMode.h"
 #include "Logger.h"
 #include "MinHookInit.h"
 #include "preyvr/EngineMap.h"
@@ -91,7 +91,7 @@ std::atomic<unsigned> gBackMm{100};
 std::atomic<bool> gSuppress{false};
 
 // The ray this frame. Produced by the aim hook (R-011) and consumed by the
-// selector hook (R-022); both run on the game thread in every capture so far,
+// selector hook (R-022); both run on the main thread in every capture so far,
 // but the lock costs nothing and makes that an observation, not a requirement.
 // A blocking lock, not a try-lock: a refused read would hand the selector the
 // weapon's ray for one frame and flicker the pick.
@@ -103,7 +103,7 @@ struct FrameRay {
 };
 FrameRay gRay;
 std::mutex gRayMutex;
-use::RayFilter gFilter;                  // game thread only
+use::RayFilter gFilter;                  // main thread only
 std::atomic<bool> gFilterReset{false};   // settings changed: restart it there
 long long gLastDisplayTime = 0;
 
@@ -401,7 +401,7 @@ struct Selection {
 };
 // use.find: where an entity is, as the controller angles that point the left
 // hand at it (test harness). Requested by the command thread, answered by the
-// game thread on its next frame -- the engine is only called from there.
+// main thread on its next frame -- the engine is only called from there.
 struct FindResult {
     std::uint32_t id = 0;
     bool found = false, bounds = false;
@@ -414,7 +414,7 @@ std::atomic<std::uint32_t> gFindId{0};
 std::mutex gFindMutex;
 FindResult gFind;
 
-Selection gLast;           // game thread
+Selection gLast;           // main thread
 std::mutex gLastMutex;     // for the report
 Selection gReported;
 bool gMenuWasOpen = false;
@@ -712,7 +712,7 @@ bool UseCarrying() { return gCarry.load(std::memory_order_relaxed) != 0; }
 
 float UseCarryHoldSeconds(std::uint32_t entity)
 {
-    // gLast is the game thread's; so is the caller (StartCarrying).
+    // gLast is the main thread's; so is the caller (StartCarrying).
     if (!entity || gLast.usable != entity) { return -1.0f; }
     float hold = -1.0f;
     for (const auto& r : gLast.info) {

@@ -21,6 +21,8 @@
     Right now it just plays the animation. It would be better to allow the player to physically attach and detach weapon ammunition.
 - The wrench tends to hit around the hand area instead of the head of the wrench
 - Focusing on keypads brings the camera *way* too close
+- Better throwing
+    Add an option to impart extra force to objects that are physically thrown.
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -55,11 +57,14 @@
 - The hand lasers start outside of player hands
     They seem to begin out of nowhere. Something like a fade in along the length (like when the laser fades out in menus when it's not hitting a surface) would make them look a bit nicer.
     The lasers also render over the top of everything.
+- The neuromod cutscene that plays when you first use a neuromod only appears in the right eye
 
 ### VR Options Menu
 - Have bindings section let you change your bindings
 - Group related options in the tabs into sections
 - Audit every option and rework and/or remove and/or consolidate as many as needed
+- In game console
+    In the VR Options menu, add a tab to show a console that allows me to enter tuning commands. It should also write the output to a log somewhere so agents can read it.
 
 ## IN PROGRESS
 
@@ -91,3 +96,5 @@
     They now stop at fixed scenery and at heavy (Heavy Objects setting, 10 kg) or immovable loose objects, which slide when pressed. See docs/SURFACE-STOP-SCOPE-2026-10-21.md.
 - Hand animation plays when taking the wrench out
     It causes the right hand to spin. The animation should not play.
+
+### Development

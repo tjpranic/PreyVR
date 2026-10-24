@@ -4,7 +4,7 @@
 #include "BodyFollow.h"
 #include "DebugOverlay.h"
 #include "HeadTrackingHook.h"
-#include "HudBridge.h"
+#include "UiMode.h"
 #include "preyvr/StereoCamera.h"
 #include "InputPost.h"
 #include "VrOptionsRuntime.h"
@@ -23,7 +23,7 @@ namespace preyvr::dll {
 namespace {
 struct Request {int slot=-1;std::uint64_t epoch=0,reference=0,stamp=0;};
 struct Status {equipment::Vitals values;std::uint64_t epoch=0,stamp=0;};
-Request request; // input-drain / player-producer thread only
+Request request; // main thread only: the input drain and the player producer
 equipment::HolsterGesture gesture;
 std::atomic<bool> gripOwned{false},clear{false},fault{false};
 std::atomic<unsigned> dispatched{0},refused{0},occupied{0};

@@ -224,6 +224,24 @@ void TestOcclusionShapes()
     Require(SegmentNearSegment(eye, card, eye, eye, 0.01f), "degenerate segment at the eye");
 }
 
+void TestGateBits()
+{
+    // The bits wrist.report gate= prints, one per condition, in XrSessionHost's order.
+    Require(Gate{}.Bits() == 0, "nothing open, no bits");
+    bool Gate::* const fields[] = {&Gate::display, &Gate::views, &Gate::rendered, &Gate::noMenu, &Gate::noOptions,
+                                  &Gate::gameplay, &Gate::oneHanded, &Gate::settled, &Gate::tracking};
+    Gate all{};
+    for (unsigned i = 0; i < 9; ++i) {
+        Gate one{};
+        one.*fields[i] = true;
+        Require(one.Bits() == 1u << i, "each condition is its own bit");
+        all.*fields[i] = true;
+    }
+    Require(all.Bits() == Gate::kOpen && Gate::kOpen == 511u, "all nine are open, 511");
+    all.tracking = false;
+    Require(all.Bits() == 255u, "a stale frame closes it on the top bit");
+}
+
 }  // namespace
 
 int main()
@@ -239,6 +257,7 @@ int main()
     TestFastSweepDoesNotOpen();
     TestOcclusionAndGateHideFast();
     TestOcclusionShapes();
+    TestGateBits();
     std::cout << "wrist_holo tests passed\n";
     return 0;
 }

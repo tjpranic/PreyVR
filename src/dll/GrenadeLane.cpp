@@ -701,7 +701,7 @@ bool HookAt(std::uintptr_t rva, std::span<const std::uint8_t> prologue, void* de
     return hook::HookAt(reinterpret_cast<void*>(gBase + rva), prologue, detour, original, name, &Log);
 }
 
-// --- give (test support; game thread) ---------------------------------------------------
+// --- give (test support; main thread) ---------------------------------------------------
 
 struct EntityIdVector {
     std::uint32_t* begin = nullptr;

@@ -2,7 +2,7 @@
 #include "DebugOverlay.h"
 #include "HandWorld.h"
 #include "Haptics.h"
-#include "HudBridge.h"
+#include "UiMode.h"
 #include "PsiMedkit.h"
 #include "WeaponAttachment.h"
 #include "XrInput.h"

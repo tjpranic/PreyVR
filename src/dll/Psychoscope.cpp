@@ -1,7 +1,7 @@
 #include "Psychoscope.h"
 #include "EngineAccess.h"
 #include "GameplayFrame.h"
-#include "HudBridge.h"
+#include "UiMode.h"
 #include "VrOptionsRuntime.h"
 #include "InputPost.h"
 #include "preyvr/PsychoscopeGesture.h"
@@ -38,7 +38,7 @@ DWORD Toggle(std::uintptr_t player){
 }
 }
 void UpdatePsychoscopeGesture(const GameplayPoseFrame& frame,bool tracking){
- // Called only by the live ArkPlayer producer hook, on its owning game thread.
+ // Called only by the live ArkPlayer producer hook, on the main thread.
  // The receiver is supplied by that call, not retained from an earlier level.
  static PsychoscopeGesture gesture;
  static std::uint64_t owner=0,reference=0,epoch=0;

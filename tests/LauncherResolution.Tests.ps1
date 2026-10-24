@@ -2,16 +2,9 @@
 param()
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
-$scriptPath=Join-Path $PSScriptRoot '../tools/Start-PreyVR.ps1'
-$tokens=$null;$parseErrors=$null
-$ast=[System.Management.Automation.Language.Parser]::ParseFile($scriptPath,[ref]$tokens,[ref]$parseErrors)
-if ($parseErrors.Count) {throw ($parseErrors | Out-String)}
 # Load only the two configuration functions, never the launcher body.
-foreach ($name in @('Resolve-PreyVRRenderSize','Save-PreyVRConfiguration')) {
-    $function=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$true)
-    if (!$function) {throw "Missing $name"}
-    Invoke-Expression $function.Extent.Text
-}
+$launcherFunctions=@('Resolve-PreyVRRenderSize','Save-PreyVRConfiguration')
+. (Join-Path $PSScriptRoot 'LauncherTestSupport.ps1')
 function Assert-Size($result,$width,$height,$migration) {
     if ($result.Width -ne $width -or $result.Height -ne $height -or $result.MigrateLegacy -ne $migration) {
         throw "Unexpected render selection: $($result | ConvertTo-Json -Compress)"

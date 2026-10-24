@@ -2,7 +2,7 @@
 #include "EngineAccess.h"
 #include "AimTakeover.h"
 #include "HeadTrackingHook.h"
-#include "HudBridge.h"
+#include "UiMode.h"
 #include "InputPost.h"
 #include "ReticleFollow.h"
 #include "preyvr/SceneQuery.h"

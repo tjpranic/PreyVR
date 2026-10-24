@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <type_traits>
 
 namespace preyvr::dll {
@@ -50,6 +51,19 @@ template <class T>
 bool SafeRead(std::uintptr_t at, T& out)
 {
     return SafeRead(reinterpret_cast<const void*>(at), out);
+}
+
+// The text at `address`: up to 96 characters, to its terminator or the first
+// byte that cannot be read, with anything unprintable as '?'.
+inline std::string SafeText(std::uint64_t address)
+{
+    std::string text;
+    for (unsigned i = 0; i < 96 && address != 0; ++i) {
+        char c = 0;
+        if (!SafeCopy(&c, reinterpret_cast<const void*>(address + i), 1) || c == 0) { break; }
+        text.push_back(c >= 32 && c < 127 ? c : '?');
+    }
+    return text;
 }
 
 // Committed and executable, and inside `module` when one is given. A query, not

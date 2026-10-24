@@ -9,7 +9,7 @@
 #include "BodyFollow.h"
 #include "GameplayFrame.h"
 #include "HeadTrackingHook.h"
-#include "HudBridge.h"
+#include "UiMode.h"
 #include "preyvr/MonotonicClock.h"
 
 #include <windows.h>

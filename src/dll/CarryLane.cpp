@@ -112,7 +112,7 @@ bool gInstallTried = false, gInstalled = false, gVelocityQueueOk = false;
 std::atomic<bool> gHand{false}, gHoldToHold{false}, gTrace{false};
 std::atomic<bool> gHolding{false};
 
-// Tunables (carry.throw / carry.hold*), read on the game thread.
+// Tunables (carry.throw / carry.hold*), read on the main thread.
 std::mutex gSettingsMutex;
 carry::ThrowSettings gThrow{};
 carry::HoldSettings gHoldSettings{};
@@ -131,7 +131,7 @@ carry::MotionHistory gMotion[2];
 std::uint64_t gMotionGeneration = 0;
 std::atomic<unsigned long long> gMotionSamples{0}, gRuntimeVelocitySamples{0};
 
-// --- the release request (input lane -> game thread) ----------------------------
+// --- the release request (input lane -> main thread) ----------------------------
 struct Pending {
     bool active = false;
     std::uint64_t ns = 0;
@@ -143,7 +143,7 @@ struct Pending {
 std::mutex gPendingMutex;
 Pending gPending;
 
-// --- what the hand holds (game thread) --------------------------------------------
+// --- what the hand holds (main thread) --------------------------------------------
 struct Grab {
     bool active = false;
     std::uint32_t entity = 0;

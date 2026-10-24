@@ -15,7 +15,7 @@
 // On by default (VR Options, Hands).
 namespace preyvr::dll {
 struct GameplayPoseFrame;
-// Input-drain thread, in the aim hook, after the two-handed solve and before the
+// Main thread, in the aim hook, after the two-handed solve and before the
 // frame is published.
 void UpdateSurfaceStop(GameplayPoseFrame& frame, bool allowed);
 void SetSurfaceStop(unsigned enabled);

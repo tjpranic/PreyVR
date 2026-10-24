@@ -13,7 +13,7 @@
 #include "BodyFollow.h"
 #include "ControllerPrompts.h"
 #include "HeadTrackingHook.h"
-#include "HudBridge.h"
+#include "UiMode.h"
 #include "MoveLane.h"
 #include "InputPost.h"
 #include "preyvr/MenuNavigator.h"

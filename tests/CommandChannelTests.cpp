@@ -165,6 +165,7 @@ const Case kCases[] = {
     {"mem.watch 9 x", "mem.watch result=87", nullptr, neither},
     {"mem.stack", "mem.stack result=2", nullptr, neither},
     {"mem.hits", "mem.hits result=0 count=0 slots=0,0,0,0", nullptr, neither},
+    {"mem.bogus", "mem.bogus result=1 detail=unknown_verb", nullptr, neither},
     {"arms.att", "arms.att result=2", nullptr, neither},
     {"arms.hide", "arms.hide result=2", nullptr, neither},
     {"arms.draw", "arms.draw result=0 (requested)", nullptr, neither},
@@ -606,6 +607,29 @@ void TestTorsoOwner()
     Require(TorsoDeadzoneDegrees() == 35 && std::fabs(relax - 0.6f) < 1e-6f, "the defaults are back");
 }
 
+// contact log and swing log share one parse (EventLogSwitch): bare `log` turns
+// the lane's per-event lines on, `log 0` off, a malformed value is the default
+// (on), and another second word leaves them as they are.
+void TestEventLogSwitches()
+{
+    const struct {
+        const char* verb;
+        unsigned (*get)();
+    } lanes[] = {{"contact", ContactEventLog}, {"swing", SwingEventLog}};
+    for (const auto& lane : lanes) {
+        const std::string verb = lane.verb;
+        Run((verb + " log").c_str());
+        Require(lane.get() == 1, "bare log turns the lines on");
+        Run((verb + " log 0").c_str());
+        Require(lane.get() == 0, "log 0 turns them off");
+        Run((verb + " log abc").c_str());
+        Require(lane.get() == 1, "a malformed value is on");
+        Run((verb + " other 0").c_str());
+        Require(lane.get() == 1, "another word leaves them");
+        Run((verb + " log 0").c_str());
+    }
+}
+
 } // namespace
 
 int main()
@@ -619,6 +643,7 @@ int main()
     TestLoggedReplies();
     TestCommandFile();
     TestTorsoOwner();
+    TestEventLogSwitches();
 
     Require(GetModuleHandleW(L"openxr_loader.dll") == nullptr, "no command loaded the OpenXR loader");
     Require(preyvr::test::gMinHookCalls == 0, "no command tried to install a hook");

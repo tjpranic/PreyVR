@@ -13,7 +13,7 @@
 // Options, Hands).
 namespace preyvr::dll {
 struct GameplayPoseFrame;
-// Input-drain thread, once per gameplay frame, after the physical lane.
+// Main thread, once per gameplay frame, after the physical lane.
 void UpdateContactLane(const GameplayPoseFrame&,bool allowed);
 void SetPhysicalContact(unsigned enabled);
 unsigned PhysicalContactEnabled();

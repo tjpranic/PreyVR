@@ -77,7 +77,7 @@ unsigned long long NearViewReenteredCount();
 unsigned long long NearViewAlreadyOffsetCount();
 // Packer calls refused because the view-info's own camera could not be matched
 // to a published eye record. This is the fail-closed path that replaces reading
-// a mutable game-thread eye global: an un-offset near pass is a visible, smaller
+// a mutable main-thread eye global: an un-offset near pass is a visible, smaller
 // error than a confidently wrong eye. Climbing means the eye records are not
 // reaching the render thread, not that the offset is wrong.
 unsigned long long NearViewNoProvenanceCount();

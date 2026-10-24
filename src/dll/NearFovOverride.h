@@ -4,7 +4,7 @@
 namespace preyvr::dll {
 // Override the renderer's near FOV after its RT_BeginFrame latch. 1233 means
 // 123.3 degrees. Accept 11..1789; zero disables. The engine restores its cvar
-// value at the next frame begin. No game-thread renderer writes are performed.
+// value at the next frame begin. No main-thread renderer writes are performed.
 // Nonzero requests install a code-gated hook; failure leaves the setting alone.
 DWORD SetNearFovDeciDegrees(unsigned int deciDegrees);
 DWORD NearFovDeciDegrees();

@@ -7,7 +7,6 @@
 #include "Haptics.h"
 #include "HeadTrackingHook.h"
 #include "HookInstall.h"
-#include "HudBridge.h"
 #include "InputPost.h"
 #include "Logger.h"
 #include "MinHookInit.h"
@@ -408,7 +407,7 @@ std::atomic<AttackFn> originalAttack{nullptr};
 std::atomic<GetHitsFn> originalGetHits{nullptr};
 std::atomic<ImpulseFn> originalImpulse{nullptr};
 std::atomic<BuilderFn> originalBuilder{nullptr};
-// The strike in flight: set around the call to the hit on the input-drain thread,
+// The strike in flight: set around the call to the hit on the main thread,
 // and read by the hooks the hit reaches on the same thread. Nothing else matches it.
 struct Striking {
     bool active = false;
@@ -559,7 +558,7 @@ void HandOver(const void* collider, std::uint64_t now)
     ++handoffs;
 }
 
-// --- the lane (input-drain thread) ----------------------------------------------
+// --- the lane (main thread) ----------------------------------------------
 // Last frame's sample: its reference-space points and grip, so this frame can map
 // them through its own world transform and see the arm's motion alone.
 struct Last {

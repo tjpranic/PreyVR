@@ -7,7 +7,7 @@
 
 #include "GameplayFrame.h"
 #include "HeadTrackingHook.h"
-#include "HudBridge.h"
+#include "UiMode.h"
 #include "Logger.h"
 #include "MinHookInit.h"
 #include "SceneQuery.h"

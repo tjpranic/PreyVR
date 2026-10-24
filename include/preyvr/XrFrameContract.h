@@ -24,7 +24,7 @@
 // None of those crash. All of them are cheap to prevent here.
 //
 // The threading split is part of the contract, not an implementation detail:
-// Prey's camera work happens on the game thread (44208 in the live capture) and
+// Prey's camera work happens on the main thread (44208 in the live capture) and
 // presentation on the render thread (54600), and XR-005 puts the wait on the
 // former and the submit on the latter. The contract records which thread did
 // what so a violation is reported rather than debugged later.
@@ -66,7 +66,7 @@ public:
     // OpenXR allows it; XR-005 does not, and the difference matters. During
     // bring-up the whole XR frame runs on Prey's render thread, because that is
     // the only place the backbuffer is valid, and splitting the wait onto the
-    // game thread would add cross-thread pose caching before there is anything
+    // main thread would add cross-thread pose caching before there is anything
     // to cache. So the rule is **opted out of explicitly, with a reason**, rather
     // than deleted or quietly not enforced.
     //

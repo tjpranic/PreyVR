@@ -161,7 +161,7 @@ struct ReticleTarget {
     bool hit = false;
     std::uint64_t ns = 0, reference = 0;
 };
-// Game thread, from the aim takeover after its scene query. Clears the target
+// Main thread, from the aim takeover after its scene query. Clears the target
 // when the aim is not usable, so the crosshair returns to the HUD.
 void PublishReticleTarget(const GameplayPoseFrame& frame, const aim::Sample& sample);
 // XR thread: the latest target while the world reticle is on, if it is fresh

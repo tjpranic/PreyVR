@@ -13,7 +13,7 @@ namespace preyvr::dll {
 
 struct GameplayPoseFrame;
 
-// Game thread (input drain), once per gameplay frame: the holster state, and a
+// Main thread (input drain), once per gameplay frame: the holster state, and a
 // requested draw carried out with the native equip.
 void UpdateArmsLane(const GameplayPoseFrame& frame, bool valid);
 // No weapon drawn and one to draw (holstered), nothing carried, no cinematic.
@@ -22,7 +22,8 @@ bool ArmsHolstered();
 void RequestDrawWeapon();
 std::string ArmsReport();
 
-// arms.* and mem.* verbs; false if the verb is not one of them.
+// arms.* verbs; false if the verb is not one of them. (The mem.* verbs are
+// MemoryCommands'.)
 bool ExecuteArmsCommand(const std::vector<std::string>& args, std::ostringstream& out);
 
 // The joint the character's attachment `name` is bound to (arms.att's list:

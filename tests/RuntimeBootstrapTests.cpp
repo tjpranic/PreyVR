@@ -1,6 +1,7 @@
 #include "preyvr/EngineMap.h"
 #include "preyvr/FrameObserver.h"
 #include "preyvr/OpenXRBootstrap.h"
+#include "TestEngineImage.h"
 #include "TestSupport.h"
 
 #include <algorithm>
@@ -13,21 +14,7 @@ namespace {
 
 using preyvr::test::Require;
 
-std::vector<std::uint8_t> BuildSyntheticSupportedImage()
-{
-    std::size_t size = 0;
-    for (const auto& landmark : preyvr::engine::Landmarks()) {
-        size = std::max(size, static_cast<std::size_t>(landmark.rva) + landmark.expected.size());
-    }
-    std::vector<std::uint8_t> image(size, 0xCC);
-    for (const auto& landmark : preyvr::engine::Landmarks()) {
-        std::copy(
-            landmark.expected.begin(),
-            landmark.expected.end(),
-            image.begin() + static_cast<std::size_t>(landmark.rva));
-    }
-    return image;
-}
+using preyvr::test::BuildSyntheticSupportedImage;
 
 } // namespace
 

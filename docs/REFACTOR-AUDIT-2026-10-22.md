@@ -38,8 +38,11 @@ This was read-only: five parallel reviews, each covering one slice, with nothing
 - **2026-10-24, the Hands batch is built** ([its scope](HANDS-SCOPE-2026-10-24.md), with your three decisions: the splits in, the rename now, Carry and Grenade converted too).
   - PreyVR-65 holds HandWorld, `IkAnchor`, the `reticleOrigin` rename, `DriveHand`'s structs and the torso owner. PreyVR-66 adds the AimTakeover, BodyFollow and AnimIk splits.
   - Build passes, 94/94 ctest pass, no new warnings, and the 75 export names are unchanged.
-  - **Worn OK on PreyVR-65 and PreyVR-66 (10-24).** Not yet committed.
+  - **Worn OK on PreyVR-65 and PreyVR-66 (10-24), and committed by you as `84d6c19`** ("Hand code refactor").
   - The one issue seen, the fade when leaning over a desk, is the known 30 cm residual limit (fix 3 in [TURN-LEAN-ARMS-2026-10-19.md](TURN-LEAN-ARMS-2026-10-19.md)). It predates the batch, and you left it for later.
+- **2026-10-24, the offline cleanup batch (batch A) is built** ([its scope](OFFLINE-CLEANUP-SCOPE-2026-10-24.md)): the XrSessionHost extractions, the options wiring test, the moves and renames, the ring search, the `log` helper, D3/D4 and the verifier runner.
+  - Build passes, 97/97 ctest pass (`vr_options_wiring`, `position_ring` and `re_verifiers` are new), no new warnings, and the 75 export names are unchanged.
+  - **Worn OK on PreyVR-67 (10-24).** Not yet committed.
 
 **How this relates to [the 10-17 audit](DUPLICATION-AUDIT-2026-10-17.md):**
 - The older audit is still the reference for its items. Its "Constraints that shape every fix" and section F ("don't merge") still apply in full.
@@ -220,8 +223,9 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
   7. the swap mapping `gSwapEyes ? 1-eye : eye`, written 4 times
 - The content-addressed lookups are correct by design (H-022), and the per-fix edit/restore steps should stay separate (section F). What is worth sharing:
   - `EyeRecords`, which also folds the identical ring searches `FindBuiltEyeByPosition`/`IsDualFrameCentre` (CameraEditHook:674-716) into one tested template;
-    - **Partly done 10-24:** EyeRecords exists, moved verbatim. The two ring searches are still separate; folding them is open.
-  - `int SubmissionEye()` in place of the bool;
+    - **Partly done 10-24:** EyeRecords exists, moved verbatim.
+    - **Done 10-24 (batch A):** the two searches share `ring::FindNewest`.
+  - `int SubmissionEye()` in place of the bool. **Dropped 10-24:** its one caller needs only the bool.
   - `constexpr stereo::EyeSign(eye)`. The `eye == 0 ? -half : half` convention appears 7 times [V].
 - **The IPD lives in 5 stores, fed from 2 sources.** The world, near pass and markers use the IPD latched at VR start; inventory parallax uses the live runtime IPD each frame. Changing the IPD mid-session would desynchronise them (latent). Moving to one source is T3.
 
@@ -305,11 +309,11 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
 - **Done 10-23 (offline batch):** `StepSeconds(previous, displayTime)` in MonotonicClock.h, at 4 sites. Each site keeps its own repeat-skip.
 - **Done 10-23 (offline batch):** `VerifiedSetting` (src/dll/VerifiedSetting.h): the state plus `Advance(key, command, log)`. It is used by ControllerPrompts (`gGlyphs`) and FocusHold (`gPause`), with log lines unchanged. VR start's timed settings loop is a different shape and stays.
 - **Checked and kept 10-23:** the pointer-on-surface helper (B12 row).
-- **Open:** the `log [0|1]` verb helper.
+- **Done 10-24 (batch A):** the `log [0|1]` verb helper (`EventLogSwitch`).
 - **Partly done 10-23:** `carry::TrackingToWorld` is gone (see play-space mapping above). The rest of HandCarry.h's math waits for the throwing redo.
 - **Done 10-23:** the `phys::` slot aliases (above), and AnimIk's per-frame `GetModuleHandleW` in the IK detour, which now reads `PreyBase()`.
 
-**Pure logic out of XrSessionHost, with new tests (open):**
+**Pure logic out of XrSessionHost, with new tests.** **Done 10-24 (batch A):** `ui::FitMenuStack`, `ui::WantMenuPanel`, `ui::StepFade`, `wrist::Gate`, `stereoframe::ScaleFov`, and the IPD computed once.
 - menu-stack fit loop (1404-1437)
 - fade ramp and quantisation (2749-2755)
 - wrist gate bitmask (2608-2611)
@@ -326,11 +330,11 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
   - Bootstrap.cpp is down to 292 lines and its lifecycle includes.
   - The export table was checked by name before and after: 159 names, identical.
   - PsiMedkit.cpp's receipt pin (20260930-psi-medkit-static) was already stale at 8d05696, so this batch's edits to it don't stale a holding pin.
-- **Open:** `UiMode.h` out of HudBridge, keeping signatures (8 tests and 2 replays stub them); `PreyWheelOpen` out of BindingDump.
-- **Open:** the `mem.watch/mem.stack` verbs out of ArmsLane:294-330, next to DebugWatch.
-- **Open:** the renames in S6.
+- **Done 10-24 (batch A):** `UiMode.h` out of HudBridge, signatures kept. BindingDump is renamed ActionMaps rather than split, since `PreyWheelOpen` shares its guarded reader.
+- **Done 10-24 (batch A):** the `mem.*` verbs moved to MemoryCommands.cpp. `arms.att/hide/joints` stay in ArmsLane with `AttachmentJoint`'s reader.
+- **Partly done 10-24 (batch A), the renames in S6:** InputPath, ResearchHotkeys, ActionMaps, `LastBuiltEye` and the thread's name. The rest are left to the batches that touch that code; see [the batch A scope](OFFLINE-CLEANUP-SCOPE-2026-10-24.md#not-in-this-batch).
 
-**Options groundwork (open):** the constexpr Spec, lanes initialising from it, and range tests (S4). Also `ButtonSpec[]`: button text currently lives in VrOptionsUi.cpp:55-67 while all setting text is in VrOptions.cpp. Also a per-event table for HapticPolicy.h:22-28.
+**Options groundwork:** the constexpr Spec, lanes initialising from it, and range tests (S4). **Done 10-24 (batch A), differently:** `options::Default`, used for VR start's six literals, and `vr_options_wiring`, which holds every lane's initial value and range to its Spec. The lanes keep their own initial values because most store another form, such as bools, milli-degrees or metres as floats. Also `ButtonSpec[]`: button text currently lives in VrOptionsUi.cpp:55-67 while all setting text is in VrOptions.cpp. Also a per-event table for HapticPolicy.h:22-28.
 
 **Test infrastructure:**
 - **Done 10-23 (offline batch): `tests/DllTestSupport.h`.** It provides the captured log with `Logged`/`Count`, and opt-in macros: `PREYVR_TEST_CAPTURE_LOG()`, `PREYVR_TEST_DROP_LOG()` and `PREYVR_TEST_STUB_MINHOOK()`.
@@ -339,13 +343,13 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
 - **Done 10-23:** `preyvr_add_test(... DLL ...)`. One flag adds the DLL's lifecycle include and `WIN32_LEAN_AND_MEAN NOMINMAX`.
   - It replaces the 16 repeated `INCLUDES`/`DEFS` pairs and covers every DLL-source test and the 4 replays.
   - The 7 tests that were built **without** the DLL's defines now build the same translation unit the DLL ships, and they still pass.
-- **Open:** D3 and D4.
+- **Done 10-24 (batch A):** D3 (the synthetic image and the UseButton tests) and D4 (the launcher preamble). The WARP device fixture stays copied: one copy is in the receipt-pinned NativeWristTests.
 - **Done 10-23 (offline batch): `tests/CommandChannelTests.cpp`** (ctest `command_channel`).
   - **What it pins:** 303 command lines over all 13 dispatchers and 175 of about 202 verbs, each with its exact reply and how it was counted. Also the `report` verb's 128 field names, and the A9 fallbacks.
   - **Build change:** the DLL's sources became an OBJECT library (`preyvr_dll_objects`) that both `preyvr` and the test link. PreyVR.dll built byte-identical with that change alone.
   - **Safety:** verbs that start sessions or threads, install hooks, post input, read raw memory or capture frames are excluded and listed in the test.
   - **Oddities pinned as they are** (for B9): see section 5.
-- **Open:** a runner for the 30 `tools/re` verifiers that skips when the game is missing. Today nothing runs them; the `*Native.h`-vs-binary check is manual.
+- **Done 10-24 (batch A):** `re_verifiers` (tools/re/run_verifiers.py) runs the 26 verifiers against the installed PreyDll.dll, and skips when there is none. 25 pass here; `verify_inventory_stereo` needs pefile.
 - **Blocked:** register `test_extract_native_hud.py`. The receipt-pinned `extract_native_hud.py` calls `hashlib.file_digest`, which needs Python 3.11+, and this machine has 3.10.6, so 1 of its 9 tests errors. It also needs pycryptodome. Registering it needs a newer Python on the machine, or a CMake version check that skips it.
 
 ### T2: one smoke headset run per batch
@@ -534,7 +538,7 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
 1. **T1 cleanup, with no headset.** **Done 10-23:** the safe dead code, stale comments and READMEs, the CMake option text, the `DLL` test flag, `DllTestSupport.h`, the CommandChannel characterization test, and the version string.
 2. **T1 abstractions:**
    - done 10-23: `GameplayFrame.h`, `OnEngineMainThread`, `EnvSwitchOff`, `YawDistance`, `Exports.cpp`, `PhysicalLane.h`, the play-space functions, the recenter checks, the small helpers and `VerifiedSetting`;
-   - open: the XrSessionHost pure extractions, the options Spec groundwork, the renames, and the `log [0|1]` helper.
+   - done 10-24 in batch A, worn OK on PreyVR-67: the XrSessionHost pure extractions, the options wiring test, the renames, and the `log [0|1]` helper.
 3. **Your decisions in section 4,** then the approved deletions. **Done 10-23.**
-4. **T2 batches,** one headset smoke run each: FrameSchedule, Hands, Physics, XR, UI. **FrameSchedule done 10-24, worn OK on PreyVR-63/64. Hands done 10-24, worn OK on PreyVR-65/66.**
+4. **T2 batches,** one headset smoke run each: FrameSchedule, Hands, Physics, XR, UI. **FrameSchedule done 10-24, worn OK on PreyVR-63/64. Hands done 10-24, worn OK on PreyVR-65/66, committed `84d6c19`.** Next: XR, then UI, with Physics after the throwing redo.
 5. **Last:** the folder move and the ARCHITECTURE.md rewrite.

@@ -16,7 +16,7 @@
 #include "DualOverlay.h"
 #include "NearFovOverride.h"
 #include "InputPost.h"
-#include "InputPathProbe.h"
+#include "InputPath.h"
 #include "MoveLane.h"
 #include "AimTakeover.h"
 #include "ReticleFollow.h"
@@ -30,6 +30,7 @@
 #include "DebugOverlay.h"
 #include "EnvSwitch.h"
 #include "preyvr/StereoCamera.h"
+#include "preyvr/VrOptions.h"
 #include "FocusHold.h"
 #include "ControllerPrompts.h"
 #include "InventoryPointerCapture.h"
@@ -193,7 +194,7 @@ void TickVrMode() {
         }
         // Both eyes in every frame (rung 1b, DualSceneStereo.h) unless
         // PREYVR_DUAL_STEREO=0 asks for the alternate-eye path. The render-thread
-        // mode is armed before the game thread starts publishing both-eyes
+        // mode is armed before the main thread starts publishing both-eyes
         // contracts, so no such contract can arrive without a submission to fill
         // it. Not fatal: without the hooks the alternate-eye path continues.
         {
@@ -227,11 +228,11 @@ void TickVrMode() {
         // Phase 2: what the left hand carries is IN it, held while the grip is,
         // thrown with the hand's motion (CarryLane.h). Not fatal: without the
         // hooks the game's own carry stays, toggled like in phase 1.
-        else if(SetCarryHand(1)!=0) Log("carry_hand=native reason=hooks_unavailable");
+        else if(SetCarryHand(options::Default(options::CarryHand))!=0) Log("carry_hand=native reason=hooks_unavailable");
         // Grenades leave the right hand at the trigger's release with its
         // motion (GrenadeLane.h). Not fatal: without the hooks the game's own
         // charged throw along the view stays.
-        if(SetGrenadeHand(1)!=0) Log("grenade_hand=native reason=hooks_unavailable");
+        if(SetGrenadeHand(options::Default(options::GrenadeHand))!=0) Log("grenade_hand=native reason=hooks_unavailable");
         // The body turns with the player (BodyFollow.h; the VR options switch
         // it off). Not fatal: without the hook the body keeps the native yaw,
         // as before.
@@ -239,17 +240,19 @@ void TickVrMode() {
         // The arms stay at the controllers with no weapon drawn: holstered (the
         // right grip held) or carrying (AnimIkTakeover arms.free; arms.free 0 =
         // the game lowers them out of view, as before).
-        SetAnimIkFreeArms(1);
+        SetAnimIkFreeArms(options::Default(options::ArmsFree));
         // The aim lasers by default (each hand's ray to what it points at); VR
         // Options' Aim lasers turns them off, and its saved choice applies below.
         // The debug overlay is not switched on here: it follows its own row, or
         // dbg.draw for the session, and leaves the lasers as they are.
-        SetAimLasers(1);
+        SetAimLasers(options::Default(options::AimLasers));
         // The floating HUD by default; VR Options' HUD style can turn it off.
-        if(SetHudLayerEnabled(1)!=0)Log("hud_layer=unavailable native_hud=retained");
+        if(SetHudLayerEnabled(options::Default(options::HudLayer))!=0)Log("hud_layer=unavailable native_hud=retained");
         // The menus keep the controller's prompts under the laser
         // (ControllerPrompts.h); VR Options' Force Controller Prompts can turn it off.
-        SetControllerPrompts(1);
+        SetControllerPrompts(options::Default(options::ControllerPrompts));
+        // The carry and grenade hands, the free arms, the lasers, the HUD layer
+        // and the prompts start off; above, each takes its VR Options default.
         // Saved VR Options choices last, so they win over the defaults above
         // (an F11 restart included).
         ApplySavedVrOptions();

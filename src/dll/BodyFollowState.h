@@ -132,7 +132,7 @@ inline std::atomic<bool> gHeadOut{false};
 inline std::atomic<std::uint64_t> gHeadOutNs{0};
 constexpr float kOutResidual = 0.30f, kInResidual = 0.25f;
 
-// The game thread's own.
+// The main thread's own.
 inline armpose::TorsoYaw gTorso;
 inline std::uint64_t gTorsoNs = 0;
 inline unsigned long long gTorsoEpoch = ~0ull;

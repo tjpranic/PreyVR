@@ -72,7 +72,7 @@ void __fastcall BeginFrameWithNearFov(void* renderer)
     const auto original = gOriginal.load(std::memory_order_acquire);
     if (original == nullptr) { return; }
     original(renderer);
-    // The native latch completed on this callback's thread. A game-thread
+    // The native latch completed on this callback's thread. A main-thread
     // CSystem::Render entry cannot establish this ordering for a queued renderer.
     const auto wanted = gDeciDegrees.load(std::memory_order_acquire);
     if (wanted == 0 || gFaulted.load(std::memory_order_acquire)) { return; }

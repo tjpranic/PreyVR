@@ -57,7 +57,7 @@ FrameBuild BuildGameplayFrame(std::uintptr_t player, GameplayPoseFrame& frame, b
     std::memcpy(&frame.reticleOrigin, reinterpret_cast<const void*>(
         playerAddress + engine::ArkPlayerLayout::cachedReticleOrigin), sizeof(Vec3));
     // The view camera's own translation -- Matrix34, translation in column 3,
-    // so elements 3, 7 and 11. This is the gameplay camera on the game thread,
+    // so elements 3, 7 and 11. This is the gameplay camera on the main thread,
     // before the render seam installs a per-eye offset, so it carries no half
     // IPD (the trap H-005C / FAIL-HAND-037 records for the live render camera).
     frame.cameraCentreValid = false;

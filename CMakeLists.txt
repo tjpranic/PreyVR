@@ -241,7 +241,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/Exports.cpp
         src/dll/VrMode.cpp
         src/dll/UiGuide.cpp
-        src/dll/BindingDump.cpp
+        src/dll/ActionMaps.cpp
         src/dll/VrOptionsLayer.cpp
         src/dll/VrOptionsUi.cpp
         src/dll/VrOptionsRuntime.cpp
@@ -262,6 +262,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/WrenchSound.cpp
         src/dll/GrenadeLane.cpp
         src/dll/ArmsLane.cpp
+        src/dll/MemoryCommands.cpp
         src/dll/SlotFeedback.cpp
         src/dll/NativeWristTexture.cpp
         src/dll/WristLane.cpp
@@ -286,9 +287,9 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/FrameSchedule.cpp
         src/dll/HeadTrackingHook.cpp
         src/dll/HudBridge.cpp
-        src/dll/HotkeyBridge.cpp
+        src/dll/ResearchHotkeys.cpp
         src/dll/IkTargetProbe.cpp
-        src/dll/InputPathProbe.cpp
+        src/dll/InputPath.cpp
         src/dll/InputPost.cpp
         src/dll/MinHookInit.cpp
         src/dll/MoveLane.cpp
@@ -462,6 +463,7 @@ if(PREYVR_BUILD_TESTS)
     preyvr_add_test(render_contract tests/RenderContractTests.cpp)
     preyvr_add_test(inventory_depth tests/InventoryDepthTests.cpp)
     preyvr_add_test(ui_panel tests/UiPanelTests.cpp)
+    preyvr_add_test(position_ring tests/PositionRingTests.cpp)
     preyvr_add_test(xr_hold tests/XrHoldTests.cpp)
     preyvr_add_test(hud_parts tests/HudPartsTests.cpp)
     preyvr_add_test(locomotion tests/LocomotionTests.cpp)
@@ -582,6 +584,18 @@ if(PREYVR_BUILD_TESTS)
             target_link_options(preyvr_command_channel_tests PRIVATE /DELAYLOAD:openxr_loader.dll)
             set_target_properties(preyvr_command_channel_tests PROPERTIES
                 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/command_channel")
+            # VR Options' wiring against the real lanes, linked the same way: the
+            # test includes VrOptionsRuntime and links the DLL's other objects.
+            preyvr_add_test(vr_options_wiring tests/VrOptionsWiringTests.cpp
+                SOURCES "$<FILTER:$<TARGET_OBJECTS:preyvr_dll_objects>,EXCLUDE,/(VrOptionsRuntime|DllMain|Logger|MinHookInit)[.]obj$>"
+                INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/dll" "${CMAKE_CURRENT_BINARY_DIR}/generated"
+                DLL
+                DEFS XR_USE_PLATFORM_WIN32 XR_USE_GRAPHICS_API_D3D11
+                LIBS preyvr_core preyvr_win32_bootstrap preyvr_imgui minhook bcrypt psapi shell32 d3d11 dxgi
+                    d3dcompiler gdi32 openxr_loader delayimp)
+            target_link_options(preyvr_vr_options_wiring_tests PRIVATE /DELAYLOAD:openxr_loader.dll)
+            set_target_properties(preyvr_vr_options_wiring_tests PROPERTIES
+                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/command_channel")
 
             preyvr_add_test(openxr_preflight_files tests/OpenXRPreflightWin32Tests.cpp
                 TARGET preyvr_openxr_preflight_tests
@@ -606,6 +620,14 @@ if(PREYVR_BUILD_TESTS)
             add_test(NAME launcher_${suite_name} COMMAND "${PREYVR_POWERSHELL_EXECUTABLE}"
                 -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/Launcher${suite}.Tests.ps1")
         endforeach()
+    endif()
+
+    # The tools/re static verifiers against the installed PreyDll.dll; skipped
+    # (77) on a machine without the supported build.
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME re_verifiers COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/re/run_verifiers.py")
+        set_tests_properties(re_verifiers PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
     endif()
     if(PREYVR_POWERSHELL_EXECUTABLE AND PREYVR_BUILD_SMOKE_DLL AND WIN32)
         add_test(

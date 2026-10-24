@@ -7,7 +7,6 @@
 #include "EngineAccess.h"
 #include "Haptics.h"
 #include "HeadTrackingHook.h"
-#include "HudBridge.h"
 #include "InputPost.h"
 #include "InteractionLane.h"
 #include "Logger.h"
@@ -478,7 +477,7 @@ bool OnTopOf(const Natives& n, const Underfoot& u, const void* object)
     return false;
 }
 
-// --- the lane (input-drain thread) ----------------------------------------------
+// --- the lane (main thread) ----------------------------------------------
 // The boxes that push (Contact::proxy): the held weapon; the right hand while no
 // weapon is drawn (a drawn weapon is its box); the left hand while it is free.
 enum Proxy : std::uint8_t { kWeapon = 0, kRightHand = 1, kLeftHand = 2, kProxies = 3 };

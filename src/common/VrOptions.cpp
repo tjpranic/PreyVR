@@ -170,6 +170,7 @@ std::wstring Display(unsigned id,int v){
  return v?L"ON":L"OFF";
 }
 Values Defaults(){Values v{};for(unsigned i=0;i<Count;++i)v[i]=specs[i].initial;return v;}
+int Default(unsigned id){return Describe(id).initial;}
 std::string Serialize(const Values& v,const Present* present){
  std::string s="version=1\n";
  for(unsigned i=0;i<Count;++i)if(!present||(*present)[i])s+=std::string(specs[i].key)+"="+std::to_string(v[i])+"\n";

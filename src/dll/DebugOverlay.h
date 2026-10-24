@@ -42,11 +42,11 @@ std::string DebugOverlayReport();   // counters and the status text
 std::string DebugOverlayMarks();    // primitive positions, OpenXR space and last projected pixels
 
 // Producers. All return immediately when the overlay is off.
-// Game/input-drain thread, from the aim takeover, after its sample is final.
+// Main thread, from the aim takeover, after its sample is final.
 void DebugOverlayAim(const GameplayPoseFrame& frame, const aim::Sample& sample);
-// Game/input-drain thread, once per gameplay frame (left ray).
+// Main thread, once per gameplay frame (left ray).
 void DebugOverlayGameFrame(const GameplayPoseFrame& frame, bool tracking);
-// Game/input-drain thread, from the two-hand solver.
+// Main thread, from the two-hand solver.
 void DebugOverlayForegrip(const GameplayPoseFrame& frame, const twohand::Input& input,
                           const twohand::Output& output, bool regionReady);
 // Holster input lane. `centres`/`valid` describe the gesture's torso estimate.
@@ -58,7 +58,7 @@ void DebugOverlayMedkit(bool live, Vec3 centre, Vec3 hand, bool gripPressed, boo
                         bool triggerArmed);
 // Any slot notice, whether or not belt hints are shown.
 void DebugOverlayNotice(equipment::SlotNotice notice);
-// Physical-contact sweep (PhysicalInteractions), game/input-drain thread, once
+// Physical-contact sweep (PhysicalInteractions), main thread, once
 // per gameplay frame while DebugOverlayWantsPhysical(). Engine world space.
 struct PhysicalOverlayState {
     bool box = false;                 // `points` is the published weapon box

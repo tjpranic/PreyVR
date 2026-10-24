@@ -53,6 +53,10 @@ using Values = std::array<int, Count>;
 // never chosen in the menu keeps its built-in value.
 using Present = std::array<bool, Count>;
 Values Defaults();
+// One setting's default, its Spec's `initial`. Every lane starts at its own
+// setting's default but six, which start off until VR start sets them to it
+// (VrMode.cpp); vr_options_wiring pins both.
+int Default(unsigned id);
 // `present` null writes every setting; otherwise only those marked.
 std::string Serialize(const Values&, const Present* present = nullptr);
 // Transactional parse: malformed/unknown fields refuse the whole file. Keys

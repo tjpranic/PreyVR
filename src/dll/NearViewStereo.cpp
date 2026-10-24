@@ -53,7 +53,7 @@ constexpr std::array<std::uint8_t, 22> kPackerPrologue{
 constexpr std::size_t kNearViewProjection = 0xA0;
 // The render view's own current CCamera, stored by the view-info builder
 // 0x180FB2AC0 (`param_1[1] = param_3`, caller passing renderView + 0x11A0).
-// This is the provenance anchor that replaces the game-thread eye global.
+// This is the provenance anchor that replaces the main-thread eye global.
 constexpr std::size_t kViewInfoCamera = 0x08;
 
 void* gTarget = nullptr;
@@ -258,7 +258,7 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
 
     // Which eye this VIEW-INFO belongs to, resolved from its own camera.
     //
-    // **Not `LastRenderedEye()`.** That is a mutable game-thread global, and
+    // **Not `LastBuiltEye()`.** That is a mutable main-thread global, and
     // EyeRecords.h says in its own words that the game and render threads
     // run about a frame apart, so a view-info queued earlier can be packed
     // while the global already names the next eye. Every tag on that path is
@@ -269,7 +269,7 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
     // The view-info's `+0x08` is the render view's own current CCamera --
     // verified by reading the builder `0x180FB2AC0`, whose first act is
     // `param_1[1] = param_3` with the caller passing `renderView + 0x11A0`.
-    // That camera is a by-value copy of the one the game thread built, so
+    // That camera is a by-value copy of the one the main thread built, so
     // matching its position against the published eye records identifies the
     // eye from the data being rendered, and supplies the right axis that
     // belongs to it rather than a newer head orientation.

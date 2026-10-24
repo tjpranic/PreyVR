@@ -97,7 +97,7 @@ bool BuildDualEyeCamera(std::uint8_t* camera, int eye);
 // Locks synthetic stereo to one eye instead of alternating.
 //
 // **This replaces the per-frame tagging, which did not work.** The camera hook
-// runs on the game thread and the capture runs on the render thread, and the two
+// runs on the main thread and the capture runs on the render thread, and the two
 // are offset by the engine's MT/RT double buffer -- so a tag written by one is
 // not reliably read by the other for the same frame. Observed live 2026-08-31:
 // two captures reported as eye 1 then eye 0 both landed in files tagged 1, which
@@ -116,13 +116,16 @@ DWORD SetStereoEyeLock(unsigned int eye);
 // SetStereoEyeLock, which also keeps the capture tag correct.
 void SetStereoEyeLockFromRenderThread(int eye);
 
-// Which eye the most recent render used, or -1.
+// Which eye the main thread last built a camera for: 0 or 1, kRenderContractBothEyes
+// for a both-eyes frame, or -1. (Called
+// LastRenderedEye until 2026-10-24; the PreyVR_GetLastRenderedEye export keeps
+// that name.)
 //
 // **Reported for observation only -- do not identify a capture by it.** It is
-// written on the game thread and any capture reads it on the render thread, and
+// written on the main thread and any capture reads it on the render thread, and
 // the two are a frame or so apart. Use SetStereoEyeLock instead; that is the
 // whole reason it exists.
-int LastRenderedEye();
+int LastBuiltEye();
 
 DWORD CameraEditStatusValue();
 

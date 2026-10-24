@@ -2,16 +2,9 @@
 param()
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
-$scriptPath=Join-Path $PSScriptRoot '../tools/Start-PreyVR.ps1'
-$tokens=$null;$parseErrors=$null
-$ast=[System.Management.Automation.Language.Parser]::ParseFile($scriptPath,[ref]$tokens,[ref]$parseErrors)
-if ($parseErrors.Count) {throw ($parseErrors | Out-String)}
 # Extract configuration only. Never dot-source or invoke the launcher body.
-foreach ($name in @('Resolve-PreyVRStereoSettings','Get-PreyVRStereoStatus','Save-PreyVRConfiguration')) {
-    $function=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$true)
-    if (!$function) {throw "Missing $name"}
-    Invoke-Expression $function.Extent.Text
-}
+$launcherFunctions=@('Resolve-PreyVRStereoSettings','Get-PreyVRStereoStatus','Save-PreyVRConfiguration')
+. (Join-Path $PSScriptRoot 'LauncherTestSupport.ps1')
 function Assert-Stereo($result,$expected) {
     if ($result -ne $expected) {throw "Unexpected DualStereo selection: $result (expected $expected)"}
 }

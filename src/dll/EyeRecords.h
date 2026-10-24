@@ -17,7 +17,7 @@ namespace preyvr::dll {
 // One immutable record of a built eye: where that eye's camera ended up, the
 // right axis it was offset along, and which eye it is.
 //
-// **Why content and not a tag.** `LastRenderedEye()` is a mutable game-thread
+// **Why content and not a tag.** `LastBuiltEye()` is a mutable main-thread
 // global, and the render thread is about a frame behind it, so a consumer that
 // reads it may be packing a view built for the *other* eye while every counter
 // stays valid (H-022). Matching a view-info's own camera position against these
@@ -58,7 +58,7 @@ bool IsDualFrameCentre(const float position[3]);
 void PublishRenderContract(const RenderContract& contract);
 
 // The render contract of the frame the render thread has just finished -- which
-// eye it is, and its pose -- or false if the game thread has not published one.
+// eye it is, and its pose -- or false if the main thread has not published one.
 //
 // The camera hook publishes the eye it built alongside each frame, and this pops
 // them in order. The engine's MT/RT double buffer delays work without reordering

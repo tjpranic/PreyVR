@@ -17,9 +17,9 @@
 #include "HeadTrackingHook.h"
 #include "ReticleFollow.h"
 #include "XrInput.h"
-#include "HotkeyBridge.h"
+#include "ResearchHotkeys.h"
 #include "IkTargetProbe.h"
-#include "InputPathProbe.h"
+#include "InputPath.h"
 #include "CommandChannel.h"
 #include "NearViewStereo.h"
 #include "WeaponAttachment.h"
@@ -211,10 +211,10 @@ extern "C" __declspec(dllexport) DWORD PreyVR_SetNativeProjectionPtr(void* enabl
     return preyvr::dll::SetNativeProjection(PtrArg(enabled));
 }
 
-// Which eye the most recent render used, or -1.
+// Which eye the main thread last built a camera for, or -1 (LastBuiltEye).
 extern "C" __declspec(dllexport) int PreyVR_GetLastRenderedEye()
 {
-    return preyvr::dll::LastRenderedEye();
+    return preyvr::dll::LastBuiltEye();
 }
 
 // Reads Prey's live view camera and returns the frustum PreyVR must DECLARE to

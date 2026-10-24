@@ -94,7 +94,7 @@ bool NewestArm(WristArmFrame& out)
 
 wrist::Arm ToArm(const WristArmFrame& f) { return {f.wrist, f.elbow, f.palm}; }
 
-// ---- scene occlusion (game thread) -----------------------------------------
+// ---- scene occlusion (main thread) -----------------------------------------
 struct Occlusion {
     bool occluded = false;
     std::uint64_t ns = 0;

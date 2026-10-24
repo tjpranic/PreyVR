@@ -101,7 +101,7 @@ bool ReadDimensions(void* physics, std::uint8_t* dims)
 
 // Whether a SetParams on the body applies at once rather than queued behind a
 // physics step: the change request's own test (RoomScaleNative.h), from the
-// game thread -- the world's step lock, +0x57B0 and its lock all clear, and
+// main thread -- the world's step lock, +0x57B0 and its lock all clear, and
 // nothing queued for the body.
 bool PhysicsIdle(std::uintptr_t world, void* physics)
 {

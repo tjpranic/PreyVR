@@ -439,7 +439,7 @@ void SetStereoEyeLockFromRenderThread(int eye)
     gEyeLock.store((eye == 0 || eye == 1) ? eye : -1, std::memory_order_release);
 }
 
-int LastRenderedEye()
+int LastBuiltEye()
 {
     return gLastEye.load(std::memory_order_acquire);
 }

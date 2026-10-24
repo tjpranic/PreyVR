@@ -39,7 +39,7 @@ bool GrenadeHeldByHand(std::uintptr_t weapon);
 
 // Input lane: the right trigger's press/release edges as posted to the game.
 void NoteGrenadeTrigger(bool pressed);
-// Game thread, once per gameplay frame: queued gives, the flight watch.
+// Main thread, once per gameplay frame: queued gives, the flight watch.
 void UpdateGrenadeLane(const GameplayPoseFrame& frame, bool tracking);
 
 std::string GrenadeReport();

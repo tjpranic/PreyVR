@@ -406,6 +406,30 @@ void TestAnglesAreArctangents()
     Require(Near(angles.angleUp, std::atan(2.0f)), "up likewise");
 }
 
+// xr.mirrorfov scales the tangent, not the angle; 100 is the frustum unchanged.
+void TestScaleFovScalesTangents()
+{
+    const EyeFovAngles fov{-0.9f, 0.7f, -0.8f, 0.75f};
+    const auto same = ScaleFov(fov, 100);
+    Require(same.angleLeft == fov.angleLeft && same.angleRight == fov.angleRight &&
+            same.angleDown == fov.angleDown && same.angleUp == fov.angleUp, "100 percent is the same frustum");
+    const auto doubled = ScaleFov(fov, 200);
+    Require(Near(std::tan(doubled.angleLeft), 2.0f * std::tan(fov.angleLeft)) &&
+            Near(std::tan(doubled.angleRight), 2.0f * std::tan(fov.angleRight)) &&
+            Near(std::tan(doubled.angleDown), 2.0f * std::tan(fov.angleDown)) &&
+            Near(std::tan(doubled.angleUp), 2.0f * std::tan(fov.angleUp)), "200 percent doubles every tangent");
+    Require(doubled.angleLeft < 0.0f && doubled.angleDown < 0.0f && doubled.angleRight > 0.0f, "signs are kept");
+    // Bit for bit the expression ScaleDeclaredFov used inline.
+    for (const unsigned percent : {50u, 99u, 101u, 130u, 250u}) {
+        const float scale = static_cast<float>(percent) * 0.01f;
+        const auto scaled = ScaleFov(fov, percent);
+        Require(scaled.angleLeft == std::atan(std::tan(fov.angleLeft) * scale) &&
+                scaled.angleRight == std::atan(std::tan(fov.angleRight) * scale) &&
+                scaled.angleDown == std::atan(std::tan(fov.angleDown) * scale) &&
+                scaled.angleUp == std::atan(std::tan(fov.angleUp) * scale), "the expression it replaced");
+    }
+}
+
 } // namespace
 
 int main()
@@ -440,6 +464,7 @@ int main()
     TestAnglesAreArctangents();
     TestSymmetricScaleMakesBothEyesIdentical();
     TestAsymmetricScaleMirrorsTheEyes();
+    TestScaleFovScalesTangents();
     std::cout << "PreyVR stereo frame tests passed\n";
     return 0;
 }

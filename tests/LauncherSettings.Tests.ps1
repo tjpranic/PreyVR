@@ -2,16 +2,9 @@
 param()
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
-$scriptPath=Join-Path $PSScriptRoot '../tools/Start-PreyVR.ps1'
-$tokens=$null;$parseErrors=$null
-$ast=[System.Management.Automation.Language.Parser]::ParseFile($scriptPath,[ref]$tokens,[ref]$parseErrors)
-if ($parseErrors.Count) {throw ($parseErrors | Out-String)}
 # Extract configuration only. Never dot-source or invoke the launcher body.
-foreach ($name in @('Resolve-PreyVRReferenceSpace','Get-PreyVRStartupCommands')) {
-    $function=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$true)
-    if (!$function) {throw "Missing $name"}
-    Invoke-Expression $function.Extent.Text
-}
+$launcherFunctions=@('Resolve-PreyVRReferenceSpace','Get-PreyVRStartupCommands')
+. (Join-Path $PSScriptRoot 'LauncherTestSupport.ps1')
 
 # Reference space: a launch setting, saved in PreyVR.json.
 $default=$ast.ParamBlock.Parameters.Where({$_.Name.VariablePath.UserPath -eq 'ReferenceSpace'})[0].DefaultValue.Value

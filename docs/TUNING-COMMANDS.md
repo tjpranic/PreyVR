@@ -352,7 +352,7 @@ value report, as described above.
 | `wrist.gate` / `wrist.native` / `wrist.occlusion` | see above | | When the card shows, the game status's scale, what hides it. |
 | `wrist.anchor` | 0/1 | 1 | On the drawn forearm (0: the old grip-anchored card). |
 | `wrist.force` | 0/1 | 0 | Shows the card from any pose, for captures. |
-| `wrist.report` | report | | Gate, look test, counters. |
+| `wrist.report` | report | | Gate, look test, counters. `gate=` adds up the conditions that hold: 1 the option, 2 views, 4 rendered, 8 no menu panel, 16 VR Options closed, 32 gameplay input, 64 no two-hand aim, 128 not recentering, 256 tracking. 511 is open (`wrist::Gate`, preyvr/WristHolo.h). |
 
 ### Aim, reticle and shots
 

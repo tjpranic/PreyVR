@@ -108,6 +108,11 @@ struct EyeFovAngles {
 
 EyeFovAngles AnglesFromTangents(const EyeView& view);
 
+// `fov` with each half-angle's TANGENT scaled by `percent` (xr.mirrorfov), not
+// the angle: the projection is linear in tangent space, so doubling the angle
+// would not double the apparent size. 100 returns `fov` unchanged.
+EyeFovAngles ScaleFov(const EyeFovAngles& fov, unsigned percent);
+
 // The synthetic per-eye frustum used when there is no headset to report one.
 //
 // `asymmetryScale` scales the outer half-angle and shrinks the inner one by the

@@ -7,7 +7,7 @@
 #include "AimTakeover.h"
 #include "HandWorld.h"
 #include "HeadTrackingHook.h"
-#include "HudBridge.h"
+#include "UiMode.h"
 #include "InteractionLane.h"
 #include "CarryLane.h"
 #include "Logger.h"
@@ -75,7 +75,7 @@ std::atomic<std::uint64_t> gWristNs{0};
 struct WristCardRecord { dd::Wrist card{}; std::uint64_t ns = 0; };
 LatestSnapshot<WristCardRecord> gWristCard;
 // The physical sweep, in OpenXR space. Its recent sweeps and last contact are
-// kept in engine world space (input-drain thread only) and re-expressed every
+// kept in engine world space (main thread only) and re-expressed every
 // gameplay frame, so they stay where they happened while the player moves.
 struct PhysicalRecord { dd::Physical physical{}; std::uint64_t ns = 0, reference = 0; };
 LatestSnapshot<PhysicalRecord> gPhysical;
