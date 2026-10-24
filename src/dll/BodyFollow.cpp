@@ -57,7 +57,7 @@ void ResetStats()
                        &gJumps, &gNudges, &gViewDrift, &gHeadOutEvents, &gHeadOutFrames, &gHeadHits,
                        &gNativeMoving, &gLivingUnread, &gFitChecks, &gFitShortened, &gFitVertical,
                        &gFitStartBlocked, &gKeptMotion, &gRestMoves, &gStepSettling, &gPushOut,
-                       &gDeferredBusy}) {
+                       &gDeferredBusy, &gStartKept, &gRaced}) {
         c->store(0, std::memory_order_relaxed);
     }
     gPushOutMaxMm.store(0, std::memory_order_relaxed);

@@ -4,7 +4,6 @@
 
 ### Controls
 - The X to transfer junk in the recycler doesn't work
-- The movement stoppage bug is still there
 
 ### UX/Game Feel
 - Rotate to face direction
@@ -30,6 +29,7 @@
     One thing I'm particularly concerned about is 1. bad abstractions and 2. logic that should be abstracted but isn't. A lot of hyper-focused work has been done on various issues that may leave similar logic unconnected and ungeneralized when they ought to be.
 - Restructuring
     Related source files should be grouped with directories.
+    Structure by feature set? (UI, In-Game Controls, Debug/Crash Instrumentation, VR Body and Motion Logic, Engine Hooking, Physics, etc.).
 - Optimization
     The mod is starting to lag a bit due to all the feature work. Two types of optimizations are needed. Big O optimization of code and actual targeted optimization of bottlenecks (this will require instrumentation). Will need to look for quick wins on both, if any.
 - Tuning parameter cleanup
@@ -85,6 +85,10 @@
     Instrumentation in place. See ResourceSetWatch.cpp.
 
 ## DONE
+
+### Controls
+- The movement stoppage bug
+    > Prey re-read the stick from the physical gamepad whenever an action filter changed (mostly the interaction prompt as the view swept over usable objects) and zeroed what the mod had posted. Fixed in PreyVR-72, worn OK 2026-10-24. See docs/MOVE-STOP-2026-10-24.md.
 
 ### UX/Game Feel
 - Shot from muzzle laser shows skewed

@@ -294,6 +294,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/InputPost.cpp
         src/dll/MinHookInit.cpp
         src/dll/MoveLane.cpp
+        src/dll/StickReread.cpp
         src/dll/CommandChannel.cpp
         src/dll/WorkerThread.cpp
         src/dll/NearFovOverride.cpp

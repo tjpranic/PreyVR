@@ -18,6 +18,7 @@
 #include "InputPost.h"
 #include "InputPath.h"
 #include "MoveLane.h"
+#include "StickReread.h"
 #include "AimTakeover.h"
 #include "ReticleFollow.h"
 #include "SceneQuery.h"
@@ -214,6 +215,9 @@ void TickVrMode() {
         EnsureNearParticleStereo();
         // World markers at the depth they mark (MarkerStereo.h). Not fatal either.
         EnsureMarkerDepth();
+        // Prey's re-read of the sticks finds the lanes' stick (StickReread.h).
+        // Not fatal: the lanes' read-back still restores it within a frame.
+        if(InstallStickReread()!=0) Log("stick_reread=unavailable fallback=read_back");
         if(SetMoveLaneMode(2)!=0 || SetTurnLaneEnabled(1)!=0 || SetFireLaneEnabled(1)!=0 ||
             SetInteractionEnabled(1)!=0 || SetAimTakeoverEnabled(1)!=0 ||
             SetReticleFollowEnabled(1)!=0 || SetReticleDispatchEnabled(1)!=0 ||
@@ -271,7 +275,8 @@ void TickVrMode() {
             nextStatusReport=GetTickCount64()+kStatusReportMs;
             // The same text dual.report and hud.layer answer with.
             Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
-                " } body={"+BodyFollowReport()+" } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" focus={"+
+                " } body={"+BodyFollowReport()+" } move={"+MoveLaneStatusReport()+StickRereadReport()+
+                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" focus={"+
                 FocusHoldReport()+" } hold={"+XrHoldReport()+" } prompts={"+ControllerPromptsReport()+" }");
         }
         const auto owner=AnimIkOwnerGeneration();

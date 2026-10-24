@@ -128,7 +128,8 @@ std::string BodyFollowReport()
         << " keptMotion=" << gKeptMotion.load() << " restMoves=" << gRestMoves.load()
         << " stepSettling=" << gStepSettling.load() << " pushOut=" << gPushOut.load()
         << " pushOutMaxMm=" << gPushOutMaxMm.load() << " deferredBusy=" << gDeferredBusy.load()
-        << " bodyLagMaxMm=" << gBodyLagMaxMm.load();
+        << " bodyLagMaxMm=" << gBodyLagMaxMm.load() << " startKept=" << gStartKept.load()
+        << " raced=" << gRaced.load();
     return out.str();
 }
 

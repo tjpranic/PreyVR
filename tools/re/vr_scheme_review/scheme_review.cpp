@@ -11,9 +11,16 @@ struct Posted { int key; int value; };
 std::vector<Posted> posted;
 preyvr::dll::TrackingFrame tracked;
 bool focused = true;
+bool gameplay = true;     // no menu, and VR Options does not own the controllers
 bool wheelOpen = false;   // Prey's weapon wheel (its focusmode map)
 int rejectedKey = 0;
 int failures = 0;
+// ArkPlayerInput as the handlers leave it: a posted axis is stored, unless a
+// filter blocks that action (filteredKey) or the gate says otherwise.
+struct PlayerInput {
+    preyvr::dll::StickAxes axes;
+    int filteredKey = 0;
+} playerInput;
 
 namespace preyvr::lifecycle { void Log(std::string_view) {} }
 namespace preyvr::dll {
@@ -24,14 +31,21 @@ bool TryGetTrackingFrame(TrackingFrame& out) {
     out.publishedNs = MonotonicNanoseconds();
     return true;
 }
-bool HudGameplayInputAllowed() { return true; }
+bool HudGameplayInputAllowed() { return gameplay; }
 bool InputPostDrivingThisThread() { return true; }
 DWORD SetInputPostEnabled(unsigned int) { return 0; }
 DWORD PostRawInputImmediate(int key, unsigned int, int value) {
     if (key == rejectedKey) { return 4; }
     posted.push_back({key, value});
+    const float v = locomotion::HeldAxisValue(value);
+    if (key == playerInput.filteredKey) {}
+    else if (key == locomotion::kKeyThumbLX) { playerInput.axes.moveX = playerInput.axes.gate ? 0.0f : v; }
+    else if (key == locomotion::kKeyThumbLY) { playerInput.axes.moveY = playerInput.axes.gate ? 0.0f : v; }
+    else if (key == locomotion::kKeyThumbRX && !playerInput.axes.yawBlocked) { playerInput.axes.yaw = -v; }
     return 0;
 }
+// The read-back's view of the engine (StickReread.h).
+bool ReadStickAxes(StickAxes& out) { out = playerInput.axes; return true; }
 // No hook is installed; Reset marks the lane installed instead.
 bool EnsureMinHook() { return false; }
 // The rest of the game at rest: no recentre or snap, no other lane holding a
@@ -72,10 +86,18 @@ void Check(bool ok, const char* name) {
 void Reset() {
     using namespace preyvr::dll;
     focused = true;
+    gameplay = true;
     wheelOpen = false;
     rejectedKey = 0;
     tracked = {};
     posted.clear();
+    playerInput = {};
+    // A refused sample releases at once unless a test asks for the hold.
+    SetStickSampleHoldMs(0);
+    for (auto& held : gHeldMilli) { held = 0; }
+    for (auto& after : gReassertAfterNs) { after = 0; }
+    for (unsigned axis = 0; axis < 3; ++axis) { gReasserted[axis] = 0; gReassertRefused[axis] = 0; }
+    gMoveSamples.Reset();
     gInstalled = true; // Skip hook installation: this executable has no target.
     SetMoveLaneMode(2);
     SetTurnLaneEnabled(1);
@@ -100,6 +122,14 @@ bool Sent(int key, int value) {
 }
 bool ZeroFor(int key) {
     for (const auto& e : posted) { if (e.key == key && e.value == 0) return true; }
+    return false;
+}
+// Anything posted on the stick axes (the fire lane posts its hold every frame).
+bool StickSent() {
+    for (const auto& e : posted) {
+        if (e.key == preyvr::locomotion::kKeyThumbLX || e.key == preyvr::locomotion::kKeyThumbLY ||
+            e.key == preyvr::locomotion::kKeyThumbRX) return true;
+    }
     return false;
 }
 void Held() {
@@ -185,6 +215,73 @@ int main() {
     tracked.play.wheelFood = false; posted.clear(); Tick();
     Check(ZeroFor(input::kShoulderR), "and is let go");
     SetInteractionEnabled(0); Tick();
+
+    // **The stick the engine keeps** (docs/MOVE-STOP-2026-10-24.md).
+    // Held(): move (0.8, 0.6) at full deflection, turn 0.8 past a 0.15 deadzone.
+    const int turnMilli = static_cast<int>((0.8f - 0.15f) / 0.85f * 1000.0f);
+    Reset(); Held();
+    Check(MoveLaneHeldMilli(0) == 800 && MoveLaneHeldMilli(1) == 600 && MoveLaneHeldMilli(2) == turnMilli,
+          "the held values are what each lane delivered");
+    Check(MoveLaneStickStarted(MonotonicNanoseconds(), 150000000ull), "a stick just pushed is a walk's start");
+    focused = false; Tick();
+    Check(MoveLaneHeldMilli(0) == 0 && MoveLaneHeldMilli(1) == 0 && MoveLaneHeldMilli(2) == 0 &&
+          !MoveLaneStickStarted(MonotonicNanoseconds(), 150000000ull),
+          "released, nothing is held and no walk is starting");
+
+    // Fix 2, the read-back: Prey's re-read (or anything else) zeroes the axes.
+    Reset(); Held();
+    playerInput.axes.moveX = playerInput.axes.moveY = playerInput.axes.yaw = 0.0f;
+    posted.clear(); Tick();
+    Check(Sent(locomotion::kKeyThumbLX, 800) && Sent(locomotion::kKeyThumbLY, 600) &&
+          Sent(locomotion::kKeyThumbRX, turnMilli), "the read-back posts again every axis the engine lost");
+    Check(playerInput.axes.moveX == 0.8f && playerInput.axes.moveY == 0.6f &&
+          gReasserted[0] == 1 && gReasserted[1] == 1 && gReasserted[2] == 1, "and the engine holds them again");
+    posted.clear(); Tick();
+    Check(!StickSent(), "a stick the engine holds is not posted again");
+
+    Reset(); Held();
+    playerInput.filteredKey = locomotion::kKeyThumbLX; playerInput.axes.moveX = 0.0f;
+    posted.clear(); Tick();
+    Check(Sent(locomotion::kKeyThumbLX, 800) && gReassertRefused[0] == 1, "an axis a filter blocks is tried once");
+    posted.clear(); Tick();
+    Check(!Sent(locomotion::kKeyThumbLX, 800), "and not posted again every frame");
+
+    Reset(); Held();
+    playerInput.axes.gate = 1; playerInput.axes.moveX = playerInput.axes.moveY = 0.0f;
+    playerInput.axes.yawBlocked = true; playerInput.axes.yaw = 0.0f;
+    posted.clear(); Tick();
+    Check(!StickSent(), "a cinematic gate's zero is the engine's decision");
+
+    // A gap in the controller samples within move.hold keeps walk and turn.
+    Reset(); SetStickSampleHoldMs(100); Held();
+    posted.clear(); focused = false; Tick();
+    Check(!ZeroFor(locomotion::kKeyThumbLX) && !ZeroFor(locomotion::kKeyThumbLY) &&
+          !ZeroFor(locomotion::kKeyThumbRX), "a sample gap within move.hold releases nothing");
+    focused = true; Tick();
+    Check(!StickSent() && MoveLaneHeldMilli(0) == 800, "and the stick carries on with nothing posted");
+    Reset(); SetStickSampleHoldMs(1); Held();
+    posted.clear(); focused = false; Sleep(10); Tick();
+    Check(ZeroFor(locomotion::kKeyThumbLX) && ZeroFor(locomotion::kKeyThumbLY) && ZeroFor(locomotion::kKeyThumbRX),
+          "past move.hold the sticks are released");
+
+    // The menu flag for one frame neither releases the sticks nor latches the
+    // wait for a centred stick; for two it does both.
+    Reset(); Held();
+    posted.clear(); gameplay = false; Tick(); gameplay = true; Tick();
+    Check(!ZeroFor(locomotion::kKeyThumbLX) && !ZeroFor(locomotion::kKeyThumbRX),
+          "a one-frame menu flag releases nothing");
+    tracked.play.move = {0.6f, 0.8f}; posted.clear(); Tick();
+    Check(Sent(locomotion::kKeyThumbLX, 600), "and the stick still moves the player");
+    Reset(); Held();
+    posted.clear(); gameplay = false; Tick(); Tick();
+    Check(ZeroFor(locomotion::kKeyThumbLX) && ZeroFor(locomotion::kKeyThumbLY) && ZeroFor(locomotion::kKeyThumbRX),
+          "a menu up for two frames releases the sticks");
+    gameplay = true; posted.clear(); Held();
+    Check(!Sent(locomotion::kKeyThumbLX, 800) && !Sent(locomotion::kKeyThumbRX, turnMilli),
+          "after it, a stick still pushed waits for centre");
+    tracked = {}; Tick(); posted.clear(); Held();
+    Check(Sent(locomotion::kKeyThumbLX, 800) && Sent(locomotion::kKeyThumbRX, turnMilli), "centred, it moves again");
+    tracked = {}; Tick();
 
     xrframe::FrameContract contract;
     contract.AllowSingleThreaded(true);

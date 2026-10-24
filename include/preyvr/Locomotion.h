@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 // Turning a thumbstick into the analog axis events Prey's input layer already
 // understands.
 //
@@ -89,5 +91,40 @@ private:
 // a commanded stick. Writes the shaped reading to `outX`/`outY`; false when the
 // input is not usable, in which case the outputs are untouched.
 bool ShapeStick(float x, float y, float deadzone, float* outX, float* outY);
+
+// The value the engine stores for an axis posted in thousandths -- the same
+// conversion the post makes, so a read-back compares exactly.
+inline float HeldAxisValue(int milli) { return static_cast<float>(milli) / 1000.0f; }
+
+// **What Prey's re-read of a stick axis should find** (docs/MOVE-STOP-2026-10-24.md).
+// On an action-map or filter event Prey re-reads the move and yaw axes from the
+// physical pad's symbols and stores them, and the lane's posts never set those
+// symbols: the re-read found 0 and stopped the player. It finds instead what a
+// real pad's symbol would hold: the pad's own value when the pad is pushed or the
+// lane holds nothing, 0 when the action is filtered (as the engine's read
+// returns), otherwise the value the lane delivered.
+inline float RereadValue(float native, int heldMilli, bool filtered)
+{
+    if (native != 0.0f || heldMilli == 0 || filtered) { return native; }
+    return HeldAxisValue(heldMilli);
+}
+
+// **A short gap in the controller samples keeps the last stick.** A refused or
+// stale tracking read (or an untracked head, for head-relative movement) used to
+// post a zero for a frame -- a one-frame stop -- and the value again the next.
+// Within `limit` of the last good sample the lane posts nothing, so the engine
+// keeps what it holds; past it, the stick is released as before.
+class SampleHold {
+public:
+    void Sampled(std::uint64_t now) { last_ = now; }
+    bool Bridges(std::uint64_t now, std::uint64_t limit) const
+    {
+        return last_ != 0 && limit != 0 && now >= last_ && now - last_ <= limit;
+    }
+    void Reset() { last_ = 0; }
+
+private:
+    std::uint64_t last_ = 0;
+};
 
 } // namespace preyvr::locomotion

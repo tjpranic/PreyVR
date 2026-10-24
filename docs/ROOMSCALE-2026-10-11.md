@@ -207,7 +207,8 @@ was 0 throughout.
   - With a 3 cm deadzone the follower chased the eyes, which swing several centimetres about the
     neck whenever the head turns or tips.
   - It moved 934–1863 times a minute, about once every two to four frames, through `SetPos`.
-  - A `SetPos` while the engine walks the capsule stalls the walk.
+  - This was the first report of the movement stop. Its causes and fixes, through 2026-10-24, are
+    in [MOVE-STOP-2026-10-24.md](MOVE-STOP-2026-10-24.md).
 - **The fade never appeared.**
   - Detection worked: `headOutEvents=7`, `headHits=814`, the head up to 46 cm from a blocked
     body.
@@ -223,7 +224,7 @@ that is native mouse look on refocus.
 | Change | Detail |
 |---|---|
 | **Follow the neck, not the eyes** | The body follows the head moved by where its neck is now, less where it would be facing the torso, level (`FollowPoint`, neck 7.5 cm below and 8 cm behind the eyes). Turning or tipping the head alone no longer moves the body |
-| **Stand aside while the engine moves the capsule** | When the capsule moved more than 0.25 m/s natively since the last frame (stick walking, a jump, a fall, a lift), no room-scale move that frame (`nativeMoving`) |
+| **Stand aside while the engine moves the capsule** | When the capsule moved more than 0.25 m/s natively since the last frame (stick walking, a jump, a fall, a lift), no room-scale move that frame (`nativeMoving`). Off by default since PreyVR-43 (2026-10-19; [MOVE-STOP-2026-10-24.md](MOVE-STOP-2026-10-24.md), A.6) |
 | **The fade draws** | 640×480, repainted per alpha level (8 levels), 0.2 m ahead and 5 m square. The swapchain logs `detail=fade_swapchain` with its result. `fadeFrames` in `body.report` counts frames it was submitted |
 
 **New `body.report` fields:**
@@ -283,9 +284,9 @@ menu (there is no gameplay view to pair), as before this branch.
    when you step back, and the trigger should do nothing while black.
 3. **Tables and low furniture:** lean over a desk. A fade there is a false positive: the head is
    above the top but more than 30 cm from a body the desk stopped. Report it if it happens.
-4. **Stick walking and turning:** walk and turn with the sticks and your head. Nothing should
-   stall, and `nativeMoving` should climb while the stick walks. (The multi-frame snap-back check
-   passed in the second stage.)
+4. **Stick walking and turning:** superseded by
+   [MOVE-STOP-2026-10-24.md](MOVE-STOP-2026-10-24.md) ("If it comes back"). (The multi-frame
+   snap-back check passed in the second stage.)
 
 ## Implementation order
 

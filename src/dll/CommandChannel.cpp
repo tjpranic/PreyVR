@@ -54,6 +54,7 @@
 #include "FrameCaptureWin32.h"
 #include "InputPost.h"
 #include "MoveLane.h"
+#include "StickReread.h"
 #include "ActionMaps.h"
 #include "WeaponAttachment.h"
 #include "XrInput.h"
@@ -1337,6 +1338,19 @@ constexpr Verb kVerbs[] = {
     {"move.deadzone", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
         out << "move.deadzone result=" << (Valued(args) ? SetMoveLaneDeadzone(Arg(args, 1, 15)) : 0)
             << " hundredths=" << MoveLaneDeadzone();
+    }},
+    {"move.reread", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
+        // docs/MOVE-STOP-2026-10-24.md: Prey's re-read of the sticks finds the
+        // lanes' stick (1), or the idle pad's zero as Prey reads it (0, A/B).
+        out << "move.reread result=" << (Valued(args) ? SetStickRereadFix(static_cast<unsigned>(Arg(args, 1, 1))) : 0)
+            << StickRereadReport();
+    }},
+    {"move.hold", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
+        out << "move.hold result=" << (Valued(args) ? SetStickSampleHoldMs(static_cast<unsigned>(Arg(args, 1, 100))) : 0)
+            << " ms=" << StickSampleHoldMs();
+    }},
+    {"move.report", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
+        out << "move.report result=0" << MoveLaneStatusReport() << StickRereadReport();
     }},
     {"input.post", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
         out << "input.post result=" << (Valued(args) ? SetInputPostEnabled(Arg(args, 1, 1)) : 0) << NoValue(args);

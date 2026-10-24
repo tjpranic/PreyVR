@@ -274,6 +274,9 @@ value report, as described above.
 | `move.all` | 0/1 | | Turns move, turn, fire and act on or off together. |
 | `move.firehold` | 0/1 | 1 | Holds the fire key while the trigger is held (GLOO, Disruptor). |
 | `move.bind <slot> <keyId>` | slot 0–14 | | Remaps a controller action's key: 0 interact, 1 inventory, 2 jump, 3 crouch, 4 PC wheel (unbound by default), 5 Prey's Y, 6 sprint, 7 psychoscope, 8–10 quick slots left/right/down, 11 torch, 12 psi, 13–14 the wheel's LB/RB (Frame bumpers, sent only while Prey's wheel is open). |
+| `move.reread` | 0/1 | 1 | 1: when Prey re-reads the sticks from the gamepad (leaving the weapon wheel, a keypad or a menu, any filter change), it finds the stick you are holding. 0: it finds the idle pad's zero and the player stops until the stick moves, as before 2026-10-24, for A/B. Counts either way (docs/MOVE-STOP-2026-10-24.md). |
+| `move.hold` | 0–250 ms | 100 | How long a gap in the controller samples keeps the last stick instead of releasing it for a frame. 0 releases at once, as before 2026-10-24. |
+| `move.report` | report | | The stick lanes' counters, also on the status line as `move={...}`: `released` (a held stick let go, by reason), `bridged`/`turnBridged` (sample gaps held across), `menuFlickers` (a menu flag up for one frame, which no longer stops you), `menuTook`, `reasserted`/`reassertRefused` (sticks the engine lost and was given back), and `reread` (Prey's re-reads by event; `wouldStop` = re-reads that would have stopped you, `kept` = those the fix kept). |
 | `input.post` | 0/1 | 0 → VR 1 | Lets the mod post input to the engine; every controller lane needs it. |
 | `input.force` | 0/1 | 0 | Bypasses the engine's posting check. Diagnostic. |
 | `input.key <keyId> [state] [valueMilli]` | | | Posts one raw input event. Diagnostic. |
@@ -293,7 +296,7 @@ value report, as described above.
 | `body.level` | 0/1 | 1 | Level body rotation. |
 | `body.turn <deg> [delayS]` | ±1..180, 0–60 s | | Test: one body turn; the view must not turn. |
 | `body.nudge <rightCm> <fwdCm> [delayS]` | ±100 cm | | Test: one capsule move; the view must not move. |
-| `body.report` | report | | Body-follow and room-scale counters. Since 2026-10-19 also `keptMotion`/`restMoves` (moves while walking / at rest), `fitShortened`, `fitVertical`, `fitStartBlocked`, `stepSettling`, `pushOut`/`pushOutMaxMm` (times the engine pushed the body sideways out of something), `deferredBusy` (moves mid-walk that waited a frame for the physics to be idle) and `bodyLagMaxMm`. |
+| `body.report` | report | | Body-follow and room-scale counters. Since 2026-10-19 also `keptMotion`/`restMoves` (moves while walking / at rest), `fitShortened`, `fitVertical`, `fitStartBlocked`, `stepSettling`, `pushOut`/`pushOutMaxMm` (times the engine pushed the body sideways out of something), `deferredBusy` (moves mid-walk that waited a frame for the physics to be idle) and `bodyLagMaxMm`. Since 2026-10-24 also `startKept` (moves in a walk's first frames that kept the motion instead of the teleport) and `raced` (moves a physics step queued behind it, replayed as a teleport). |
 
 ### Arms and hands (IK)
 

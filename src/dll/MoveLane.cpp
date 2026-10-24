@@ -15,6 +15,7 @@
 
 #include "InputPost.h"
 #include "HeadTrackingHook.h"
+#include "StickReread.h"
 #include "UiMode.h"
 #include "Logger.h"
 #include "MinHookInit.h"
@@ -190,6 +191,98 @@ std::atomic<unsigned long long> gFireHoldPosted{0};
 bool gRecenterHeld = false;
 std::atomic<unsigned long long> gRecenters{0};
 
+// --- the stick the engine keeps (docs/MOVE-STOP-2026-10-24.md) ---------------
+//
+// What the lanes delivered and the engine should hold, in thousandths: move X,
+// move Y, yaw. Written by the frame thread, read by StickReread's hook wherever
+// Prey re-reads the sticks.
+std::atomic<int> gHeldMilli[3]{};
+std::atomic<std::uint64_t> gStickPushedNs{0};
+std::atomic<unsigned> gSampleHoldMs{100};
+locomotion::SampleHold gMoveSamples;   // frame thread
+// Once a frame, for both lanes: a menu takes the sticks only after two frames.
+// On the flag's first frame the sticks are still play's and the lanes hold.
+input::MenuDebounce gMenuDebounce;
+bool gSticksPlay = false;
+bool gMenuFlagFrame = false;
+// Why the move lane let go of a held stick -- each one a stop the player sees.
+enum MoveRelease : unsigned { kReleaseOff, kReleaseMenu, kReleaseRead, kReleaseHead, kReleaseRecentre,
+                              kReleaseCentre, kReleaseCount };
+std::atomic<unsigned long long> gReleases[kReleaseCount]{};
+std::atomic<unsigned long long> gBridged{0}, gTurnBridged{0}, gMenuFlickers{0}, gMenuTook{0};
+// The read-back's re-posts, per axis: restored, or still refused (filtered),
+// which waits a quarter second before the next try.
+std::atomic<unsigned long long> gReasserted[3]{}, gReassertRefused[3]{};
+std::uint64_t gReassertAfterNs[3]{};   // frame thread
+constexpr std::uint64_t kReassertBackoffNs = 250000000ull;
+constexpr unsigned long long kReassertLogBudget = 20;
+std::atomic<unsigned long long> gReassertLogged{0};
+constexpr float kAxisTolerance = 1e-4f;
+constexpr int kAxisKeys[3] = {locomotion::kKeyThumbLX, locomotion::kKeyThumbLY, locomotion::kKeyThumbRX};
+constexpr const char* kAxisNames[3] = {"x", "y", "yaw"};
+
+std::uint64_t SampleHoldNs() { return gSampleHoldMs.load(std::memory_order_relaxed) * 1000000ull; }
+
+// The move stick's two axes delivered as held: notes the moment it went from
+// released to pushed, for room-scale's walk start.
+void HoldMove(unsigned axis, int milli)
+{
+    const bool wasPushed = gHeldMilli[0].load(std::memory_order_relaxed) != 0 ||
+                           gHeldMilli[1].load(std::memory_order_relaxed) != 0;
+    gHeldMilli[axis].store(milli, std::memory_order_relaxed);
+    if (!wasPushed && milli != 0) { gStickPushedNs.store(MonotonicNanoseconds(), std::memory_order_relaxed); }
+}
+
+float StoredAxis(const StickAxes& axes, unsigned axis)
+{
+    return axis == 0 ? axes.moveX : axis == 1 ? axes.moveY : axes.yaw;
+}
+
+// What an axis holds when the lane delivered `milli`: the yaw handler stores it
+// negated (StickRereadNative.h).
+float ExpectedAxis(unsigned axis, int milli)
+{
+    const float value = locomotion::HeldAxisValue(milli);
+    return axis == 2 ? -value : value;
+}
+
+// **The read-back** (fix 2): the engine still holds what the lanes delivered.
+// A held axis it stores otherwise -- overwritten by a path StickReread does not
+// cover -- is posted again, within the frame it was found. One the engine
+// still refuses (a filter blocks it) is tried again a quarter second later.
+// The cinematic gate, and yaw's own block, are the engine's to decide.
+void ReassertHeld(unsigned first, unsigned last)
+{
+    bool anyHeld = false;
+    for (unsigned axis = first; axis <= last; ++axis) {
+        anyHeld = anyHeld || gHeldMilli[axis].load(std::memory_order_relaxed) != 0;
+    }
+    StickAxes stored{};
+    if (!anyHeld || !ReadStickAxes(stored)) { return; }
+    const std::uint64_t now = MonotonicNanoseconds();
+    for (unsigned axis = first; axis <= last; ++axis) {
+        const int milli = gHeldMilli[axis].load(std::memory_order_relaxed);
+        if (milli == 0 || now < gReassertAfterNs[axis] || (axis < 2 ? stored.gate != 0 : stored.yawBlocked)) {
+            continue;
+        }
+        const float before = StoredAxis(stored, axis);
+        const float expected = ExpectedAxis(axis, milli);
+        if (std::fabs(before - expected) <= kAxisTolerance) { continue; }
+        if (PostRawInputImmediate(kAxisKeys[axis], static_cast<unsigned int>(locomotion::kStateChanged), milli) != 0) {
+            continue;
+        }
+        StickAxes after{};
+        const bool restored = ReadStickAxes(after) && std::fabs(StoredAxis(after, axis) - expected) <= kAxisTolerance;
+        (restored ? gReasserted[axis] : gReassertRefused[axis]).fetch_add(1, std::memory_order_relaxed);
+        if (!restored) { gReassertAfterNs[axis] = now + kReassertBackoffNs; }
+        if (gReassertLogged.fetch_add(1, std::memory_order_relaxed) < kReassertLogBudget) {
+            Log(std::string("result=0 detail=reassert axis=") + kAxisNames[axis] +
+                " storedMilli=" + std::to_string(static_cast<int>(before * 1000.0f)) +
+                " heldMilli=" + std::to_string(milli) + " restored=" + (restored ? "1" : "0"));
+        }
+    }
+}
+
 bool ReadFloat(const void* at, float* out)
 {
     return SafeRead(at, *out);
@@ -315,6 +408,20 @@ bool PsiButtonHeld() { return gPsiHeld.load(std::memory_order_acquire); }
 
 void UpdateMoveLane()
 {
+    const std::uint64_t now = MonotonicNanoseconds();
+    // Once a frame, for both lanes (input::MenuDebounce): a menu flag that has
+    // been up for one frame only does not take the sticks -- that used to stop
+    // the player until the stick was centred.
+    const bool allowed = HudGameplayInputAllowed();
+    gSticksPlay = gMenuDebounce.Update(allowed);
+    gMenuFlagFrame = !allowed && gSticksPlay;
+    if (gMenuDebounce.Flickered()) { gMenuFlickers.fetch_add(1, std::memory_order_relaxed); }
+    static bool awaitNeutral=false;
+    if (!gSticksPlay) {
+        if (!awaitNeutral) { gMenuTook.fetch_add(1, std::memory_order_relaxed); }
+        awaitNeutral=true;
+    }
+
     // The move action (the LEFT stick by default) moves, matching
     // `xi_thumblx`/`xi_thumbly` and every mod in the fleet survey.
     Navigation state{};
@@ -322,41 +429,57 @@ void UpdateMoveLane()
     const bool neutralize = gMoveNeutralize.exchange(false, std::memory_order_acq_rel);
     const auto movementReference=HeadTrackingReferenceGeneration();
     TrackingFrame movementFrame{};
-    bool haveInput = active && !neutralize && HudGameplayInputAllowed() &&
-        TryGetTrackingFrame(movementFrame) && FreshSample(MonotonicNanoseconds(),movementFrame.publishedNs);
+    unsigned release = kReleaseCount;   // none
+    bool hold = gMenuFlagFrame;
+    if (!active || neutralize) { release = kReleaseOff; hold = false; }
+    else if (!gSticksPlay) { release = kReleaseMenu; }
+    else if (!hold && !TryGetTrackingFrame(movementFrame)) { release = kReleaseRead; }
+    bool haveInput = release == kReleaseCount && !hold;
     if(haveInput) state=movementFrame.play.move;
-    static bool awaitNeutral=false;
-    if (!HudGameplayInputAllowed()) { awaitNeutral=true; }
     if (haveInput && awaitNeutral) {
         if (std::fabs(state.x)<=.15f && std::fabs(state.y)<=.15f) awaitNeutral=false;
-        else haveInput=false;
+        else { haveInput=false; release=kReleaseCentre; }
     }
     if(haveInput && gHeadRelative.load()) {
         const auto yaw=stereo::RecenterYawFromHeadPose(movementFrame.head);
-        if(!yaw || !IsPoseUsable(movementFrame.head,movementFrame.headValidity,kMaxPoseAgeNs)) haveInput=false;
-        else {
+        if(!yaw || !IsPoseUsable(movementFrame.head,movementFrame.headValidity,kMaxPoseAgeNs)) {
+            haveInput=false; release=kReleaseHead;
+        } else {
             const auto v=comfort::HeadRelativeStick({state.x,state.y},
                 *yaw-HeadTrackingReferenceYaw(),gStrafeScale.load(),gBackwardScale.load());
             state.x=v.x;state.y=v.y;
         }
     }
-    if(!stereo::ReferenceCurrent(movementReference, HeadTrackingReferenceGeneration())) haveInput=false;
+    if(haveInput && !stereo::ReferenceCurrent(movementReference, HeadTrackingReferenceGeneration())) {
+        haveInput=false; release=kReleaseRecentre;
+    }
+    // A short gap in the samples, or in head tracking moving head relative,
+    // keeps the stick the engine holds (move.hold): releasing it for a frame
+    // and posting it again the next was a one-frame stop.
+    if (haveInput) { gMoveSamples.Sampled(now); }
+    else if ((release == kReleaseRead || release == kReleaseHead) && gMoveSamples.Bridges(now, SampleHoldNs())) {
+        hold = true;
+        gBridged.fetch_add(1, std::memory_order_relaxed);
+    }
+    if (hold) { return; }
     if (!haveInput) {
+        if (gMoveMayBeHeld && release < kReleaseCount) { gReleases[release].fetch_add(1, std::memory_order_relaxed); }
         // A partially delivered X/Y pair can leave one axis held even though
         // the candidate shaper was not committed. Release both owned axes and
         // retry refusals; never infer successful delivery from shaper state.
         bool released = true;
         if (gMoveMayBeHeld) {
-            for (const int key : {locomotion::kKeyThumbLX, locomotion::kKeyThumbLY}) {
-                if (PostRawInputImmediate(key, locomotion::kStateChanged, 0) == 0) {
+            for (const unsigned axis : {0u, 1u}) {
+                if (PostRawInputImmediate(kAxisKeys[axis], locomotion::kStateChanged, 0) == 0) {
                     gPosted.fetch_add(1, std::memory_order_relaxed);
+                    HoldMove(axis, 0);
                 } else {
                     released = false;
                     gDropped.fetch_add(1, std::memory_order_relaxed);
                 }
             }
         }
-        if (released) { gMoveMayBeHeld = false; gStick.Reset(); }
+        if (released) { gMoveMayBeHeld = false; gStick.Reset(); HoldMove(0, 0); HoldMove(1, 0); }
         else { gMoveNeutralize.store(true, std::memory_order_release); }
         return;
     }
@@ -380,6 +503,7 @@ void UpdateMoveLane()
                                   valueMilli) == 0) {
             if (valueMilli != 0) { gMoveMayBeHeld = true; }
             gPosted.fetch_add(1, std::memory_order_relaxed);
+            HoldMove(events[i].keyId == locomotion::kKeyThumbLX ? 0u : 1u, valueMilli);
         } else {
             delivered = false;
             gDropped.fetch_add(1, std::memory_order_relaxed);
@@ -389,6 +513,7 @@ void UpdateMoveLane()
         gStick = candidate;
         if (gStick.LastSentX() == 0 && gStick.LastSentY() == 0) { gMoveMayBeHeld = false; }
     }
+    ReassertHeld(0, 1);
 }
 
 void UpdateTurnAndFireLanes()
@@ -401,6 +526,9 @@ void UpdateTurnAndFireLanes()
     // recenter/support chord that was never held at the same instant.
     TrackingFrame inputFrame{};
     const bool haveInput = TryGetTrackingFrame(inputFrame);
+    const std::uint64_t now = MonotonicNanoseconds();
+    static locomotion::SampleHold turnSamples;
+    if (haveInput) { turnSamples.Sampled(now); }
     const ControllerState right = haveInput ? inputFrame.hands[1] : ControllerState{};
     const ControllerState leftHand = haveInput ? inputFrame.hands[0] : ControllerState{};
     // Play's named actions, whichever buttons they are bound to (ControllerProfiles).
@@ -438,23 +566,31 @@ void UpdateTurnAndFireLanes()
         gRecenterHeld = both;
     }
 
+    // The menu state the move lane settled this frame (input::MenuDebounce).
     static bool turnBlocked=false;
-    if (!HudGameplayInputAllowed()) turnBlocked=true;
+    if (!gSticksPlay) turnBlocked=true;
     else if (haveInput && std::fabs(play.turn.x)<=.15f && std::fabs(play.turn.y)<=.15f) turnBlocked=false;
-    const bool turnOn = gTurnEnabled.load(std::memory_order_acquire) && HudGameplayInputAllowed() && !turnBlocked;
+    const bool turnOn = gTurnEnabled.load(std::memory_order_acquire) && gSticksPlay && !turnBlocked;
     const bool releaseTurn = gTurnNeutralize.exchange(false, std::memory_order_acq_rel);
+    // The menu flag's first frame, or a short gap in the samples: the engine
+    // keeps the turn it holds, as the move lane keeps the walk.
+    const bool bridging = !haveInput && turnSamples.Bridges(now, SampleHoldNs());
+    const bool turnHold = turnOn && !releaseTurn && (gMenuFlagFrame || bridging);
+    if (turnHold && !gMenuFlagFrame) { gTurnBridged.fetch_add(1, std::memory_order_relaxed); }
     static comfort::SnapLatch snap;
     static unsigned previousMode=~0u;
     const unsigned snapDegrees=gSnapDegrees.load();
     const bool modeChanged=snapDegrees!=previousMode;previousMode=snapDegrees;
-    const int steps=snap.Update(play.turn.x,play.turn.y,
+    // Not updated while holding: a sample missed mid-push would otherwise
+    // disarm a snap until the stick came back to centre.
+    const int steps=turnHold ? 0 : snap.Update(play.turn.x,play.turn.y,
         turnOn && haveInput && !releaseTurn && !modeChanged && snapDegrees!=0);
     if(steps) {
         // Queued, not applied: this frame's view was built before this hook,
         // against the reference the snap changes (QueueSnapTurn).
         if(QueueSnapTurn(steps,snapDegrees)==0) ++gTurnPosted; else ++gTurnRefused;
     }
-    if (turnOn || (gTurnPrimed && gLastTurnSent != 0)) {
+    if (!turnHold && (turnOn || (gTurnPrimed && gLastTurnSent != 0))) {
         const float dead = gTurnDeadzoneHundredths.load(std::memory_order_relaxed) / 100.0f;
         const float scale = gTurnScalePercent.load(std::memory_order_relaxed) / 100.0f;
         float value = (turnOn && haveInput && !releaseTurn && snapDegrees==0) ? play.turn.x : 0.0f;
@@ -476,6 +612,7 @@ void UpdateTurnAndFireLanes()
                                       locomotion::kStateChanged, milli) == 0) {
                 gLastTurnSent = value;
                 gTurnPrimed = true;
+                gHeldMilli[2].store(milli, std::memory_order_relaxed);
                 gTurnPosted.fetch_add(1, std::memory_order_relaxed);
             } else {
                 if (releaseTurn) { gTurnNeutralize.store(true, std::memory_order_release); }
@@ -483,6 +620,7 @@ void UpdateTurnAndFireLanes()
             }
         }
     }
+    if (!turnHold) { ReassertHeld(2, 2); }
 
     static bool awaitTriggerRelease=false;
     // A head through a wall is blacked out (BodyFollow.h): no shots from the
@@ -781,6 +919,42 @@ unsigned long long MoveLaneInputObject() { return gInputObject.load(std::memory_
 int MoveLaneAxisMilli(unsigned int axis) { return axis < 2 ? gAxisMilli[axis].load(std::memory_order_relaxed) : 0; }
 int MoveLaneCinematicGate() { return gCinematic.load(std::memory_order_relaxed); }
 unsigned long long MoveLaneRecenterCount() { return gRecenters.load(std::memory_order_relaxed); }
+
+int MoveLaneHeldMilli(unsigned axis) { return axis < 3 ? gHeldMilli[axis].load(std::memory_order_relaxed) : 0; }
+
+bool MoveLaneStickStarted(std::uint64_t now, std::uint64_t windowNs)
+{
+    const std::uint64_t pushed = gStickPushedNs.load(std::memory_order_relaxed);
+    return (gHeldMilli[0].load(std::memory_order_relaxed) != 0 || gHeldMilli[1].load(std::memory_order_relaxed) != 0) &&
+           pushed != 0 && now >= pushed && now - pushed <= windowNs;
+}
+
+DWORD SetStickSampleHoldMs(unsigned ms)
+{
+    if (ms > 250u) { return ERROR_INVALID_PARAMETER; }
+    gSampleHoldMs.store(ms, std::memory_order_relaxed);
+    Log("result=0 detail=sample_hold ms=" + std::to_string(ms));
+    return 0;
+}
+
+unsigned StickSampleHoldMs() { return gSampleHoldMs.load(std::memory_order_relaxed); }
+
+std::string MoveLaneStatusReport()
+{
+    std::ostringstream out;
+    out << " lane={mode=" << MoveLaneMode() << " turn=" << TurnLaneEnabled() << " posted=" << gPosted.load()
+        << " dropped=" << gDropped.load() << " heldMilli=" << gHeldMilli[0].load() << ',' << gHeldMilli[1].load()
+        << ',' << gHeldMilli[2].load() << " holdMs=" << StickSampleHoldMs()
+        << " released={off=" << gReleases[kReleaseOff].load() << " menu=" << gReleases[kReleaseMenu].load()
+        << " read=" << gReleases[kReleaseRead].load() << " head=" << gReleases[kReleaseHead].load()
+        << " recentre=" << gReleases[kReleaseRecentre].load() << " centre=" << gReleases[kReleaseCentre].load()
+        << "} bridged=" << gBridged.load() << " turnBridged=" << gTurnBridged.load()
+        << " menuFlickers=" << gMenuFlickers.load() << " menuTook=" << gMenuTook.load()
+        << " reasserted=" << gReasserted[0].load() << ',' << gReasserted[1].load() << ',' << gReasserted[2].load()
+        << " reassertRefused=" << gReassertRefused[0].load() << ',' << gReassertRefused[1].load() << ','
+        << gReassertRefused[2].load() << " native=" << gNative.load() << " }";
+    return out.str();
+}
 
 DWORD SetSnapTurnDegrees(unsigned degrees) {
     if(degrees!=0 && (degrees<15 || degrees>90)) return 1;

@@ -4,6 +4,7 @@
 
 #include "GameplayFrame.h"
 #include "HeadTrackingHook.h"
+#include "MoveLane.h"
 #include "SceneQuery.h"
 #include "XrInput.h"
 #include "preyvr/RoomScale.h"
@@ -286,7 +287,13 @@ int Move(void* player, const GameplayPoseFrame& pose, float playSpaceYaw, const 
         // before that step, undoing the walk's own movement. Otherwise the move
         // waits a frame. At rest the entity's SetPos alone, whose teleport lets
         // the next step settle the body on what is under it.
-        const bool moving = physics != nullptr && roomscale::BodyMoving(living.velocity, living.requested);
+        //
+        // A walk's first frames read as rest (the velocity and the request are
+        // last frame's), so a stick pushed within kWalkStartNs counts as moving:
+        // the teleport there started the walk airborne.
+        const bool bodyMoving = roomscale::BodyMoving(living.velocity, living.requested);
+        const bool starting = !bodyMoving && MoveLaneStickStarted(MonotonicNanoseconds(), kWalkStartNs);
+        const bool moving = physics != nullptr && (bodyMoving || starting);
         Vec3 base = feet;
         if (moving) {
             Vec3 body{};
@@ -328,6 +335,7 @@ int Move(void* player, const GameplayPoseFrame& pose, float playSpaceYaw, const 
         if (moving) {
             if (SetPositionKeepingMotion(physics, target)) {
                 gKeptMotion.fetch_add(1, std::memory_order_relaxed);
+                if (starting) { gStartKept.fetch_add(1, std::memory_order_relaxed); }
             } else {
                 PhysicsFault("set_params");
             }
@@ -337,6 +345,14 @@ int Move(void* player, const GameplayPoseFrame& pose, float playSpaceYaw, const 
         if (!CallSetPos(set, entity, &target)) {
             Fault("set_pos");
             return std::nullopt;
+        }
+        // A physics step that began between the two calls queued the entity's
+        // own SetParams behind it (RoomScaleNative.h). Replayed afterwards with
+        // this position, it puts the body back by that step's movement, and
+        // takes the teleport. Counted, to decide whether it needs a cure.
+        std::uint32_t queued = 0;
+        if (moving && ReadAt(physics, rn::EntityQueued, queued) && queued >= rn::EntityQueuedUnit) {
+            gRaced.fetch_add(1, std::memory_order_relaxed);
         }
         if (!CallGetPos(get, entity, movedTo)) {
             Fault("get_pos");

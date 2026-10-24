@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <iostream>
 
+using preyvr::input::MenuDebounce;
 using preyvr::input::PlayResume;
 using preyvr::input::ReleaseGate;
 
@@ -58,6 +59,19 @@ int main()
         Check(resume.Update(true), "the first frame ever is the menu's");
         Check(!resume.Update(true), "then play");
         Check(resume.Update(false) && resume.Update(true) && !resume.Update(true), "one frame of grace per return");
+    }
+    {
+        // docs/MOVE-STOP-2026-10-24.md: a one-frame menu flag stopped the player.
+        MenuDebounce sticks;
+        Check(sticks.Update(true) && !sticks.Flickered(), "play has the sticks");
+        Check(sticks.Update(false), "the flag's first frame leaves them to play");
+        Check(sticks.Update(true) && sticks.Flickered(), "a one-frame flag is a flicker, and play keeps them");
+        Check(sticks.Update(true) && !sticks.Flickered(), "counted once");
+        Check(sticks.Update(false) && !sticks.Update(false), "a second frame of menu takes them");
+        Check(!sticks.Update(false) && !sticks.Flickered(), "for as long as it is up");
+        Check(sticks.Update(true) && !sticks.Flickered(), "a real menu closing is no flicker");
+        MenuDebounce slow(3);
+        Check(slow.Update(false) && slow.Update(false) && !slow.Update(false), "the frame count is a setting");
     }
     std::cout << "release gate: a button that closes a menu waits for its release\n";
     return 0;

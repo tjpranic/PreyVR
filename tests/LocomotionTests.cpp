@@ -145,6 +145,30 @@ void TestResetForcesAFullRestatement()
             "after a reset the engine's stored axis is not ours to assume");
 }
 
+// docs/MOVE-STOP-2026-10-24.md: what Prey's re-read of an axis finds.
+void TestRereadFindsTheHeldStick()
+{
+    Require(HeldAxisValue(800) == 800.0f / 1000.0f, "an axis posted as 800 is stored as the post converts it");
+    Require(RereadValue(0.0f, 800, false) == HeldAxisValue(800), "the idle pad's zero becomes the held stick");
+    Require(RereadValue(0.0f, -1000, false) == -1.0f, "held backwards too");
+    Require(RereadValue(0.0f, 0, false) == 0.0f, "nothing held: the pad's value");
+    Require(RereadValue(0.0f, 800, true) == 0.0f, "a filtered action reads 0, as the engine's read does");
+    Require(RereadValue(0.4f, 800, false) == 0.4f, "a real pad that is pushed wins");
+}
+
+void TestSampleGapsAreBridged()
+{
+    SampleHold hold;
+    Require(!hold.Bridges(1000, 100), "no sample yet: nothing to keep");
+    hold.Sampled(1000);
+    Require(hold.Bridges(1000, 100) && hold.Bridges(1100, 100), "within the limit the last stick stands");
+    Require(!hold.Bridges(1101, 100), "past it the stick is released");
+    Require(!hold.Bridges(1050, 0), "a zero limit releases at once");
+    Require(!hold.Bridges(999, 100), "a clock behind the sample is no gap to bridge");
+    hold.Reset();
+    Require(!hold.Bridges(1050, 100), "and a reset forgets the sample");
+}
+
 } // namespace
 
 int main()
@@ -157,6 +181,8 @@ int main()
     TestReleasingTheStickEmitsZero();
     TestABadReadingDoesNotBecomeTheBaseline();
     TestResetForcesAFullRestatement();
+    TestRereadFindsTheHeldStick();
+    TestSampleGapsAreBridged();
     std::cout << "locomotion tests passed\n";
     return 0;
 }

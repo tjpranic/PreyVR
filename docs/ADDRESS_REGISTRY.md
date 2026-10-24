@@ -2,6 +2,26 @@
 
 Only confirmed or explicitly provisional build-specific locations belong here. Prefer a signature plus validation recipe over an RVA alone.
 
+### Stick re-read — 2026-10-24
+
+No R-number. Worn OK in PreyVR-72 (2026-10-24, run `player-20261024-171806`): 128 re-reads that
+would have stopped the player were kept, mostly the `ArkPlayerInteraction` filter. Supported Steam hash;
+`tools/re/verify_stick_reread.py` checks every row (61 checks), and `src/dll/StickReread.cpp`
+compares the six bodies of `include/preyvr/StickRereadNative.h` and two vtable slots in memory
+before hooking. Why and how in [the movement-stop notes](MOVE-STOP-2026-10-24.md).
+
+| RVA / field | Purpose and constraint |
+| --- | --- |
+| `0x1590390` (342 bytes) | `ArkPlayerInput` OnActionMapEvent, slot 1 of its vtable at `+8` (`0x1E580F8`). Event 3 with `lparam` (`+0x10`) set and a map (`+0x08`, GetName slot `+0xC8`) named `player`, or event 2 while the input-mode stack (`+0x10..+0x18`, 8-byte entries) tops at mode 0, calls the re-read. Detoured, to name the event (MinHook; entry `48 89 5C 24 20`). |
+| `0x158E780` (1029 bytes) | The re-read: stores move X `+0x5C`, move Y `+0x60`, pitch `+0x44` and yaw `+0x4C` (both negated) from `0x158EB90` for action table `+0x2F0/+0x2F8/+0x310/+0x308`; zeroes the move axes while the gate `+0x94` is set, yaw while `+0xB4` or gate 2. Its only caller is the listener. |
+| `0x158EB90` (156 bytes) | The per-axis read `float(context, action, map)`: `ActionFiltered` on `**context` (manager slot `+0x1A8`, `0x3CDFE0`) → 0, else `IInput` `+0xD8` LookupSymbol(3, `CUIManager+0x3C`, key)`->value` (`+0x1C`). Called only by the re-read (four calls). Detoured: returns the lanes' delivered stick (MinHook; entry `48 89 5C 24 10`). |
+| `0x2C16838` | qword: the action-name struct. `xi_movex` `+0x2F0`, `xi_movey` `+0x2F8`, `xi_rotateyaw` `+0x308`, `xi_rotatepitch` `+0x310` (initializer `0x1706DA0`, at `0x1708B34`). Prey's filter objects are kept in it too (`+0xBD8..`, `0x170F310`). |
+| `0x158FE50` (39 bytes) | `xi_rotateyaw` handler: stores `-value` at `+0x4C`, nothing while `+0xB4` is set or the gate is 2. The pitch handler `0x158FE10` stores `+0x44`. |
+| `0x3CF050` / `0x3CF1C0` | `CActionMapManager` (vtable `0x1CBFC48`) `+0xD8` EnableActionMap: event 3 only on a change, map `+0x08`, enable `+0x10`. `+0xE0` EnableFilter: calls the filter's Enable, then event 2 with the name at `+0x08`, enable `+0x10`. |
+| `0x3C3770` | `CActionFilter` (vtable `0x1CBE190`) `+0x38` Enable: event 2 on every call, changed or not, enable at `+0x08`, name (GetName `+0x30`, `0x863F70`) at `+0x10`. |
+| `0x158EDE0` | Movement reset: zeroes `+0x5C`, `+0x60`, `+0x6C`. Callers: the pause transition (`0x119D421`) and door prying (`0x145672B`). |
+| `0x9D6E0D` | `PostInputEvent`: the hold-symbol bookkeeping runs only for a non-null event symbol (`+0x28`). The mod's posts carry none, so the pad's symbols never hold the mod's stick. |
+
 ### Wrench draw — 2026-10-20
 
 No R-number. The skip is worn OK (PreyVR-49, 2026-10-20); the sound capture ran (PreyVR-50); the

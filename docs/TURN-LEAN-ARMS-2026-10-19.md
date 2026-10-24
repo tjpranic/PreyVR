@@ -1,15 +1,19 @@
-# Turning stalls, leaning push-back and bent arms: investigation, 19 October 2026
+# Leaning push-back and bent arms: investigation, 19 October 2026
+
+**The turning stall this investigation also covered now lives with the rest of that bug, in
+[MOVE-STOP-2026-10-24.md](MOVE-STOP-2026-10-24.md) (cause A).** Section 1 and fix 1 are kept here
+as pointers, so the section and fix numbers others cite still hold.
 
 Status, 2026-10-19:
 - **Fix 5 (the arms):** worn OK, and committed as `079e55f`.
-- **Fixes 1 and 2 (the stall and the push-back):** worn OK in PreyVR-42.
-  See "Fixes 1 and 2 as built".
-- **The body following mid-walk:** worn OK in PreyVR-43. See "following mid-walk".
+- **Fix 2 (the push-back):** worn OK in PreyVR-42, with fix 1 (the stall). See "Fixes 1 and 2 as
+  built".
 - **Fixes 3 and 4 (leaning past furniture):** waiting on a decision.
   - **2026-10-24:** seen again in PreyVR-65/66 as a fade when leaning over a desk (run `player-20261024-113604`: 3 fades, 86 frames, 0 head hits, with `fitShortened` climbing). It is the 30 cm residual rule fix 3 replaces. You chose to leave it for now.
 
-It covers three TODO items:
+It covered three TODO items:
 - The movement stop on turn still exists. It is not as bad as before, but it still needs fixing.
+  **Now in [MOVE-STOP-2026-10-24.md](MOVE-STOP-2026-10-24.md); fixed 2026-10-24.**
 - Physically leaning is wonky. The game's collision seems to act on the player's character
   model and moves the player back to resolve the contact.
 - Arm IK bends the arms inward. There may not be enough room between shoulder and wrist.
@@ -31,7 +35,7 @@ been run in a headset since the TODO items were written.
 
 | Symptom | Cause | Confidence |
 |---|---|---|
-| Walking stalls on a turn | Room-scale moves the player with `SetPos`. The engine treats each move as a teleport: velocity zeroed, airborne, ground released. Turning alone makes room-scale move, and the guard that should keep it out of a walk opens exactly when the walk has stalled | Teleport: **proved** from bytes. Turn-triggered moves: **proved** by simulation of the mod's code. That this is the stall the wearer feels: **inferred**, live check below |
+| Walking stalls on a turn | Room-scale's `SetPos` is an engine teleport: [MOVE-STOP-2026-10-24.md](MOVE-STOP-2026-10-24.md), cause A | |
 | Leaning pushes you back | Room-scale moves the 35 cm-radius capsule with your neck. Its 9-ray sweep misses table tops and edges, so `SetPos` puts the capsule inside furniture. The engine's next step pushes it out, and the mod does not cancel that push in the view | Every link **proved** from bytes or code. The chain as a whole is **inferred** |
 | Arms bend inward | The arm hangs from a shoulder fixed to the *eyes*. Looking down drops it 5–11 cm towards the hands. The drawn arm is also a fixed 56 cm, whatever the player's arm length | **Proved** from code; sizes from simulation |
 
@@ -39,13 +43,10 @@ been run in a headset since the TODO items were written.
 (simulation class 4), and the player's step skips it. What collides is the physics capsule,
 which room-scale moves under the head.
 
-**Body turning is not the stall.** The per-frame turn writes a level, yaw-only rotation. That
-never reaches the living entity's velocity, airborne flag or ground state.
-
 ## What the three have in common
 
-All three come from the `BodyFollow` / arm code estimating the player's body from the headset
-alone, with three separate approximations:
+All three (the stall included) come from the `BodyFollow` / arm code estimating the player's body
+from the headset alone, with three separate approximations:
 - **Room-scale** follows a point 8 cm in front of the neck, along the lagging torso yaw.
 - **The arm solver** hangs the shoulders off the eyes.
 - **Neither** has a notion of leaning.
@@ -54,88 +55,10 @@ Room-scale then moves the capsule the one way the engine reads as a teleport.
 
 ## 1. Movement stops on a turn
 
-### What runs on a turn
-
-Each frame at `ArkPlayer::Update` entry, `BodyFollow::Tick` (game thread):
-1. **The body turn.** The torso yaw relaxes towards the head at 0.6/s, so after any turn the
-   body is turned a little on most frames. The status line shows `applied` at 74–94% of `ticks`
-   in every 10-18 run. Each turn calls `SetViewRotation`, which calls the entity's `SetRotation`.
-2. **Room-scale.** When the follow point is more than 3 cm from the capsule, the follower glides
-   the capsule towards it with `SetPos`. It stands aside only when the capsule moved faster than
-   0.25 m/s since the last frame (`nativeMoving`).
-
-### The engine treats a room-scale move as a teleport (proved)
-
-The chain:
-- `CEntity::SetPos` (`0x90AF40`) → transform update `0x905480`.
-- That update sends the XFORM event unless `whyFlags` has bit 18 (`0x40000`, NO_EVENT).
-- The physics component's handler (`0x96BE00`) builds `pe_params_pos` with only `pos`, and
-  `bRecalcBounds = 1` hard-coded. It calls the living entity's `SetParams` (`0xB49610`, slot
-  `+0x20` of `0x1D81580`).
-
-Inside `SetParams`, if the position moved by more than 1% of the collider's half-height
-(`+0x1CC`, a few mm), and `bRecalcBounds & 0x20` is clear:
-
-```
-B49A52  call 0xB49390            ; release the ground colliders (+0x2C8, +0x2D0)
-B49A57  or   [rbx+2C0h],1        ; airborne
-B49A76  mov  [rbx+16Ch],rsi      ; velocity = 0 (skipped only for entity 0x7777 with dynamics flag 8)
-B49A7D  mov  [rbx+168h],esi
-B49A83  mov  [rbx+1D0h],esi      ; step-smoothing offset = 0
-```
-
-**Requested velocity (`+0x174`) is kept, so the walk does not stop dead.** It has to accelerate
-again from zero through the living entity's inertia, under air control until it lands.
-
-`SetRotation` sends only `q`, so a yaw-only quaternion skips that branch. The only rotation
-branch is a tilt correction, which a level quaternion does not enter.
-
-**Elsewhere on the XFORM event:**
-- ArkPlayer's handler (`0x15806E0` case 0) copies the rotation and runs the level-bounds check.
-  It does not reset movement.
-- The animated character (`ArkPlayer+0x1808`, handler `0x4F87A0`) re-syncs its location and
-  zeroes its stored prediction translation on every non-physics XFORM. That includes each body
-  turn. No effect on movement was found, so this is noted only.
-
-### Turning makes room-scale move (proved by simulation)
-
-The follow point (`roomscale::FollowPoint`) is the neck plus 8.05 cm along the *torso's* facing,
-so that the native eye sits under the eyes when the head faces the torso. The torso yaw lags the
-head (35° deadzone) and then relaxes towards it, so after a physical turn the follow point swings
-round the neck. The real body has not moved.
-
-`follow_sim.py`: head turning about a fixed neck at 90 fps, using the mod's settings.
-
-| Turn | `SetPos` frames | Capsule moved | Over |
-|---|---|---|---|
-| 45° in 0.4 s | 16 | 5.3 cm | 1.1–4.0 s |
-| 90° in 0.5 s | 29 | 10.0 cm | 0.3–1.9 s |
-| 180° in 1 s | 74 | 22.5 cm | 0.3–2.4 s |
-| 60° glance held 1 s | 17 | 5.9 cm | 0.2–5.8 s |
-| 30° glance held 2 s | 0 | 0 | |
-
-A snap turn pivots the origin about the eyes. When the head is turned away from the torso, the
-snap shifts the follow point's offset by up to about 3.7 cm. That can start a glide too.
-
-### Why the guard does not keep these out of a walk
-
-`nativeMoving` measures the capsule's speed after the fact. The stall can then feed itself:
-1. A glide is pending from a turn.
-2. On the first frames of a walk, or after any hitch, the capsule is still slow, so the guard
-   is open.
-3. `SetPos` zeroes the velocity, so the capsule stays slow.
-4. The guard stays open and the glide continues, frame after frame, until it is within 0.5 cm.
-
-The third room-scale stage cut the number of moves (follow the neck, not the eyes) and added this
-guard. That fits "not as bad as before".
-
-### Related, smaller
-
-- **The stick is released when a tracking-frame read is refused.** `UpdateMoveLane` posts zero
-  on both axes when it cannot read the tracking frame. That read is refused while the XR thread
-  is publishing the frame. It costs one frame of zero stick, and is not tied to turning.
-- **The stick is also released when the head is untracked or looking within about 5° of
-  vertical.** It is the same zero-post path.
+Moved to [MOVE-STOP-2026-10-24.md](MOVE-STOP-2026-10-24.md), cause A: what runs on a turn, the
+engine's teleport (proved from bytes), why turning made room-scale move (`follow_sim.py`), and why
+the stand-aside guard did not keep the moves out of a walk. The smaller items listed here (the
+stick released on a refused tracking read, or with the head untracked) are its cause C.
 
 ## 2. Leaning pushes the player back
 
@@ -156,7 +79,7 @@ guard. That fits "not as bad as before".
    - A corner that meets the round front of the capsule between the three lines is missed too.
    - `SetPos` then puts the capsule inside the furniture.
 4. **The engine pushes it out.**
-   - The move marks the body airborne (section 1), so the next physics step runs.
+   - The move marks the body airborne (the teleport, MOVE-STOP A.2), so the next physics step runs.
    - The step first tests for overlap at the current position (`0xB4ED4A`). Because the player
      is `pushable_by_players` (`m_flags` `0x643` has bit `0x200`; test at `0xB4F421`), it moves
      the capsule out by the depth plus a small gap.
@@ -258,13 +181,8 @@ it went.
 These confirm the causes. **Turn Only and a 200 mm step are diagnostics, not fixes.** Each check
 is written as hypothesis, control, variable and decision rule. Read `body.report` after each.
 
-1. **Turning stall.**
-   - Hypothesis: the stall is room-scale's `SetPos`.
-   - Control: Body Follows You = Turn and Move.
-   - Variable: Turn Only (`body.roomscale 0`).
-   - Test: walk with the stick while turning physically 90–180°, then while snap turning.
-   - Decision: if the stall goes with Turn Only, fix 1 is the cure. If it stays, look at the turn
-     itself (`body.follow 0`), which the static read says is innocent.
+1. **Turning stall.** Moved to [MOVE-STOP-2026-10-24.md](MOVE-STOP-2026-10-24.md) ("If it comes
+   back").
 2. **Lean push-back.**
    - Hypothesis: the push is the capsule placed into furniture by room-scale.
    - Control: Body Step Distance 30 mm.
@@ -277,25 +195,14 @@ is written as hypothesis, control, variable and decision rule. Read `body.report
 
 ### 1. Move the capsule without the teleport branch: the stall fix (small–medium)
 
-Before the entity's `SetPos`, send the physics `pe_params_pos{pos}` with `bRecalcBounds = 0x21`.
-- Bit `0x20` skips the living branch, and the base `SetParams` still recomputes the bounds
-  (proved).
-- The entity's own sync then finds no position change, so it skips the branch too.
-- `ChangeRequest` queues both in order if the physics step is running.
-
-**Effect:**
-- A room-scale move keeps the walk's velocity, ground contact and airborne state, so it can
-  land in a walk without stalling it.
-- **The body can then follow you during stick walking too.** The `nativeMoving` stand-aside can
-  go once this is proven in a headset.
-
-**Gates and counters:** as built, below (`keptMotion`, `restMoves`).
+Moved to [MOVE-STOP-2026-10-24.md](MOVE-STOP-2026-10-24.md), A.5: `pe_params_pos{pos}` with
+`bRecalcBounds 0x21` before the entity's `SetPos`, while the body is moving and the physics idle.
 
 **Ship it with fix 2.** Without the teleport's airborne flag, an overlap is no longer pushed out
 at once; it would pop when the body next moves.
 
 It may also explain the `bFlying` flicker the contact work found while the player stood on a light
-object: every room-scale move sets that flag.
+object: every room-scale move set that flag.
 
 ### 2. Ask the engine whether the capsule fits before moving it (medium)
 
@@ -315,54 +222,40 @@ needs the broadphase and the same filters by hand.
 
 ### Fixes 1 and 2 as built (2026-10-19)
 
-**Static results.**
-- `tools/re/verify_room_scale_physics.py` passes 41 checks.
-- `include/preyvr/RoomScaleNative.h` hashes 4 bodies:
+Fix 1 (the move that keeps its motion, its moving test, `PhysicsIdle` and its counters) is described
+in [MOVE-STOP-2026-10-24.md](MOVE-STOP-2026-10-24.md), A.5 and A.6. Fix 2 is here.
+
+**Static results** (both fixes).
+- `tools/re/verify_room_scale_physics.py` passes 41 checks (52 after PreyVR-43 hashed the change
+  request).
+- `include/preyvr/RoomScaleNative.h` hashes the bodies:
   - the living `SetParams` (`0xB49610`);
   - the base `SetParams` (`0xB88AA0`);
   - the stance test (`0xB56900`);
-  - the physics proxy's XForm (`0x96BE00`).
+  - the physics proxy's XForm (`0x96BE00`);
+  - the change request (`0xB1BCD0`, PreyVR-43).
 - ContactNative.h's living and base `GetStatus`/`GetParams` rows are gated as well.
 - The scripts and dumps are in the evidence folder (`scan_stance.py`, `rows.py`, `fit*.txt`).
 
-**What the static work changed in the plan:**
-- **The teleport has a job at rest.** The living step only runs on a body that is moving,
-  airborne, or climbing a step. The teleport's airborne flag is what makes the next step settle a
-  body moved while standing still onto the floor, ramp or step under it. So a move skips the
-  teleport only while the body is moving: its own velocity (`pe_status_living` `+0x30`) or the
-  movement's request (`+0x3C`) is above 5 cm/s. At rest the teleport costs no velocity and is kept.
-- **The stance test is `pe_status_check_stance` (type `0x15`).**
-  - The base `GetStatus` does not handle that type (it returns 0 for it), so the living one does.
-  - The test returns 1 when nothing overlaps. Otherwise it writes the depth to `+0x3C` and, with
-    a zero `dirUnproj`, the contact's normal to `+0x30`.
-  - It skips the body itself, anything with the same owner, and what ignores collisions with it.
-  - It runs on the game thread's query slot (4), the one the scene query uses.
-  - Game code never calls it: only the living entity does, around stance changes.
-- **Moving while the physics step runs:**
-  - Our call is queued, in order with the entity's own.
-  - If the step falls between the two calls, the teleport runs once, as before.
+**The stance test is `pe_status_check_stance` (type `0x15`).**
+- The base `GetStatus` does not handle that type (it returns 0 for it), so the living one does.
+- The test returns 1 when nothing overlaps. Otherwise it writes the depth to `+0x3C` and, with a
+  zero `dirUnproj`, the contact's normal to `+0x30`.
+- It skips the body itself, anything with the same owner, and what ignores collisions with it.
+- It runs on the game thread's query slot (4), the one the scene query uses.
+- Game code never calls it: only the living entity does, around stance changes.
 
-**What it does, each move (`BodyFollow.cpp`):**
-1. **Read the body.** `pe_status_living` gives its velocity, the requested velocity and camOffset.
-   This happens each frame room-scale runs.
-2. **Wait out a step-up.** While camOffset is non-zero (a step is being smoothed), no move.
-3. **Test the fit.**
-   - First, does the body fit where it stands?
-     - If yes: if the move's end fits, take it all. Otherwise bisect 6 times and take the largest
-       part that fits, within 1/64 of the first contact.
-     - If no (something the test counts but the step ignores, perhaps): the 9 rays decide, as
-       before (`fitStartBlocked`).
-   - A refusal by a contact above or below rather than a wall is counted (`fitVertical`). A
-     staircase being refused would show there.
-4. **Move.**
-   - If the body is moving: first `pe_params_pos{pos}` with `bRecalcBounds 0x21` (`keptMotion`),
-     then the entity's `SetPos`.
-   - At rest: the entity's `SetPos` alone (`restMoves`).
+**What it does, each room-scale move** (`RoomScaleMove.cpp`). Reading the body, waiting out a
+step-up and the move itself are fix 1's (MOVE-STOP A.5). Between them, fix 2 tests the fit:
+- First, does the body fit where it stands?
+  - If yes: if the move's end fits, take it all. Otherwise bisect 6 times and take the largest
+    part that fits, within 1/64 of the first contact.
+  - If no (something the test counts but the step ignores, perhaps): the 9 rays decide, as
+    before (`fitStartBlocked`).
+- A refusal by a contact above or below rather than a wall is counted (`fitVertical`). A staircase
+  being refused would show there.
 
-**Unchanged:**
-- **Standing aside** while the engine moves the capsule faster than 0.25 m/s stayed on by default
-  in PreyVR-42. Turned off in PreyVR-43; see "following mid-walk" below.
-- **The head-in-wall fade** on the 30 cm residual: deciding that is fix 3.
+**Unchanged:** the head-in-wall fade on the 30 cm residual. Deciding that is fix 3.
 
 **Diagnostics:**
 - `pushOut` and `pushOutMaxMm`: frames the capsule moved sideways by more than 5 mm while at rest,
@@ -371,100 +264,38 @@ needs the broadphase and the same filters by hand.
 - The first frame logs `room_scale_dimensions`: radius, half-height, heightCollider, pivot,
   capsule, and `bottomMm`. `bottomMm` is how high a step can be before the stance test refuses it.
 
-**Switches:**
-- `body.physics 0` restores the rays and the plain `SetPos`, for A/B.
-- `body.standaside 0|1`.
+**Switch:** `body.physics 0` restores the rays and the plain `SetPos`, for A/B.
 
-**Tests.** `room_scale` covers:
-- the bisection: a clear move is taken whole; a desk 0.37 of the way stops the body within 1/64,
-  on the clear side; touching already means no move;
-- the moving test: rest, a crawl, the stick before the body has sped up, coasting, falling.
-
-`ctest` 85/85. Not yet worn.
+**Tests.** `room_scale` covers the bisection: a clear move is taken whole; a desk 0.37 of the way
+stops the body within 1/64, on the clear side; touching already means no move.
 
 **Headset checklist (`body.report` after each):**
-1. **The stall.** Walk with the stick while turning physically 90–180°, and while snap turning.
-   - Expect no stop.
-   - `keptMotion` climbs on frames where a move met a walk.
-   - `physicsAvailable=1`.
-2. **Leaning.** Lean over a desk and towards a wall, as before.
+1. **Leaning.** Lean over a desk and towards a wall, as before.
    - Expect no push back.
    - `pushOut` stays near 0 and `fitShortened` climbs.
    - Compare with `body.physics 0`: `pushOut` should climb there.
    - The fade may still come on 30 cm past the desk. That is fix 3's to change.
-3. **Stairs and ramps.** Step about physically on stairs and a ramp, at rest.
+2. **Stairs and ramps.** Step about physically on stairs and a ramp, at rest.
    - The body should follow.
    - If it sticks, read `fitVertical` and the `room_scale_dimensions` line.
-4. **Walls in the open.** Walk physically into a wall.
+3. **Walls in the open.** Walk physically into a wall.
    - The body stops at it and the fade comes on as before.
    - `fitStartBlocked` stays low. If it climbs in open space, something the test counts is
      overlapping the body, such as a carried object; note what you were holding.
 
-### Fixes 1 and 2 worn, and following mid-walk (2026-10-19)
+### Fix 2 worn (PreyVR-42, 2026-10-19)
 
-**PreyVR-42 in the headset.** Runs `player-20261019-194513` and `-195350`. The wearer reported:
-- the push-back is gone;
-- the walk no longer stalls;
-- but turning physically, the body does not keep up: the character's neck can sit noticeably
-  off centre.
+Runs `player-20261019-194513` and `-195350`. The wearer reported **the push-back is gone**. (The
+walk no longer stalled either, and the body lagging mid-walk led to PreyVR-43: MOVE-STOP A.6.)
 
 **Counters:**
-- `physicsAvailable=1`, `livingUnread=0`, `viewDrift=0`.
-- `keptMotion` 474 and `restMoves` 684, against 1158 moves.
-- `pushOut` 25 in four minutes, at most 73 mm.
-- The collider: radius 350 mm, half-height 335 mm, `bottomMm=530`, so a physical step onto a
-  stair is never refused.
+- `pushOut` 25 in four minutes, at most 73 mm. PreyVR-43: 10, at most 50 mm.
+- The collider: radius 350 mm, half-height 335 mm, `bottomMm=530`, so a physical step onto a stair
+  is never refused.
 - `fitShortened` climbed fastest while the fade fired: the lean test, as intended.
 - `fitStartBlocked` climbed while the wearer carried bins and buckets. The stance test counts a
   carried object overlapping the body, which the step ignores, so those moves fell back to the
-  rays.
-
-**Why the body lagged: standing aside.**
-- The second run was 85% stick walking (`nativeMoving` 2590 of 3037 ticks).
-- While the engine moves the capsule, room-scale stood aside entirely, so physical turns and steps
-  mid-walk were not followed until the walk stopped. A physical turn alone swings the follow point
-  round the neck (section 1).
-- Before fix 1, the stall itself kept opening that gate, so the body lurched along mid-walk.
-  With the stall gone, the gate stayed shut for whole walks.
-
-**The change (PreyVR-43):**
-- **No standing aside by default.** Room-scale follows during stick walks too (`body.standaside 0`).
-- **A move during a walk can no longer undo a physics step.** The physics' change request
-  (`0xB1BCD0`, now hashed: 5 rows; 52 checks) applies a `SetParams` at once only while the world's
-  step lock (`+0x576C`), `+0x57B0` and lock (`+0x5784`) are clear and the body has nothing queued
-  (`+0x40`). Otherwise it is replayed after the step, where an absolute position computed before the
-  step would put the body back by that step's movement. So:
-  - A move while the body is moving is made only while all four are clear (`PhysicsIdle`), and
-    otherwise waits a frame (`deferredBusy`).
-  - It starts from the body's physics position (`+0xA8`), not the entity's. If the entity was
-    behind (`bodyLagMaxMm`), that catch-up is the walk's own movement: the view shows it rather than
-    cancelling it.
-- **At rest, unchanged.**
-
-`ctest` 85/85.
-
-**Headset checklist:**
-1. **Turning mid-walk.** Walk with the stick while turning physically, then stop and look down.
-   - The body stays under you throughout.
-   - The walk stays smooth, with no stutter or stall.
-   - `keptMotion` climbs. `deferredBusy` should be small against it; if it climbs as fast, the
-     physics was busy whenever room-scale ran, and the body would still lag mid-walk.
-2. **Compare.** Repeat with `body.standaside 1` (the PreyVR-42 behaviour): the lag should come back.
-3. **Earlier checks still hold:** no push-back leaning (`pushOut` small), no stall on snap turns.
-
-**PreyVR-43 in the headset: verified.** Run `player-20261019-200651`. The wearer confirmed the body
-keeps up with physical turns mid-walk, with no stall. From the last status line:
-
-| Counter | Value | Reading |
-|---|---|---|
-| `moved`, `movedM` | 4400, 17.4 m | Nearly four times PreyVR-42's rate: the body now follows mid-walk |
-| `nativeMoving` | 8998 of 16326 ticks | Half the run stick walking, with `standAside=0` |
-| `keptMotion` | 2959 | Moves made while the body was moving |
-| `deferredBusy` | 220 | 7% of them waited a frame for the physics to be idle |
-| `bodyLagMaxMm` | 71 | The entity was up to 7 cm behind its physics at a move. Moving from the entity's position would have put the body back that far; starting from the physics position is what prevents it |
-| `pushOut`, `pushOutMaxMm` | 10, 50 mm | |
-| `viewDrift` | 0 | |
-| `fitStartBlocked` | 2 | |
+  rays. PreyVR-43: 2.
 
 ### 3. Lean past a blocked body (medium)
 
@@ -620,8 +451,7 @@ while the torso stayed at the calibrated height. Room-scale follows only horizon
 
 ### Dropped from the first draft
 
-- **Gating room-scale on stick intent.** It would hold the body back while the stick is used.
-  Fix 1 removes the reason for it.
+- **Gating room-scale on stick intent** (a stall fix): see MOVE-STOP A.5.
 - **A larger Body Step Distance as the lean fix.** The body would lag small steps. It stays only as
   diagnostic 0.2.
 - **A narrower capsule in VR.** It is not needed for leaning once fixes 3 and 4 exist, and it
@@ -631,29 +461,24 @@ while the torso stayed at the calibrated height. Room-scale follows only horizon
 
 ### Lower priority
 
-- **Stick hold.** Hold the last stick value for a few frames when the tracking read is refused,
-  instead of releasing it.
+- **Stick hold.** Done 2026-10-24 as `move.hold` (MOVE-STOP, cause C).
 - **Turn threshold.** Skip body turns under about 0.05°. That saves the XFORM fan-out on most
   frames, including the animated character's re-sync.
-- **Push-out counter.** Count frames where, with the stick idle and no room-scale move, the
-  capsule moved more than 5 mm (`pushOut`). This measures the push directly, before and after
-  fix 2.
+- **Push-out counter.** Done in fixes 1 and 2 as built (`pushOut`).
 
 ## Engine facts recorded here (Steam hash)
 
+The teleport's chain (the transform update, the physics component's XForm, the living
+`SetParams`), the ArkPlayer and animated-character XFORM handlers and the movement path are in
+[MOVE-STOP-2026-10-24.md](MOVE-STOP-2026-10-24.md), with the rest of the stall.
+
 | What | Where | Evidence |
 |---|---|---|
-| Entity transform update; skips the event on `whyFlags` bit 18 | `0x905480` (`0x9059A0 bt r14d,12h`) | listing |
-| Physics component XForm → `pe_params_pos` (pos or q, `bRecalcBounds = 1`) | `0x96BE00`; SetParams call `0x96BFA3` | listing |
-| Living `SetParams`; teleport branch | `0xB49610`; `0xB499CE`–`0xB49A8E` | bytes re-checked |
 | Living Step; overlap push-out (`pushable_by_players`, up to 2.5·r) | `0xB4BF60` (slot `+0x100`); `0xB4F41D`–`0xB4F548`; constant `0x1C85B60` = 2.5 | bytes re-checked |
 | Living constructor: one part, `flagsCollider` 2, `m_flags` `0x643` | `0xB441D0` (`0xB4472D`, `0xB4473B`, `0xB44819`) | bytes re-checked |
 | Player physicalize (capsule, per-stance table `ArkPlayer+0x1610`) | `0x157EDE0`, stance table `0x157D3A0` | decompile |
 | Skeleton physics is a separate entity (sim class 4) | `0x96D930` | decompile |
 | Native eye = entity rotation × `#camera` attachment, plus entity position | `0x1489010`, `CView::Update` `0x3D9B9D` | decompile |
-| ArkPlayer XFORM handler (rotation copy, level bounds) | `0x15806E0`, `0x1580AD6` | listing |
-| Animated character XFORM handler | `0x4F87A0` | listing |
-| Movement: AddMovement → `pe_action_move` | `0x4F5D00` → `0x4FC070` → living Action `0xB44E60` | decompile |
 
 The CRYENGINE GitHub source was not reachable (404) and the CryEngine trees named in `AGENTS.md`
 are not on this machine. CryEngine names above are by signature, not by symbol.

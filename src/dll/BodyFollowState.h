@@ -187,6 +187,14 @@ inline std::atomic<std::uintptr_t> gLivingVtable{0};
 inline Counter gLivingUnread{0}, gFitChecks{0}, gFitShortened{0}, gFitVertical{0}, gFitStartBlocked{0};
 inline Counter gKeptMotion{0}, gRestMoves{0}, gStepSettling{0}, gPushOut{0}, gDeferredBusy{0};
 inline std::atomic<int> gPushOutMaxMm{0}, gBodyLagMaxMm{0};
+// docs/MOVE-STOP-2026-10-24.md, section 2. A walk's first frames read as rest --
+// the body's velocity and request are last frame's -- so a move then took the
+// teleport and the walk's first step started airborne. Within this long of the
+// stick being pushed, the body counts as moving (startKept). raced: moves whose
+// entity SetPos was queued behind a physics step; replayed after it, the body
+// goes back by that step and takes the teleport.
+inline constexpr std::uint64_t kWalkStartNs = 150000000ull;
+inline Counter gStartKept{0}, gRaced{0};
 // Where SetPos left the entity, for the view of the same frame to read back;
 // and after a nudge, for the next views. Under gViewMutex.
 inline bool gMovedPending = false;

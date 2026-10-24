@@ -24,6 +24,33 @@ private:
     bool was_ = false;
 };
 
+// **A menu takes the sticks only once it has been up for `frames` frames.** The
+// sticks wait for a centred stick after a menu, so a menu flag that read "open"
+// for a single frame used to stop the player until the stick was let go
+// (docs/MOVE-STOP-2026-10-24.md). While the flag has been up for fewer frames
+// the sticks stay play's, and the lanes hold what they last sent.
+class MenuDebounce {
+public:
+    explicit MenuDebounce(unsigned frames = 2) : frames_(frames) {}
+
+    // Once per frame. True while play keeps the sticks: no menu, or one that
+    // has not yet been up for `frames` frames.
+    bool Update(bool gameplay)
+    {
+        flickered_ = gameplay && run_ > 0 && run_ < frames_;
+        if (gameplay) { run_ = 0; }
+        else if (run_ < frames_) { ++run_; }
+        return run_ < frames_;
+    }
+    // This frame ended a menu flag that was up too briefly to count.
+    bool Flickered() const { return flickered_; }
+
+private:
+    unsigned frames_;
+    unsigned run_ = 0;
+    bool flickered_ = false;
+};
+
 // One button through PlayResume: down on a menu frame, it reads as up until it
 // has been let go.
 class ReleaseGate {

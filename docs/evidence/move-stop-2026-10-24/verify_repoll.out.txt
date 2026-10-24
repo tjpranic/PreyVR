@@ -1,0 +1,58 @@
+== ArkPlayerInput (player+0x8E0, vtable 0x1E580E0): the action-map listener
+          OK  listener vtable 0x1E580F8 +0x8: 0x1590390 (want 0x1590390)
+0x15903b2 OK  83f803                         cmp eax,3                  (event: action map status changed)
+0x15903bb OK  48837a1000                     cmp qword [rdx+10h],0      (lparam: enabled, else return)
+0x15903cd OK  ff90c8000000                   call [rax+0C8h]            (the map's GetName)
+0x15903d6 OK  488d15c7d77000                 lea rdx,"player" (0x1C9DBA4)
+          OK  type-3 repoll call 0x15903F0: 0x158e780 (want 0x158e780)
+0x15904bc OK  83f802                         cmp eax,2                  (event: filter status changed)
+0x15904c1 OK  488b4110                       mov rax,[rcx+10h]          (mode stack end, input+0x18)
+0x15904c5 OK  48394108                       cmp [rcx+8],rax            (stack begin, input+0x10: non-empty)
+0x15904cb OK  8378f800                       cmp dword [rax-8],0        (top mode == 0: player)
+          OK  type-2 repoll call 0x15904D6: 0x158e780 (want 0x158e780)
+== FUN_18158e780: the repoll overwrites the axes
+0x158e976 OK  4881c2f0020000                 add rdx,2F0h               (action table: xi_movex)
+          OK  poll call 0x158E981: 0x158eb90 (want 0x158eb90)
+0x158e99a OK  f30f11435c                     movss [rbx+5Ch],xmm0       (move X := polled)
+0x158e9eb OK  4881c2f8020000                 add rdx,2F8h               (xi_movey)
+          OK  poll call 0x158E9F2: 0x158eb90 (want 0x158eb90)
+0x158ea03 OK  f30f114660                     movss [rsi+60h],xmm0       (move Y := polled)
+0x158ea51 OK  4881c210030000                 add rdx,310h               (xi_rotatepitch)
+0x158ea85 OK  f30f114644                     movss [rsi+44h],xmm0       (pitch := -polled)
+0x158ea9a OK  4881c208030000                 add rdx,308h               (xi_rotateyaw)
+0x158eac6 OK  f30f11464c                     movss [rsi+4Ch],xmm0       (yaw := -polled)
+== the action table the offsets index (initializer 0x1706DA0)
+0x1708b3b OK  488d8bf0020000                 lea rcx,[rbx+2F0h]  <- xi_movex
+0x1708b74 OK  488d8b08030000                 lea rcx,[rbx+308h]  <- xi_rotateyaw
+0x1708b87 OK  488d8b10030000                 lea rcx,[rbx+310h]  <- xi_rotatepitch
+== FUN_18158eb90: what the poll reads
+0x158eba9 OK  ff90a8010000                   call [rax+1A8h]            (manager: action filtered -> 0)
+0x158ebf7 OK  448b423c                       mov r8d,[rdx+3Ch]          (CUIManager+0x3C: pad index)
+0x158ebfb OK  ba03000000                     mov edx,3                  (device type: gamepad)
+0x158ec03 OK  ff90d8000000                   call [rax+0D8h]            (IInput LookupSymbol)
+0x158ec0e OK  f30f10401c                     movss xmm0,[rax+1Ch]       (SInputSymbol::value)
+          OK  CActionMapManager vtable +0x1A8: 0x3cdfe0 (want 0x3cdfe0)
+== the analog handlers the mod's posts reach
+0x158fd32 OK  f30f11415c                     movss [rcx+5Ch],xmm0       (xi_movex handler 0x158FD20)
+0x158fdb4 OK  f30f114960                     movss [rcx+60h],xmm1       (xi_movey handler 0x158FD80)
+0x158fe68 OK  0f570501ed6e00                 xorps xmm0,[signmask]      (yaw handler 0x158FE50 negates)
+0x158fe6f OK  f30f11414c                     movss [rcx+4Ch],xmm0       (yaw handler stores)
+== the posts never set the symbol the poll reads (PostInputEvent 0x9D6D30)
+          OK  listener dispatch 0x9D6DEE: 0x9d7430 (want 0x9d7430)
+0x09d6e0d OK  488b5328                       mov rdx,[rbx+28h]          (event symbol pointer)
+0x09d6e11 OK  4885d2                         test rdx,rdx               (null: no symbol bookkeeping)
+== what broadcasts the events
+          OK  manager vtable +0xD8 (EnableActionMap): 0x3cf050 (want 0x3cf050)
+0x03cf0d3 OK  ff90d8000000                   call [rax+0D8h]            (map: is enabled)
+0x03cf0d9 OK  403ac5                         cmp al,bpl                 (broadcast only on a change)
+0x03cf119 OK  c744242003000000               mov dword [rsp+20h],3      (event type 3)
+          OK  type-3 broadcast 0x3CF121: 0x3ce5c0 (want 0x3ce5c0)
+          OK  manager vtable +0xE0 (EnableFilter): 0x3cf1c0 (want 0x3cf1c0)
+          OK  filter vtable 0x1CBE190 +0x38 (Enable): 0x3c3770 (want 0x3c3770)
+0x03c3853 OK  c744242002000000               mov dword [rsp+20h],2      (event type 2, no change test)
+          OK  type-2 broadcast 0x3C3860: 0x3ce5c0 (want 0x3ce5c0)
+== the explicit movement reset (pause transition 0x119D360, door pry 0x1456680)
+0x158ede0 OK  33c04889415c89416cc3           xor eax,eax; mov [rcx+5Ch],rax; mov [rcx+6Ch],eax; ret
+          OK  reset call in pause transition: 0x158ede0 (want 0x158ede0)
+          OK  reset call in door pry: 0x158ede0 (want 0x158ede0)
+all OK

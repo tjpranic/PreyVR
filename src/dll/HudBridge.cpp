@@ -567,7 +567,8 @@ DWORD HudRefreshMenuOpenState()
     bool anyVisible = false;
     bool anyAnswered = false;
     bool pdaVisible = false, otherVisible = false, exclusiveKnown = true;
-    for (const char* const name : kMenuElements) {
+    unsigned visibleMask = 0;   // kMenuElements bits, for the log below
+    for (const char* const& name : kMenuElements) {
         void* const element = ResolveNamedElement(base, name);
         if (element == nullptr) { continue; }
         const std::uintptr_t isVisible = ReadVtableSlot(element, kIsVisibleSlot);
@@ -584,6 +585,7 @@ DWORD HudRefreshMenuOpenState()
         anyAnswered = true;
         if (visible) {
             anyVisible = true;
+            visibleMask |= 1u << (&name - kMenuElements);
             if (std::strcmp(name,"DaniellePDA")==0) pdaVisible=true;
             else otherVisible=true;
         }
@@ -594,7 +596,20 @@ DWORD HudRefreshMenuOpenState()
     // load screen or an early frame would look exactly like gameplay and re-arm
     // the D-pad taps this predicate exists to suppress.
     if (!anyAnswered) { return 7; }
-    if(gMenuOpen.exchange(anyVisible,std::memory_order_acq_rel)!=anyVisible)gMenuEpoch.fetch_add(1);
+    if(gMenuOpen.exchange(anyVisible,std::memory_order_acq_rel)!=anyVisible) {
+        gMenuEpoch.fetch_add(1);
+        // Which element opened it, so a flag that flickers in play can be
+        // named (docs/MOVE-STOP-2026-10-24.md). Logged up to a budget.
+        static unsigned long long logged = 0;
+        if (logged++ < 200) {
+            std::string names;
+            for (std::size_t i = 0; i < std::size(kMenuElements); ++i) {
+                if ((visibleMask & (1u << i)) != 0) { names += (names.empty() ? "" : ",") + std::string(kMenuElements[i]); }
+            }
+            Log(std::string("result=0 detail=menu_state open=") + (anyVisible ? "1" : "0") +
+                " elements=" + (names.empty() ? "none" : names));
+        }
+    }
     gInventoryOpen.store(exclusiveKnown && pdaVisible && !otherVisible, std::memory_order_release);
     gMenuStamp.store(MonotonicNanoseconds(), std::memory_order_release);
     gMenuStateSamples.fetch_add(1, std::memory_order_relaxed);

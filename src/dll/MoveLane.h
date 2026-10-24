@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 #include <windows.h>
@@ -140,6 +141,27 @@ int MoveLaneCinematicGate();
 // view has drifted behind the character's head has no other way to fix it from
 // inside a headset. Each recentre invalidates the IK calibration by design.
 unsigned long long MoveLaneRecenterCount();
+
+// --- the stick the engine keeps (docs/MOVE-STOP-2026-10-24.md) -------------
+//
+// The lanes post a stick only when it changes, so the engine must keep what was
+// posted. These are what they delivered and it should hold, in thousandths:
+// 0 move X, 1 move Y, 2 yaw (the turn lane's xi_thumbrx); 0 when nothing is held.
+// StickReread hands them to Prey's re-read, and the lanes read the engine back
+// every frame and post again what something else overwrote.
+int MoveLaneHeldMilli(unsigned axis);
+// The move stick went from released to pushed within `windowNs` of `now` and is
+// still pushed: a walk's first frames, before the body has been asked to move.
+bool MoveLaneStickStarted(std::uint64_t now, std::uint64_t windowNs);
+// How long a gap in the controller samples (or in head tracking, moving head
+// relative) keeps the last stick instead of releasing it, in ms; 0 releases at
+// once, as before 2026-10-24. Default 100.
+DWORD SetStickSampleHoldMs(unsigned ms);
+unsigned StickSampleHoldMs();
+// " lane={...}" for the status line and move.report: releases of a held stick by
+// reason, frames a sample gap was bridged, menu flags too brief to take the
+// sticks, and the read-back's re-posts.
+std::string MoveLaneStatusReport();
 
 } // namespace preyvr::dll
 

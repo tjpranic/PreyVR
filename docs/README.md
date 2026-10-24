@@ -25,8 +25,11 @@ The notebook separates evidence from plans so implementation follows demonstrate
 > without moving the view: [`BODY-YAW-2026-10-11.md`](BODY-YAW-2026-10-11.md). It also
 > walks with them across the room, swept for walls, and the view goes black when the head
 > goes through one: [`ROOMSCALE-2026-10-11.md`](ROOMSCALE-2026-10-11.md).
-> Why walking stalls on a turn, why leaning pushes the player back, and why the arms bend:
-> the engine treats a room-scale move as a teleport, and the shoulders hang off the eyes:
+> Why the player stopped while walking and turning, from the first report to the fix: room-scale
+> moved the capsule with the engine's teleport, and Prey re-read the stick from the physical
+> gamepad: [`MOVE-STOP-2026-10-24.md`](MOVE-STOP-2026-10-24.md).
+> Why leaning pushes the player back, and why the arms bend: room-scale puts the capsule into
+> furniture, and the shoulders hang off the eyes:
 > [`TURN-LEAN-ARMS-2026-10-19.md`](TURN-LEAN-ARMS-2026-10-19.md).
 > The VR Options panel, drawn with Dear ImGui over the game or a game menu and moved with
 > the laser; it replaced the classic card, and each controller's bindings have their own
