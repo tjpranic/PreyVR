@@ -1,6 +1,7 @@
 #include <d3d11.h>
 
 #include "DebugOverlay.h"
+#include "NeverDestroyed.h"
 #include "D3D11SavedState.h"
 #include "preyvr/TextFormat.h"
 
@@ -539,7 +540,8 @@ private:
     std::vector<Entry> views_;
     bool attempted_ = false, ok_ = false, srgb_ = false;
 };
-Renderer gRenderer;          // render thread only
+// Render thread only. Never destroyed: its D3D objects are not released at exit (NeverDestroyed.h).
+Renderer& gRenderer = NeverDestroyed<Renderer>();
 std::vector<dd::Vertex> gVerticesScratch;
 dd::Scene gScene;
 

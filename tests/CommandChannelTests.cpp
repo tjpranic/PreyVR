@@ -212,6 +212,8 @@ const Case kCases[] = {
     {"cull.watch", "cull.watch result=0", CullCameraWatchReport, processed},
     {"cull.probe", "cull.probe result=0", FrameProbeReport, processed},
     {"cull.prepare", "cull.prepare result=0", CullPrepareReport, processed},
+    {"rset.report", "rset.report result=0", ResourceSetWatchReport, processed},
+    {"rset.watch", "rset.watch result=0", ResourceSetWatchReport, processed},
     {"window.hold", "window.hold result=0 note=no_value_nothing_changed", FocusHoldReport, processed},
     {"window.hold 2", "window.hold result=1", FocusHoldReport, processed},
     {"window.hold 0", "window.hold result=0", FocusHoldReport, processed},

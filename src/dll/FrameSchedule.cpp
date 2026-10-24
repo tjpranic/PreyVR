@@ -10,6 +10,7 @@
 #include "ControllerPrompts.h"
 #include "CullCameraWatch.h"
 #include "CullPrepareGuard.h"
+#include "ResourceSetWatch.h"
 #include "DebugOverlay.h"
 #include "FocusHold.h"
 #include "FrameCaptureWin32.h"
@@ -131,6 +132,7 @@ void TickWorker()
     ServiceCullCameraWatch();
     ServiceFrameProbe();
     ServiceCullPrepareGuard();
+    ServiceResourceSetWatch();
     TickVrMode();
     ServiceVrOptions();
     ServiceFocusHold();

@@ -17,6 +17,7 @@
 #include "ConsoleBridgeWin32.h"
 #include "CullCameraWatch.h"
 #include "CullPrepareGuard.h"
+#include "ResourceSetWatch.h"
 #include "FrameProbe.h"
 #include "FocusHold.h"
 #include "ControllerPrompts.h"
@@ -691,6 +692,14 @@ constexpr Verb kVerbs[] = {
         // behind (CullPrepareGuard.h): 1 guards, 0 only observes. No argument: report.
         out << "cull.prepare result=" << (Valued(args) ? SetCullPrepareGuard(ArgU(args, 1, 1)) : 0)
             << CullPrepareReport();
+    }},
+    {"rset.report", Audience::research, 0, [](const Args&, std::ostringstream& out) {
+        // docs/CRASHES-2026-10-24.md: who rebuilds a render item's resource set mid-pass.
+        out << "rset.report result=0" << ResourceSetWatchReport();
+    }},
+    {"rset.watch", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
+        out << "rset.watch result=" << (Valued(args) ? SetResourceSetWatch(ArgU(args, 1, 1)) : 0)
+            << ResourceSetWatchReport();
     }},
     {"window.hold", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
         // docs/DESKTOP-WINDOW-2026-10-17.md: Prey runs as though focused. The

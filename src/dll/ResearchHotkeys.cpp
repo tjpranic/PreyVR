@@ -1,4 +1,5 @@
 #include "ResearchHotkeys.h"
+#include "NeverDestroyed.h"
 
 #include "HeadTrackingHook.h"
 
@@ -33,7 +34,9 @@ constexpr int kDefaultIpdIndex = 3;   // 0.064
 std::atomic<bool> gRunning{false};
 std::atomic<int> gIpdIndex{kDefaultIpdIndex};
 std::atomic<int> gAaMode{0};
-std::thread gThread;
+// Never destroyed: at exit it is still joinable, and its destructor would call
+// std::terminate (NeverDestroyed.h).
+std::thread& gThread = NeverDestroyed<std::thread>();
 
 bool Chord()
 {

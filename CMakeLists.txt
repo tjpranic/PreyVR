@@ -276,6 +276,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/ConsoleBridgeWin32.cpp
         src/dll/CullCameraWatch.cpp
         src/dll/CullPrepareGuard.cpp
+        src/dll/ResourceSetWatch.cpp
         src/dll/FrameProbe.cpp
         src/dll/FocusHold.cpp
         src/dll/LoadingScreen.cpp
@@ -347,6 +348,14 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         target_link_options(preyvr PRIVATE /DELAYLOAD:openxr_loader.dll)
     endif()
     set_target_properties(preyvr PROPERTIES OUTPUT_NAME PreyVR)
+    if(MSVC)
+        # **A PDB for every build** (docs/CRASHES-2026-10-24.md): without one a
+        # crash dump's PreyVR frames can only be matched by disassembly. Debug
+        # information in the objects, PreyVR.pdb beside the DLL; /DEBUG would
+        # otherwise turn off /OPT:REF and /OPT:ICF, so the code stays as it was.
+        target_compile_options(preyvr_dll_objects PRIVATE /Z7)
+        target_link_options(preyvr PRIVATE /DEBUG:FULL /OPT:REF /OPT:ICF)
+    endif()
     if(TARGET preyvr_engine_map_probe)
         add_dependencies(preyvr preyvr_engine_map_probe)
     endif()
@@ -535,6 +544,9 @@ if(PREYVR_BUILD_TESTS)
             DLL
             LIBS minhook)
         preyvr_add_test(cull_prepare_guard tests/CullPrepareGuardTests.cpp
+            DLL
+            LIBS minhook)
+        preyvr_add_test(resource_set_watch tests/ResourceSetWatchTests.cpp
             DLL
             LIBS minhook)
         preyvr_add_test(focus_hold tests/FocusHoldTests.cpp

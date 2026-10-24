@@ -59,7 +59,7 @@ This was read-only: five parallel reviews, each covering one slice, with nothing
     - The Spec's fallbacks, the replies' `result=0`, `near.fov` keeping follow, 87 for too few values or for one with no default, and `report` logging only itself.
     - The pinned `command_channel` oddities in section 5 are fixed, apart from the carry and grenade calls before install.
     - Build passes, 97/97 ctest pass, and the 75 export names are unchanged.
-    - Packaged as PreyVR-70 and **worn OK (10-24)**. Not committed.
+    - Packaged as PreyVR-70, **worn OK (10-24)**, and committed by you as `e8a30af` ("Command handling refactor").
     - That session's one crash was the engine's, not this batch's ([CRASHES-2026-10-24.md](CRASHES-2026-10-24.md)).
 
 **How this relates to [the 10-17 audit](DUPLICATION-AUDIT-2026-10-17.md):**

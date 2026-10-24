@@ -1,4 +1,5 @@
 #include "HudLayer.h"
+#include "NeverDestroyed.h"
 #include "HookInstall.h"
 #include "EngineAccess.h"
 #include "DualOverlay.h"
@@ -82,7 +83,9 @@ struct Capture {
     std::uint64_t stamp=0;
     DWORD thread=0;
 };
-Capture captures[kMovies];
+// The captures, here and below, are never destroyed: their D3D objects are not
+// released at exit (NeverDestroyed.h).
+Capture (&captures)[kMovies]=NeverDestroyed<Capture[kMovies]>();
 
 // **The text movies.** Notes and books, subtitles and tutorial cards are
 // separate elements from the gameplay HUD, so they stayed in the scene -- and
@@ -106,7 +109,7 @@ struct TextCapture {
     std::atomic<bool> fault{false};
     std::atomic<unsigned long long> captured{0},refused{0};
 };
-TextCapture textPanels[kTextPanels];
+TextCapture (&textPanels)[kTextPanels]=NeverDestroyed<TextCapture[kTextPanels]>();
 
 // Every Flash element's render proxy and name, kept for reference so it
 // can say which movie it drew into the held eye (DualOverlayReport).
@@ -141,9 +144,9 @@ thread_local ID3D11DepthStencilView* redrawDepthView=nullptr;
 thread_local bool redrawn=false;
 // The movie being redrawn is DanielleMarkers: its markers move per eye (MarkerStereo.h).
 thread_local bool redrawMarkers=false;
-Capture redrawDepth; // the stencil the native draw started from; depth fields only
-Capture inventoryRight;
-Capture nativeWrist;
+Capture& redrawDepth=NeverDestroyed<Capture>(); // the stencil the native draw started from; depth fields only
+Capture& inventoryRight=NeverDestroyed<Capture>();
+Capture& nativeWrist=NeverDestroyed<Capture>();
 std::atomic<std::uint64_t> wristRequest{0};
 std::atomic<unsigned long long> wristCaptured{0},wristRefused{0};
 std::atomic<bool> wristFault{false};
@@ -204,7 +207,8 @@ struct PartState {
     std::atomic<unsigned long long> overridden{0},overrideRefused{0};
     unsigned sampleCounter=0;
 };
-PartState parts[]={{&hud::Wheel},{&hud::Reticle}};
+// As NeverDestroyed makes the captures, aggregate-initialised in place.
+PartState (&parts)[2]=*new PartState[1][2]{{{&hud::Wheel},{&hud::Reticle}}};
 constexpr unsigned kParts=sizeof(parts)/sizeof(parts[0]);
 static_assert(kParts==static_cast<unsigned>(HudPart::count));
 bool partsInstallAttempted=false;

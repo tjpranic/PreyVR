@@ -34,6 +34,7 @@
 #include "UiPointer.h"
 #include "HudLayer.h"
 #include "LayerSwapchain.h"
+#include "NeverDestroyed.h"
 #include "RendererAccess.h"
 #include "XrPose.h"
 #include "LoadingScreen.h"
@@ -375,7 +376,8 @@ struct Host {
     unsigned long long loadingUploaded=0, loadingUploads=0, loadingFrames=0;
 };
 
-inline Host gHost;
+// Never destroyed: its swapchains' destructors call OpenXR (NeverDestroyed.h).
+inline Host& gHost = NeverDestroyed<Host>();
 
 // In XrResolution order.
 inline LatestSnapshot<std::array<DWORD,static_cast<std::size_t>(XrResolution::count)>> gResolution;

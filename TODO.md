@@ -8,7 +8,7 @@
 
 ### UX/Game Feel
 - Rotate to face direction
-    Add in an option to rotate the camera in the direction the right hand is facing
+    Add in an option to rotate the camera in the direction the right hand is facing. Alternatively, having the player body and camera follow the left/right hand when holding a certain button?
 - Adjustable wrench bounding box
     Add in an adjustable wrench bounding box lengthening system that only registers hits against enemies. Essentially, an additional bounding box would be added to the wrench, but it would be longer and only used to find collisions with enemies. This would preserve existing correct physical interaction between wrench/hands and objects, but allow for smoother feeling combat.
 - Two-handed wrench
@@ -36,7 +36,7 @@
     One set of functionality that's going to need to be refactored out at the end of the project is all the tuning parameters. If they can be made debug build only, then that is preferred, otherwise they should be removed.
 - Instrumentation cleanup
     Removing (or gating behind a debug only build) of all the console logging and bug-finding instrumentation needs to be done at some point.
-- Document consolidation
+- Documentation cleanup
     Feature work has been tracked across multiple documents. These should be combined into one document.
 
 ### Immersion
@@ -82,6 +82,7 @@
 - Camera flashing bug
     A weird bug that causes certain parts of the world to flash strangely. Might be a culling issue. A fix + instrumentation is in place.
 - Texture view use-after-free bug
+    Instrumentation in place. See ResourceSetWatch.cpp.
 
 ## DONE
 
