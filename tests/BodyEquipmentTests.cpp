@@ -27,7 +27,7 @@ int main(){
  // A small glance changes head yaw but does not move the reached hip zone.
  head.orientation={0,std::sin(.3f),0,std::cos(.3f)};
  Check(tick(hip,true)==0,"head glance does not drag reached zone");
- // The shared torso (BodyFollow): the slots sit on the body the player sees,
+ // The shared torso (TorsoLane): the slots sit on the torso the shoulders do,
  // whatever the head is doing, and still never move under a reaching hand.
  {
   head.orientation={0,0,0,1};g.Reset();

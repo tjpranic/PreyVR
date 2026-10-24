@@ -4,7 +4,7 @@
 #include "VrOptionsRuntime.h"
 #include "Psychoscope.h"
 #include "BodyEquipment.h"
-#include "BodyFollow.h"
+#include "TorsoLane.h"
 
 #include "AimTakeover.h"
 #include "AnimIkTakeover.h"
@@ -483,7 +483,7 @@ constexpr Verb kVerbs[] = {
         out << "arm.report result=0" << ArmReport();
     }},
     // The arm solver's settings (SetArmSetting), as TUNING-COMMANDS.md lists them.
-    {"arm.torso", Audience::player, 0, ArmSetting},
+    {"arm.torso", Audience::tuning, 0, ArmSetting},
     {"arm.mode", Audience::tuning, 0, ArmSetting},
     {"arm.anchor", Audience::tuning, 0, ArmSetting},
     {"arm.shoulder", Audience::tuning, 0, ArmSetting},
@@ -496,56 +496,13 @@ constexpr Verb kVerbs[] = {
     {"arm.hold", Audience::tuning, 0, ArmSetting},
     {"arm.knee", Audience::tuning, 0, ArmSetting},
     {"body.report", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
-        // docs/BODY-YAW-2026-10-11.md: the body turned to the torso.
-        out << "body.report result=0" << BodyFollowReport();
-    }},
-    {"body.follow", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        out << "body.follow result=" << (Valued(args) ? SetBodyFollow(static_cast<unsigned>(Arg(args, 1, 1))) : 0)
-            << BodyFollowReport();
-    }},
-    {"body.level", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        out << "body.level result=" << (Valued(args) ? SetBodyFollowLevel(static_cast<unsigned>(Arg(args, 1, 1))) : 0)
-            << BodyFollowReport();
+        // The shared torso the shoulders and body slots sit on (TorsoLane.h).
+        out << "body.report result=0" << TorsoLaneReport();
     }},
     {"body.torso", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
         // body.torso <deadzoneDeg> <relax per mille per second>; arm.torso sets the same filter.
         out << "body.torso result=" << (args.size() > 2 ? SetBodyTorso(Arg(args, 1, 35), Arg(args, 2, 600)) : TooFewValues(args))
-            << BodyFollowReport();
-    }},
-    {"body.turn", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
-        // body.turn <degrees> [delayS=5]: one native turn with the reference --
-        // the body turns, the view must not. Waits for gameplay and the delay.
-        out << "body.turn result=" << RequestBodyTurn(Arg(args, 1, 0), Arg(args, 2, 5)) << BodyFollowReport();
-    }},
-    {"body.roomscale", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        // docs/ROOMSCALE-2026-10-11.md: the capsule follows the head.
-        out << "body.roomscale result=" << (Valued(args) ? SetRoomScale(static_cast<unsigned>(Arg(args, 1, 1))) : 0)
-            << BodyFollowReport();
-    }},
-    {"body.zone", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        // body.zone <startMm> <stopMm> [followMs]: idle until the head is start
-        // away, then glide to stop with that time constant.
-        out << "body.zone result="
-            << (args.size() > 2 ? SetRoomScaleZone(Arg(args, 1, 30), Arg(args, 2, 5), Arg(args, 3, -1)) : TooFewValues(args))
-            << BodyFollowReport();
-    }},
-    {"body.radius", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        out << "body.radius result=" << (Valued(args) ? SetRoomScaleRadius(Arg(args, 1, 350)) : 0) << BodyFollowReport();
-    }},
-    {"body.physics", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
-        // docs/TURN-LEAN-ARMS-2026-10-19.md: the living body's stance test and
-        // moves that keep its motion (1), or the rays and plain SetPos (0).
-        out << "body.physics result=" << (Valued(args) ? SetRoomScalePhysics(static_cast<unsigned>(Arg(args, 1, 1))) : 0)
-            << BodyFollowReport();
-    }},
-    {"body.standaside", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
-        out << "body.standaside result="
-            << (Valued(args) ? SetRoomScaleStandAside(static_cast<unsigned>(Arg(args, 1, 1))) : 0) << BodyFollowReport();
-    }},
-    {"body.nudge", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
-        // body.nudge <rightCm> <forwardCm> [delayS=5]: one swept move with the
-        // origin -- the body moves, the view must not. Waits like body.turn.
-        out << "body.nudge result=" << RequestBodyNudge(Arg(args, 1, 0), Arg(args, 2, 0), Arg(args, 3, 5)) << BodyFollowReport();
+            << TorsoLaneReport();
     }},
     {"pose.report", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
         out << "pose.report result=0" << HandPoseReport();

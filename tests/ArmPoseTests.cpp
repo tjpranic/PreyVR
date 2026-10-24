@@ -1,5 +1,4 @@
 #include "preyvr/ArmPose.h"
-#include "preyvr/RoomScale.h"
 #include "TestGeometry.h"
 #include "TestSupport.h"
 
@@ -81,6 +80,27 @@ void TestShoulder()
     Require(std::fabs(limited.y - root.y) < 1e-4f && limited.x > root.x, "towards the target");
 }
 
+void TestLevelEyeIgnoresHeadRotation()
+{
+    const float torso = 25.0f * kDeg;
+    const Vec3 neck{0.3f, 1.5f, -0.4f};
+    // Facing the torso, level: the eyes themselves.
+    const Pose level{AboutY(torso), Sub(neck, Rotate(AboutY(torso), kNeckFromEye))};
+    Require(NearVec(LevelEye(level, torso), level.position, 1e-6f), "facing the torso: the head itself");
+    // Turn and tip the head about a fixed neck: the eyes swing, the point does not.
+    for (float yaw : {-70.0f, -30.0f, 0.0f, 45.0f, 80.0f}) {
+        for (float pitch : {-50.0f, -10.0f, 0.0f, 30.0f}) {
+            const Quaternion q = Normalize(Multiply(AboutY(torso + yaw * kDeg), AboutX(pitch * kDeg)));
+            const Pose head{q, Sub(neck, Rotate(q, kNeckFromEye))};
+            Require(NearVec(LevelEye(head, torso), level.position, 1e-5f), "a glance does not move it");
+        }
+    }
+    // Walking moves it one for one.
+    const Pose walked{level.orientation, Add(level.position, Vec3{0.4f, 0.0f, -0.2f})};
+    Require(NearVec(LevelEye(walked, torso), Add(level.position, Vec3{0.4f, 0.0f, -0.2f}), 1e-6f), "a step does");
+    Require(NearVec(LevelEye(Pose{Quaternion{NAN, 0, 0, 1}, {1, 2, 3}}, torso), {1, 2, 3}), "no orientation: the head");
+}
+
 // The shoulder hangs from the neck: turning or tipping the head swings the eyes
 // about the neck by centimetres, and the shoulders not at all.
 void TestShoulderFromHead()
@@ -94,11 +114,11 @@ void TestShoulderFromHead()
         Require(NearVec(ShoulderFromHead(level, torso, side, body), fromEye, 1e-4f),
                 "head level and facing the torso: the shoulder is where the eye puts it");
     }
-    const Vec3 neck = Add(level.position, Rotate(level.orientation, roomscale::kNeckFromEye));
+    const Vec3 neck = Add(level.position, Rotate(level.orientation, kNeckFromEye));
     const Vec3 right = ShoulderFromHead(level, torso, +1, body);
     const auto about = [&](const Quaternion& local) {
         const Quaternion q = Multiply(level.orientation, local);
-        return Pose{q, Sub(neck, Rotate(q, roomscale::kNeckFromEye))};
+        return Pose{q, Sub(neck, Rotate(q, kNeckFromEye))};
     };
     for (const Quaternion local : {AboutX(-60.0f * kDeg), AboutX(-30.0f * kDeg), AboutX(25.0f * kDeg),
                                    AboutY(30.0f * kDeg), AboutY(-45.0f * kDeg),
@@ -151,10 +171,10 @@ void TestTorsoLift()
 {
     // Tipping the head about the neck leaves the level eye's height alone.
     const Pose level{AboutY(0.3f), Vec3{0, 1.2f, 0}};
-    const Vec3 neck = Add(level.position, Rotate(level.orientation, roomscale::kNeckFromEye));
+    const Vec3 neck = Add(level.position, Rotate(level.orientation, kNeckFromEye));
     for (const float pitch : {-60.0f, -20.0f, 30.0f}) {
         const Quaternion q = Multiply(level.orientation, AboutX(pitch * kDeg));
-        const Pose tipped{q, Sub(neck, Rotate(q, roomscale::kNeckFromEye))};
+        const Pose tipped{q, Sub(neck, Rotate(q, kNeckFromEye))};
         Require(std::fabs(LevelEyeHeight(tipped) - 1.2f) < 1e-4f, "tipping the head does not lift the torso");
     }
     Require(std::fabs(LevelEyeHeight(Pose{Quaternion{}, Vec3{0, 1.65f, 0}}) - 1.65f) < 1e-5f, "level: the eye's own height");
@@ -289,6 +309,7 @@ int main()
     TestHeadYaw();
     TestTorsoYaw();
     TestShoulder();
+    TestLevelEyeIgnoresHeadRotation();
     TestShoulderFromHead();
     TestArmLength();
     TestTorsoLift();

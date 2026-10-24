@@ -3,7 +3,6 @@
 #include "ArmsLane.h"
 #include "ActionMaps.h"
 #include "BodyEquipment.h"
-#include "BodyFollow.h"
 #include "CarryLane.h"
 #include "ConsoleBridgeWin32.h"
 #include "ContactLane.h"
@@ -64,7 +63,6 @@ void TickMainRender()
     // case menu navigation needs. Called ahead of the hook's stereo-armed check:
     // driving a menu must not require stereo or head tracking to be enabled
     // first, and the early return would otherwise skip it.
-    NoteBodyFollowRender();
     DrainQueuedInput();
     DrainQueuedHudCalls();
     DrainUiPointer();

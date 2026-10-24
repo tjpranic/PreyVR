@@ -1,7 +1,7 @@
 #include "BodyEquipment.h"
 #include "EngineAccess.h"
 #include "AimTakeover.h"
-#include "BodyFollow.h"
+#include "TorsoLane.h"
 #include "DebugOverlay.h"
 #include "HeadTrackingHook.h"
 #include "UiMode.h"
@@ -124,7 +124,7 @@ void UpdateHolsterInput(const TrackingFrame& f,bool valid){
   FreshSample(MonotonicNanoseconds(),f.publishedNs)&&
   IsPoseUsable(f.head,f.headValidity,kMaxPoseAgeNs)&&IsPoseUsable(r.gripPose,r.gripValidity,kMaxPoseAgeNs)&&
   !TwoHandedAimHeld()&&l.squeezeValue<.45f&&!r.triggerPressed&&!FaceButtonHeld(r)&&!f.play.special&&!f.play.weaponWheel&&!f.play.psychoscope;
- // The slots sit on the body the player sees (BodyFollow's torso).
+ // The slots sit on the shared torso (TorsoLane), as the shoulders do.
  float torso=0;const bool shared=BodyTorsoYaw(torso);
  const int slot=gesture.Update(f.head,r.gripPose.position,r.gripPressed,valid,dt,shared?&torso:nullptr);
  gripOwned=gesture.OwnsGrip();

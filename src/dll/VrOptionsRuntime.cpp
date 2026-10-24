@@ -10,7 +10,6 @@
 #include "MarkerStereo.h"
 #include "AimTakeover.h"
 #include "BodyEquipment.h"
-#include "BodyFollow.h"
 #include "ControllerPrompts.h"
 #include "HeadTrackingHook.h"
 #include "UiMode.h"
@@ -184,7 +183,6 @@ constexpr Wiring wiring[]={
  {options::DebugOverlay,[](int v){SetDebugOverlay(v?debugdraw::kAllLayers:0u);},
   []{return static_cast<int>(DebugOverlayMask()!=0);}},
  {options::MuzzleAim,Set<SetShotRay>,Get<ShotRayEnabled>},
- {options::BodyFollow,Set<SetBodyFollowMode>,Get<BodyFollowMode>},
  {options::UiDistance,Set<SetUiDistanceCm>,Get<UiDistanceCm>},
  // The offsets are set as a pair: each keeps the other's current value.
  {options::UiOffsetRight,[](int v){SetUiOffsetDegrees(v,UiOffsetUpDegrees());},Get<UiOffsetRightDegrees>},
@@ -199,10 +197,6 @@ constexpr Wiring wiring[]={
   Get<MovementStrafePercent>},
  {options::BackwardSpeed,[](int v){SetMovementAxisScales(MovementStrafePercent(),static_cast<unsigned>(v));},
   Get<MovementBackwardPercent>},
- {options::BodyTurnDeadzone,Set<SetTorsoDeadzone>,Get<TorsoDeadzoneDegrees>},
- // The stop distance stays below the new start, as the zone requires.
- {options::BodyStep,[](int v){SetRoomScaleZone(v,std::min(RoomScaleStopMm(),v-1),-1);},Get<RoomScaleStartMm>},
- {options::BodyGlide,[](int v){SetRoomScaleZone(RoomScaleStartMm(),RoomScaleStopMm(),v);},Get<RoomScaleFollowMs>},
  {options::ArmsFree,Set<SetAnimIkFreeArms>,Get<AnimIkFreeArms>},
  {options::CarryHold,Set<SetCarryHoldToHold>,Get<CarryHoldPreference>},
  {options::GrenadeHand,Set<SetGrenadeHand>,Get<GrenadeHandEnabled>},

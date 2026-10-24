@@ -79,7 +79,6 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
         auto* const ch = static_cast<std::uint8_t*>(character);
         if (IdentifyRig(ch)) {
             gMatched.fetch_add(1, std::memory_order_relaxed);
-            NoteBodyFollowIk();
             gCalibration.Tick();   // settles an auto re-take past the equip animation
             int gate = 0;
             if (ReadInt(ch + kCharAnimPlaying, &gate)) {
@@ -471,7 +470,7 @@ DWORD SetArmSetting(const std::string& what, const int* v, unsigned n)
     } else if (what == "hold" && n >= 2 && v[0] >= 0 && v[0] <= 360 && v[1] >= 0 && v[1] <= 1000) {
         p.wrist.holdSigmaDeg = static_cast<float>(v[0]); p.poleTau = v[1] / 1000.0f;
     } else if (what == "torso" && n >= 2 && v[0] >= 0 && v[0] <= 180 && v[1] >= 0 && v[1] <= 10000) {
-        SetBodyTorso(v[0], v[1]);   // one torso: BodyFollow owns the filter's settings
+        SetBodyTorso(v[0], v[1]);   // one torso: TorsoLane owns the filter's settings
     } else if (what == "knee" && n >= 1 && v[0] >= 500 && v[0] <= 1000) {
         p.armKnee = v[0] / 1000.0f;
     } else {

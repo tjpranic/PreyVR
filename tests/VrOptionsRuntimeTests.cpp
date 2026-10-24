@@ -40,8 +40,6 @@ void ClearHolsters(){++holsterClears;}
 DWORD SetDebugOverlay(unsigned v){applied[options::DebugOverlay]=v?1:0;return 0;}
 DWORD SetShotRay(unsigned v){applied[options::MuzzleAim]=v;return 0;}
 unsigned ShotRayEnabled(){return applied[options::MuzzleAim];}
-DWORD SetBodyFollowMode(unsigned v){applied[options::BodyFollow]=v;return 0;}
-unsigned BodyFollowMode(){return applied[options::BodyFollow];}
 unsigned DebugOverlayMask(){return applied[options::DebugOverlay];}
 DWORD SetSnapTurnDegrees(unsigned v){applied[options::Turn]=v;return 0;}
 unsigned SnapTurnDegrees(){return applied[options::Turn];}
@@ -76,7 +74,6 @@ int UiOffsetUpDegrees(){return menuUp;}
 PREYVR_STUB(SetTextPanelDistanceCm,TextPanelDistanceCmValue,UiText,unsigned)
 PREYVR_STUB(SetMoveLaneDeadzone,MoveLaneDeadzone,MoveDeadzone,unsigned)
 PREYVR_STUB(SetTurnLaneDeadzone,TurnLaneDeadzone,TurnDeadzone,unsigned)
-PREYVR_STUB(SetTorsoDeadzone,TorsoDeadzoneDegrees,BodyTurnDeadzone,int)
 PREYVR_STUB(SetArmLengthCm,ArmLengthCm,ArmLength,int)
 PREYVR_STUB(SetAnimIkFreeArms,AnimIkFreeArms,ArmsFree,unsigned)
 PREYVR_STUB(SetAnimIkFingerCurl,AnimIkFingerCurl,FingerCurl,unsigned)
@@ -108,14 +105,6 @@ DWORD SetMovementAxisScales(unsigned strafe,unsigned backward){
  applied[options::StrafeSpeed]=static_cast<int>(strafe);applied[options::BackwardSpeed]=static_cast<int>(backward);return 0;}
 unsigned MovementStrafePercent(){return static_cast<unsigned>(applied[options::StrafeSpeed]);}
 unsigned MovementBackwardPercent(){return static_cast<unsigned>(applied[options::BackwardSpeed]);}
-// The real zone's rule: the stop distance stays below the start.
-int roomStop=5;
-DWORD SetRoomScaleZone(int start,int stop,int follow){
- if(start<5||start>500||stop<0||stop>=start||follow>1000)return ERROR_INVALID_PARAMETER;
- applied[options::BodyStep]=start;roomStop=stop;if(follow>=0)applied[options::BodyGlide]=follow;return 0;}
-int RoomScaleStartMm(){return applied[options::BodyStep];}
-int RoomScaleStopMm(){return roomStop;}
-int RoomScaleFollowMs(){return applied[options::BodyGlide];}
 unsigned useLeft=1;
 unsigned UseHandLeft(){return useLeft;}
 bool HudMenuIsOpen(){return nativeModal;}
@@ -249,7 +238,7 @@ int main(){
   const std::pair<unsigned,int> chosen[]={
    {options::UiDistance,150},{options::UiOffsetRight,20},{options::UiOffsetUp,-10},{options::UiText,180},
    {options::HudLayer,0},{options::MoveDeadzone,20},{options::TurnDeadzone,25},{options::StrafeSpeed,80},
-   {options::BackwardSpeed,60},{options::BodyTurnDeadzone,50},{options::BodyStep,100},{options::BodyGlide,200},
+   {options::BackwardSpeed,60},
    {options::ArmsFree,0},{options::CarryHold,0},{options::GrenadeHand,0},{options::CarryThrowStrength,200},
    {options::GrenadeThrowStrength,150},{options::WristOnHud,1},{options::WristTick,0},{options::WristAlong,100},
    {options::WristHover,50},{options::WristTilt,30},{options::CarryHand,0},{options::GrenadeDeploy,1},
@@ -263,7 +252,6 @@ int main(){
   const auto live=VrOptionsValues();
   for(const auto& [id,v]:chosen)Check(live[id]==v,"each setting reaches its lane and reads back");
   Check(menuDistance==150&&menuRight==20&&menuUp==-10,"menu placement reaches its setters, both axes kept");
-  Check(roomStop<100,"a body step keeps the zone's stop below it");
   const auto text=readFile();
   auto stored=options::Defaults();options::Present marked{};
   Check(options::Parse(text,stored,&marked),"the file stays readable");

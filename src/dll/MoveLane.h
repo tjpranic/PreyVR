@@ -150,9 +150,6 @@ unsigned long long MoveLaneRecenterCount();
 // StickReread hands them to Prey's re-read, and the lanes read the engine back
 // every frame and post again what something else overwrote.
 int MoveLaneHeldMilli(unsigned axis);
-// The move stick went from released to pushed within `windowNs` of `now` and is
-// still pushed: a walk's first frames, before the body has been asked to move.
-bool MoveLaneStickStarted(std::uint64_t now, std::uint64_t windowNs);
 // How long a gap in the controller samples (or in head tracking, moving head
 // relative) keeps the last stick instead of releasing it, in ms; 0 releases at
 // once, as before 2026-10-24. Default 100.

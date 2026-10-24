@@ -99,13 +99,11 @@ void SettingsChecks(){
   Check(Parse("version=1\naim_lasers=0\n",parsed,&marked)&&parsed[ControllerPrompts]==1&&!marked[ControllerPrompts],
         "a file saved before the prompts leaves them to VR start");}
  Check(Parse("version=1\nmuzzle_aim=1\n",parsed)&&parsed[MuzzleAim]==1&&!Valid(MuzzleAim,2),"muzzle aim persists as on/off");
- Check(Defaults()[BodyFollow]==2,"body following turns and moves by default");
- Check(Parse("version=1\nbody_follow=1\n",parsed)&&parsed[BodyFollow]==1&&Valid(BodyFollow,0)&&!Valid(BodyFollow,3),
-       "body following persists as off, turn only, turn and move");
- Check(Display(BodyFollow,0)==L"OFF"&&Display(BodyFollow,1)==L"TURN ONLY"&&Display(BodyFollow,2)==L"TURN AND MOVE",
-       "body following reads as what it does");
- Check(Choices(BodyFollow)==std::vector<int>{0,1,2},"body following offers its three settings");
- Check(Parse("version=1\nturn=45\n",parsed)&&parsed[BodyFollow]==2,"settings saved before body following default it on");
+ // Body Follows You and its settings are retired (2026-10-24): a file saved
+ // with them still loads, their values are dropped, and a save leaves them out.
+ Check(Parse("version=1\nbody_follow=2\nbody_turn_deadzone=35\nbody_step=30\nbody_glide=50\nturn=45\n",parsed)&&
+       parsed[Turn]==45,"a file saved with body following still loads");
+ Check(Serialize(Defaults()).find("body_")==std::string::npos,"and no body following setting is written");
  Check(Parse("version=1\ndebug_overlay=1\n",parsed)&&parsed[DebugOverlay]==1&&!Valid(DebugOverlay,2),"debug overlay persists as on/off");
  // The scene reticle toggle is retired: a file saved with it still loads, its
  // other settings intact, and the world reticle takes its default.
@@ -186,7 +184,7 @@ void LayoutChecks(){
  Check(Defaults()[HeavySwingSpeed]==700&&Valid(HeavySwingSpeed,300)&&Valid(HeavySwingSpeed,1500)&&!Valid(HeavySwingSpeed,1550)&&
        !Valid(HeavySwingSpeed,250)&&Display(HeavySwingSpeed,700)==L"700 CM/S",
        "heavy swings from 7 m/s by default, 3 to 15 m/s");
- Check(MenuEntries(0)[0]==Turn&&Has(MenuEntries(0),BodyFollow)&&Has(MenuEntries(0),BodyGlide),"comfort: turning first, body following");
+ Check(MenuEntries(0)[0]==Turn&&Has(MenuEntries(0),BackwardSpeed),"comfort: turning first, then walking");
  for(const int e:{UiDistance,UiOffsetRight,UiOffsetUp,UiText,PointerHand,HudLayer,ReticleWorld,ReticleSize,ReticleFallback,MarkerSize})
   Check(Has(MenuEntries(2),e),"menu placement, the HUD, the reticle and the markers on the interface tab");
  Check(Defaults()[MarkerSize]==100&&Valid(MarkerSize,50)&&Valid(MarkerSize,200)&&!Valid(MarkerSize,40)&&!Valid(MarkerSize,210)&&
@@ -229,14 +227,14 @@ void PresenceChecks(){
  back[Turn]=true;
  Check(!Parse("version=1\nturn=7\n",parsed,&back)&&back[Turn],"a refused file leaves presence as it was");
  Check(Serialize(Defaults()).find("inventory_depth=25\n")!=std::string::npos,"without presence, every setting is written");
- Check(Parse("version=1\nui_offset_right=-90\nui_offset_up=45\nui_distance=400\nbody_glide=0\n",parsed)&&
-       parsed[UiOffsetRight]==-90&&parsed[UiOffsetUp]==45&&parsed[UiDistance]==400&&parsed[BodyGlide]==0,
+ Check(Parse("version=1\nui_offset_right=-90\nui_offset_up=45\nui_distance=400\n",parsed)&&
+       parsed[UiOffsetRight]==-90&&parsed[UiOffsetUp]==45&&parsed[UiDistance]==400,
        "new settings persist at their limits");
  for(auto s:{"version=1\nui_offset_up=46\n","version=1\nui_distance=99\n","version=1\npointer_hand=3\n",
              "version=1\nwrist_along=-51\n","version=1\ninventory_depth=101\n"})
   Check(!Parse(s,parsed),"out-of-range new settings are refused");
  Check(Display(UiOffsetRight,-10)==L"10 DEGREES LEFT"&&Display(UiOffsetUp,0)==L"CENTRE"&&
-       Display(PointerHand,2)==L"BUTTONS ONLY"&&Display(HudLayer,0)==L"IN THE WORLD"&&Display(BodyGlide,0)==L"0 MS"&&
+       Display(PointerHand,2)==L"BUTTONS ONLY"&&Display(HudLayer,0)==L"IN THE WORLD"&&
        Display(WristHover,42)==L"42 MM"&&Display(UiText,140)==L"140 CM","new settings read as what they do");
 }
 void GestureChecks(){

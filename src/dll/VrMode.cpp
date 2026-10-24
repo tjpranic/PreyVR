@@ -1,5 +1,5 @@
 #include "VrMode.h"
-#include "BodyFollow.h"
+#include "TorsoLane.h"
 #include "VrOptionsRuntime.h"
 #include "Logger.h"
 #include "XrSessionHost.h"
@@ -72,7 +72,7 @@ void StopFeatures() {
     SetAnimIkControllerDrive(0); SetAnimIkMode(0);
     SetMenuNavigation(0); SetMoveLaneMode(0);
     SetTurnLaneEnabled(0); SetFireLaneEnabled(0); SetInteractionEnabled(0);
-    SetBodyFollowActive(0);
+    SetTorsoLaneActive(0);
     // Prey's keyboard/mouse prompts again, if VR start had set the controller's.
     SetControllerPrompts(0);
     // Leave the input drain alive to deliver the owned releases on the next frame.
@@ -237,10 +237,10 @@ void TickVrMode() {
         // motion (GrenadeLane.h). Not fatal: without the hooks the game's own
         // charged throw along the view stays.
         if(SetGrenadeHand(options::Default(options::GrenadeHand))!=0) Log("grenade_hand=native reason=hooks_unavailable");
-        // The body turns with the player (BodyFollow.h; the VR options switch
-        // it off). Not fatal: without the hook the body keeps the native yaw,
-        // as before.
-        if(SetBodyFollowActive(1)!=0) Log("body_follow=unavailable body=native_yaw");
+        // The shared torso the shoulders and body slots sit on (TorsoLane.h).
+        // Not fatal: without the hook each keeps its own estimate, and a snap
+        // turn lands at the view instead.
+        if(SetTorsoLaneActive(1)!=0) Log("torso=unavailable shoulders=own_estimate");
         // The arms stay at the controllers with no weapon drawn: holstered (the
         // right grip held) or carrying (AnimIkTakeover arms.free; arms.free 0 =
         // the game lowers them out of view, as before).
@@ -275,7 +275,7 @@ void TickVrMode() {
             nextStatusReport=GetTickCount64()+kStatusReportMs;
             // The same text dual.report and hud.layer answer with.
             Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
-                " } body={"+BodyFollowReport()+" } move={"+MoveLaneStatusReport()+StickRereadReport()+
+                " } torso={"+TorsoLaneReport()+" } move={"+MoveLaneStatusReport()+StickRereadReport()+
                 " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" focus={"+
                 FocusHoldReport()+" } hold={"+XrHoldReport()+" } prompts={"+ControllerPromptsReport()+" }");
         }

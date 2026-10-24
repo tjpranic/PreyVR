@@ -133,35 +133,31 @@ DWORD SnapTurnHeadTracking(int steps, unsigned degrees);
 // 0 queued, 1 out of range, 4 one already queued.
 DWORD QueueSnapTurn(int steps, unsigned degrees);
 // Applies a queued snap. The frame-start seams -- ArkPlayer::Update's entry
-// (BodyFollow) and, failing that, the UpdateView hook -- pass `late` false and
+// (TorsoLane) and, failing that, the UpdateView hook -- pass `late` false and
 // requeue a busy one. The turn lane passes `late` true for one neither seam took
 // in a whole frame: applied there, a frame late and with the old frame drops,
 // and dropped if busy. Main thread.
 void ApplyQueuedSnapTurn(bool late);
 // " snapApplied= snapLate= snapDropped=" for the report.
 std::string SnapTurnReport();
+// Snap turns applied so far, from any seam: TorsoLane turns the body after each.
+unsigned long long HeadTrackingSnapCount();
+// Set while TorsoLane turns the body with each snap. A snap then turns the view
+// about the body, as a smooth turn does, so the camera keeps its place on the
+// model; otherwise about the head, so the camera stays where it is.
+void SetSnapTurnsAboutBody(bool aboutBody);
 
-// Turns the reference yaw with a native turn of the player (BodyFollow), so the
-// play space P = G - R does not move. `turnNative` runs under the recenter lock,
-// is given the reference yaw, and returns the angle it actually turned the
-// native player by -- nothing if it did not turn it.
+// Turns the reference yaw with a native turn of the player (TorsoLane, after a
+// snap turn), so the play space P = G - R does not move. `turnNative` runs
+// under the recenter lock, is given the reference yaw, and returns the angle it
+// actually turned the native player by -- nothing if it did not turn it.
 //
 // **No generation bump**, unlike a snap or a recenter. The generation announces
 // a change of P, and some 25 consumers reset on it (IK calibration, the two-hand
 // hold, gestures, panel fits); this changes R and G together and never P.
 // 0 turned, 1 no reference, 2 busy (lock or a reference change in flight),
-// 3 the native turn was refused.
+// 3 the native turn was not made.
 int TurnHeadTrackingReferenceWithNative(const std::function<std::optional<float>(float referenceYaw)>& turnNative);
-
-// The positional twin (room-scale, docs/ROOMSCALE-2026-10-11.md): moves the
-// native player and the play-space origin together, so the view does not move.
-// `moveNative` runs under the recenter lock, is given the head's offset from the
-// native eye in the world (engine axes, metres) at `playSpaceYaw`, and returns
-// the world move it applied -- nothing if it applied none. The origin shifts by
-// exactly that move. No generation bump, for the same reason as the turn.
-// 0 moved, 1 no reference, 2 busy, 3 nothing applied, 4 positional tracking off.
-int MoveHeadTrackingOriginWithNative(const Pose& head, float playSpaceYaw,
-                                     const std::function<std::optional<Vec3>(const Vec3& headOffsetWorld)>& moveNative);
 
 // Bumped by recenter, runtime rebase and reset: the events that redefine which
 // way the tracking space faces, after which a torso estimate is stale. Not by a

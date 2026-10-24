@@ -217,23 +217,15 @@ float LaserFade(float along);
 // of it unseen. The reticle is over the HUD it came out of and under the wheel,
 // which hides it anyway; the note panel under the text panel: a subtitle reads
 // over an open book.
-// The wrist, slot and fade layers are their callers' to gate: they pause while
+// The wrist and slot layers are their callers' to gate: they pause while
 // VR Options has the controls, which is more than not being drawn.
 enum class FrameLayer : unsigned char {
     world, menu, menuCylinder, menuRightEye, guide, hud, reticle, wheel, note, text, options, beam, cursor, wrist,
-    slot, fade };
+    slot };
 struct FrameShown {
     bool menu=false,menuCylinder=false,menuRightEye=false,guide=false,hud=false,reticle=false,wheel=false,note=false;
-    bool text=false,options=false,beam=false,cursor=false,wrist=false,slot=false,fade=false;
+    bool text=false,options=false,beam=false,cursor=false,wrist=false,slot=false;
 };
 struct FrameLayers { std::array<FrameLayer,12> layers{}; unsigned count=0; };
 FrameLayers ComposeFrame(const FrameShown& shown);
-// **The head-in-wall fade** (XrSessionHost, BodyHeadOut): black over 0.1 s while
-// `wanted`, clear again over 0.2 s. `now` is the frame's display time (ns);
-// the step is capped at 0.1 s, and there is none on the first frame or one
-// whose time did not advance. Returns the alpha in kFadeLevels steps, rounded:
-// the layer is repainted only when that changes.
-struct Fade { long long time=0; float alpha=0; };
-inline constexpr unsigned kFadeLevels=8;
-int StepFade(Fade& fade, long long now, bool wanted);
 }

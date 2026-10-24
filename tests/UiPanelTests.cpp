@@ -398,17 +398,17 @@ int main() {
         return true;
     };
     ui::FrameShown play;
-    play.hud=play.reticle=play.wheel=play.note=play.text=play.beam=play.cursor=play.wrist=play.slot=play.fade=true;
+    play.hud=play.reticle=play.wheel=play.note=play.text=play.beam=play.cursor=play.wrist=play.slot=true;
     Require(is(ui::ComposeFrame(play),{L::world,L::hud,L::reticle,L::wheel,L::note,L::text,L::beam,L::cursor,L::wrist,
-        L::slot,L::fade}),
-        "gameplay: the world, then the HUD, the reticle, the wheel over them, note and text, the laser, wrist, slot and fade");
+        L::slot}),
+        "gameplay: the world, then the HUD, the reticle, the wheel over them, note and text, the laser, wrist and slot");
     Require(ui::ComposeFrame(play).count<=ui::FrameLayers{}.layers.size(),"every gameplay layer at once fits");
-    auto over=play;over.options=true;over.wrist=over.slot=over.fade=false; // paused by their callers meanwhile
+    auto over=play;over.options=true;over.wrist=over.slot=false; // paused by their callers meanwhile
     Require(is(ui::ComposeFrame(over),{L::world,L::options,L::beam,L::cursor}),
         "VR Options over the running game: the world under it, the laser over it, the HUD, wheel, note and text out");
-    over.wrist=over.slot=over.fade=true;
-    Require(is(ui::ComposeFrame(over),{L::world,L::options,L::beam,L::cursor,L::wrist,L::slot,L::fade}),
-        "the wrist, slot and fade are their callers' to gate: what is shown is drawn");
+    over.wrist=over.slot=true;
+    Require(is(ui::ComposeFrame(over),{L::world,L::options,L::beam,L::cursor,L::wrist,L::slot}),
+        "the wrist and slot are their callers' to gate: what is shown is drawn");
     ui::FrameShown menu;menu.menu=menu.menuCylinder=menu.menuRightEye=menu.guide=menu.beam=menu.cursor=true;
     Require(is(ui::ComposeFrame(menu),{L::menuCylinder,L::menuRightEye,L::guide,L::beam,L::cursor}),
         "a curved game menu with its right eye and guide card, under the laser");
@@ -421,8 +421,8 @@ int main() {
         "a flat game menu is the quad, VR Options over it, no HUD, wheel, note or text");
     ui::FrameShown everything;
     everything.menuRightEye=everything.guide=everything.hud=everything.text=true;
-    everything.beam=everything.cursor=everything.wrist=everything.slot=everything.fade=true;
-    Require(is(ui::ComposeFrame(everything),{L::world,L::hud,L::text,L::beam,L::cursor,L::wrist,L::slot,L::fade}),
+    everything.beam=everything.cursor=everything.wrist=everything.slot=true;
+    Require(is(ui::ComposeFrame(everything),{L::world,L::hud,L::text,L::beam,L::cursor,L::wrist,L::slot}),
         "the menu's right eye and guide card never show over the world");
 
     // **VR Options dragged by the laser**, round the inside of a cylinder about the head.
@@ -649,29 +649,7 @@ int main() {
         Require(!ui::WantMenuPanel(2,false,true,true,true),"never without located views");
         Require(ui::WantMenuPanel(1,true,false,false,true)&&!ui::WantMenuPanel(1,true,false,true,false),
                 "an unknown menu state keeps what was shown");
-        // The fade: 0.1 s to black, 0.2 s back, steps capped at 0.1 s, 8 levels.
-        ui::Fade fade{};
-        Require(ui::StepFade(fade,1000,true)==0&&fade.alpha==0&&fade.time==1000,"no step on the first frame");
-        Require(ui::StepFade(fade,1000+50000000,true)==4&&near(fade.alpha,.5f),"half black after 50 ms");
-        Require(ui::StepFade(fade,1000+50000000,true)==4&&near(fade.alpha,.5f),"a frame whose time did not advance holds");
-        Require(ui::StepFade(fade,2000000000,true)==8&&fade.alpha==1,"a long step counts as 0.1 s, and black is 1");
-        Require(ui::StepFade(fade,2100000000,false)==4&&near(fade.alpha,.5f),"0.1 s clears half of it");
-        Require(ui::StepFade(fade,2200000000,false)==0&&near(fade.alpha,0),"and 0.2 s all of it");
-        Require(ui::StepFade(fade,1500000000,true)==0&&fade.time==1500000000,"time going back takes the new time, no step");
-        // Against the expression it replaced, bit for bit, over an uneven run.
-        ui::Fade stepped{};float alpha=0;long long time=0;
-        const long long steps[]={0,11111111,8333333,90000000,250000000,-3000000,16666666,1,500000000,7000000};
-        long long now=123456789;unsigned n=0;
-        for(int round=0;round<40;++round){
-            now+=steps[round%10];const bool wanted=(round/3)%2==0;
-            const float dt=time&&now>time?std::min(.1f,static_cast<float>(now-time)*1e-9f):0.f;
-            time=now;
-            alpha=wanted?std::min(1.f,alpha+dt/.1f):std::max(0.f,alpha-dt/.2f);
-            const int level=ui::StepFade(stepped,now,wanted);
-            n+=level==static_cast<int>(alpha*8u+.5f)&&stepped.alpha==alpha&&stepped.time==time;
-        }
-        Require(n==40,"the fade is the expression it replaced");
     }
 
-    std::cout<<"UI panel geometry, frame layers, panel dragging, laser quads, the menu stack and the fade passed\n";
+    std::cout<<"UI panel geometry, frame layers, panel dragging, laser quads and the menu stack passed\n";
 }

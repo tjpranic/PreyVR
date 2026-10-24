@@ -25,7 +25,6 @@
 #include "VrOptionsLayer.h"
 #include "VrOptionsRuntime.h"
 #include "BodyEquipment.h"
-#include "BodyFollow.h"
 #include "SlotFeedback.h"
 #include "NativeWristTexture.h"
 #include "WristLane.h"
@@ -68,7 +67,7 @@
 
 // The overlay layers of Prey's frames, over the world (XrSessionState.h): the
 // HUD panel, the world reticle, the wheel, the note and text panels, the wrist
-// card, the slot card and the head-in-wall fade. ServiceXrFrame calls them in
+// card and the slot card. ServiceXrFrame calls them in
 // this order; each fills its layer and says whether it is shown.
 
 namespace preyvr::dll {
@@ -345,47 +344,6 @@ bool BuildSlotLayer(const FrameView& view, XrCompositionLayerQuad& layer)
                 FillQuad(layer,gHost.space,p.pose,{p.width,p.height},gHost.slotImage.Handle(),
                          {{0,0},{SlotFeedbackWidth,SlotFeedbackHeight}},0);
             }
-        }
-    }
-    return active;
-}
-
-// The head-in-wall fade (docs/ROOMSCALE-2026-10-11.md): while the head is
-// through geometry the view goes black -- in over 0.1 s, out over 0.2 s --
-// so walking into a wall cannot show what is behind it. Over everything.
-bool BuildFadeLayer(const FrameView& view, XrCompositionLayerQuad& layer)
-{
-    bool active=false;
-    // Repainted per level change only, so its size (Host::kFadeWidth)
-    // costs nothing per frame.
-    constexpr unsigned kFadeWidth=Host::kFadeWidth, kFadeHeight=Host::kFadeHeight, kFadeLevels=ui::kFadeLevels;
-    const bool fadeWanted=view.rendered&&view.haveViews&&!view.panelActive&&!view.optionsActive&&BodyHeadOut();
-    const int level=ui::StepFade(gHost.fade,view.displayTime,fadeWanted);
-    if(level>0&&view.rendered&&view.haveViews){
-        gHost.fadeImage.Ensure(SessionSwapchainApi(),gHost.session,gHost.device,Log);
-        if(gHost.fadeImage.Ready()&&level!=gHost.fadePainted){
-            // Black is zero in either channel order; alpha is linear even in sRGB.
-            const auto alpha=static_cast<unsigned char>(level*255/kFadeLevels);
-            std::vector<unsigned char> pixels(static_cast<size_t>(kFadeWidth)*kFadeHeight*4,0);
-            for(size_t n=3;n<pixels.size();n+=4)pixels[n]=alpha;
-            if(const auto context=ImmediateContext(gHost.device)){
-                const auto upload=gHost.fadeImage.Paint(context.Get(),pixels.data());
-                if(upload==LayerSwapchain::Upload::ready)gHost.fadePainted=level;
-                if(upload==LayerSwapchain::Upload::sessionFault)gStopRequested.store(true);
-            }
-        }
-        if(gHost.fadeImage.Ready()&&gHost.fadePainted==level){
-            // 0.2 m ahead of the head -- clear of any compositor near plane --
-            // and 5 m square: about 85 degrees each way.
-            const auto& q=view.head.orientation;
-            const Vec3 ahead=Rotate(q,Vec3{0,0,-.2f});
-            FillQuad(layer,gHost.space,
-                     Pose{q,{view.head.position.x+ahead.x,view.head.position.y+ahead.y,view.head.position.z+ahead.z}},
-                     {5.f,5.f},gHost.fadeImage.Handle(),
-                     {{0,0},{static_cast<int32_t>(kFadeWidth),static_cast<int32_t>(kFadeHeight)}},
-                     XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT);
-            active=true;
-            gFadeFrames.fetch_add(1,std::memory_order_relaxed);
         }
     }
     return active;

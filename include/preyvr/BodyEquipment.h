@@ -12,7 +12,7 @@ inline constexpr std::array<Vec3,2> Zones{{{.25f,-.65f,.02f},{-.20f,-.30f,-.13f}
 class HolsterGesture {
 public:
  explicit HolsterGesture(std::array<Vec3,2> zones=Zones):zones_(zones){}
- // `torso`: the shared torso yaw the visible body faces (BodyFollow), in this
+ // `torso`: the shared torso yaw the shoulders sit on (TorsoLane), in this
  // frame's yaw convention; null keeps the gesture's own head-following estimate.
  int Update(Pose head,Vec3 hand,bool squeeze,bool valid,float dt,const float* torso=nullptr) {
   if(!valid||!std::isfinite(dt)||dt<=0||dt>.2f){Reset();return -1;}

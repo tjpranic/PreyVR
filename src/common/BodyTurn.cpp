@@ -1,21 +1,11 @@
-#include "preyvr/BodyFollow.h"
+#include "preyvr/BodyTurn.h"
 
+#include "preyvr/MotionController.h"
 #include "preyvr/StereoCamera.h"
 
 #include <cmath>
 
-namespace preyvr::bodyfollow {
-namespace {
-
-
-} // namespace
-
-float Wrap(float radians)
-{
-    if (!std::isfinite(radians)) { return radians; }
-    const float wrapped = std::remainder(radians, 2.0f * kPi);
-    return wrapped <= -kPi ? wrapped + 2.0f * kPi : wrapped;
-}
+namespace preyvr::bodyturn {
 
 std::optional<float> EngineYawOf(const Quaternion& engineRotation)
 {
@@ -43,23 +33,21 @@ std::optional<float> EngineYawOf(const Quaternion& engineRotation)
     return std::atan2(-hx, hy);
 }
 
-std::optional<Quaternion> TurnedViewRotation(const Quaternion& current, float delta, bool level)
+std::optional<Quaternion> LevelledTurn(const Quaternion& current, float delta)
 {
     if (!std::isfinite(delta)) { return std::nullopt; }
     const auto yaw = EngineYawOf(current);
     if (!yaw) { return std::nullopt; }
-    if (level) { return stereo::YawQuaternion(Wrap(*yaw + delta)); }
-    // Pre-multiplied: a turn about the world's up axis, not the view's own.
-    return Normalize(Multiply(stereo::YawQuaternion(delta), Normalize(current)));
+    return stereo::YawQuaternion(controller::WrapAngle(*yaw + delta));
 }
 
-Step FollowStep(float referenceYaw, float torsoYaw, float minimum)
+Step TorsoStep(float referenceYaw, float torsoYaw, float minimum)
 {
     if (!std::isfinite(referenceYaw) || !std::isfinite(torsoYaw) || !std::isfinite(minimum)) {
         return {};
     }
-    const float delta = Wrap(torsoYaw - referenceYaw);
+    const float delta = controller::WrapAngle(torsoYaw - referenceYaw);
     return {delta, std::fabs(delta) > minimum};
 }
 
-} // namespace preyvr::bodyfollow
+} // namespace preyvr::bodyturn

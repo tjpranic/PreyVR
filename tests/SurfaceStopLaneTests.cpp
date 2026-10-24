@@ -119,7 +119,6 @@ unsigned overlays = 0;
 namespace preyvr::dll {
 unsigned long InputDrainThreadId() { return GetCurrentThreadId(); }
 bool HudGameplayInputAllowed() { return !menu; }
-bool BodyHeadOut() { return false; }
 unsigned long long HeadTrackingReferenceGeneration() { return 2; }
 bool TryGetWeaponBox(WeaponBox& out) { out = weapon; return haveBox; }
 bool SceneQueryFaulted() { return false; }

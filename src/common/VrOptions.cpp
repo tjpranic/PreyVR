@@ -12,7 +12,6 @@ constexpr const wchar_t* headRelativeNames[]={L"BODY RELATIVE",L"HEAD RELATIVE"}
 constexpr const wchar_t* gripToggleNames[]={L"HOLD",L"TOGGLE"};
 constexpr const wchar_t* supportSnapNames[]={L"FREE",L"SNAPPED"};
 constexpr const wchar_t* psiNames[]={L"ORIGINAL",L"HEAD",L"LEFT CONTROLLER"};
-constexpr const wchar_t* bodyFollowNames[]={L"OFF",L"TURN ONLY",L"TURN AND MOVE"};
 constexpr const wchar_t* pointerNames[]={L"LEFT",L"RIGHT",L"BUTTONS ONLY"};
 constexpr const wchar_t* hudNames[]={L"IN THE WORLD",L"FLOATING PANEL"};
 constexpr const wchar_t* reticleNames[]={L"ON THE HUD",L"IN THE WORLD"};
@@ -50,7 +49,6 @@ constexpr Spec specs[]={
  {"belt_hints",L"BODY SLOT FEEDBACK",L"Brief feedback for holster requests and medkit selection/use. Requires the corresponding body slot feature.",1,0,1,1},
  {"debug_overlay",L"DEBUG OVERLAY (TESTING)",L"Draws each hand's ray and target, body slots, the wrist test, the foregrip region and the weapon's contact sweep in the world.",0,0,1,1},
  {"muzzle_aim",L"SHOTS FROM THE MUZZLE",L"Shots leave the weapon's muzzle along your controller's aim, so they land where the barrel points at any distance.",0,0,1,1},
- {"body_follow",L"BODY FOLLOWS YOU",L"Turn: your body faces you once you look past a short deadzone. Turn and move: it also steps to stay under you as you walk.",2,0,2,1,U::none,bodyFollowNames},
  {"ui_distance",L"MENU DISTANCE",L"How far away the game's menus float. They keep their apparent size.",200,100,400,5,U::cm},
  {"ui_offset_right",L"MENU LEFT / RIGHT",L"Turns the game's menus around you, left or right of where you faced when they opened.",0,-90,90,1,U::degreesRightLeft,{},{},L"CENTRE"},
  {"ui_offset_up",L"MENU UP / DOWN",L"Raises or lowers the game's menus; they stay upright.",0,-45,45,1,U::degreesUpDown,{},{},L"CENTRE"},
@@ -61,9 +59,6 @@ constexpr Spec specs[]={
  {"turn_deadzone",L"TURN STICK DEADZONE",L"How far the right stick moves before you turn.",15,0,60,1,U::percent},
  {"strafe_speed",L"SIDEWAYS SPEED",L"Walking speed to the side, relative to walking forward.",100,10,200,5,U::percent},
  {"backward_speed",L"BACKWARD SPEED",L"Walking speed backward, relative to walking forward.",100,10,200,5,U::percent},
- {"body_turn_deadzone",L"BODY TURN DEADZONE",L"How far you look away before your body turns to follow. Arms and body turn together.",35,0,180,5,U::degrees},
- {"body_step",L"BODY STEP DISTANCE",L"How far your head moves before your body steps under you. Needs Body Follows You: Turn and Move.",30,10,300,5,U::mm},
- {"body_glide",L"BODY GLIDE",L"How long your body takes to catch up when it steps under you. Zero is instant.",50,0,1000,10,U::ms},
  {"arms_free",L"HANDS WITHOUT A WEAPON",L"Keep both hands at the controllers with no weapon drawn: holstered or carrying.",1,0,1,1},
  {"carry_hold",L"CARRY",L"Press X once to pick up and again to drop, as Prey does, or hold X to keep holding.",0,0,1,1,U::none,carryHoldNames},
  {"grenade_hand",L"GRENADE THROW",L"Throw grenades with your hand's motion, or with the game's charged throw along your view.",1,0,1,1,U::none,grenadeNames},
@@ -101,8 +96,7 @@ constexpr bool Consistent(){
 static_assert(Consistent(),"every Spec describes its own range");
 
 // The panel's tabs. Each setting appears once, each button once.
-constexpr int comfort[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,StrafeSpeed,BackwardSpeed,
-    BodyFollow,BodyTurnDeadzone,BodyStep,BodyGlide};
+constexpr int comfort[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,StrafeSpeed,BackwardSpeed};
 constexpr int hands[]={AimLasers,TwoHand,GripToggle,SupportSnap,Psychoscope,ArmsFree,FingerCurl,ArmLength,CarryHold,GrenadeHand,
     CarryThrowStrength,GrenadeThrowStrength,SurfaceStop,HeavyMass,PhysicalContact,PushStrength,FreeSwing,SwingSpeed,HeavySwingSpeed};
 constexpr int interface_[]={UiScale,UiMargin,UiCurve,UiGuide,UiDistance,UiOffsetRight,UiOffsetUp,UiText,
@@ -162,7 +156,6 @@ std::wstring Display(unsigned id,int v){
  case U::degrees:return number+L" DEGREES";
  case U::degreesRightLeft:return std::to_wstring(std::abs(v))+(v>0?L" DEGREES RIGHT":L" DEGREES LEFT");
  case U::degreesUpDown:return std::to_wstring(std::abs(v))+(v>0?L" DEGREES UP":L" DEGREES DOWN");
- case U::ms:return number+L" MS";
  case U::cmPerSecond:return number+L" CM/S";
  case U::kg:return number+L" KG";
  case U::none:break;
@@ -194,7 +187,10 @@ bool Parse(std::string_view text,Values& result,Present* present){
   // scene query itself (reticle_world). physical_contacts, contact_strength:
   // Object Nudges, removed 2026-10-18 for a redesign. physical_melee: the
   // Physical Wrench, replaced by the free-swing wrench (free_swing) 2026-10-18.
-  if(key=="scene_reticle"||key=="physical_contacts"||key=="contact_strength"||key=="physical_melee")continue;
+  // body_follow, body_turn_deadzone, body_step, body_glide: Body Follows You,
+  // removed 2026-10-24 (smooth turning jittered with it on).
+  if(key=="scene_reticle"||key=="physical_contacts"||key=="contact_strength"||key=="physical_melee"||
+     key=="body_follow"||key=="body_turn_deadzone"||key=="body_step"||key=="body_glide")continue;
   // swing_speed took 80-250 until 2026-10-18; a file saved at 80 or 90 rises to the new minimum.
   if(key=="swing_speed"&&value>=80&&value<100)value=100;
   unsigned i=0;for(;i<Count&&key!=specs[i].key;++i){}

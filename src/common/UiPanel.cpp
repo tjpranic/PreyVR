@@ -402,14 +402,6 @@ FrameLayers ComposeFrame(const FrameShown& s)
     if(s.cursor)add(FrameLayer::cursor);
     if(s.wrist)add(FrameLayer::wrist);
     if(s.slot)add(FrameLayer::slot);
-    if(s.fade)add(FrameLayer::fade);
     return out;
-}
-int StepFade(Fade& fade, long long now, bool wanted)
-{
-    const float dt=fade.time&&now>fade.time?std::min(.1f,static_cast<float>(now-fade.time)*1e-9f):0.f;
-    fade.time=now;
-    fade.alpha=wanted?std::min(1.f,fade.alpha+dt/.1f):std::max(0.f,fade.alpha-dt/.2f);
-    return static_cast<int>(fade.alpha*kFadeLevels+.5f);
 }
 }

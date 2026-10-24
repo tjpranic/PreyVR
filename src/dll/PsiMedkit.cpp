@@ -2,7 +2,7 @@
 #include "HookInstall.h"
 #include "EngineAccess.h"
 #include "GameplayFrame.h"
-#include "BodyFollow.h"
+#include "TorsoLane.h"
 #include "HeadTrackingHook.h"
 #include "UiMode.h"
 #include "InputPost.h"

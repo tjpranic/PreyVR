@@ -4,12 +4,9 @@
 #include "HeadTrackingHook.h"
 #include "XrInput.h"
 #include "MinHookInit.h"
-#include "BodyFollow.h"
 #include "AtomicMax.h"
 
 #include "Logger.h"
-#include "preyvr/BodyFollow.h"
-#include "preyvr/RoomScale.h"
 #include "preyvr/CameraEdit.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/StereoCamera.h"
@@ -81,6 +78,11 @@ std::atomic<unsigned long long> gRecenterEpoch{0};
 std::atomic<unsigned long long> gRoomReadFallbacks{0};
 comfort::PendingSnap gPendingSnap;
 std::atomic<unsigned long long> gSnapsApplied{0}, gSnapsLate{0}, gSnapsDropped{0};
+// Every snap turn applied, from any seam (HeadTrackingSnapCount).
+std::atomic<unsigned long long> gSnapCount{0};
+// The body turns with each snap (SetSnapTurnsAboutBody): the snap then leaves
+// the origin alone, so the view turns about the body as a smooth turn's does.
+std::atomic<bool> gSnapAboutBody{false};
 
 std::int64_t QpcNow()
 {
@@ -229,7 +231,7 @@ float ReadFloat(const std::uint8_t* base, std::size_t offset)
 void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
 {
     // The fallback seam for a queued snap, when ArkPlayer::Update's took none
-    // (body following unavailable): still before this view samples the reference.
+    // (the torso lane unavailable): still before this view samples the reference.
     ApplyQueuedSnapTurn(false);
     tRenderedHead.valid=false;
     const auto renderReference=HeadTrackingReferenceGeneration();
@@ -259,10 +261,8 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     std::memcpy(&gameRotation, viewParams + kViewRotation, sizeof(gameRotation));
     const stereo::Matrix34 gameMatrix =
         stereo::MatrixFromPose(Pose{gameRotation, Vec3{}});
-    // The body follower publishes the reference every frame it turns the body
-    // (BodyFollow.h). A read refused for contention reuses this thread's last
-    // reference of the same generation -- at most one follower step stale --
-    // rather than drop to the untracked view for a frame.
+    // A read refused for contention reuses this thread's last reference of the
+    // same generation, rather than drop to the untracked view for a frame.
     thread_local RoomReference lastRoom{};
     thread_local unsigned long long lastRoomReference = ~0ull;
     RoomReference room{};
@@ -276,7 +276,6 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
         return;
     }
     const float playSpaceYaw = stereo::CameraYawOf(gameMatrix) - room.yaw;
-    NoteBodyFollowView(playSpaceYaw, renderReference);
 
     // **Position is gated separately from rotation on purpose.** They fail in
     // completely different ways -- a wrong rotation reads as the world spinning,
@@ -526,14 +525,24 @@ DWORD SnapTurnHeadTracking(int steps,unsigned degrees) {
     std::unique_lock lock(gRecenterMutex,std::try_to_lock);
     if(!lock.owns_lock() || !stereo::ReferenceCurrent(sampledReference, gReferenceGeneration.load()) ||
        !gRoomReference.TryRead(room)) return 3;
-    const float delta=static_cast<float>(steps)*static_cast<float>(degrees)*kRadiansPerDegree;
-    room.origin=comfort::TurnOriginAboutHead(room.origin,frame.head.position,delta);
+    // About the head, the camera stays where it is in the world -- and a body
+    // turning with the snap would turn under it, moving the model against the
+    // camera. With the body turning, the origin stays: the snap and the body's
+    // turn together are one turn about the capsule, the camera keeping its place
+    // on the body, as a smooth turn's does.
+    if(!gSnapAboutBody.load(std::memory_order_acquire)) {
+        const float delta=static_cast<float>(steps)*static_cast<float>(degrees)*kRadiansPerDegree;
+        room.origin=comfort::TurnOriginAboutHead(room.origin,frame.head.position,delta);
+    }
     room.yaw=controller::SnapTurn(room.yaw,steps,degrees*kRadiansPerDegree);
     gReferenceGeneration.fetch_add(1);
     gRoomReference.Publish(room);gReferenceYaw.store(room.yaw);gReferenceGeneration.fetch_add(1);
+    gSnapCount.fetch_add(1,std::memory_order_release);
     Log("result=0 detail=snap_turn degrees="+std::to_string(steps*static_cast<int>(degrees)));
     return 0;
 }
+unsigned long long HeadTrackingSnapCount() { return gSnapCount.load(std::memory_order_acquire); }
+void SetSnapTurnsAboutBody(bool aboutBody) { gSnapAboutBody.store(aboutBody, std::memory_order_release); }
 DWORD QueueSnapTurn(int steps,unsigned degrees) {
     if((steps!=-1 && steps!=1) || degrees<15 || degrees>90) return 1;
     return gPendingSnap.Queue(steps,degrees) ? 0 : 4;
@@ -585,29 +594,8 @@ int TurnHeadTrackingReferenceWithNative(const std::function<std::optional<float>
     const auto turned=turnNative(room.yaw);
     if(!turned) return 3;
     // R and G move together, so P = G - R stays where it was: no generation bump.
-    room.yaw=bodyfollow::Wrap(room.yaw+*turned);
+    room.yaw=controller::WrapAngle(room.yaw+*turned);
     gRoomReference.Publish(room);gReferenceYaw.store(room.yaw,std::memory_order_release);
-    return 0;
-}
-int MoveHeadTrackingOriginWithNative(const Pose& head, float playSpaceYaw,
-                                     const std::function<std::optional<Vec3>(const Vec3& headOffsetWorld)>& moveNative) {
-    // Without the head's position in the view, moving the player would move it.
-    if(!viewhook::gApplying.load(std::memory_order_acquire) ||
-       !viewhook::gApplyingPosition.load(std::memory_order_acquire)) return 4;
-    const float scale=viewhook::gPositionScale.load(std::memory_order_relaxed);
-    const auto sampledReference=gReferenceGeneration.load();
-    if(!gHaveReference.load(std::memory_order_acquire)) return 1;
-    std::unique_lock lock(gRecenterMutex,std::try_to_lock);
-    RoomReference room{};
-    if(!lock.owns_lock() || !stereo::ReferenceCurrent(sampledReference, gReferenceGeneration.load()) ||
-       !gRoomReference.TryRead(room)) return 2;
-    const auto applied=moveNative(roomscale::HeadOffsetWorld(head.position,room.origin,playSpaceYaw,scale));
-    if(!applied) return 3;
-    // The head's offset drops by exactly the move, so the eye stays put: no
-    // generation bump.
-    const Vec3 shift=roomscale::OriginShift(*applied,playSpaceYaw,scale);
-    room.origin={room.origin.x+shift.x,room.origin.y+shift.y,room.origin.z+shift.z};
-    gRoomReference.Publish(room);
     return 0;
 }
 unsigned long long HeadTrackingRecenterEpoch() { return gRecenterEpoch.load(); }

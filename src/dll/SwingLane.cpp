@@ -1,6 +1,5 @@
 #include "SwingLane.h"
 #include "GameplayFrame.h"
-#include "BodyFollow.h"
 #include "CarryLane.h"
 #include "DebugOverlay.h"
 #include "EngineAccess.h"

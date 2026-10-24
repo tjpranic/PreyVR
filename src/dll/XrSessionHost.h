@@ -91,8 +91,6 @@ float XrRuntimeIpdMetres();
 void ObserveXrBackbuffer(void* renderer);
 bool XrBackbufferReady(unsigned int width=0,unsigned int height=0);
 unsigned long long XrSubmittedFrameCount();
-// Frames the head-in-wall fade layer was submitted (BodyFollow.h).
-unsigned long long XrFadeFrames();
 
 // Arms stereo submission: a real image per eye, and Prey's own frustum declared
 // over them instead of the runtime's.

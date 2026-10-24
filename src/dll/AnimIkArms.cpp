@@ -82,9 +82,9 @@ void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& locatio
         const std::uint64_t now = preyvr::timing::MonotonicNanoseconds();
         const float dt = gTorsoNs != 0 ? static_cast<float>(now - gTorsoNs) * 1e-9f : 0.0f;
         gTorsoNs = now;
-        // The torso the body is turned to (BodyFollow), so the shoulders sit on
-        // the body the player sees; this filter only while that lane is not
-        // running, with that lane's settings.
+        // The shared torso (TorsoLane), so the shoulders and the body slots
+        // agree; this filter only while that lane is not running, with that
+        // lane's settings.
         float yaw = 0.0f;
         if (BodyTorsoYaw(yaw)) { gTorsoYaw.Reset(); }
         else {

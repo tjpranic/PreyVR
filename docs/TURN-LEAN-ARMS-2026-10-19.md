@@ -4,6 +4,11 @@
 [MOVE-STOP-2026-10-24.md](MOVE-STOP-2026-10-24.md) (cause A).** Section 1 and fix 1 are kept here
 as pointers, so the section and fix numbers others cite still hold.
 
+**2026-10-24: room-scale was removed**, with body turning, because smooth turning jittered with
+them on. Fixes 1 to 4 no longer apply: there is no room-scale move left to stall, push back or
+fade. Fix 5 (the arms) and the torso lift remain, and the neck model they use is now
+`armpose::LevelEye`.
+
 Status, 2026-10-19:
 - **Fix 5 (the arms):** worn OK, and committed as `079e55f`.
 - **Fix 2 (the push-back):** worn OK in PreyVR-42, with fix 1 (the stall). See "Fixes 1 and 2 as

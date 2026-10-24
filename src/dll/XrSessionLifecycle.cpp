@@ -25,7 +25,6 @@
 #include "VrOptionsLayer.h"
 #include "VrOptionsRuntime.h"
 #include "BodyEquipment.h"
-#include "BodyFollow.h"
 #include "SlotFeedback.h"
 #include "NativeWristTexture.h"
 #include "WristLane.h"
@@ -478,7 +477,6 @@ void Teardown()
     gHost.reticleSwapchain.reset();
     gHost.optionsLayer.Reset();
     gHost.slotImage.Reset();
-    gHost.fadeImage.Reset();
     ClearSlotFeedback();
     gHost.wristSwapchain.reset();
     gHost.wristFitter.reset();

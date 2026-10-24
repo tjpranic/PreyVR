@@ -1,5 +1,10 @@
 # The body does not follow the player across the room — investigation, 11 October 2026
 
+**Removed on 2026-10-24,** with body turning ([BODY-YAW-2026-10-11.md](BODY-YAW-2026-10-11.md)):
+with Body Follows You on, smooth turning jittered when spinning. The capsule no longer follows
+the head, and the head-in-wall fade went with it. The neck model the arms use moved to
+`armpose::LevelEye`. The rest of this document is the record of what was built.
+
 Branch `playability-improvements`. Investigation, plan, and implementation in two stages (see
 Implementation); all three stages have run in a headset, and the third was accepted.
 Follows [BODY-YAW-2026-10-11.md](BODY-YAW-2026-10-11.md): the body now turns with the player,

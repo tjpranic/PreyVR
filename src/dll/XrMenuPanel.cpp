@@ -25,7 +25,6 @@
 #include "VrOptionsLayer.h"
 #include "VrOptionsRuntime.h"
 #include "BodyEquipment.h"
-#include "BodyFollow.h"
 #include "SlotFeedback.h"
 #include "NativeWristTexture.h"
 #include "WristLane.h"

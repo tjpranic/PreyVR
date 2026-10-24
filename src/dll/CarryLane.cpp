@@ -409,8 +409,7 @@ struct HandNow {
     Vec3 head{};          // camera centre
     // The yaw the body faces in the world: the play space plus the reference.
     // The game's own carry target turns with it, so a heavy object's neutral
-    // offset must too -- with the body following the torso, a physical turn
-    // turns it, and a snap turn does (BodyFollow.h).
+    // offset must too -- a snap turn or a recenter turns it.
     float bodyYaw = 0;
     std::uint64_t reference = 0;
 };

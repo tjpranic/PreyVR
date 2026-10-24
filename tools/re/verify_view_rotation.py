@@ -20,9 +20,9 @@ def verify():
  # ArkPlayer's constructor installs its primary vtable at +0 (RTTI is stripped).
  proof('ArkPlayer ctor stores primary vtable 0x1E56B30 at +0',0x157a43c,
   '488d05edc68d004c896108488bf14c89611048890148')
- # Slot 19 (+0x98): ArkPlayer::Update, R-021's function; BodyFollow hooks its entry.
+ # Slot 19 (+0x98): ArkPlayer::Update, R-021's function; TorsoLane hooks its entry.
  slot('vtable slot 19 is ArkPlayer::Update 0x1584FE0',0x1e56b30,19,0x1584fe0)
- proof('ArkPlayer::Update prologue (BodyFollow hook target)',0x1584fe0,
+ proof('ArkPlayer::Update prologue (TorsoLane hook target)',0x1584fe0,
   '488bc455574881ecf800000048895808488bf90fb699851800004c8978e84c8b')
  proof('ArkPlayer::Update reads the context frame time at +0x14',0x15850c7,'f3410f107714')
  # Slot 52 (+0x1A0) and slot 53 (+0x1A8): the IActor SetViewRotation/GetViewRotation pair.

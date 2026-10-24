@@ -4,14 +4,13 @@
 // engine hook that calls the functions below; the lists themselves, and the
 // reasons for their order, are in FrameSchedule.cpp.
 //
-// **The main thread's frame**, in the order BodyFollow's frame-order probes
-// record it:
-//   1. ArkPlayer::Update (BodyFollow.cpp PlayerUpdateDetour): a snap turn queued
-//      last frame lands, then the body follows.
+// **The main thread's frame**, in the order the body follower's frame-order
+// probes recorded it (removed with it, 2026-10-24):
+//   1. ArkPlayer::Update (TorsoLane.cpp PlayerUpdateDetour): a snap turn queued
+//      last frame lands, then the torso is estimated.
 //   2. ArkPlayerCamera::UpdateView (HeadTrackingHook.cpp): the snap turn's
 //      fallback seam, then head tracking into the view.
-//   3. The arm IK callback (AnimIkTakeover.cpp). Its place varies, and
-//      BodyFollow counts which.
+//   3. The arm IK callback (AnimIkTakeover.cpp). Its place varies.
 //   4. The gameplay seam (AimTakeover.cpp): PrepareGameplayFrame, the publish,
 //      TickGameplayLanes.
 //   5. CSystem::Render (MainRenderHook.cpp): TickMainRender, the stereo camera
@@ -21,8 +20,8 @@
 // Meanwhile the render thread runs TickRenderThread for the previous frame, and
 // the worker thread runs TickWorker on its own at 50 Hz.
 //
-// **Not scheduled here, on purpose.** The snap-turn delivery and frame-order
-// probes in 1-3, and each stereo fix's own render hook (NearViewStereo,
+// **Not scheduled here, on purpose.** The snap-turn delivery in 1-2, and each
+// stereo fix's own render hook (NearViewStereo,
 // NearParticleStereo, MarkerStereo, DualSceneStereo, DualOverlay,
 // LoadingScreen), run where they do because their placement is the point.
 #include "GameplayFrame.h"

@@ -12,9 +12,9 @@ namespace preyvr::options {
 enum Setting : unsigned { Turn, HeadRelative, TurnSpeed, TwoHand, GripToggle,
     SupportSnap, Psychoscope, UiScale, UiMargin, UiCurve, UiGuide, Holsters, Wrist, WristSize,
     ReticleWorld, ReticleSize, ReticleFallback, MarkerSize, Haptics, HapticStrength, FreeSwing, SwingSpeed, HeavySwingSpeed, PhysicalContact, PushStrength,
-    PsiTarget, Medkit, BeltHints, DebugOverlay, MuzzleAim, BodyFollow,
+    PsiTarget, Medkit, BeltHints, DebugOverlay, MuzzleAim,
     UiDistance, UiOffsetRight, UiOffsetUp, UiText, PointerHand, HudLayer,
-    MoveDeadzone, TurnDeadzone, StrafeSpeed, BackwardSpeed, BodyTurnDeadzone, BodyStep, BodyGlide,
+    MoveDeadzone, TurnDeadzone, StrafeSpeed, BackwardSpeed,
     ArmsFree, CarryHold, GrenadeHand, CarryThrowStrength, GrenadeThrowStrength,
     WristOnHud, WristTick, WristAlong, WristHover, WristTilt,
     CarryHand, GrenadeDeploy, LongReach, InventoryLayer, InventoryStereo, InventoryDepth,
@@ -22,7 +22,7 @@ enum Setting : unsigned { Turn, HeadRelative, TurnSpeed, TwoHand, GripToggle,
     Count };
 // What a value counts, for Display. `metresInMm` shows millimetres as metres;
 // the two directional units name the side instead of a sign.
-enum class Unit : unsigned char { none, percent, cm, mm, metresInMm, degrees, degreesRightLeft, degreesUpDown, ms,
+enum class Unit : unsigned char { none, percent, cm, mm, metresInMm, degrees, degreesRightLeft, degreesUpDown,
     cmPerSecond, kg };
 // **One setting, described once**: the key it is saved under, its label and
 // help, its default, range and step, and how its value reads -- `names` for a

@@ -5,6 +5,9 @@
 ### Controls
 - The X to transfer junk in the recycler doesn't work
 
+### Bugs
+- The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision).
+
 ### UX/Game Feel
 - Rotate to face direction
     Add in an option to rotate the camera in the direction the right hand is facing. Alternatively, having the player body and camera follow the left/right hand when holding a certain button?
@@ -18,6 +21,7 @@
 - Focusing on keypads brings the camera *way* too close
 - Better throwing
     Add an option to impart extra force to objects that are physically thrown.
+    Maybe an option to point with left hand where you want the grenade to go?
 - Flashlight should be aimable with left hand
 - Wrench hits use too much stamina
     I think swings *back* away from the target may be getting counted. Maybe add a very short cooldown after a hit connects?
@@ -49,6 +53,7 @@
 - Optional body rendering
     An option to not render the body and only render the hands like in Half Life Alyx.
     Or an overhaul to polish it up fully.
+    It also still feels like the shoulders are attached to the head and not the torso, will need to double check this.
 - Physical crouching
     Crouching in real life should enable crouch mode. Standing up should disable crouch mode.
 
@@ -70,7 +75,7 @@
 - Group related options in the tabs into sections
 - Audit every option and rework and/or remove and/or consolidate as many as needed
 - In game console
-    In the VR Options menu, add a tab to show a console that allows me to enter tuning commands. It should also write the output to a log somewhere so agents can read it.
+    In the VR Options menu, add a tab to show a console that allows me to enter tuning commands. It should also write the output to a log somewhere so agents can read it. Then remove the tuning command prompt stuff.
 
 ## IN PROGRESS
 

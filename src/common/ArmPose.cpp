@@ -1,7 +1,5 @@
 #include "preyvr/ArmPose.h"
 
-#include "preyvr/RoomScale.h"
-
 #include <algorithm>
 #include <cmath>
 
@@ -82,9 +80,20 @@ Vec3 ShoulderTarget(const Vec3& eye, const TorsoFrame& torso, Side side, const B
                Scale(torso.up, body.shoulderUp));
 }
 
+Vec3 LevelEye(const Pose& head, float torsoYaw)
+{
+    const Quaternion& q = head.orientation;
+    const float lengthSquared = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
+    if (!std::isfinite(lengthSquared) || lengthSquared < 0.5f || !std::isfinite(torsoYaw)) { return head.position; }
+    const Vec3 now = Rotate(Normalize(q), kNeckFromEye);
+    const Quaternion torso{0.0f, std::sin(torsoYaw * 0.5f), 0.0f, std::cos(torsoYaw * 0.5f)};
+    const Vec3 rest = Rotate(torso, kNeckFromEye);
+    return {head.position.x + now.x - rest.x, head.position.y + now.y - rest.y, head.position.z + now.z - rest.z};
+}
+
 Vec3 ShoulderFromHead(const Pose& head, float torsoYaw, Side side, const Body& body)
 {
-    return ShoulderTarget(roomscale::FollowPoint(head, torsoYaw), TorsoFromYaw(torsoYaw), side, body);
+    return ShoulderTarget(LevelEye(head, torsoYaw), TorsoFromYaw(torsoYaw), side, body);
 }
 
 float ArmLength(const Body& body) { return body.upper + body.fore; }
@@ -100,8 +109,8 @@ Body WithArmLength(Body body, float metres)
 
 float LevelEyeHeight(const Pose& head)
 {
-    // roomscale::FollowPoint's height does not depend on the torso's yaw.
-    return roomscale::FollowPoint(head, 0.0f).y;
+    // LevelEye's height does not depend on the torso's yaw.
+    return LevelEye(head, 0.0f).y;
 }
 
 float TorsoLift(float neckRise, float up, float down)

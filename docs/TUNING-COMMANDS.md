@@ -31,7 +31,7 @@ does not show.
   and the numbers of `hud.setvar`, `hud.call` and `hud.probe`.
   `dbg.draw`, `aim.shot`, `near.fx`, `markers.depth`, `near.fov` and `ik.align`
   also refuse one, because a fallback there would switch something on.
-- A setting given some of its values but not all, such as `body.zone 30`,
+- A setting given some of its values but not all, such as `body.torso 30`,
   is refused with `87`.
 - A line that is not a command is answered `result=rejected` and changes
   nothing. That covers an unknown command under a known prefix, such as
@@ -63,8 +63,6 @@ The exceptions are one-shot actions, which act when they are typed:
 - `vr.enable`, `vr.disable`, `vr.recenter`, `view.recenter`, `view.calibrate`, `xr.start`
 - `arms.draw`, `ik.dump`, `ik.skel`, `ik.helpers`, `near.dump`
 - `menu`. A bare `menu` posts action 0, Up.
-
-`body.turn` and `body.nudge` refuse to run without their values.
 
 **Commands that take several values reset the ones you leave out to their
 built-in defaults, not to their current values.** This applies to
@@ -111,10 +109,6 @@ this session. "Menu only" means no command reaches it.
 | Comfort | Turn stick deadzone (`turn_deadzone`) | 0–60 % of the stick | 15 | `move.turndeadzone <0..60>` |
 | Comfort | Sideways speed (`strafe_speed`) | 10–200 % of forward speed | 100 | `move.scales <strafe> <backward>` (each 1–200) |
 | Comfort | Backward speed (`backward_speed`) | 10–200 % of forward speed | 100 | `move.scales <strafe> <backward>` |
-| Comfort | Body follows you (`body_follow`) | off (0), turn only (1), turn and move (2) | 2 | `body.follow <0\|1>`, `body.roomscale <0\|1>` |
-| Comfort | Body turn deadzone (`body_turn_deadzone`) | 0–180 degrees | 35 | `arm.torso <degrees> <relax ‰/s>` |
-| Comfort | Body step distance (`body_step`) | 10–300 mm | 30 | `body.zone <startMm> <stopMm> [followMs]` |
-| Comfort | Body glide (`body_glide`) | 0–1000 ms | 50 | `body.zone <startMm> <stopMm> <followMs>` |
 | Hands | Aim lasers (`aim_lasers`) | on/off | on | `dbg.lasers <0\|1>` |
 | Hands | Two-hand aim (`two_hand`) | on/off | on | `aim.twohand <0\|1>` |
 | Hands | Foregrip input (`grip_toggle`) | hold (0), toggle (1) | hold | menu only |
@@ -178,11 +172,6 @@ no command.
 
 A few rows behave differently from their commands:
 
-- Body step distance keeps the zone's stop distance below the new start, which
-  `body.zone` requires.
-- Body turn deadzone sets the deadzone alone and keeps the settling rate.
-  There is one copy since 2026-10-24: `body.torso`, `arm.torso` and the menu
-  all set the same torso, which the body and the arms both follow.
 - Physical carrying switches on only while the left hand is the use hand
   (`use.hand 1`, which VR start sets). Switching it off always works.
 
@@ -190,10 +179,7 @@ A few rows behave differently from their commands:
 
 | Command | Values | Default | What it does |
 |---|---|---|---|
-| `body.torso <deg> <relax>` | 0–180, 0–10000 ‰/s | 35, 600 | The turn deadzone and how fast the torso settles, for the body and the arms. The same setting as `arm.torso`. |
-| `body.zone <start> <stop> [followMs]` | start 5–500 mm, stop below start, follow ≤1000 ms | 30, 5, 50 | Room-scale: how far your head moves before the body follows, how close it brings it, how fast. The menu sets start and follow. |
-| `body.radius <mm>` | 100–600 | 350 | Capsule radius for the ray sweep (`body.physics 0`, or the stance test's fallback). |
-| `body.level <0\|1>` | | 1 | Keeps the body's rotation level (no pitch or roll). |
+| `body.torso <deg> <relax>` | 0–180, 0–10000 ‰/s | 35, 600 | How far you look away before the torso turns, and how fast it settles. The shoulders and the holster and medkit slots sit on it. The same setting as `arm.torso`. |
 | `wrist.place <along> <hover> <width> <tilt>` | mm, mm, 40–300 mm, degrees | 75, 42, 125, 40 | Where the wrist card sits. Width is multiplied by the menu's wrist size. |
 | `wrist.gate <enterFacing> <exitFacing> <enterViewing> <exitViewing> [dwellMs]` | ‰ −1000..1000, 0–2000 ms | 500, 220, 820, 620, 80 | How squarely you must look at the wrist before the card shows. |
 | `wrist.native <scale> [background]` | 100–600 %, 0/1 | 400, 0 | Scale of the game's own status on the card; 1 keeps the game's backdrop. |
@@ -284,25 +270,26 @@ value report, as described above.
 
 ### Body
 
+Body Follows You was removed on 2026-10-24, with its menu row, its three
+tuning rows and the `body.follow`, `body.roomscale`, `body.zone`,
+`body.radius`, `body.physics`, `body.standaside`, `body.level`, `body.turn`
+and `body.nudge` commands. It turned the body to face you and moved it under
+you as you walked, and with either part on, smooth turning jittered. The body
+now keeps the game's own facing: it turns with the stick, and after each snap
+turn it turns to face your torso once. It does not follow you turning round in
+the room until your next snap. A snap turns the view about the body, as smooth
+turning does, so the camera keeps its place on the model; it turns about your
+head only if the body cannot be turned (`snapBodyTurn=0`).
+
 | Command | Values | Default | What it does |
 |---|---|---|---|
-| `body.follow` | 0/1 | 1 | The body turns to face where you look. **Menu** (Body follows you). |
-| `body.roomscale` | 0/1 | 1 | The body walks with you across the room. **Menu** (turn and move). |
-| `body.zone <start> <stop> [followMs]` | see above | 30 5 50 | Room-scale start, stop and glide. **Menu** (start and glide). |
-| `body.torso <deg> <relax>` | | 35 600 | The turn deadzone, the same setting as `arm.torso`. |
-| `body.radius` | 100–600 mm | 350 | Capsule radius for the ray sweep, which `body.physics 0` uses and the stance test falls back to. |
-| `body.physics` | 0/1 | 1 | 1: before room-scale moves the body, the engine's own stance test checks it fits, and a move while you walk keeps your speed. 0: the 9-ray sweep and plain move from before 2026-10-19, for A/B. |
-| `body.standaside` | 0/1 | 0 | 0: the body follows your physical turns and steps while you stick-walk too, keeping your walking speed. 1: room-scale waits while the engine moves you faster than 0.25 m/s (stick walking, falling), as up to PreyVR-42. |
-| `body.level` | 0/1 | 1 | Level body rotation. |
-| `body.turn <deg> [delayS]` | ±1..180, 0–60 s | | Test: one body turn; the view must not turn. |
-| `body.nudge <rightCm> <fwdCm> [delayS]` | ±100 cm | | Test: one capsule move; the view must not move. |
-| `body.report` | report | | Body-follow and room-scale counters. Since 2026-10-19 also `keptMotion`/`restMoves` (moves while walking / at rest), `fitShortened`, `fitVertical`, `fitStartBlocked`, `stepSettling`, `pushOut`/`pushOutMaxMm` (times the engine pushed the body sideways out of something), `deferredBusy` (moves mid-walk that waited a frame for the physics to be idle) and `bodyLagMaxMm`. Since 2026-10-24 also `startKept` (moves in a walk's first frames that kept the motion instead of the teleport) and `raced` (moves a physics step queued behind it, replayed as a teleport). |
+| `body.report` | report | | The shared torso the shoulders and body slots sit on: `hooked`, `active`, `torsoDeadzoneDeg`, `torsoRelax`, `ticks`, `notPlayer`, `noHead`, `headDeg`, `torsoDeg`. The snap's body turn: `snapBodyTurn` (1 when it can run), `turnFault`, `snapTurns` (turns made), `lastSnapTurnMdeg`, `snapWaits` (frames a turn waited for gameplay or a busy reference) and `readbackMaxMdeg` (how far the engine's rotation differed from the one asked for). The status line carries the same as `torso={...}`. |
 
 ### Arms and hands (IK)
 
 | Command | Values | Default | What it does |
 |---|---|---|---|
-| `arm.torso <deg> <relax>` | 0–180, 0–10000 ‰/s | 35 600 | Torso yaw deadzone and settling, for the arms and the body together. **Menu** (Body turn deadzone). |
+| `arm.torso <deg> <relax>` | 0–180, 0–10000 ‰/s | 35 600 | Torso yaw deadzone and settling, for the shoulders and the body slots. The same setting as `body.torso`. |
 | `arm.mode` | 0 native arm, 1 your shoulder | 1 | Where the arm is solved from. |
 | `arm.anchor` | 0 the eyes, 1 the neck | 1 | Where the shoulder hangs from. The neck keeps it still when you look down or around; 0 is the behaviour before 2026-10-19, for A/B. |
 | `arm.shoulder <fwd> <out> <up>` | mm | | The shoulder joint from the centre eye, with the head level and facing the torso, in the torso's frame. |

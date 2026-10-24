@@ -250,7 +250,6 @@ int main()
     Check(Find(frame, Kind::choice, options::Turn).has_value(), "turning is a choice of angles");
     Check(Find(frame, Kind::choice, options::HeadRelative).has_value(), "head/body relative is a named choice, not a checkbox");
     Check(Find(frame, Kind::range, options::TurnSpeed).has_value(), "turn speed is a slider");
-    Check(Find(frame, Kind::choice, options::BodyFollow).has_value(), "body following is a choice");
 
     // A choice list: open it, pick 30 degrees.
     frame = panel.Click(*Find(frame, Kind::choice, options::Turn));

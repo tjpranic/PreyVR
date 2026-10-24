@@ -103,19 +103,13 @@ game menu. Releasing the controls is required before they can operate what is
 behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
 
 - **Comfort:** snap angle / smooth turning, head-relative movement, smooth-turn
-  speed, and **Body Follows You**:
-  - **Turn and Move** (the default): the character's body turns to face you once
-    you look past a short deadzone, and steps to stay under you as you walk round
-    the room. Turning or tilting your head alone does not move it. Walls stop the
-    body, not your head: if your head goes into a wall, or more than about 30 cm
-    past a body the wall has stopped, the view fades to black and the trigger and
-    use button do nothing until you step back.
-  - **Turn Only:** it turns but stays where it is when you walk.
-  - **Off:** the game's own facing.
-
-  Also the move and turn stick deadzones, sideways and backward walking speed,
-  and for the body its turn deadzone, how far your head moves before it steps
-  under you, and how quickly it catches up.
+  speed, the move and turn stick deadzones, and sideways and backward walking
+  speed. The character's body keeps the game's own facing: it turns with the
+  stick, and each snap turn turns it to face where you face. Both turn you
+  about the body, so you keep your place on it; if you have stepped away from
+  it, a snap swings you round it. Turning round in the room does not turn it
+  until your next snap, and it does not walk with you. (Body Follows You did both until 2026-10-24; it made smooth turning
+  jitter and was removed.)
 
   Reset VR view is on the Setup page.
 - **Hands:** **aim lasers** (on by default: a laser from each hand to what it
@@ -284,14 +278,6 @@ Turning and movement direction are on the Comfort tab. For this session only,
 use `move.snap 30` or `move.headrelative 0` in **Tune Prey VR.cmd**. A command
 typed without a value reports the current setting and changes nothing. Return
 the stick to neutral after changing modes.
-
-Body following can be tuned the same way, for this session only (the new
-panel's Comfort tab saves the step distance and glide):
-- `body.zone 30 5 50` sets how far your head moves before the body follows, how
-  close it brings it, and how quickly it glides (millimetres, millimetres,
-  milliseconds; lower is tighter, `0` for no glide).
-- `body.follow 0|1` and `body.roomscale 0|1` switch turning and moving separately.
-- `body.report` prints the counters.
 
 The in-headset option is what persists.
 

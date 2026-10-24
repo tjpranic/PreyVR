@@ -125,22 +125,13 @@ const Case kCases[] = {
     {"pose.roll", "pose.roll result=0", HandPoseReport, processed},
     {"pose.stretch", "pose.stretch result=0", HandPoseReport, processed},
     {"arm.report", "arm.report result=0", ArmReport, processed},
-    {"body.report", "body.report result=0", BodyFollowReport, processed},
-    {"body.follow", "body.follow result=0", BodyFollowReport, processed},
-    {"body.level", "body.level result=0", BodyFollowReport, processed},
-    {"body.level 2", "body.level result=87", BodyFollowReport, processed},
-    {"body.torso 1", "body.torso result=87", BodyFollowReport, processed},   // needs 2
-    {"body.turn", "body.turn result=87", BodyFollowReport, processed},      // 0 degrees
-    {"body.turn 30", "body.turn result=21", BodyFollowReport, processed},   // not in gameplay
-    {"body.roomscale", "body.roomscale result=0", BodyFollowReport, processed},
-    {"body.zone 1", "body.zone result=87", BodyFollowReport, processed},     // needs 2
-    {"body.radius", "body.radius result=0", BodyFollowReport, processed},
-    {"body.radius 200", "body.radius result=0", BodyFollowReport, processed},
-    {"body.radius 99", "body.radius result=87", BodyFollowReport, processed},
-    {"body.radius abc", "body.radius result=0", BodyFollowReport, processed},   // the default, 350
-    {"body.physics", "body.physics result=0", BodyFollowReport, processed},
-    {"body.standaside", "body.standaside result=0", BodyFollowReport, processed},
-    {"body.nudge", "body.nudge result=87", BodyFollowReport, processed},
+    {"body.report", "body.report result=0", TorsoLaneReport, processed},
+    {"body.torso 1", "body.torso result=87", TorsoLaneReport, processed},   // needs 2
+    // Body Follows You and room-scale, removed 2026-10-24: their verbs are gone.
+    {"body.follow", "result=rejected verb=\"body.follow\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
+     rejected},
+    {"body.roomscale", "result=rejected verb=\"body.roomscale\" detail=not_a_channel_verb_and_not_allowlisted",
+     nullptr, rejected},
     {"arm.lift", "arm.lift result=0", ArmReport, processed},
     {"arm.torso abc 600", "arm.torso result=87", ArmReport, processed},   // no default to fall back to
     {"pose.report", "pose.report result=0", HandPoseReport, processed},
@@ -638,29 +629,27 @@ void TestNearFovFollow()
 }
 
 // One torso (your 10-23 decision): body.torso and arm.torso set the one copy
-// BodyFollow owns, which the Body Turn Deadzone option reads back and the arms'
-// fallback filter uses. The option keeps the relaxation, and refuses what
-// arm.torso refuses. Puts the defaults (35 degrees, 600 per mille) back.
+// TorsoLane owns, which the arms' fallback filter uses. Refuses what arm.torso
+// refuses. Puts the defaults (35 degrees, 600 per mille) back.
 void TestTorsoOwner()
 {
     float deadzone = 0.0f, relax = 0.0f;
     Run("body.torso 50 700");
     BodyTorsoSettings(deadzone, relax);
-    Require(TorsoDeadzoneDegrees() == 50 && std::fabs(relax - 0.7f) < 1e-6f &&
-                std::fabs(deadzone - 50.0f * preyvr::kRadiansPerDegree) < 1e-6f,
-            "body.torso sets the one torso the option reads back");
+    Require(std::fabs(relax - 0.7f) < 1e-6f && std::fabs(deadzone - 50.0f * preyvr::kRadiansPerDegree) < 1e-6f,
+            "body.torso sets the one torso");
     Run("arm.torso 40 650");
     BodyTorsoSettings(deadzone, relax);
-    Require(TorsoDeadzoneDegrees() == 40 && std::fabs(relax - 0.65f) < 1e-6f, "arm.torso sets the same one");
-    Require(SetTorsoDeadzone(35) == 0 && TorsoDeadzoneDegrees() == 35, "the option sets the deadzone");
+    Require(std::fabs(relax - 0.65f) < 1e-6f && std::fabs(deadzone - 40.0f * preyvr::kRadiansPerDegree) < 1e-6f,
+            "arm.torso sets the same one");
+    Require(Run("arm.torso 181 600") == "arm.torso result=1" + ArmReport(), "arm.torso still refuses out of range");
+    Require(Run("body.torso 181 600").rfind("body.torso result=87", 0) == 0, "and so does body.torso");
     BodyTorsoSettings(deadzone, relax);
-    Require(std::fabs(relax - 0.65f) < 1e-6f, "and keeps the relaxation");
-    Require(SetTorsoDeadzone(181) != 0 && TorsoDeadzoneDegrees() == 35, "and refuses what arm.torso refuses");
-    Require(Run("arm.torso 181 600") == "arm.torso result=1" + ArmReport() && TorsoDeadzoneDegrees() == 35,
-            "arm.torso still refuses out of range");
+    Require(std::fabs(deadzone - 40.0f * preyvr::kRadiansPerDegree) < 1e-6f, "a refused value leaves it alone");
     Run("arm.torso 35 600");
     BodyTorsoSettings(deadzone, relax);
-    Require(TorsoDeadzoneDegrees() == 35 && std::fabs(relax - 0.6f) < 1e-6f, "the defaults are back");
+    Require(std::fabs(deadzone - 35.0f * preyvr::kRadiansPerDegree) < 1e-6f && std::fabs(relax - 0.6f) < 1e-6f,
+            "the defaults are back");
 }
 
 // contact log and swing log share one parse (EventLogSwitch): bare `log` turns

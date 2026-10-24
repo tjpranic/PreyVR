@@ -20,7 +20,7 @@
 #include "AimTakeover.h"
 #include "HandWorld.h"
 #include "ArmsLane.h"
-#include "BodyFollow.h"
+#include "TorsoLane.h"
 #include "WeaponAttachment.h"
 #include "CarryLane.h"
 #include "GrenadeLane.h"
@@ -337,8 +337,8 @@ struct PoseSettings {
     bool torsoLift = true;
     float liftUp = kNoLiftLimit, liftDown = kNoLiftLimit;
     armpose::Body body{};
-    // The torso filter's deadzone and relaxation are BodyFollow's
-    // (BodyTorsoSettings): one torso for the body and the arms.
+    // The torso filter's deadzone and relaxation are TorsoLane's
+    // (BodyTorsoSettings): one torso for the arms and the body slots.
     float armKnee = 0.92f;      // exact reach up to this fraction of the stretched arm
     float poleTau = 0.06f;      // elbow pole smoothing, seconds
     armpose::WristLimits wrist{};

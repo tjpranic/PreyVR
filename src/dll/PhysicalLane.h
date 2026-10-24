@@ -6,7 +6,6 @@
 // a speed is trusted in. Each lane keeps its own state, thresholds and log
 // lines; these are only the mechanics. Header-only so the lane tests, which
 // compile a lane's .cpp directly, need nothing more to link.
-#include "BodyFollow.h"
 #include "GameplayFrame.h"
 #include "HeadTrackingHook.h"
 #include "UiMode.h"
@@ -60,8 +59,8 @@ struct ReportThrottle {
 };
 
 // Why a lane stays shut this frame, asked in this order: the option off, a
-// latched fault, tracking not allowed, a menu, the head out of the body, no
-// usable camera, a stale pose or another reference. Null when none is.
+// latched fault, tracking not allowed, a menu, no usable camera, a stale pose
+// or another reference. Null when none is.
 inline const char* GateReason(const GameplayPoseFrame& frame, bool allowed, bool on, bool faulted, std::uint64_t now,
                               std::uint64_t freshNs)
 {
@@ -69,7 +68,6 @@ inline const char* GateReason(const GameplayPoseFrame& frame, bool allowed, bool
     if (faulted) { return "fault"; }
     if (!allowed) { return "tracking"; }
     if (!HudGameplayInputAllowed()) { return "menu"; }
-    if (BodyHeadOut()) { return "head_out"; }
     if (!frame.cameraCentreValid || !frame.headYawUsable || !std::isfinite(frame.yaw)) { return "camera"; }
     if (!FreshSample(now, frame.tracking.publishedNs, freshNs) ||
         frame.referenceGeneration != HeadTrackingReferenceGeneration()) { return "pose"; }

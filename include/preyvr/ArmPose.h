@@ -74,13 +74,23 @@ struct TorsoYaw {
 // and facing the torso.
 Vec3 ShoulderTarget(const Vec3& eye, const TorsoFrame& torso, Side side, const Body& body);
 
+// The neck's pivot from the eyes, head-local OpenXR (+Y up, +Z back), metres.
+// Turning or tipping the head swings the eyes about it by several centimetres.
+inline constexpr Vec3 kNeckFromEye{0.0f, -0.075f, 0.0805f};
+
+// The eye as it would be with the head level and facing the torso, tracking
+// space: the head moved by where its neck is now, less where the neck would be
+// level and facing `torsoYaw`. Rotating the head alone leaves it where it was;
+// facing the torso it is the head itself.
+Vec3 LevelEye(const Pose& head, float torsoYaw);
+
 // **The shoulder from the headset's pose.** Turning or tipping the head swings
 // the eyes about the neck by several centimetres, and the shoulders do not
 // move with them: looking down at the hands dropped an eye-anchored shoulder
 // 5-11 cm towards them and bent a straight arm by 20-45 degrees
 // (docs/TURN-LEAN-ARMS-2026-10-19.md). So the shoulder is placed from the eye
-// as it would be with the head level and facing the torso -- the neck model
-// room-scale follows (roomscale::FollowPoint). A lean still moves it.
+// as it would be with the head level and facing the torso (LevelEye). A lean
+// still moves it.
 Vec3 ShoulderFromHead(const Pose& head, float torsoYaw, Side side, const Body& body);
 
 // The drawn arm's length, shoulder joint to wrist (m), and the same body with

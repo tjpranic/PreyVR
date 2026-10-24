@@ -108,20 +108,22 @@ compares the same bytes in memory before it touches the slot.
 
 No R-number: static only, nothing called live yet. Supported Steam hash;
 `tools/re/verify_view_rotation.py`: 27 exact-byte/vtable checks. Purpose and design
-in [the body-yaw investigation](BODY-YAW-2026-10-11.md); `src/dll/BodyFollow.cpp`
-compares the same bytes in memory before its first call.
+in [the body-yaw investigation](BODY-YAW-2026-10-11.md). `src/dll/BodyFollow.cpp`
+compared the same bytes in memory before its first call, until body following and room-scale
+were removed on 2026-10-24. `src/dll/TorsoLane.cpp` hooks slot 19 and, after each snap turn,
+calls the setter once, comparing the same bytes first.
 
 | RVA / field | Purpose and constraint |
 | --- | --- |
 | ArkPlayer primary vtable `0x1E56B30` | Stored at `+0` by the constructor (`0x157A43C`). RTTI is stripped; the slot pair below matches the IActor `SetViewRotation`/`GetViewRotation` shape, which is a name by shape, not by symbol. |
-| slot 19 `+0x98` -> `0x1584FE0` | `ArkPlayer::Update(SEntityUpdateContext&, int)` (R-021's function); frame time from context `+0x14`. BodyFollow hooks its entry. |
+| slot 19 `+0x98` -> `0x1584FE0` | `ArkPlayer::Update(SEntityUpdateContext&, int)` (R-021's function); frame time from context `+0x14`. TorsoLane hooks its entry (BodyFollow did until 2026-10-24). |
 | slot 52 `+0x1A0` -> `0x1584CC0` | View-rotation setter, `this` = ArkPlayer, `RDX` = `const Quat*`. Copies q to `+0x13F0`, calls entity (`+0x38`) virtual `+0x118` with `(q, 0)`, tail-calls `0x1327050` on the component at `+0x1468`. |
 | slot 53 `+0x1A8` -> `0x157CE80` | Getter: returns the `+0x13F0` quaternion through the hidden return pointer. |
 | ArkPlayer `+0x13F0` (= ArkPlayerCamera `+0x150`) | World view rotation, Quat x y z w; saved as `"rotation"` (`0x157C490`); read by `UpdateView` at `0x148B927`. Third-party EGS headers name it `ArkPlayerCamera::m_rotation`. |
 | component `+0x1468`, copy at `+0x08` | Holds its own copy of the rotation (`0x1327050`); `0x1327070` is its per-frame update. **Writing `+0x13F0` alone leaves this copy stale; use the setter.** |
 | `0x1580AE4` | Entity rotation event copies entity `GetRotation` (virtual `+0x120`) back into `+0x13F0`. |
 | Concrete `CEntity` vtable `0x1D30BD0` | The one holding the hash-gated `GetPhysics` `0x9042B0` at `+0x228`. `+0xE8` GetWorldTM `0x10EA260` (matrix at `+0x60`); `+0x108` SetPos `0x90AF40`; `+0x110` GetPos `0x10EA250` (`m_vPos` at `+0x38`); `+0x118` SetRotation `0x90B220`; `+0x120` GetRotation `0x9043A0` (`+0x44`). |
-| `0x90AF40` SetPos(pos, whyFlags, recalcPhys, force) | Returns if unchanged; else stores `m_vPos`, `flags \|= 2`, tail-calls the transform update `+0x350`. The player's stance change (`0x157B980`) uses it after a `RayWorldIntersection(Game)`. Room-scale seam, [ROOMSCALE-2026-10-11.md](ROOMSCALE-2026-10-11.md). |
+| `0x90AF40` SetPos(pos, whyFlags, recalcPhys, force) | Returns if unchanged; else stores `m_vPos`, `flags \|= 2`, tail-calls the transform update `+0x350`. The player's stance change (`0x157B980`) uses it after a `RayWorldIntersection(Game)`. Room-scale's seam until 2026-10-24, [ROOMSCALE-2026-10-11.md](ROOMSCALE-2026-10-11.md). |
 
 ### H-018 static additions — 2026-09-06
 
