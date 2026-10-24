@@ -54,6 +54,13 @@ DWORD SetInputPostForce(unsigned int force);
 // Nonzero epoch scopes a controller tap to the menu that produced it.
 DWORD PostMenuAction(unsigned int action, unsigned long long menuEpoch = 0);
 
+// **Prey's X and Y in menus, held rather than tapped** (MenuHold.h): whether
+// each is down now, and the menu (HudMenuEpoch) it was read in. The drain
+// posts each as a pad's -- pressed, held every frame, released -- and lets go
+// when the menu closes or changes, or when these stop coming. XR frame service
+// only: it counts the presses between two drains.
+void PublishMenuHolds(bool secondary, bool tertiary, unsigned long long menuEpoch);
+
 // One raw event, for finding out which keys a given screen actually listens to.
 // `valueMilli` is thousandths, so a text channel can carry a float.
 DWORD PostRawInput(int keyId, unsigned int state, int valueMilli);
@@ -71,10 +78,11 @@ DWORD PostRawInputImmediate(int keyId, unsigned int state, int valueMilli);
 // Drains queued events on the calling thread. Called from the engine's own
 // per-frame seam; safe to call when nothing is queued.
 //
-// **At most one event per frame by default.** A menu that samples its input once
-// per frame would see a press and its release collapse into a single update and
-// could treat the button as never held. Separate frames is the shape real input
-// has.
+// **At most one queued event per frame by default.** A menu that samples its
+// input once per frame would see a press and its release collapse into a single
+// update and could treat the button as never held. Separate frames is the shape
+// real input has. Then X's and Y's held events (PublishMenuHolds), at most one
+// per button.
 void DrainQueuedInput();
 
 // How many events were handed to the engine, refused before that, dropped
@@ -82,6 +90,8 @@ void DrainQueuedInput();
 unsigned long long InputPostCount();
 unsigned long long InputPostRefusedCount();
 unsigned long long InputMenuDiscardedCount();
+// Presses of X and Y the drain posted as held (PublishMenuHolds).
+unsigned long long InputMenuHoldCount();
 unsigned long long InputQueueDroppedCount();
 unsigned long long InputQueueDepthEstimate();
 // True while this thread is inside a PostInputEvent this mod issued, so a

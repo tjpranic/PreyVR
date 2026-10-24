@@ -8,6 +8,8 @@
 
 #include "preyvr/InputEvent.h"
 #include "preyvr/InputQueue.h"
+#include "preyvr/LatestSnapshot.h"
+#include "preyvr/MenuHold.h"
 #include "preyvr/MenuTapDispatch.h"
 #include <cstring>
 
@@ -31,6 +33,7 @@ std::atomic<bool> gEnabled{false};
 std::atomic<unsigned long long> gPosted{0};
 std::atomic<unsigned long long> gRefused{0};
 std::atomic<unsigned long long> gMenuDiscarded{0};
+std::atomic<unsigned long long> gMenuHoldPresses{0};
 std::atomic<unsigned long> gDrainThread{0};
 // **Diagnostic.** `PostInputEvent` checks posting-enabled first and drops the
 // event when it is off; `force` bypasses that check. The native producers do not
@@ -40,6 +43,8 @@ std::atomic<unsigned long> gDrainThread{0};
 std::atomic<bool> gForce{false};
 
 input::EventQueue gQueue;
+// X and Y as the XR frame service last read them (PublishMenuHolds).
+LatestSnapshot<input::MenuHolds> gMenuHolds;
 
 // Resolved once and cached, so the drain does no discovery work inside a frame.
 void* gInput = nullptr;
@@ -158,6 +163,79 @@ void DisarmAfterFault(const char* detail)
     Log(std::string("result=failed detail=") + detail + " disarmed=1");
 }
 
+bool MenuModal() { return !VrOptionsInputOwned() && HudMenuStateKnown() && HudMenuIsOpen(); }
+
+// False when the post faulted and disarmed: nothing more this frame.
+bool DrainOneQueued()
+{
+    // **One per frame.** A menu that samples input once per frame would see a
+    // press and its release collapse into one update and could conclude the
+    // button was never held. Real input arrives on separate frames.
+    std::array<std::uint8_t, input::kEventSize> event{};
+    static input::MenuTapDispatch menuDispatch;
+    std::uint64_t scope=0;
+    int key=-1;unsigned state=0;
+    bool accepted=false;
+    for(unsigned i=0;i<input::kQueueCapacity;++i) {
+        if(!gQueue.Pop(event.data(),&scope))return true;
+        std::memcpy(&key,event.data()+input::kOffsetKeyId,sizeof(key));
+        std::memcpy(&state,event.data()+input::kOffsetState,sizeof(state));
+        if(menuDispatch.Allow(scope,HudMenuEpoch(),MenuModal(),key,state)) {
+            accepted=true;break;
+        }
+        gMenuDiscarded.fetch_add(1,std::memory_order_relaxed);
+    }
+    if(!accepted)return true;
+    if (!CallPost(gPost, gInput, event.data(), gForce.load(std::memory_order_acquire))) {
+        DisarmAfterFault("exception_in_post");
+        return false;
+    }
+    gPosted.fetch_add(1, std::memory_order_relaxed);
+    menuDispatch.Delivered(scope,key,state);
+    return true;
+}
+
+// Prey's X and Y in menus (MenuHold.h): each pressed, held or released,
+// after the queued event.
+void MirrorMenuHolds()
+{
+    static input::MenuHolds latest;
+    static input::MenuHoldMirror mirrors[2];
+    // Contended, the last reading stands, judged by its age.
+    gMenuHolds.TryRead(latest);
+    const bool fresh = FreshSample(MonotonicNanoseconds(), latest.stamp);
+    const bool modal = MenuModal();
+    const auto menu = HudMenuEpoch();
+    constexpr input::MenuAction kButtons[] = {input::MenuAction::Secondary, input::MenuAction::Tertiary};
+    for (unsigned i = 0; i < 2; ++i) {
+        auto& mirror = mirrors[i];
+        const auto& sample = latest.button[i];
+        const unsigned state = mirror.Next(sample, fresh, menu, modal);
+        if (state == 0) { continue; }
+        const int key = input::MenuActionKeyId(kButtons[i]);
+        std::array<std::uint8_t, input::kEventSize> event{};
+        if (BuildRawEvent(key, state, state == input::kStateReleased ? 0 : 1000, event) != 0) { continue; }
+        if (!CallPost(gPost, gInput, event.data(), gForce.load(std::memory_order_acquire))) {
+            DisarmAfterFault("exception_in_menu_hold");
+            return;
+        }
+        gPosted.fetch_add(1, std::memory_order_relaxed);
+        mirror.Delivered(state);
+        if (state == input::kStatePressed) {
+            gMenuHoldPresses.fetch_add(1, std::memory_order_relaxed);
+            Log(std::string("result=0 detail=menu_hold key=") + input::KeyNameFor(key) + " pressed=1 menu=" +
+                std::to_string(menu));
+        } else if (state == input::kStateReleased) {
+            // Why it let go: held=0 the player did, modal=0 or a new menu the
+            // menu did, fresh=0 the XR input stopped.
+            Log(std::string("result=0 detail=menu_hold key=") + input::KeyNameFor(key) +
+                " pressed=0 frames=" + std::to_string(mirror.Frames()) + " held=" + (sample.held ? "1" : "0") +
+                " modal=" + (modal ? "1" : "0") + " fresh=" + (fresh ? "1" : "0") + " menu=" + std::to_string(menu) +
+                " pressMenu=" + std::to_string(sample.scope));
+        }
+    }
+}
+
 } // namespace
 
 void DrainQueuedInput()
@@ -175,30 +253,17 @@ void DrainQueuedInput()
         Log("result=0 detail=drain_thread id=" + std::to_string(thread));
     }
 
-    // **One per frame.** A menu that samples input once per frame would see a
-    // press and its release collapse into one update and could conclude the
-    // button was never held. Real input arrives on separate frames.
-    std::array<std::uint8_t, input::kEventSize> event{};
-    static input::MenuTapDispatch menuDispatch;
-    std::uint64_t scope=0;
-    int key=-1;unsigned state=0;
-    bool accepted=false;
-    for(unsigned i=0;i<input::kQueueCapacity;++i) {
-        if(!gQueue.Pop(event.data(),&scope))return;
-        std::memcpy(&key,event.data()+input::kOffsetKeyId,sizeof(key));
-        std::memcpy(&state,event.data()+input::kOffsetState,sizeof(state));
-        if(menuDispatch.Allow(scope,HudMenuEpoch(),!VrOptionsInputOwned()&&HudMenuStateKnown()&&HudMenuIsOpen(),key,state)) {
-            accepted=true;break;
-        }
-        gMenuDiscarded.fetch_add(1,std::memory_order_relaxed);
-    }
-    if(!accepted)return;
-    if (!CallPost(gPost, gInput, event.data(), gForce.load(std::memory_order_acquire))) {
-        DisarmAfterFault("exception_in_post");
-        return;
-    }
-    gPosted.fetch_add(1, std::memory_order_relaxed);
-    menuDispatch.Delivered(scope,key,state);
+    if (DrainOneQueued()) { MirrorMenuHolds(); }
+}
+
+void PublishMenuHolds(bool secondary, bool tertiary, unsigned long long menuEpoch)
+{
+    // The frame service's own copy: it counts the presses between drains.
+    static input::MenuHolds holds;
+    holds.button[0].Note(secondary, menuEpoch);
+    holds.button[1].Note(tertiary, menuEpoch);
+    holds.stamp = MonotonicNanoseconds();
+    gMenuHolds.Publish(holds);
 }
 
 DWORD SetInputPostForce(unsigned int force)
@@ -284,6 +349,7 @@ DWORD PostRawInputImmediate(int keyId, unsigned int state, int valueMilli)
 unsigned long long InputPostCount() { return gPosted.load(std::memory_order_relaxed); }
 unsigned long long InputPostRefusedCount() { return gRefused.load(std::memory_order_relaxed); }
 unsigned long long InputMenuDiscardedCount() { return gMenuDiscarded.load(std::memory_order_relaxed); }
+unsigned long long InputMenuHoldCount() { return gMenuHoldPresses.load(std::memory_order_relaxed); }
 unsigned long long InputQueueDroppedCount() { return gQueue.Dropped(); }
 unsigned long long InputQueueDepthEstimate() { return gQueue.Pushed() - gQueue.Popped(); }
 bool InputPostDrivingThisThread() { return tPostingOurEvent; }

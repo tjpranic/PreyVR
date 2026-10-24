@@ -130,7 +130,7 @@ unsigned int ModalMenuRouter::Update(const ModalMenuState& state, bool modal, fl
         previousTab_.Reset(); nextTab_.Reset(); previousPage_.Reset(); nextPage_.Reset();
     }
     modal_ = modal;
-    if (!modal) { return count; }
+    if (!modal) { secondaryHeld_ = tertiaryHeld_ = false; return count; }
     if (std::fabs(state.stickX) <= .35f && std::fabs(state.stickY) <= .35f) { blockStick_ = false; }
     for (unsigned i = 0; i < kButtons; ++i) { if (!buttons[i]) { blocked_[i] = false; } }
     ControllerMenuState nav{};
@@ -149,14 +149,16 @@ unsigned int ModalMenuRouter::Update(const ModalMenuState& state, bool modal, fl
     const bool pages = state.bothGrips || (state.previousPage && state.nextPage);
     if (previousPage_.Update(down(6), pages)) { emit(MenuAction::PreviousPage); }
     if (nextPage_.Update(down(7), pages)) { emit(MenuAction::NextPage); }
-    // X, Y, exit and the stick clicks act on press.
+    // Exit and the stick clicks act on press.
     constexpr struct { unsigned button; MenuAction action; } pressed[] = {
-        {4, MenuAction::Secondary}, {5, MenuAction::Tertiary}, {8, MenuAction::Exit},
-        {9, MenuAction::LeftStick}, {10, MenuAction::RightStick}};
+        {8, MenuAction::Exit}, {9, MenuAction::LeftStick}, {10, MenuAction::RightStick}};
     for (const auto& [i, action] : pressed) {
         if (down(i) && !was_[i]) { emit(action); }
         was_[i] = down(i);
     }
+    // X and Y are held for as long as they are down (MenuHold.h).
+    secondaryHeld_ = down(4);
+    tertiaryHeld_ = down(5);
     return count;
 }
 

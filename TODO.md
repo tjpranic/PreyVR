@@ -2,9 +2,6 @@
 
 ## TODO
 
-### Controls
-- The X to transfer junk in the recycler doesn't work
-
 ### Bugs
 - The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision).
 
@@ -24,7 +21,7 @@
     Maybe an option to point with left hand where you want the grenade to go?
 - Flashlight should be aimable with left hand
 - Wrench hits use too much stamina
-    I think swings *back* away from the target may be getting counted. Maybe add a very short cooldown after a hit connects?
+    I think swings *back*, away from the target may be getting counted. Maybe add a very short cooldown after a hit connects?
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -94,6 +91,7 @@
 ### Controls
 - The movement stoppage bug
     > Prey re-read the stick from the physical gamepad whenever an action filter changed (mostly the interaction prompt as the view swept over usable objects) and zeroed what the mod had posted. Fixed in PreyVR-72, worn OK 2026-10-24. See docs/MOVE-STOP-2026-10-24.md.
+- The X to transfer junk in the recycler doesn't work
 
 ### UX/Game Feel
 - Shot from muzzle laser shows skewed

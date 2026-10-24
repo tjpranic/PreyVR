@@ -113,9 +113,15 @@ public:
     unsigned int Update(const ModalMenuState& state, bool modal, float seconds,
                         MenuAction* out, unsigned int capacity);
     void Reset();
+    // **Prey's X and Y are held, not tapped** (MenuHold.h), so Update emits no
+    // action for them: they are down while the menu is modal, and not while
+    // held since before it opened.
+    bool SecondaryHeld() const { return secondaryHeld_; }
+    bool TertiaryHeld() const { return tertiaryHeld_; }
 private:
     MenuNavigator navigator_;
     bool modal_ = false, startWas_ = false, blockStick_ = false;
+    bool secondaryHeld_ = false, tertiaryHeld_ = false;
     bool blocked_[11]{}, was_[11]{};
     ReleaseTap previousTab_, nextTab_, previousPage_, nextPage_;
 };

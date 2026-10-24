@@ -154,8 +154,8 @@ int main()
                 "opening a menu with a held gameplay stick/button must not select");
         s = {}; router.Update(s, true, .016f, out, 8);
         s.accept = true; s.previousTab = true; s.tertiary = true;
-        Require(router.Update(s, true, .016f, out, 8) == 2 && out[0] == MenuAction::Accept && out[1] == MenuAction::Tertiary,
-                "confirm and Y act on press; a tab waits for release to tell a two-grip hold apart");
+        Require(router.Update(s, true, .016f, out, 8) == 1 && out[0] == MenuAction::Accept && router.TertiaryHeld(),
+                "confirm acts on press and Y is held; a tab waits for release to tell a two-grip hold apart");
         Require(router.Update(s, true, .016f, out, 8) == 0, "held buttons do not repeat");
         s.previousTab=false;
         Require(router.Update(s,true,.016f,out,8)==1 && out[0]==MenuAction::PreviousTab,"single grip release changes tab");
@@ -199,22 +199,31 @@ int main()
         Require(router.Update(s, true, .016f, out, 8) == 0, "reopening requires neutral");
     }
     {
-        // **X and Y, Prey's own actions, on press**, once each.
+        // **X and Y, Prey's own actions, held** (MenuHold.h): no tap, down for
+        // as long as the button is, since Prey's menus bind their holds.
         ModalMenuRouter router;
         ModalMenuState s{};
         MenuAction out[8]{};
         router.Update(s, true, .016f, out, 8);
         router.Update(s, true, .016f, out, 8);
         s.secondary = true;
-        Require(router.Update(s, true, .016f, out, 8) == 1 && out[0] == MenuAction::Secondary, "X acts on press");
-        s.secondary = false; router.Update(s, true, .016f, out, 8);
+        Require(router.Update(s, true, .016f, out, 8) == 0 && router.SecondaryHeld() && !router.TertiaryHeld(),
+                "X is held, not tapped");
+        Require(router.Update(s, true, .016f, out, 8) == 0 && router.SecondaryHeld(), "for as long as it is down");
+        s.secondary = false;
+        Require(router.Update(s, true, .016f, out, 8) == 0 && !router.SecondaryHeld(), "and let go");
         s.tertiary = true;
-        Require(router.Update(s, true, .016f, out, 8) == 1 && out[0] == MenuAction::Tertiary, "Y acts on press");
-        Require(router.Update(s, true, .016f, out, 8) == 0, "once");
+        Require(router.Update(s, true, .016f, out, 8) == 0 && router.TertiaryHeld(), "Y likewise");
+        Require(router.Update(s, false, .016f, out, 8) == 0 && !router.TertiaryHeld(), "Y held as a menu closes is let go");
+        Require(router.Update(s, true, .016f, out, 8) == 0 && !router.TertiaryHeld(),
+                "and is no Y in the next menu until let go");
         s.tertiary = false; router.Update(s, true, .016f, out, 8);
         s.tertiary = true;
-        Require(router.Update(s, false, .016f, out, 8) == 0, "Y held as a menu closes");
-        Require(router.Update(s, true, .016f, out, 8) == 0, "is no Y in the next menu until let go");
+        Require(router.Update(s, true, .016f, out, 8) == 0 && router.TertiaryHeld(), "a fresh Y is");
+        // VR Options resets the router while it has the controllers.
+        router.Reset();
+        Require(router.Update(s, true, .016f, out, 8) == 0 && !router.TertiaryHeld(),
+                "a reset lets Y go until it is let go");
     }
     {
         // **Exit, the Steam Frame's View**: the gamepad's Back, on press. The

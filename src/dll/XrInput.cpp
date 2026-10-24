@@ -587,6 +587,7 @@ void UpdateXrInput(void* sessionHandle, void* spaceHandle, long long predictedDi
     ServiceHaptics(session,Action(Role::haptic),{gHands[0].subactionPath,gHands[1].subactionPath},frame,true);
     if((gMenuNavigation.load()||VrOptionsInputOwned())&&VrOptionsReady()&&ProcessVrOptionsInput(frame)) {
         gNavigator.Reset();gLastDisplayTime.store(predictedDisplayTime);
+        PublishMenuHolds(false, false, HudMenuEpoch());   // the panel has the controllers
         return;
     }
 
@@ -643,6 +644,9 @@ void UpdateXrInput(void* sessionHandle, void* spaceHandle, long long predictedDi
             PostMenuAction(static_cast<unsigned int>(actions[i]),actions[i]==input::MenuAction::Start?0:menuEpoch);
             gMenuActions.fetch_add(1, std::memory_order_relaxed);
         }
+        // Prey's X and Y, held rather than tapped: its menus bind their holds
+        // (the recycler's transfer all is X held). The drain mirrors them.
+        PublishMenuHolds(gNavigator.SecondaryHeld(), gNavigator.TertiaryHeld(), menuEpoch);
     }
 }
 
