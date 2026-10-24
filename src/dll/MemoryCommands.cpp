@@ -1,4 +1,5 @@
 #include "MemoryCommands.h"
+#include "CommandArgs.h"
 #include "SafeMemory.h"
 #include "EngineAccess.h"
 
@@ -122,7 +123,7 @@ bool ExecuteMemoryCommand(const std::vector<std::string>& args, std::ostringstre
         out << std::dec << " count=" << hits;
     } else if (verb == "mem.watch") {
         // mem.watch <slot> <addr> <w4|w8|x> [captures 64]; mem.watch <slot> off
-        unsigned slot = args.size() > 1 ? static_cast<unsigned>(std::atoi(args[1].c_str())) : 99;
+        const unsigned slot = static_cast<unsigned>(Arg(args, 1, 99));
         if (args.size() > 2 && args[2] == "off") {
             out << "mem.watch result=" << DisarmWatch(slot);
             return true;
@@ -130,7 +131,7 @@ bool ExecuteMemoryCommand(const std::vector<std::string>& args, std::ostringstre
         std::uint64_t address = 0;
         if (args.size() < 4 || slot > 3 || !ResolveAddress(args[2], address)) { out << "mem.watch result=87"; return true; }
         const WatchKind kind = args[3] == "x" ? WatchKind::execute : args[3] == "w8" ? WatchKind::write8 : WatchKind::write4;
-        const unsigned captures = args.size() > 4 ? static_cast<unsigned>(std::atoi(args[4].c_str())) : 64;
+        const unsigned captures = static_cast<unsigned>(Arg(args, 4, 64));
         out << "mem.watch result=" << ArmWatch(slot, address, kind, captures) << " at=0x" << std::hex << address
             << std::dec;
     } else if (verb == "mem.hits") {
@@ -149,7 +150,7 @@ bool ExecuteMemoryCommand(const std::vector<std::string>& args, std::ostringstre
         if (args.size() > 1 && args[1] == "clear") { ClearWatchCaptures(); }
     } else if (verb == "mem.stack") {
         // mem.stack <slotCapture>: return-address candidates (PreyDll RVAs) on the stack of capture N.
-        const unsigned index = args.size() > 1 ? static_cast<unsigned>(std::atoi(args[1].c_str())) : 0;
+        const unsigned index = static_cast<unsigned>(Arg(args, 1, 0));
         WatchCapture c{};
         if (!ReadWatchCapture(index, c)) { out << "mem.stack result=2"; return true; }
         out << "mem.stack result=0 (stack may have moved since the trap)" << std::hex;
@@ -164,7 +165,7 @@ bool ExecuteMemoryCommand(const std::vector<std::string>& args, std::ostringstre
         if (args.size() < 2 || !ResolveAddress(args[1], address)) { out << "mem.str result=87"; return true; }
         out << "mem.str result=0 \"" << SafeText(address) << "\"";
     } else {
-        out << verb << " result=1 detail=unknown_verb";
+        return false;
     }
     return true;
 }

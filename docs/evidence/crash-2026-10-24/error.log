@@ -1,0 +1,94 @@
+Logged at Saturday, October 24, 2026 15:12:44
+FileVersion: 1.0.1.0
+ProductVersion: 1.0.1.0
+LogFile: Game.log
+GameDir: GameSDK
+Executable: E:\Steam Games\steamapps\common\Prey\Binaries\Danielle\x64\Release\Prey.exe
+
+Exception Thread: 0x000035E4 (JobSystem_Worker_6(Regular))
+Exception Code: 0xC0000005
+Exception Addr: 0x0033:0x00007FF913E2BCFD
+Exception Module: <Unknown>
+Exception Description: EXCEPTION_ACCESS_VIOLATION, Attempt to read from address 0x0000000000000080
+The memory could not be "read"
+Memory in use: 6208.9MB
+Debug Status: 
+Out of Memory: 0
+
+Call Stack Trace:
+16) function=0x00007FF913E2BCFD
+15) function=0x00007FF913E2B74B
+14) function=0x00007FF913F94C79
+13) function=0x00007FF913F5D2C1
+12) function=0x00007FF820203CF8
+11) function=0x00007FF82020680C
+10) function=0x00007FF8201A0B2A
+ 9) function=0x00007FF8201797A5
+ 8) function=0x00007FF820179CF5
+ 7) function=0x00007FF820076B72
+ 6) function=0x00007FF820077565
+ 5) function=0x00007FF81F777E8C
+ 4) function=0x00007FF91859CD30
+ 3) function=0x00007FF91992DDA7
+ 2) function=0x00007FF91B27EE4C
+ 1) function=0x00007FF91B27EE4C
+
+
+Suspended thread (JobSystem_Worker_3(Regular)):
+ 2) function=0x00007FF91B27EE4C
+ 1) function=0x00007FF91B27EE4C
+
+
+Suspended thread (JobSystem_Worker_0(Regular)):
+ 2) function=0x00007FF91B27EE4C
+ 1) function=0x00007FF91B27EE4C
+
+
+Suspended thread (JobSystem_Worker_2(Regular)):
+ 2) function=0x00007FF91B27EE4C
+ 1) function=0x00007FF91B27EE4C
+
+
+Suspended thread (JobSystem_Worker_0(Blocking)):
+ 2) function=0x00007FF91B27EE4C
+ 1) function=0x00007FF91B27EE4C
+
+
+Suspended thread (JobSystem_Worker_5(Regular)):
+ 2) function=0x00007FF91B27EE4C
+ 1) function=0x00007FF91B27EE4C
+
+
+Suspended thread (JobSystem_Worker_1(Regular)):
+ 2) function=0x00007FF91B27EE4C
+ 1) function=0x00007FF91B27EE4C
+
+
+Suspended thread (JobSystem_Worker_7(Regular)):
+ 2) function=0x00007FF91B27EE4C
+ 1) function=0x00007FF91B27EE4C
+
+
+Suspended thread (JobSystem_Worker_4(Regular)):
+ 2) function=0x00007FF91B27EE4C
+ 1) function=0x00007FF91B27EE4C
+
+
+Suspended thread (RenderThread):
+ 2) function=0x00007FF91B27EE4C
+ 1) function=0x00007FF91B27EE4C
+
+
+Suspended thread (Main):
+ 2) function=0x00007FF91B27EE4C
+ 1) function=0x00007FF91B27EE4C
+
+
+Suspended thread (Physics):
+ 2) function=0x00007FF91B27EE4C
+ 1) function=0x00007FF91B27EE4C
+
+
+Suspended thread (PhysicsWorker1):
+ 2) function=0x00007FF91B27EE4C
+ 1) function=0x00007FF91B27EE4C

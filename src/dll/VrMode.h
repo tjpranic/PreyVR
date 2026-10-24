@@ -10,5 +10,6 @@ std::string VrModeReport();
 // (default on). 0 keeps the value set at activation (120-degree assumption).
 void FollowNearFov();
 unsigned long SetNearFovFollow(unsigned enabled);
+bool NearFovFollowing();
 unsigned NearFovFollowed();
 }

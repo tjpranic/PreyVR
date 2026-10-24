@@ -1,0 +1,5 @@
+.ecxr
+kn 30
+.echo === exception record
+.exr -1
+q

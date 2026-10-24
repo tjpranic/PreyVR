@@ -1,7 +1,7 @@
 # Tuning command reference
 
 Every command **Tune Prey VR.cmd** accepts, what it changes, its values and
-default, and whether anything keeps it past this session. Updated 2026-10-13.
+default, and whether anything keeps it past this session. Updated 2026-10-24.
 
 The commands are not a settings menu. Most of them are developer and diagnostic
 switches. The ones a player would reasonably change are also rows in the
@@ -23,6 +23,25 @@ does not show.
     code did not match what the feature hooks, so it stays off.
 - Values are whole numbers. Units are in the name or in the tables below: `cm`,
   `mm`, degrees, percent, or hundredths of the stick's travel for deadzones.
+- Numbers are decimal. A leading zero changes nothing (`0310` is 310), and hex
+  such as `0x96` is malformed.
+- A malformed value, `abc` or `12abc`, is that command's default, so a typo
+  cannot set an unintended value. Where a command has no default to fall back
+  to, it refuses the line with `87` instead: the `arm.*` settings, `ui.offset`,
+  and the numbers of `hud.setvar`, `hud.call` and `hud.probe`.
+  `dbg.draw`, `aim.shot`, `near.fx`, `markers.depth`, `near.fov` and `ik.align`
+  also refuse one, because a fallback there would switch something on.
+- A setting given some of its values but not all, such as `body.zone 30`,
+  is refused with `87`.
+- A line that is not a command is answered `result=rejected` and changes
+  nothing. That covers an unknown command under a known prefix, such as
+  `carry.bogus`. Its `detail=` says why:
+  - `not_a_channel_verb_and_not_allowlisted`: no such command, and not a console
+    variable the allowlist passes;
+  - `missing_arguments`: a command short of the words it needs, such as `console`
+    on its own.
+- `report`'s `channelProcessed` and `channelRejected` count every line the mod
+  answered and every line it rejected.
 
 ## A command with no value reports
 
@@ -397,7 +416,7 @@ value report, as described above.
 | `dual.observe` / `dual.capture` / `dual.report` | | | Diagnostics. |
 | `near.enable` | 0/1 | 0 → VR 1 | Per-eye offset for the weapon and arms pass. |
 | `near.halfipd` | 20–45 mm | VR runtime IPD / 2 | Half the eye separation for that pass. |
-| `near.follow` / `near.fov` | 0/1; 0 or 11–1789 decidegrees | 1; follows | The weapon pass's field of view. An explicit `near.fov` stops following. |
+| `near.follow` / `near.fov` | 0/1; 0 or 11–1789 decidegrees | 1; follows | The weapon pass's field of view. An explicit `near.fov` stops following; a refused one leaves following as it was. |
 | `near.fx` / `near.fxbridge` | 0/1 | 1 | Weapon-space stereo for near particles; the Q-Beam bridge. |
 | `near.fxhide` / `near.zero` / `near.lineage` / `near.dump` | | 0 | Test switches. |
 | `markers.depth` | 0/1 | 1 | World markers (objectives, repair, danger, enemy awareness, points of interest) at the depth they mark. Bare: report. |

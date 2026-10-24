@@ -1,0 +1,7 @@
+.echo === first entries of the set
+dq 0x26ae6e794e0 L6
+.echo === the new view in slot 2 (live?)
+dq 0x26c6ad6d0a8 L4
+.echo === all threads
+~*kn 30
+q

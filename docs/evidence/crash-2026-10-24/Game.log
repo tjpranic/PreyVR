@@ -1,0 +1,302 @@
+BuildInfo:
+BuildTool=[Incredibuild]
+ChangeList=[719851]
+CleanBuild=[true]
+Configuration=[Release]
+branch=[//danielle/cryengineMS/]
+buildid=[10965948]
+buildtime=[Jul  3 2019 08:43:12]
+platform=[x64]
+BackupNameAttachment=" Build(0) 24 Oct 26 (14 58 30)"  -- used by backup system
+Log Started at Sat Oct 24 14:58:30 2026
+Built on Jul  3 2019 08:43:12
+Running 64 bit Windows version
+Executable: E:\Steam Games\steamapps\common\Prey\Binaries\Danielle\x64\Release\Prey.exe
+Adding BuildInfo [Executable]=E:\Steam Games\steamapps\common\Prey\Binaries\Danielle\x64\Release\Prey.exe
+FileVersion: 1.0.1.0
+ProductVersion: 1.0.1.0
+Using Microsoft (tm) C++ Standard Library implementation
+
+Total number of logical processors: 16
+Number of available logical processors: 16
+Total number of system cores: 8
+Number of cores available to process: 8
+ 
+Processor 0:
+  CPU: AMD AMD Ryzen 7 5700X 8-Core Processor             
+  Family: 15, Model: 1, Stepping: 2
+  FPU: On-Chip
+  Features: FP16, SSE, SSE2, SSE3, SSE4.2, AVX, AVX2, FMA3
+  Serial number not present or disabled
+ 
+Processor 1:
+  CPU: AMD AMD Ryzen 7 5700X 8-Core Processor             
+  Family: 15, Model: 1, Stepping: 2
+  FPU: On-Chip
+  Features: FP16, SSE, SSE2, SSE3, SSE4.2, AVX, AVX2, FMA3
+  Serial number not present or disabled
+ 
+Processor 2:
+  CPU: AMD AMD Ryzen 7 5700X 8-Core Processor             
+  Family: 15, Model: 1, Stepping: 2
+  FPU: On-Chip
+  Features: FP16, SSE, SSE2, SSE3, SSE4.2, AVX, AVX2, FMA3
+  Serial number not present or disabled
+ 
+Processor 3:
+  CPU: AMD AMD Ryzen 7 5700X 8-Core Processor             
+  Family: 15, Model: 1, Stepping: 2
+  FPU: On-Chip
+  Features: FP16, SSE, SSE2, SSE3, SSE4.2, AVX, AVX2, FMA3
+  Serial number not present or disabled
+ 
+Processor 4:
+  CPU: AMD AMD Ryzen 7 5700X 8-Core Processor             
+  Family: 15, Model: 1, Stepping: 2
+  FPU: On-Chip
+  Features: FP16, SSE, SSE2, SSE3, SSE4.2, AVX, AVX2, FMA3
+  Serial number not present or disabled
+ 
+Processor 5:
+  CPU: AMD AMD Ryzen 7 5700X 8-Core Processor             
+  Family: 15, Model: 1, Stepping: 2
+  FPU: On-Chip
+  Features: FP16, SSE, SSE2, SSE3, SSE4.2, AVX, AVX2, FMA3
+  Serial number not present or disabled
+ 
+Processor 6:
+  CPU: AMD AMD Ryzen 7 5700X 8-Core Processor             
+  Family: 15, Model: 1, Stepping: 2
+  FPU: On-Chip
+  Features: FP16, SSE, SSE2, SSE3, SSE4.2, AVX, AVX2, FMA3
+  Serial number not present or disabled
+ 
+Processor 7:
+  CPU: AMD AMD Ryzen 7 5700X 8-Core Processor             
+  Family: 15, Model: 1, Stepping: 2
+  FPU: On-Chip
+  Features: FP16, SSE, SSE2, SSE3, SSE4.2, AVX, AVX2, FMA3
+  Serial number not present or disabled
+ 
+GameDir: GameSDK
+Opening pak file engine\shadercachestartup_d3d11.pak
+Opening pak file gamesdk\animations.pak
+Opening pak file gamesdk\audio.pak
+Opening pak file gamesdk\gamedata.pak
+Opening pak file gamesdk\geomcaches.pak
+Opening pak file gamesdk\objects-part0.pak
+Opening pak file gamesdk\objects-part1.pak
+Opening pak file gamesdk\objects-part2.pak
+Opening pak file gamesdk\objects-part3.pak
+Opening pak file gamesdk\objects-part4.pak
+Opening pak file gamesdk\objects-part5.pak
+Opening pak file gamesdk\objects-part6.pak
+Opening pak file gamesdk\objects-part7.pak
+Opening pak file gamesdk\scripts.pak
+Opening pak file gamesdk\textures.pak
+Opening pak file gamesdk\precache\patch.pak
+Opening pak file engine\engine.pak
+Opening pak file engine\shadercache_d3d11.pak
+Opening pak file engine\shaders.pak
+Opening pak file engine\shadersbin_d3d11.pak
+Adding BuildInfo [RCJobBuildID]=10966196
+Adding BuildInfo [RCJobDataChangelist]=719851
+Adding BuildInfo [RCJobToolsBuildID]=10965935
+Adding BuildInfo [MultiBuildID]=10966486
+Windows 10 64 bit (build 10.0.26200)
+User name: "SPEC06"
+System language: English
+Windows Directory: "C:\WINDOWS"
+Local time is 14:58:31 10/24/26, system running for 1263 minutes
+32689MB physical memory installed, 18634MB available, 134217727MB virtual memory installed, 42 percent of memory in use
+PageFile usage: 55MB, Working Set: 51MB, Peak PageFile usage: 55MB,
+Current display mode is 5120x1440x32, (Unknown graphics card)
+IBM enhanced (101/102-key) keyboard and 16+ button mouse installed
+--------------------------------------------------------------------------------
+Stream Engine Initialization
+GameName: Prey
+BuildTime: Jul  3 2019 08:43:12
+Physics initialization
+Opening pak file localization\english_xml.pak
+Opening pak file localization\english_xml_patch.pak
+Opening pak file localization\english.pak
+Opening pak file localization\english_patch.pak
+Opening pak file localization\english_anim.pak
+Opening pak file localization\english_anim_patch.pak
+<Audio>: AudioSystem initialization
+Renderer initialization
+Initializing Direct3D and creating game window:
+D3DX_SDK_VERSION = <UNDEFINED>
+Direct3D driver is creating...
+Creating window called 'Prey' (1600x1024)
+NVIDIA Driver: 610.88
+NVAPI: Found 1 GPUs for rendering
+NVAPI: DepthBoundsTesting supported
+Active GPUs: 1
+ ****** D3D11 CryRender Stats ******
+ Driver description: NVIDIA GeForce RTX 4070 Ti SUPER
+ Feature level: DirectX 11.0
+ Full stats: 
+ Rasterizer: Hardware
+ Threading Features
+   Concurrent Creates: Supported
+   Command Lists: Supported
+ Current Resolution: 1600x1024x32 Windowed
+ HDR Rendering: FP16
+ Occlusion queries: Supported
+ Geometry instancing: Supported
+ NormalMaps compression : Supported
+ Gamma control: Hardware
+ Shader model usage: 'SM.5.0'
+ *****************************************
+ 
+ General shader quality: High
+ Metal shader quality: High
+ Glass shader quality: High
+ Vegetation shader quality: High
+ Ice shader quality: High
+ Terrain shader quality: High
+ Shadow shader quality: High
+ Water shader quality: High
+ FX shader quality: High
+ PostProcess shader quality: High
+ HDR shader quality: High
+ Sky shader quality: High
+Render quality: High
+Font initialization
+Network initialization
+[net] Socket IO management: External [iocp], Internal [iocp]
+Adding BuildInfo [hostName]=DESKTOP-GLPH7FR
+network hostname: DESKTOP-GLPH7FR
+  ip:172.27.16.1
+  ip:192.168.20.13
+  ip:172.17.0.1
+  ip:10.35.78.26
+[Network Version]: RELEASE PURE CLIENT
+Online initialization
+Lobby initialization
+MovieSystem initialization
+Console initialization
+Time initialization
+Input initialization
+Initializing SteamController
+[SteamController] Failed to bind analog action handle 'game:sc_stickaim'
+[SteamController] Failed to bind analog action handle 'menu:sc_triggerl'
+[SteamController] Failed to bind analog action handle 'menu:sc_triggerr'
+AI initialization
+Initializing Animation System
+Initializing 3D Engine
+Script System Initialization
+Entity system initialization
+Initializing AI System
+Initializing additional systems
+[TextureStreaming] RC_FlushTextureStreaming {ThreadId: 26964}
+[PlayerProfiles] Login of user 'SPEC06' successful.
+[PlayerProfiles] Found 1 profiles.
+   Profile 0 : 'default'
+[PlayerProfiles] LoginUser (new) 'SPEC06' {index: 0} {userId: 0} {xuid: }
+[GameProfiles]: Successfully activated profile 'default' for user 'SPEC06'
+ActivateProfile profileName default
+[Game Version]: RELEASE PURE CLIENT
+Adding BuildInfo [hostName]=DESKTOP-GLPH7FR
+Initializing default materials...
+Closing pak file Engine/ShaderCacheStartup_D3D11.pak
+[Info] CGame::RemoveExclusiveController : deviceId: 0, deviceIndex: -1
+[TextureStreaming] CTexture::RT_FlushStreaming {abort: true} {threadId: 11972}
+    r_Fullscreen = 0 [DUMPTODISK]
+    r_Width = 2644 [DUMPTODISK]
+    r_Height = 2644 [DUMPTODISK]
+    g_pauseOnLoseFocus = 0 []
+    r_MotionBlur = 0 []
+    r_AntialiasingMode = 1 []
+[ActiveUserManagerBase] SetListening(true)
+    hud_forceControllerGlyphs = 1 []
+[ActiveUserManagerBase] SetListening(false)
+Closing pak file modes/menucommon_sp.pak
+Closing pak file modes/menucommon_sp.pak
+Opening pak file gamesdk\levels\campaign\research\lobby\level.pak
+[MFX] Loading FXLib 'col_sound' ...
+[MFX] Loading FXLib 'disc_rifle' ...
+[MFX] Loading FXLib 'foley' ...
+[MFX] Loading FXLib 'footstep_npc' ...
+[MFX] Loading FXLib 'footstep_player' ...
+[MFX] Loading FXLib 'footstep_player_bloody' ...
+[MFX] Loading FXLib 'footstep_player_crawling' ...
+[MFX] Loading FXLib 'footstep_player_sneaking' ...
+[MFX] Loading FXLib 'footstep_player_sprinting' ...
+[MFX] Loading FXLib 'footsteps' ...
+[MFX] Loading FXLib 'gloogun' ...
+[MFX] Loading FXLib 'laser' ...
+[MFX] Loading FXLib 'npc_shared' ...
+[MFX] Loading FXLib 'pistol' ...
+[MFX] Loading FXLib 'shotgun' ...
+[MFX] Loading FXLib 'stungun' ...
+[MFX] Loading FXLib 'toygun' ...
+[MFX] Loading FXLib 'turret' ...
+[MFX] Loading FXLib 'utilities' ...
+[MFX] Loading FXLib 'wrench' ...
+Registering TPS Extensions...
+[ArkRoomVolumeManager] Loading room volume data {filename: levels/campaign/research/lobby/datafile_audioPropagation}
+[ActiveUserManagerBase] SetListening(true)
+    s_MusicVolume = 0.01 []
+    s_MusicVolume = 0.02 []
+    s_MusicVolume = 0.03 []
+    s_MusicVolume = 0.04 []
+    s_MusicVolume = 0.05 []
+    s_MusicVolume = 0.06 []
+    s_MusicVolume = 0.07 []
+    s_MusicVolume = 0.08 []
+    s_MusicVolume = 0.09 []
+    s_MusicVolume = 0.1 []
+    s_MusicVolume = 0.11 []
+    s_MusicVolume = 0.12 []
+    s_MusicVolume = 0.13 []
+    s_MusicVolume = 0.14 []
+    s_MusicVolume = 0.15 []
+    s_MusicVolume = 0.16 []
+    s_MusicVolume = 0.17 []
+    s_MusicVolume = 0.18 []
+    s_MusicVolume = 0.19 []
+    s_MusicVolume = 0.2 []
+    s_MusicVolume = 0.21 []
+    s_MusicVolume = 0.22 []
+    s_MusicVolume = 0.23 []
+    s_MusicVolume = 0.24 []
+    s_MusicVolume = 0.25 []
+Begin handle Exception
+Notifying pending crash dump!
+Removing file "error.log"...
+File successfully removed.
+Removing file "error.dmp"...
+File successfully removed.
+Exception Thread: 0x000035E4 (JobSystem_Worker_6(Regular))
+Exception Code: 0xC0000005
+Exception Addr: 0x0033:0x00007FF913E2BCFD
+Exception Module: <Unknown>
+Exception Name  : EXCEPTION_ACCESS_VIOLATION
+Exception Description: Attempt to read from address 0x0000000000000080
+The memory could not be "read"
+|============================================================================
+16) function=0x00007FF913E2BCFD
+15) function=0x00007FF913E2B74B
+14) function=0x00007FF913F94C79
+13) function=0x00007FF913F5D2C1
+12) function=0x00007FF820203CF8
+11) function=0x00007FF82020680C
+10) function=0x00007FF8201A0B2A
+ 9) function=0x00007FF8201797A5
+ 8) function=0x00007FF820179CF5
+ 7) function=0x00007FF820076B72
+ 6) function=0x00007FF820077565
+ 5) function=0x00007FF81F777E8C
+ 4) function=0x00007FF91859CD30
+ 3) function=0x00007FF91992DDA7
+ 2) function=0x00007FF91B27EE4C
+ 1) function=0x00007FF91B27EE4C
+|============================================================================
+Error creating screenshot.
+<CRITICAL EXCEPTION>
+Exception: 0xC0000005, at Address: 0x0033:0x00007FF913E2BCFD
+Virtual memory usage: 6189Mb
+Debug Status: 
+Open Handles: 4848

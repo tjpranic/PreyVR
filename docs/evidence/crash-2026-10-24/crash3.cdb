@@ -1,0 +1,20 @@
+.echo === compiled object (frame 6 rdi) +0xC0..+0x110
+dq 0x26befe0b998+0xC0 L12
+.echo === resource set slot 1 = [obj+0xD8]
+dq poi(0x26befe0b998+0xD8) L20
+.echo === entries of the faulting set (frame 5 rbx..rsi)
+dq 0x26ae6e79500 L1A
+.echo === slot 2 set = [obj+0xF0]
+dq poi(0x26befe0b998+0xF0) L14
+.echo === the other srvs in the faulting set: first qword of each
+dq poi(0x26ae6e79508) L2
+dq poi(0x26ae6e79518) L2
+dq poi(0x26ae6e79528) L2
+dq poi(0x26ae6e79538) L2
+dq poi(0x26ae6e79548) L2
+dq poi(0x26ae6e79558) L2
+dq poi(0x26ae6e79568) L2
+dq poi(0x26ae6e79578) L2
+.echo === srv neighbourhood (outer object at +0x68 back pointer)
+dq 0x26bd7820980 L14
+q

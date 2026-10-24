@@ -1,5 +1,6 @@
 #include "WristLane.h"
 
+#include "CommandArgs.h"
 #include "GameplayFrame.h"
 #include "DebugOverlay.h"
 #include "Haptics.h"
@@ -341,9 +342,7 @@ bool ExecuteWristCommand(const std::vector<std::string>& args, std::ostringstrea
 {
     if (args.empty() || args[0].rfind("wrist.", 0) != 0) { return false; }
     const std::string& verb = args[0];
-    const auto num = [&](std::size_t i, int fallback) {
-        return i < args.size() ? std::atoi(args[i].c_str()) : fallback;
-    };
+    const auto num = [&](std::size_t i, int fallback) { return Arg(args, i, fallback); };
     if (verb == "wrist.report") {
         out << "wrist.report result=0" << WristReport();
     } else if (verb == "wrist.anchor") {
@@ -385,7 +384,7 @@ bool ExecuteWristCommand(const std::vector<std::string>& args, std::ostringstrea
         if (args.size() > 1) { gOcclusion = static_cast<unsigned>(std::clamp(num(1, 3), 0, 3)); }
         out << "wrist.occlusion result=0 mask=" << gOcclusion.load();
     } else {
-        out << verb << " result=1 detail=unknown_verb";
+        return false;
     }
     return true;
 }

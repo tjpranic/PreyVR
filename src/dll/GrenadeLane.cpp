@@ -1,4 +1,5 @@
 #include "GrenadeLane.h"
+#include "CommandArgs.h"
 #include "SafeMemory.h"
 #include "HookInstall.h"
 #include "EngineAccess.h"
@@ -961,16 +962,7 @@ bool ExecuteGrenadeCommand(const std::vector<std::string>& args, std::ostringstr
 {
     const std::string& verb = args[0];
     if (verb.rfind("grenade.", 0) != 0) { return false; }
-    const auto arg = [&](std::size_t i, int fallback) {
-        int value = fallback;
-        if (i < args.size()) {
-            try {
-                value = std::stoi(args[i]);
-            } catch (...) {
-            }
-        }
-        return value;
-    };
+    const auto arg = [&](std::size_t i, int fallback) { return Arg(args, i, fallback); };
     DWORD result = 0;
     if (verb == "grenade.hand") {
         if (args.size() > 1) { result = SetGrenadeHand(static_cast<unsigned>(arg(1, 1))); }
@@ -1022,8 +1014,7 @@ bool ExecuteGrenadeCommand(const std::vector<std::string>& args, std::ostringstr
             return true;
         }
     } else if (verb != "grenade.report") {
-        out << verb << " result=" << ERROR_INVALID_FUNCTION;
-        return true;
+        return false;
     }
     out << verb << " result=" << result << GrenadeReport();
     return true;

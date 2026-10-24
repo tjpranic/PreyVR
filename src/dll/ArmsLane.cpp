@@ -1,4 +1,5 @@
 #include "ArmsLane.h"
+#include "CommandArgs.h"
 #include "SafeMemory.h"
 #include "EngineAccess.h"
 
@@ -208,7 +209,7 @@ bool ExecuteArmsCommand(const std::vector<std::string>& args, std::ostringstream
     } else if (verb == "arms.hide") {
         // arms.hide <index> <0|1>: HideAttachment's own bits (0x70000) on one attachment (test only).
         AttachmentList list{};
-        const unsigned index = args.size() > 1 ? static_cast<unsigned>(std::atoi(args[1].c_str())) : 999;
+        const unsigned index = static_cast<unsigned>(Arg(args, 1, 999));
         if (!ReadAttachments(AnimIkOwnerCharacter(), list) || index >= list.count) { out << "arms.hide result=2"; return true; }
         out << "arms.hide result=" << (SetHiddenBits(list.items[index], args.size() > 2 && args[2] == "1") ? 0 : 3);
     } else if (verb == "arms.joints") {
@@ -249,7 +250,7 @@ bool ExecuteArmsCommand(const std::vector<std::string>& args, std::ostringstream
             << " character=0x" << rig.character << " attachment=0x" << rig.attachment << std::dec
             << ArmsReport();
     } else {
-        out << verb << " result=1 detail=unknown_verb";
+        return false;
     }
     return true;
 }

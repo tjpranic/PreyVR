@@ -1,4 +1,5 @@
 #include "CarryLane.h"
+#include "CommandArgs.h"
 #include "SafeMemory.h"
 #include "HookInstall.h"
 #include "EngineAccess.h"
@@ -1113,16 +1114,7 @@ bool ExecuteCarryCommand(const std::vector<std::string>& args, std::ostringstrea
 {
     const std::string& verb = args[0];
     if (verb.rfind("carry.", 0) != 0) { return false; }
-    const auto arg = [&](std::size_t i, int fallback) {
-        int value = fallback;
-        if (i < args.size()) {
-            try {
-                value = std::stoi(args[i]);
-            } catch (...) {
-            }
-        }
-        return value;
-    };
+    const auto arg = [&](std::size_t i, int fallback) { return Arg(args, i, fallback); };
     DWORD result = 0;
     if (verb == "carry.hand") {
         if (args.size() > 1) { result = SetCarryHand(static_cast<unsigned>(arg(1, 1))); }
@@ -1160,8 +1152,7 @@ bool ExecuteCarryCommand(const std::vector<std::string>& args, std::ostringstrea
             gCorpseTau = std::clamp(arg(3, 120), 0, 2000) * .001f;
         }
     } else if (verb != "carry.report") {
-        out << verb << " result=" << ERROR_INVALID_FUNCTION;
-        return true;
+        return false;
     }
     out << verb << " result=" << result << CarryReport();
     return true;

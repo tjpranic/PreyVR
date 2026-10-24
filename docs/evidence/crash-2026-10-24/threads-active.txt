@@ -1,0 +1,40 @@
+﻿--- thread 0 (6954)
+   win32u!NtUserPeekMessage+0x14
+   user32!PeekMessageW+0x1df
+   user32!PeekMessageA+0x179
+   gameoverlayrenderer64!OverlayHookD3D3+0x2a996
+   PreyDll+0xFEF6A1
+   PreyDll+0xE0BFA1
+   PreyDll+0x5C72C1
+   PreyDll+0x17047C3
+   PreyDll!AK::MemoryMgr::StartProfileThreadUsage+0x62102
+   PreyDll!AK::MemoryMgr::StartProfileThreadUsage+0x61e2d
+   PreyDll+0x9d5cb
+   PreyDll!EntryMain+0x99
+   Prey+0x12a0
+   Prey+0x14c3
+   kernel32!BaseThreadInitThunk+0x17
+   ntdll!RtlUserThreadStart+0x2c
+--- thread 8 (35e4)
+   ntdll!NtGetContextThread+0x14
+--- thread 15 (7d0c)
+   ntdll!ZwDelayExecution+0x14
+   ntdll!RtlDelayExecution+0x34
+   KERNELBASE!SleepEx+0x91
+   PreyDll+0xD736E9
+   PreyDll+0x4D7E8C
+   ucrtbase!wcsrchr+0x150
+   kernel32!BaseThreadInitThunk+0x17
+   ntdll!RtlUserThreadStart+0x2c
+--- thread 20 (1018)
+   ntdll!ZwWaitForAlertByThreadId+0x14
+   ntdll!RtlSleepConditionVariableSRW+0x1de
+   KERNELBASE!SleepConditionVariableSRW+0x38
+   msvcp140!Cnd_wait+0x2a
+   PreyDll+0xa760c
+   PreyDll+0xDD256C
+   PreyDll+0xDD5A85
+   PreyDll+0xDD5B2D
+   PreyDll+0xED9D9A
+   PreyDll+0xFAFBD5
+   PreyDll+0xF4239B

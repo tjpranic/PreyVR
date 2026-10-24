@@ -313,6 +313,7 @@ DWORD SetNearFovFollow(unsigned enabled) {
     Log(std::string("near_fov_follow=")+(nearFollow?"1":"0"));
     return 0;
 }
+bool NearFovFollowing() { return nearFollow; }
 unsigned NearFovFollowed() { return nearFollow?followedNearFov:0; }
 std::string VrModeReport() {
     const char* names[]={"off","preparing","settings","tracking","rendering","active","failed"};

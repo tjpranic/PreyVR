@@ -1,0 +1,15 @@
+.ecxr
+.frame /r 4
+dq 0x7e589ff4b0 L10
+.echo === srv pointer at child-sp+0x40
+dq poi(0x7e589ff4f0) L12
+!address poi(0x7e589ff4f0)
+.echo === state cache rbx(frame4) first qword = context
+.frame /r 5
+.frame /r 6
+.frame /r 7
+.echo === d3d11 internal objects
+dq 0x26a88ff08a0 L8
+dq 0x26bd3021c40 L8
+dq 0x26bd30dc088 L8
+q

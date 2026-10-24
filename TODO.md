@@ -19,6 +19,9 @@
 - Focusing on keypads brings the camera *way* too close
 - Better throwing
     Add an option to impart extra force to objects that are physically thrown.
+- Flashlight should be aimable with left hand
+- Wrench hits use too much stamina
+    I think swings *back* away from the target may be getting counted. Maybe add a very short cooldown after a hit connects?
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -78,6 +81,7 @@
     The camera doesn't render any new frame for a short time. Not related to the use-after-free camera bug. Instrumentation in place: FrameProbe.cpp.
 - Camera flashing bug
     A weird bug that causes certain parts of the world to flash strangely. Might be a culling issue. A fix + instrumentation is in place.
+- Texture view use-after-free bug
 
 ## DONE
 

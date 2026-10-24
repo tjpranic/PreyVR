@@ -83,5 +83,6 @@ int WristTiltDegrees();
 void ResetWristLane();
 
 std::string WristReport();
+// wrist.* verbs; false if the verb is not one of them.
 bool ExecuteWristCommand(const std::vector<std::string>& args, std::ostringstream& out);
 }  // namespace preyvr::dll
