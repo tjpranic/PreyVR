@@ -29,6 +29,9 @@ The notebook separates evidence from plans so implementation follows demonstrate
 > Why the player stopped while walking and turning, from the first report to the fix: room-scale
 > moved the capsule with the engine's teleport, and Prey re-read the stick from the physical
 > gamepad: [`MOVE-STOP-2026-10-24.md`](MOVE-STOP-2026-10-24.md).
+> One bad frame when a smooth turn stops, from the physical-turn body follow: Prey's body
+> lags the view in a stick turn and its head makes up the difference, so the body is turned
+> after the render: [`TURN-STOP-FLASH-2026-10-24.md`](TURN-STOP-FLASH-2026-10-24.md).
 > Why leaning pushes the player back, and why the arms bend: room-scale puts the capsule into
 > furniture, and the shoulders hang off the eyes:
 > [`TURN-LEAN-ARMS-2026-10-19.md`](TURN-LEAN-ARMS-2026-10-19.md).

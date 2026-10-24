@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdint>
 #include <mutex>
+#include <optional>
 #include <sstream>
 #include <string_view>
 
@@ -56,6 +57,14 @@ constexpr std::string_view kSetViewRotationBody =
 constexpr std::string_view kGetViewRotationBody =
     "8b81fc13000089420c8b81f013000089028b81f41300008942048b81f8130000894208488bc2c3";
 constexpr std::string_view kComponentCopyBody = "8b028941088b420489410c8b42088941108b420c894114c3";
+// The entity (+0x38) and its rotation (vt +0x150, through a pointer), as Prey's
+// eye reads it (0x1489010). After a stick turn the entity lags m_rotation, and
+// the head's `#camera` attachment makes up the difference.
+using EntityRotationFn = void*(__fastcall*)(void* entity, Quaternion* out);
+constexpr std::size_t kPlayerEntity = 0x38, kEntityRotationSlot = 0x150 / sizeof(void*);
+// The body lagged the view by more than this when the setter turned it: the
+// frame's head pose is for the old lag (HeadTrackingHook.h UseNativeViewYawOnce).
+constexpr float kLagEpsilon = 0.05f * kRadiansPerDegree;
 
 // Gameplay only. ArkPlayerCamera (+0x12A0): the mode UpdateView switches on
 // (+0x1A4: 0 is the ordinary camera; modes 1-3 write m_rotation themselves,
@@ -95,6 +104,14 @@ armpose::TorsoYaw gTorso;
 std::uint64_t gTorsoNs = 0;
 unsigned long long gTorsoEpoch = ~0ull;
 bodyturn::NativeTurnWatch gWatch;
+// The follow's turn, decided at ArkPlayer::Update's entry and made after the
+// frame's render (ServiceBodyFollow); body.followafter 0 makes it at once.
+struct PendingFollow {
+    void* player = nullptr;
+    float torso = 0.0f, dt = 0.0f;
+};
+std::optional<PendingFollow> gPendingFollow;
+std::atomic<bool> gFollowAfterRender{true};
 
 struct TorsoSample {
     float yaw = 0.0f;
@@ -150,6 +167,19 @@ bool CallGet(void* player, Quaternion* out)
     }
 }
 
+bool CallEntityRotation(void* player, Quaternion* out)
+{
+    __try {
+        void* const entity = *reinterpret_cast<void* const*>(static_cast<const std::uint8_t*>(player) + kPlayerEntity);
+        if (entity == nullptr) { return false; }
+        const auto rotation = reinterpret_cast<EntityRotationFn>((*static_cast<void* const* const*>(entity))[kEntityRotationSlot]);
+        rotation(entity, out);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
 bool CallSet(void* player, const Quaternion* rotation)
 {
     __try {
@@ -196,7 +226,7 @@ bool TurnToTorso(void* player, float torso, float maxStep, std::atomic<unsigned 
 {
     if (gSet.load(std::memory_order_acquire) == nullptr || gTurnFault.load(std::memory_order_acquire)) { return true; }
     if (!InGameplay(player)) { return false; }
-    float applied = 0.0f;
+    float applied = 0.0f, lag = 0.0f;
     const int result = TurnHeadTrackingReferenceWithNative([&](float reference) -> std::optional<float> {
         const auto step = bodyturn::Limited(bodyturn::TorsoStep(reference, torso, kMinimumStep), maxStep);
         if (!step.apply) { return std::nullopt; }   // already facing the torso
@@ -208,6 +238,12 @@ bool TurnToTorso(void* player, float torso, float maxStep, std::atomic<unsigned 
         const auto beforeYaw = bodyturn::EngineYawOf(before);
         const auto target = bodyturn::LevelledTurn(before, step.delta);
         if (!beforeYaw || !target) { return std::nullopt; }
+        // How far the body lags the view: the setter takes the body all the
+        // way to the view, and this frame's head was posed for the lag.
+        Quaternion entity{};
+        if (CallEntityRotation(player, &entity)) {
+            if (const auto entityYaw = bodyturn::EngineYawOf(entity)) { lag = controller::WrapAngle(*beforeYaw - *entityYaw); }
+        }
         if (!CallSet(player, &*target)) {
             Fault("set_view_rotation");
             return std::nullopt;
@@ -227,8 +263,24 @@ bool TurnToTorso(void* player, float torso, float maxStep, std::atomic<unsigned 
     if (result == 0) {
         turns.fetch_add(1, std::memory_order_relaxed);
         if (&turns == &gSnapTurns) { gLastSnapTurnMdeg.store(Mdeg(applied), std::memory_order_relaxed); }
+        // The one bad frame (docs/TURN-STOP-FLASH-2026-10-24.md): this view
+        // takes Prey's yaw from m_rotation, not the head posed for the lag.
+        if (std::fabs(lag) > kLagEpsilon) { UseNativeViewYawOnce(); }
     }
     return result != 2;
+}
+
+// As the player turns round in the room -- but never while the game is turning
+// the player itself: turning the body every frame during a smooth turn made the
+// view jitter (2026-10-24). The catch-up after it is capped.
+void FollowTurn(void* player, float torso, float dt, std::uint64_t now)
+{
+    // Read every follow, so the watch sees each frame the game turns the player.
+    if (NativeTurning(player, now)) {
+        gFollowPaused.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    TurnToTorso(player, torso, kFollowRate * std::clamp(dt, 0.001f, 0.1f), gFollowTurns);
 }
 
 void Tick(void* player)
@@ -264,8 +316,6 @@ void Tick(void* player)
     gHeadMdeg.store(Mdeg(head), std::memory_order_relaxed);
     gTorsoMdeg.store(Mdeg(torso), std::memory_order_relaxed);
 
-    // Read every frame, so the watch sees each frame the game turns the player.
-    const bool nativeTurning = NativeTurning(player, now);
     // After a snap, at once and all the way: the snap turned the view about the
     // body, which must turn with it (SetSnapTurnsAboutBody).
     const auto snaps = HeadTrackingSnapCount();
@@ -274,15 +324,15 @@ void Tick(void* player)
         else { gSnapWaits.fetch_add(1, std::memory_order_relaxed); }
         return;
     }
-    // As the player turns round in the room -- but never while the game is
-    // turning the player itself: turning the body every frame during a smooth
-    // turn made the view jitter (2026-10-24). The catch-up after it is capped.
     if (!gFollow.load(std::memory_order_acquire)) { return; }
-    if (nativeTurning) {
-        gFollowPaused.fetch_add(1, std::memory_order_relaxed);
+    // The frame's animation started before this, posed for the body as it was:
+    // turned now, the body is drawn turned with that pose. So the turn waits for
+    // the frame's render (ServiceBodyFollow) and the next frame's animation.
+    if (gFollowAfterRender.load(std::memory_order_acquire)) {
+        gPendingFollow = PendingFollow{player, torso, dt};
         return;
     }
-    TurnToTorso(player, torso, kFollowRate * std::clamp(dt, 0.001f, 0.1f), gFollowTurns);
+    FollowTurn(player, torso, dt, now);
 }
 
 void __fastcall PlayerUpdateDetour(void* player, void* context, int slot)
@@ -378,6 +428,28 @@ DWORD SetBodyFollow(unsigned enabled)
 
 unsigned BodyFollowEnabled() { return gFollow.load(std::memory_order_acquire) ? 1u : 0u; }
 
+void ServiceBodyFollow()
+{
+    if (!gPendingFollow) { return; }
+    const PendingFollow pending = *gPendingFollow;
+    gPendingFollow.reset();
+    if (!gActive.load(std::memory_order_acquire) || !gFollow.load(std::memory_order_acquire)) { return; }
+    // The player the frame started with, still the player.
+    std::uintptr_t vtable = 0;
+    if (!ReadAt(pending.player, 0, vtable) || vtable != gVtable.load(std::memory_order_relaxed)) { return; }
+    FollowTurn(pending.player, pending.torso, pending.dt, MonotonicNanoseconds());
+}
+
+DWORD SetBodyFollowAfterRender(unsigned enabled)
+{
+    if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
+    gFollowAfterRender.store(enabled != 0, std::memory_order_release);
+    Log(std::string("result=0 detail=follow_after_render value=") + (enabled ? "1" : "0"));
+    return 0;
+}
+
+unsigned BodyFollowAfterRender() { return gFollowAfterRender.load(std::memory_order_acquire) ? 1u : 0u; }
+
 bool BodyTorsoYaw(float& yaw)
 {
     if (!gActive.load(std::memory_order_acquire)) { return false; }
@@ -399,7 +471,8 @@ std::string TorsoLaneReport()
         << " headDeg=" << gHeadMdeg.load() / 1000.0 << " torsoDeg=" << gTorsoMdeg.load() / 1000.0
         << " snapBodyTurn=" << (gSet.load() != nullptr && !gTurnFault.load()) << " turnFault=" << gTurnFault.load()
         << " snapTurns=" << gSnapTurns.load() << " lastSnapTurnMdeg=" << gLastSnapTurnMdeg.load()
-        << " snapWaits=" << gSnapWaits.load() << " follow=" << gFollow.load() << " followTurns=" << gFollowTurns.load()
+        << " snapWaits=" << gSnapWaits.load() << " follow=" << gFollow.load()
+        << " followAfterRender=" << gFollowAfterRender.load() << " followTurns=" << gFollowTurns.load()
         << " followPaused=" << gFollowPaused.load() << " readbackMaxMdeg=" << gReadbackMaxMdeg.load();
     return out.str();
 }

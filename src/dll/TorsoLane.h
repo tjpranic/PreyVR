@@ -21,7 +21,11 @@
 //    its place on the model.
 //  - As the player turns round in the room, every frame, no faster than
 //    360 degrees a second -- but never while the game is turning the player
-//    itself (smooth turning), nor for 150 ms after.
+//    itself (smooth turning), nor for 150 ms after. Decided at the entry but
+//    made after the frame's render (ServiceBodyFollow): the frame's animation
+//    had already started, posed for the body as it was, so a body turned before
+//    the render was drawn with a pose meant for the old facing
+//    (docs/TURN-STOP-FLASH-2026-10-24.md).
 // Body Follows You followed every frame regardless and also moved the capsule
 // under the head (docs/BODY-YAW-2026-10-11.md, docs/ROOMSCALE-2026-10-11.md);
 // both were removed on 2026-10-24, because with either on, smooth turning
@@ -41,6 +45,13 @@ void BodyTorsoSettings(float& deadzoneRadians, float& relax);
 // and snap turns, for an A/B (body.follow). Not saved.
 DWORD SetBodyFollow(unsigned enabled);
 unsigned BodyFollowEnabled();
+// After the frame's world render, on the main thread (FrameSchedule): makes the
+// follow's turn the entry decided, before the next frame's animation starts.
+void ServiceBodyFollow();
+// 1 (default) turns the body after the render; 0 at ArkPlayer::Update's entry,
+// as before, for an A/B (body.followafter). Not saved.
+DWORD SetBodyFollowAfterRender(unsigned enabled);
+unsigned BodyFollowAfterRender();
 // The torso yaw (tracking space, armpose::YawOf convention), when the lane
 // estimated one within the last 100 ms.
 bool BodyTorsoYaw(float& yaw);

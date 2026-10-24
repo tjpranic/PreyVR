@@ -23,6 +23,7 @@
 #include "Psychoscope.h"
 #include "SurfaceStopLane.h"
 #include "SwingLane.h"
+#include "TorsoLane.h"
 #include "UiPointer.h"
 #include "VrMode.h"
 #include "VrOptionsRuntime.h"
@@ -106,6 +107,9 @@ void AfterEngineRender(const EngineRenderBracket& bracket)
     const std::uint32_t handshakeAfter = CullThreadState();
     ProbeRecord(ProbeStep::renderExit, handshakeAfter, 0, write, read);
     CullPrepareAfterRender(bracket.handshake, handshakeAfter);
+    // After the world render took the body's transform, before the next frame's
+    // animation starts: the body follow's turn (TorsoLane.h).
+    ServiceBodyFollow();
 }
 
 void TickRenderThread(void* renderer, unsigned long long frame)

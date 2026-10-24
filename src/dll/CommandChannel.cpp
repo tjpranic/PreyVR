@@ -505,6 +505,12 @@ constexpr Verb kVerbs[] = {
         out << "body.follow result=" << (Valued(args) ? SetBodyFollow(static_cast<unsigned>(Arg(args, 1, 1))) : 0)
             << " enabled=" << BodyFollowEnabled();
     }},
+    {"body.followafter", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
+        // When the follow turns the body: 1 (default) after the frame's render, 0 at the frame's start, for an A/B.
+        out << "body.followafter result="
+            << (Valued(args) ? SetBodyFollowAfterRender(static_cast<unsigned>(Arg(args, 1, 1))) : 0)
+            << " enabled=" << BodyFollowAfterRender();
+    }},
     {"body.torso", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
         // body.torso <deadzoneDeg> <relax per mille per second>; arm.torso sets the same filter.
         out << "body.torso result=" << (args.size() > 2 ? SetBodyTorso(Arg(args, 1, 35), Arg(args, 2, 600)) : TooFewValues(args))

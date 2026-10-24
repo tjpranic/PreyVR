@@ -159,6 +159,17 @@ void SetSnapTurnsAboutBody(bool aboutBody);
 // 3 the native turn was not made.
 int TurnHeadTrackingReferenceWithNative(const std::function<std::optional<float>(float referenceYaw)>& turnNative);
 
+// **For this frame's view, Prey's look yaw comes from its camera's own rotation**
+// (m_rotation, the +0x13F0 the slot-52 setter writes) rather than from the view
+// Prey composes. TorsoLane calls it when a body turn moved the entity off where
+// Prey's animation had left it: after a stick turn Prey lets the body lag the
+// view and turns the head (the `#camera` attachment) to make up the difference,
+// and that frame's animation was computed before the turn -- so the composed
+// view would carry the old lag on top of the turned body, the one bad frame of
+// docs/TURN-STOP-FLASH-2026-10-24.md. Consumed by the next view; not while
+// Prey's focus camera (player +0x9B0) supplies the view.
+void UseNativeViewYawOnce();
+
 // Bumped by recenter, runtime rebase and reset: the events that redefine which
 // way the tracking space faces, after which a torso estimate is stale. Not by a
 // snap turn, which turns the world and leaves the player's torso where it was.

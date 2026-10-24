@@ -2,6 +2,7 @@
 #include "HookInstall.h"
 #include "EngineAccess.h"
 #include "HeadTrackingHook.h"
+#include "SafeMemory.h"
 #include "XrInput.h"
 #include "MinHookInit.h"
 #include "AtomicMax.h"
@@ -203,6 +204,13 @@ constexpr std::array<std::uint8_t, 24> kUpdateViewPrologue = {
 // Quat is `Vec3 v; F w`, so the components are x, y, z, w in memory, matching
 // our own Quaternion. **Treated as unconfirmed until the FOV reads back near
 // 1.5447 rad**, which was measured from the live camera by an unrelated route.
+// RCX is ArkPlayer+0x12A0, the ArkPlayerCamera. Its m_rotation (+0x150, the
+// player's +0x13F0) is the rotation the slot-52 setter writes; Prey's focus
+// camera (player +0x9B0) supplies the view while its state (+0x98) is nonzero
+// (0x15ABD20 returns at once when it is 0).
+constexpr std::size_t kPlayerCamera = 0x12A0;
+constexpr std::size_t kCameraRotation = 0x150;
+constexpr std::size_t kFocusCameraState = 0x9B0 + 0x98 - kPlayerCamera;   // from the camera
 constexpr std::size_t kViewPosition = 0x00;   // Vec3
 constexpr std::size_t kViewRotation = 0x0C;   // Quat, x y z w
 constexpr std::size_t kViewNearPlane = 0x2C;
@@ -220,12 +228,29 @@ std::atomic<unsigned long long> gPositionRefused{0};
 std::atomic<unsigned int> gLastOffsetMillimetres{0};
 std::atomic<unsigned long long> gObserved{0};
 std::atomic<unsigned long long> gApplied{0};
+// UseNativeViewYawOnce: set by a body turn, consumed by the next view.
+std::atomic<bool> gNativeViewYaw{false};
 
 float ReadFloat(const std::uint8_t* base, std::size_t offset)
 {
     float value = 0.0f;
     std::memcpy(&value, base + offset, sizeof(value));
     return value;
+}
+
+// The yaw of the camera's own rotation, unless Prey's focus camera has the view.
+std::optional<float> NativeViewYaw(const std::uint8_t* camera)
+{
+    int focus = 1;
+    Quaternion rotation{};
+    if (!SafeRead(camera + kFocusCameraState, focus) || focus != 0 ||
+        !SafeCopy(&rotation, camera + kCameraRotation, sizeof(rotation))) {
+        return std::nullopt;
+    }
+    const float lengthSquared = rotation.x * rotation.x + rotation.y * rotation.y + rotation.z * rotation.z +
+                                rotation.w * rotation.w;
+    if (!std::isfinite(lengthSquared) || lengthSquared < 0.5f || lengthSquared > 2.0f) { return std::nullopt; }
+    return stereo::CameraYawOf(stereo::MatrixFromPose(Pose{rotation, Vec3{}}));
 }
 
 void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
@@ -235,6 +260,8 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     ApplyQueuedSnapTurn(false);
     tRenderedHead.valid=false;
     const auto renderReference=HeadTrackingReferenceGeneration();
+    // Taken whether or not this view is applied: it belongs to this frame only.
+    const bool nativeYaw = gNativeViewYaw.exchange(false, std::memory_order_acq_rel);
     const UpdateViewFn original = gOriginal.load(std::memory_order_acquire);
     if (original != nullptr) {
         original(camera, viewParams);   // let the game compute its own view first
@@ -275,7 +302,14 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     } else {
         return;
     }
-    const float playSpaceYaw = stereo::CameraYawOf(gameMatrix) - room.yaw;
+    // Prey's look yaw: its composed view's, or after a body turn that moved
+    // the entity off where Prey's animation left it, its camera's own rotation
+    // (UseNativeViewYawOnce): that frame's head was posed for the old lag.
+    float preyYaw = stereo::CameraYawOf(gameMatrix);
+    if (nativeYaw && camera != nullptr) {
+        if (const auto own = NativeViewYaw(static_cast<const std::uint8_t*>(camera))) { preyYaw = *own; }
+    }
+    const float playSpaceYaw = preyYaw - room.yaw;
 
     // **Position is gated separately from rotation on purpose.** They fail in
     // completely different ways -- a wrong rotation reads as the world spinning,
@@ -384,6 +418,7 @@ bool Install()
 
 unsigned long long ViewHookObservedCount() { return viewhook::gObserved.load(std::memory_order_relaxed); }
 unsigned long long ViewHookAppliedCount() { return viewhook::gApplied.load(std::memory_order_relaxed); }
+void UseNativeViewYawOnce() { viewhook::gNativeViewYaw.store(true, std::memory_order_release); }
 DWORD SetViewHookObserving(unsigned int enabled)
 {
     const bool on = enabled != 0u;
