@@ -5,6 +5,7 @@
 #include "HudLayer.h"
 #include "Logger.h"
 #include "MinHookInit.h"
+#include "RendererAccess.h"
 #include "XrSessionHost.h"
 #include "preyvr/EngineMap.h"
 
@@ -112,8 +113,7 @@ void __fastcall Draw2dImagesDetour(void* renderer, void* images, unsigned int co
         return;
     }
     gImageDraws.fetch_add(1, std::memory_order_relaxed);
-    auto* device = *reinterpret_cast<ID3D11Device**>(reinterpret_cast<std::uintptr_t>(renderer) +
-                                                     engine::RendererLayout::device);
+    auto* device = RendererDevice(renderer);
     ID3D11DeviceContext* context = nullptr;
     if (device != nullptr) device->GetImmediateContext(&context);
     ID3D11RenderTargetView* target = nullptr;

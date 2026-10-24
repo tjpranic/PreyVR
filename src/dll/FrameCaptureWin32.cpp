@@ -2,6 +2,7 @@
 
 #include "Logger.h"
 #include "HudLayer.h"
+#include "RendererAccess.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/FrameDump.h"
 
@@ -167,10 +168,8 @@ void ServiceFrameCapture(void* renderer, unsigned long long frameIndex)
     }
 
     const auto rendererAddress = reinterpret_cast<std::uintptr_t>(renderer);
-    auto* swapChain = *reinterpret_cast<IDXGISwapChain**>(
-        rendererAddress + engine::RendererLayout::swapchain);
-    auto* device = *reinterpret_cast<ID3D11Device**>(
-        rendererAddress + engine::RendererLayout::device);
+    auto* swapChain = RendererSwapChain(rendererAddress);
+    auto* device = RendererDevice(rendererAddress);
     if (swapChain == nullptr || device == nullptr) {
         Finish(FrameCaptureResult::unavailable, "swapchain_or_device_null");
         return;
@@ -227,10 +226,8 @@ DWORD CaptureBackBufferNow(void* renderer, std::uint32_t tag, unsigned long long
         return static_cast<DWORD>(FrameCaptureResult::unavailable);
     }
     const auto rendererAddress = reinterpret_cast<std::uintptr_t>(renderer);
-    auto* swapChain = *reinterpret_cast<IDXGISwapChain**>(
-        rendererAddress + engine::RendererLayout::swapchain);
-    auto* device = *reinterpret_cast<ID3D11Device**>(
-        rendererAddress + engine::RendererLayout::device);
+    auto* swapChain = RendererSwapChain(rendererAddress);
+    auto* device = RendererDevice(rendererAddress);
     if (swapChain == nullptr || device == nullptr) {
         Finish(FrameCaptureResult::unavailable, "swapchain_or_device_null");
         return static_cast<DWORD>(FrameCaptureResult::unavailable);

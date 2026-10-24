@@ -267,7 +267,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/NativeWristTexture.cpp
         src/dll/WristLane.cpp
         src/dll/HudLayer.cpp
-        src/dll/InventorySwapchain.cpp
+        src/dll/LayerSwapchain.cpp
         src/dll/UiPointer.cpp
         src/dll/InventoryPointerCapture.cpp
         src/dll/MainRenderHook.cpp
@@ -309,6 +309,12 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/SceneQuery.cpp
         src/dll/PhysicalInteractions.cpp
         src/dll/XrSessionHost.cpp
+        src/dll/XrSessionLifecycle.cpp
+        src/dll/XrEyePair.cpp
+        src/dll/XrMenuPanel.cpp
+        src/dll/XrOverlayLayers.cpp
+        src/dll/XrHoldFrames.cpp
+        src/dll/XrSessionReports.cpp
         src/lifecycle/Logger.cpp
     )
     target_include_directories(preyvr_dll_objects PRIVATE
@@ -563,13 +569,13 @@ if(PREYVR_BUILD_TESTS)
                 SOURCES src/dll/Haptics.cpp
                 INCLUDES $<TARGET_PROPERTY:openxr_loader,INTERFACE_INCLUDE_DIRECTORIES>
                 DLL)
-            preyvr_add_test(inventory_swapchain tests/InventorySwapchainTests.cpp
-                SOURCES src/dll/InventorySwapchain.cpp
+            preyvr_add_test(layer_swapchain tests/LayerSwapchainTests.cpp
+                SOURCES src/dll/LayerSwapchain.cpp
                 INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/dll"
                     $<TARGET_PROPERTY:openxr_loader,INTERFACE_INCLUDE_DIRECTORIES>
                 DLL
                 DEFS XR_USE_PLATFORM_WIN32 XR_USE_GRAPHICS_API_D3D11
-                LIBS d3d11)
+                LIBS preyvr_headers d3d11)
             # The command channel's replies, pinned. The test includes the channel
             # and links the DLL's other objects but DllMain, with the logger and
             # MinHook's initialiser stubbed. Built apart from the copied loader, so

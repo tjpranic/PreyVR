@@ -6,10 +6,6 @@
 - The X to transfer junk in the recycler doesn't work
 - The movement stoppage bug is still there
 
-### Graphics
-- Stuff looks a little blurry
-    Might want to increase the resolution
-
 ### UX/Game Feel
 - Rotate to face direction
     Add in an option to rotate the camera in the direction the right hand is facing
@@ -37,6 +33,8 @@
     One set of functionality that's going to need to be refactored out at the end of the project is all the tuning parameters. If they can be made debug build only, then that is preferred, otherwise they should be removed.
 - Instrumentation cleanup
     Removing (or gating behind a debug only build) of all the console logging and bug-finding instrumentation needs to be done at some point.
+- Document consolidation
+    Feature work has been tracked across multiple documents. These should be combined into one document.
 
 ### Immersion
 - Fine dextrous finger controls
@@ -46,7 +44,8 @@
 - Leaning over desks/railings
     Have the player body bend at the waist to allow leaning over furniture
 - Optional body rendering
-    An option to not render the body and only render the hands like in Half Life Alyx
+    An option to not render the body and only render the hands like in Half Life Alyx.
+    Or an overhaul to polish it up fully.
 - Physical crouching
     Crouching in real life should enable crouch mode. Standing up should disable crouch mode.
 

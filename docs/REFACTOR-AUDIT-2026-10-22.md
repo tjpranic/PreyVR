@@ -42,7 +42,11 @@ This was read-only: five parallel reviews, each covering one slice, with nothing
   - The one issue seen, the fade when leaning over a desk, is the known 30 cm residual limit (fix 3 in [TURN-LEAN-ARMS-2026-10-19.md](TURN-LEAN-ARMS-2026-10-19.md)). It predates the batch, and you left it for later.
 - **2026-10-24, the offline cleanup batch (batch A) is built** ([its scope](OFFLINE-CLEANUP-SCOPE-2026-10-24.md)): the XrSessionHost extractions, the options wiring test, the moves and renames, the ring search, the `log` helper, D3/D4 and the verifier runner.
   - Build passes, 97/97 ctest pass (`vr_options_wiring`, `position_ring` and `re_verifiers` are new), no new warnings, and the 75 export names are unchanged.
-  - **Worn OK on PreyVR-67 (10-24).** Not yet committed.
+  - **Worn OK on PreyVR-67 (10-24), and committed by you as `3e1bb1a`** ("Big refactor").
+- **2026-10-24, the XR batch is built** ([its scope](XR-SCOPE-2026-10-24.md), with your decisions: the rename, phase 3 in, one package, the other renderer reads too).
+  - B7's pieces (XrPose.h, LayerSwapchain's shared pieces, RendererAccess.h), the overlay sections as functions, and the split of XrSessionHost.cpp into seven files and a private header.
+  - Build passes, 97/97 ctest pass, the four `strncpy` warnings are gone, and the 75 export names are unchanged.
+  - **Worn OK on PreyVR-68 (10-24).** Not yet committed.
 
 **How this relates to [the 10-17 audit](DUPLICATION-AUDIT-2026-10-17.md):**
 - The older audit is still the reference for its items. Its "Constraints that shape every fix" and section F ("don't merge") still apply in full.
@@ -363,7 +367,7 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
   - The base+RVA overload of `hook::HookAt` and the atomic `InstallOnce` for the three old installers.
   - One shared loose-body reader under Contact and SurfaceStop. SurfaceStop takes its gate from ContactLane (`GateLooseBodies`), both lanes read the same objects separately, and they define "immovable" differently: Surface uses mass≤0, Contact uses mass==0 && invMass==0. Keep each lane's own verdict.
   - SurfaceStopLaneTests:127 stubs `GateLooseBodies`, so it stays an out-of-line function.
-- **XR batch:** B7 (`XrPose.h`, a swapchain factory, `PaintedQuad`/`StaticQuad`, `SelectFormat`, `ComPtr`, `AcquireBackBuffer`/`RendererDevice`, one acquire→wait→release helper with an explicit fault policy), then the XrSessionHost split.
+- **XR batch** (scoped 10-24: [XR-SCOPE-2026-10-24.md](XR-SCOPE-2026-10-24.md)): B7 (`XrPose.h`, a swapchain factory, `PaintedQuad`/`StaticQuad`, `SelectFormat`, `ComPtr`, `AcquireBackBuffer`/`RendererDevice`, one acquire→wait→release helper with an explicit fault policy), then the XrSessionHost split.
 - **UI batch:**
   - The B9 verb table with Audience tags, `ParseNumber<T>` and `QueueConsoleCommandWithRetry`.
   - B10.
@@ -540,5 +544,5 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
    - done 10-23: `GameplayFrame.h`, `OnEngineMainThread`, `EnvSwitchOff`, `YawDistance`, `Exports.cpp`, `PhysicalLane.h`, the play-space functions, the recenter checks, the small helpers and `VerifiedSetting`;
    - done 10-24 in batch A, worn OK on PreyVR-67: the XrSessionHost pure extractions, the options wiring test, the renames, and the `log [0|1]` helper.
 3. **Your decisions in section 4,** then the approved deletions. **Done 10-23.**
-4. **T2 batches,** one headset smoke run each: FrameSchedule, Hands, Physics, XR, UI. **FrameSchedule done 10-24, worn OK on PreyVR-63/64. Hands done 10-24, worn OK on PreyVR-65/66, committed `84d6c19`.** Next: XR, then UI, with Physics after the throwing redo.
+4. **T2 batches,** one headset smoke run each: FrameSchedule, Hands, Physics, XR, UI. **FrameSchedule done 10-24, worn OK on PreyVR-63/64. Hands done 10-24, worn OK on PreyVR-65/66, committed `84d6c19`. XR done 10-24, worn OK on PreyVR-68.** Next: UI, with Physics after the throwing redo.
 5. **Last:** the folder move and the ARCHITECTURE.md rewrite.

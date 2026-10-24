@@ -1,5 +1,5 @@
 #pragma once
-#include "InventorySwapchain.h"
+#include "LayerSwapchain.h"
 #include "VrOptionsUi.h"
 #include "preyvr/UiPanel.h"
 
@@ -45,7 +45,7 @@ private:
     void Keep(const ui::MenuAnchor& anchor);
 
     DXGI_FORMAT format_ = DXGI_FORMAT_UNKNOWN;
-    std::unique_ptr<InventorySwapchain> swapchain_;
+    std::unique_ptr<LayerSwapchain> swapchain_;
     std::unique_ptr<VrOptionsUi> ui_;
     unsigned controlsGeneration_ = 0;   // the bindings the Controls tab shows (XrInputBoundControls)
     std::optional<ui::Panel> panel_;

@@ -7,7 +7,8 @@
 #include "Logger.h"
 #include "UiMode.h"
 #include "XrSessionHost.h"
-#include "InventorySwapchain.h"
+#include "LayerSwapchain.h"
+#include "RendererAccess.h"
 #include "MarkerStereo.h"
 #include "WristLane.h"
 #include "preyvr/EngineMap.h"
@@ -702,7 +703,7 @@ bool EnsureTexture(ID3D11Device* device,ID3D11RenderTargetView* original,
     D3D11_TEXTURE2D_DESC d{};source->GetDesc(&d);
     D3D11_RENDER_TARGET_VIEW_DESC view{};original->GetDesc(&view);
     if(d.SampleDesc.Count!=1 || d.ArraySize!=1 || d.MipLevels!=1 ||
-       d.Width<640 || d.Height<480 || d.Width>8192 || d.Height>8192)return false;
+       d.Width<kLayerMinWidth || d.Height<kLayerMinHeight || d.Width>kMaxLayerExtent || d.Height>kMaxLayerExtent)return false;
     if(view.Format!=DXGI_FORMAT_R8G8B8A8_UNORM && view.Format!=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB &&
        view.Format!=DXGI_FORMAT_B8G8R8A8_UNORM && view.Format!=DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)return false;
     D3D11_TEXTURE2D_DESC old{};if(capture.texture)capture.texture->GetDesc(&old);
@@ -776,7 +777,7 @@ struct NativeTargets {
     NativeTargets() {
         const auto base=PreyBase();
         auto renderer=*reinterpret_cast<std::uintptr_t*>(base+engine::RendererLayout::singletonPointerRva);
-        device=*reinterpret_cast<ID3D11Device**>(renderer+engine::RendererLayout::device);
+        device=RendererDevice(renderer);
         device->GetImmediateContext(&context);
         context->OMGetRenderTargets(8,saved.data(),&ds);
         single=saved[0]!=nullptr;for(unsigned i=1;i<8;++i)single=single && !saved[i];
@@ -890,7 +891,7 @@ void __fastcall CaptureFlash(void* proxy,bool release) {
     const bool captureNormal=which!=0||enabled.load();
     const auto base=PreyBase();
     auto renderer=*reinterpret_cast<std::uintptr_t*>(base+engine::RendererLayout::singletonPointerRva);
-    auto device=*reinterpret_cast<ID3D11Device**>(renderer+engine::RendererLayout::device);
+    auto device=RendererDevice(renderer);
     ComPtr<ID3D11DeviceContext> context;device->GetImmediateContext(&context);
     std::array<ID3D11RenderTargetView*,8> saved{};ID3D11DepthStencilView* ds=nullptr;
     context->OMGetRenderTargets(8,saved.data(),&ds);
@@ -952,7 +953,7 @@ bool Install() {
        std::memcmp(reinterpret_cast<void*>(base+0xE8C5E0),flashBytes,sizeof(flashBytes)))return false;
     auto renderer=*reinterpret_cast<std::uintptr_t*>(base+engine::RendererLayout::singletonPointerRva);
     if(!renderer)return false;
-    auto device=*reinterpret_cast<ID3D11Device**>(renderer+engine::RendererLayout::device);if(!device)return false;
+    auto device=RendererDevice(renderer);if(!device)return false;
     ComPtr<ID3D11DeviceContext> context;device->GetImmediateContext(&context);if(!context)return false;
     auto om=(*reinterpret_cast<void***>(context.Get()))[33];
     // One transaction: all three live or none.

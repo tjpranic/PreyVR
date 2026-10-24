@@ -1,7 +1,9 @@
 #include "VrOptionsLayer.h"
 
 #include "Logger.h"
+#include "RendererAccess.h"
 #include "VrOptionsRuntime.h"
+#include "XrPose.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -14,18 +16,8 @@ constexpr float kPushMetresPerSecond = 1.5f;
 // The panel's own sRGB format, of the two the runtime may list.
 DXGI_FORMAT PanelFormat(XrSession session)
 {
-    std::uint32_t count = 0;
-    if (xrEnumerateSwapchainFormats(session, 0, &count, nullptr) != XR_SUCCESS || count == 0 || count >= 256) {
-        return DXGI_FORMAT_UNKNOWN;
-    }
-    std::vector<std::int64_t> formats(count);
-    if (xrEnumerateSwapchainFormats(session, count, &count, formats.data()) != XR_SUCCESS) {
-        return DXGI_FORMAT_UNKNOWN;
-    }
-    for (const auto format : {DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB}) {
-        if (std::find(formats.begin(), formats.end(), format) != formats.end()) { return format; }
-    }
-    return DXGI_FORMAT_UNKNOWN;
+    return FirstListedFormat(SessionSwapchainApi().formats, session,
+                             {DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB});
 }
 } // namespace
 
@@ -59,8 +51,7 @@ VrOptionsLayer::Frame VrOptionsLayer::Update(XrSession session, XrSpace space, I
     // its swapchain. A refused frame closes the panel (XrSessionHost).
     if (format_ == DXGI_FORMAT_UNKNOWN) { format_ = PanelFormat(session); }
     bool drawn = false;
-    ID3D11DeviceContext* context = nullptr;
-    device->GetImmediateContext(&context);
+    const auto context = ImmediateContext(device);
     if (context != nullptr && format_ != DXGI_FORMAT_UNKNOWN) {
         if (!ui_) { ui_ = std::make_unique<VrOptionsUi>(); controlsGeneration_ = 0; }
         std::vector<XrBoundControl> bound;
@@ -69,39 +60,30 @@ VrOptionsLayer::Frame VrOptionsLayer::Update(XrSession session, XrSpace space, I
             ui_->SetControls(VrOptionsControlRows(bound));
             controlsGeneration_ = generation;
         }
-        const auto frame = ui_->Render(device, context, format_, VrOptionsUiFrameInput(), VrOptionsValues(),
+        const auto frame = ui_->Render(device, context.Get(), format_, VrOptionsUiFrameInput(), VrOptionsValues(),
                                        VrOptionsSaveFailed(), VrSetupMessage());
         if (frame.texture != nullptr) {
             D3D11_TEXTURE2D_DESC description{};
             frame.texture->GetDesc(&description);
             if (!swapchain_) {
-                swapchain_ = std::make_unique<InventorySwapchain>(InventorySwapchainApi{
-                    xrEnumerateSwapchainFormats, xrCreateSwapchain, xrEnumerateSwapchainImages,
-                    xrAcquireSwapchainImage, xrWaitSwapchainImage, xrReleaseSwapchainImage, DestroyUnheldSwapchain});
+                swapchain_ = SessionLayerSwapchain();
             }
             if (swapchain_->Prepare(session, description, format_)) {
-                const auto upload = swapchain_->Copy(context, frame.texture);
-                drawn = upload == InventorySwapchain::Upload::ready;
-                out.sessionFault = upload == InventorySwapchain::Upload::sessionFault;
+                const auto upload = swapchain_->Copy(context.Get(), frame.texture);
+                drawn = upload == LayerSwapchain::Upload::ready;
+                out.sessionFault = upload == LayerSwapchain::Upload::sessionFault;
             }
         } else {
             lifecycle::Log("preyvr_xr_session result=refused detail=vr_options_ui reason=" + ui_->LastError());
         }
         ApplyVrOptionsUi(frame);
     }
-    if (context != nullptr) { context->Release(); }
 
     out.active = drawn && panel_.has_value();
     if (out.active) {
         const auto& p = *panel_;
-        out.layer.space = space;
-        out.layer.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-        out.layer.pose = {{p.pose.orientation.x, p.pose.orientation.y, p.pose.orientation.z, p.pose.orientation.w},
-                          {p.pose.position.x, p.pose.position.y, p.pose.position.z}};
-        out.layer.size = {p.width, p.height};
-        out.layer.subImage.swapchain = swapchain_->Handle();
-        out.layer.subImage.imageRect = {{0, 0}, {static_cast<std::int32_t>(options::Width),
-                                                 static_cast<std::int32_t>(options::Height)}};
+        FillQuad(out.layer, space, p.pose, {p.width, p.height}, swapchain_->Handle(),
+                 {{0, 0}, {static_cast<std::int32_t>(options::Width), static_cast<std::int32_t>(options::Height)}}, 0);
         out.surface = {p, 0};
     }
     return out;

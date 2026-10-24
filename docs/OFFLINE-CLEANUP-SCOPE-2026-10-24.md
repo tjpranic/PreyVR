@@ -1,6 +1,6 @@
 # Offline cleanup batch (batch A): scope
 
-Status: **built 2026-10-24 as PreyVR-67, and worn OK (10-24); not committed.** What was built, and where it differs from the plan, is in [Done](#done-2026-10-24) at the end; the plan below is as scoped. This is the T1 remainder of the [refactor audit](REFACTOR-AUDIT-2026-10-22.md), after the [FrameSchedule](FRAME-SCHEDULE-SCOPE-2026-10-24.md) and [Hands](HANDS-SCOPE-2026-10-24.md) batches. Everything here is checked by the build and ctest, without a headset. One package goes out at the end for a short smoke run, because phase 1 edits `ServiceXrFrame` and phase 2 touches every lane's initial value.
+Status: **built 2026-10-24 as PreyVR-67, and worn OK (10-24); committed by you as `3e1bb1a`.** What was built, and where it differs from the plan, is in [Done](#done-2026-10-24) at the end; the plan below is as scoped. This is the T1 remainder of the [refactor audit](REFACTOR-AUDIT-2026-10-22.md), after the [FrameSchedule](FRAME-SCHEDULE-SCOPE-2026-10-24.md) and [Hands](HANDS-SCOPE-2026-10-24.md) batches. Everything here is checked by the build and ctest, without a headset. One package goes out at the end for a short smoke run, because phase 1 edits `ServiceXrFrame` and phase 2 touches every lane's initial value.
 
 It covers:
 - audit section 3's open T1 items (the XrSessionHost extractions, the options groundwork, the moves and renames, the `log [0|1]` helper, the ring search, D3/D4, and the verifier runner);
@@ -121,7 +121,7 @@ Only C++ identifiers and file names change. Export names, verbs, `detail=` strin
 
 ## Done 2026-10-24
 
-Build passes, 97/97 ctest pass (`vr_options_wiring`, `position_ring` and `re_verifiers` are new), no new warnings, and the DLL's 75 export names are unchanged. No receipt pin is staled; PsiMedkit.cpp's was stale already. **Worn OK on PreyVR-67 (10-24).** Not yet committed. `git mv` staged the four file renames; everything else is unstaged.
+Build passes, 97/97 ctest pass (`vr_options_wiring`, `position_ring` and `re_verifiers` are new), no new warnings, and the DLL's 75 export names are unchanged. No receipt pin is staled; PsiMedkit.cpp's was stale already. **Worn OK on PreyVR-67 (10-24), and committed by you as `3e1bb1a`.** `git mv` staged the four file renames; everything else is unstaged.
 
 **Phase 1: the XR session's decisions.**
 - **UiPanel.h:** `FitMenuStack`, `WantMenuPanel` and `StepFade`. The Host's fade state is now a `ui::Fade`, and the fade has 8 levels (`ui::kFadeLevels`).

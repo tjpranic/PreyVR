@@ -11,6 +11,7 @@
 #include "preyvr/MenuNavigator.h"
 
 #include "UiMode.h"
+#include "XrPose.h"
 
 #include "Logger.h"
 
@@ -128,11 +129,14 @@ LatestSnapshot<TrackingFrame> gTrackingFrame;
 std::atomic<std::uint64_t> gTrackingSequence{0};
 std::atomic<std::uint64_t> gTrackingEpoch{1};
 
-Pose FromXrPose(const XrPosef& pose)
+// An OpenXR name field from `from`: at most its size less one, so it always
+// ends in the zero the struct was initialised with (as strncpy left it).
+template <std::size_t N>
+void CopyName(char (&to)[N], const char* from)
 {
-    return Pose{
-        Quaternion{pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w},
-        Vec3{pose.position.x, pose.position.y, pose.position.z}};
+    const std::size_t length = (std::min)(std::strlen(from), N - 1);
+    std::memcpy(to, from, length);
+    to[length] = '\0';
 }
 
 PoseValidity ValidityFrom(XrSpaceLocationFlags flags)
@@ -158,8 +162,8 @@ XrAction CreateAction(const input::Action& role, const std::array<XrPath, 2>& su
 {
     XrActionCreateInfo info{XR_TYPE_ACTION_CREATE_INFO};
     info.actionType = TypeOf(role.kind);
-    std::strncpy(info.actionName, role.name, sizeof(info.actionName) - 1);
-    std::strncpy(info.localizedActionName, role.label, sizeof(info.localizedActionName) - 1);
+    CopyName(info.actionName, role.name);
+    CopyName(info.localizedActionName, role.label);
     info.countSubactionPaths = static_cast<std::uint32_t>(subactions.size());
     info.subactionPaths = subactions.data();
     XrAction action = XR_NULL_HANDLE;
@@ -198,8 +202,8 @@ bool CreateXrInput(void* instanceHandle, void* sessionHandle)
         // and select) reaches both actions, and its context picks the reader.
         const auto& set = input::SetInfo(static_cast<ActionSet>(i));
         XrActionSetCreateInfo setInfo{XR_TYPE_ACTION_SET_CREATE_INFO};
-        std::strncpy(setInfo.actionSetName, set.name, sizeof(setInfo.actionSetName) - 1);
-        std::strncpy(setInfo.localizedActionSetName, set.label, sizeof(setInfo.localizedActionSetName) - 1);
+        CopyName(setInfo.actionSetName, set.name);
+        CopyName(setInfo.localizedActionSetName, set.label);
         setInfo.priority = 0;
         result = xrCreateActionSet(instance, &setInfo, &gSets[i]);
         if (XR_FAILED(result)) {
