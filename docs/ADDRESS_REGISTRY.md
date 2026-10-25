@@ -2,6 +2,25 @@
 
 Only confirmed or explicitly provisional build-specific locations belong here. Prefer a signature plus validation recipe over an RVA alone.
 
+### Fullscreen video — 2026-10-25
+
+No R-number. Worn OK in PreyVR-93 (2026-10-25, run `player-20261025-192638`): the neuromod install
+cutscene in both eyes, 243 draws copied, 0 refused. Supported Steam hash;
+`tools/re/verify_fullscreen_video.py` checks every row, and `src/dll/VideoOverlay.cpp` compares the
+two bodies of `include/preyvr/FullscreenVideoNative.h` in memory before hooking. Why and how in
+[the both-eyes notes](STEREO-DUAL-SUBMISSION-2026-10-10.md#fullscreen-videos-in-both-eyes-2026-10-25).
+
+| RVA / field | Purpose and constraint |
+| --- | --- |
+| `0xEFA9B0` (742 bytes) | The render thread's draw of the playing fullscreen Bink `(backend, movie, R8D)`. `GetViewport` on the static renderer; with another size and another float aspect than the video (`0xEFAA2C`-`0xEFAA6B`, UCOMISS/JZ), `EF_ClearTargetsImmediately(4, opaque black 0x1C848B0)` and a letterboxed viewport; the backend's `+0x08` (`0xEFB1B0`) draws through D3D11 into the bound target; the viewport is put back. Only `0xEFA360` reaches it (jmp at `0xEFA364`). Detoured: after it, the backbuffer is copied into the held first eye (MinHook; entry `4C 8B DC 53`). |
+| `0xEFA360` | `mov rcx,[rcx+0x10]; jmp 0xEFA9B0`: the Bink manager's backend. Called by `ProcessCommands` (`0xFEA1D5`, command `0x2E`) and by the queuer `0xFEBD10`, which on the render or main thread jumps here directly and elsewhere queues `0x2E` (movie, R8D). Both pass the renderer's Bink manager. |
+| `0xF7B4B0` (146 bytes) | `CD3D9Renderer::GetViewport(this, x*, y*, w*, h*)`: `+0x94A0` on the render or main thread (render thread object `+0xD90`, ids `+0x58`/`+0x54`), else `+0x9458`. The hook calls it before the draw, on the same thread, to know what the draw decides. |
+| `0x2B24E80` | The static `CD3D9Renderer` every call in the draw passes (`lea rcx` at `0xEFA9F9` and five more). `+0x8398` holds the Bink manager (vtable `0x1DCBF90`, built by `0xEF8B80` at `0xF54072`); renderer vtable `+0x898` (`0xFE53B0`) returns it. |
+| movie `+0x08`; BINK `+0x00`/`+0x04` | The movie's Bink handle; the BINK's Width and Height (U32), read by the draw at `0xEFAA11`-`0xEFAA22`. |
+| `0xF0D1F0` / `0xF0DA40` | `EF_ClearTargetsImmediately`: `EF_ClearTargetsLater` (`0xF0D2A0`) with flag `0x10` on the target-stack entry `renderer+0xAB20`, then `FX_SetActiveRenderTargets` (`0xF118C0`), which ends in `FX_ClearTargets` `0xF0DA40`: `ClearRenderTargetView` (context `+0x190`, `0xF0DB00`) on the entry's own view, whatever is bound. So a redirected second draw (`DrawRedirected`, which swaps only `OMSetRenderTargets`) would clear the real backbuffer. |
+| `0x5C6BA0` | `CCryAction::PostUpdate` (context): the Bink manager's `+0x08` advances the playing movie and counts fullscreen ones, `CSystem::Render`, the manager's `+0x10` queues the draw, then FlashUI's render `0x2D8540(ui, overBinksOnly = count > 0)`: while a fullscreen video plays only elements flagged `render_over_binks` (UIElement flag `0x8000`, set at `0x2FF773`) draw. |
+| `0x142C410` | `Ark:BinkMovie` flow node Prepare (context): manager `+0x18` with type 1 when the node's `Fullscreen` is set (the list `0xEFA9B0` draws), else 3 (texture only). `PauseGame` pauses the timers; the world still renders. |
+
 ### Stick re-read — 2026-10-24
 
 No R-number. Worn OK in PreyVR-72 (2026-10-24, run `player-20261024-171806`): 128 re-reads that

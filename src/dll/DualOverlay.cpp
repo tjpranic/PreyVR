@@ -6,6 +6,7 @@
 #include "Logger.h"
 #include "MinHookInit.h"
 #include "RendererAccess.h"
+#include "VideoOverlay.h"
 #include "XrSessionHost.h"
 #include "preyvr/EngineMap.h"
 
@@ -195,6 +196,9 @@ DWORD SetDualOverlayRedraw(unsigned int enabled)
         if (installed != 0) {
             return installed;
         }
+        // Not part of that pair: without it a fullscreen video stays in the
+        // second eye and every other overlay is still in both. It logs why.
+        EnsureVideoOverlay();
     }
     gEnabled.store(enabled != 0, std::memory_order_release);
     Log(std::string("result=0 detail=enabled value=") + (enabled != 0 ? "1" : "0"));
@@ -259,7 +263,7 @@ std::string DualOverlayReport()
         any = true;
     }
     if (!any) out << "none";
-    out << '}';
+    out << '}' << VideoOverlayReport();
     return out.str();
 }
 

@@ -306,6 +306,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/BodyDepthHook.cpp
         src/dll/DualSceneStereo.cpp
         src/dll/DualOverlay.cpp
+        src/dll/VideoOverlay.cpp
         src/dll/WeaponAttachment.cpp
         src/dll/PassCreationHook.cpp
         src/dll/ReticleFollow.cpp
@@ -463,6 +464,7 @@ if(PREYVR_BUILD_TESTS)
     preyvr_add_test(starfield_depth tests/StarfieldDepthTests.cpp)
     preyvr_add_test(body_depth tests/BodyDepthTests.cpp)
     preyvr_add_test(near_clip tests/NearClipTests.cpp)
+    preyvr_add_test(video_letterbox tests/VideoLetterboxTests.cpp)
     preyvr_add_test(hand_carry tests/HandCarryTests.cpp)
     preyvr_add_test(grenade_throw tests/GrenadeThrowTests.cpp)
     preyvr_add_test(wrist_holo tests/WristHoloTests.cpp)
@@ -530,6 +532,9 @@ if(PREYVR_BUILD_TESTS)
             DLL
             LIBS preyvr_core minhook)
         preyvr_add_test(body_depth_hook tests/BodyDepthHookTests.cpp
+            DLL
+            LIBS preyvr_core minhook)
+        preyvr_add_test(video_overlay tests/VideoOverlayTests.cpp
             DLL
             LIBS preyvr_core minhook)
         preyvr_add_test(ui_pointer_dispatch tests/UiPointerTests.cpp TARGET preyvr_ui_pointer_tests

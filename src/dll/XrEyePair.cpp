@@ -477,6 +477,38 @@ ID3D11RenderTargetView* HeldFirstEyeTarget(ID3D11RenderTargetView* destination, 
     return gHost.heldTargetView;
 }
 
+bool CopyBackBufferIntoHeldEye(const char** refusal)
+{
+    const auto refuse = [&](const char* why) {
+        if (refusal != nullptr) *refusal = why;
+        return false;
+    };
+    if (!gDualOverlayOpen.load(std::memory_order_acquire) || !gDualFirstHeld.load(std::memory_order_acquire)) {
+        return refuse("window_closed");
+    }
+    // Inside the engine's overlay draws, as HeldFirstEyeTarget.
+    std::unique_lock lock(gMutex, std::defer_lock);
+    if (!LockForRenderThread(lock) || gHost.device == nullptr) return refuse("busy");
+    const auto context = ImmediateContext(gHost.device);
+    if (!context) return refuse("no_context");
+    // What the draw drew into is what it left bound; only the frame's own
+    // backbuffer is the second eye.
+    ComPtr<ID3D11RenderTargetView> target;
+    context->OMGetRenderTargets(1, &target, nullptr);
+    if (!target) return refuse("no_target");
+    ComPtr<ID3D11Resource> drawn;
+    target->GetResource(&drawn);
+    if (drawn == nullptr || reinterpret_cast<std::uintptr_t>(drawn.Get()) != gHost.heldBackBuffer) {
+        return refuse("not_backbuffer");
+    }
+    ID3D11Texture2D* eye = gHost.eyeImage[gSwapEyes.load(std::memory_order_acquire) ? 1 : 0];
+    if (eye == nullptr) return refuse("no_eye_image");
+    // The held image was made from this backbuffer's description (HoldDualFirstEye).
+    // The native HUD is drawn after the video, so the hold's RecordEye still stands.
+    context->CopyResource(eye, drawn.Get());
+    return true;
+}
+
 std::string DualPairReport()
 {
     std::ostringstream out;

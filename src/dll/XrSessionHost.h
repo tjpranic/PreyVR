@@ -139,6 +139,11 @@ bool HoldDualFirstEye(void* renderer);
 void OpenDualOverlayWindow();
 bool DualOverlayWindowOpen();
 ID3D11RenderTargetView* HeldFirstEyeTarget(ID3D11RenderTargetView* destination, const char** refusal);
+// While the window is open: the whole backbuffer copied into the held first eye,
+// for a draw that left nothing of the second eye's world in it (a letterboxed
+// fullscreen video, VideoOverlay.h). Only when the target still bound is that
+// backbuffer. False, with `refusal` naming why, as HeldFirstEyeTarget. Render thread.
+bool CopyBackBufferIntoHeldEye(const char** refusal);
 
 // Holds made and refused, and both-eyes pairs submitted and refused.
 std::string DualPairReport();

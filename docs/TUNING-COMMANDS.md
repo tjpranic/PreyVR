@@ -189,7 +189,7 @@ A few rows behave differently from their commands:
 | `wrist.native <scale> [background]` | 100–600 %, 0/1 | 400, 0 | Scale of the game's own status on the card; 1 keeps the game's backdrop. |
 | `wrist.occlusion <mask>` | 0–3 | 3 | Hide the card behind 1 scene geometry, 2 your right hand or weapon. |
 | `pose.curl <percent>` | 0–300 | 100 | Finger curl of the relaxed free hand. |
-| `dual.overlay <0\|1>` | | 1 | Fades, markers and other overlays in both eyes; 0 right eye only, for comparison. |
+| `dual.overlay <0\|1>` | | 1 | Fades, markers, fullscreen videos and other overlays in both eyes; 0 right eye only, for comparison. |
 | `dual.vr <0\|1>` | | 1 | Both eyes from one frame, or alternate eyes. The launcher's `DualStereo` chooses at start. |
 | `vr.options <0\|1>` | | | Opens or closes VR Options, over the running game or a game menu. |
 
@@ -417,7 +417,7 @@ worn OK (2026-10-25), as Body Follows You's commands had on 2026-10-24.
 | Command | Values | Default | What it does |
 |---|---|---|---|
 | `dual.vr` | 0/1 | VR 1 (launcher `DualStereo`) | Both eyes from one game frame, or alternate eyes. |
-| `dual.overlay` | 0/1 | VR 1 | After-world overlays in both eyes. |
+| `dual.overlay` | 0/1 | VR 1 | After-world overlays in both eyes, fullscreen videos (the neuromod install) among them. |
 | `dual.mode <0..3> [budget]` | | VR 3 | Raw submission mode. Use `dual.vr`, which keeps the ordering safe. |
 | `dual.ipd` | 40–90 mm | 64 | Eye separation for flat mode 2 only. |
 | `dual.observe` / `dual.capture` / `dual.report` | | | Diagnostics. |

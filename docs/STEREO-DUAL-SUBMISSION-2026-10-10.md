@@ -232,6 +232,68 @@ the native crosshair never read as hidden. No movie was refused in any run.
 - **Menus waste work:** the second submission and the overlay redraws still run
   while the menu panel shows only the backbuffer.
 
+## Fullscreen videos in both eyes (2026-10-25)
+
+Reported: the cutscene the first neuromod install plays appeared in the right eye
+only. It is a Bink video, `GameSDK/Videos/neuromod_install.bk2` (1920x1080, 90
+frames, 3.0 s), started from data through the `Ark:BinkMovie` flow node; the
+filename is not in the DLL. Nothing in the run logs captured it, so the cause is
+static.
+
+### Why the second eye only (static, Steam build)
+
+- **A third overlay path.** `CCryAction::PostUpdate` (`0x5C6BA0`) advances the
+  playing movie, runs `CSystem::Render`, queues render command `0x2E`, then
+  renders FlashUI with only the elements flagged `render_over_binks` while a
+  fullscreen video plays. On the render thread the command runs `0xEFA9B0` after
+  both scene submissions. It draws the frame with its own textures and shader
+  straight through D3D11: neither a 2D image nor a Flash movie, so the overlay
+  redraw above never saw it.
+- **It letterboxes in a headset.** The draw asks `GetViewport`, and with another
+  size and aspect than the video it clears the whole target to opaque black and
+  narrows the viewport to 16:9. The eye images are 2644x2644, so it always does:
+  the second eye got black and a video band, the held first eye the world.
+- **Movie types.** The flow node's `Fullscreen` loads the movie as type 1, the
+  list the draw serves; without it a movie is texture-only (type 3) and shown by
+  whatever samples it -- a Flash movie (already in both eyes) or a material.
+
+### What was changed
+
+- **The backbuffer copied into the held eye (`VideoOverlay.cpp`).** The draw is
+  hooked. While the overlay window is open, the hook asks `GetViewport` as the
+  draw does, lets the draw run, and when the draw letterboxed
+  (`preyvr/VideoLetterbox.h`, its own test) copies the backbuffer into the held
+  first eye (`CopyBackBufferIntoHeldEye`, only when the target still bound is
+  that backbuffer). After the clear the backbuffer is black and the video, so the
+  copy is exactly the second eye. `render_over_binks` Flash drawn afterwards is
+  repeated into the held eye as before.
+- **Not drawn a second time.** The draw's clear runs on the engine's own view of
+  its target (`FX_ClearTargets` `0xF0DA40`), and `DrawRedirected` swaps only
+  `OMSetRenderTargets`: a redirected second draw would clear the second eye
+  after its video was drawn.
+- Part of `dual.overlay`. A refused gate leaves the video in the second eye and
+  every other overlay in both. Log: `preyvr_dual_overlay result=0
+  detail=video_hook_installed`, then the first four draws as `video size=WxH
+  viewport=WxH copied=0|1 refusal=...`. Status: `video={hook gate draws copied
+  refused lastRefusal}` inside `dual=`.
+- Static contracts: `tools/re/verify_fullscreen_video.py`; tests
+  `video_letterbox` and `video_overlay`.
+
+### Headset result, 2026-10-25 (PreyVR-93)
+
+Run `player-20261025-192638`, the first neuromod install: the wearer saw the
+cutscene in both eyes. 243 video draws, all copied (`size=1920x1080
+viewport=2644x2644`), 0 refused. No both-eyes pair was refused while it played.
+This also settles the movie type: the copy runs only in the fullscreen draw, so
+the neuromod node is `Fullscreen`.
+
+### Not established
+
+- The endings (15-55 s) and the credits (431 s) take the same path, untested.
+  The video is screen-space at zero disparity, full eye width, letterboxed in
+  black: fine for a 3 s clip, and the long ones may want a floating screen.
+- Whether the mod's own reticle, lasers or hands draw over the video.
+
 ## Open issues
 
 ### The player body does not turn with the headset

@@ -12,11 +12,12 @@
     Add in an option to rotate the camera in the direction the right hand is facing. Alternatively, having the player body and camera follow the left/right hand when holding a certain button?
 - Two-handed wrench
     Add in a two-handed wrench mode that automatically triggers heavy wrench attacks. One handed mode would always be a light attack. This would replace the speed based light/heavy attack system.
+- Two-handed carrying
 
 ## TODO
 
 ### Bugs
-- The neuromod cutscene that plays when you first use a neuromod only appears in the right eye (High Priority)
+- The handheld device (PDA) thing renders over the top of the hand
 - Reticle drifts from the actual aim point sometimes
     Seems to happen after reloading?
 - Interacting with computers and screen is off (High Priority)
@@ -112,6 +113,7 @@
     They need to be at the depth they appear at in the world. Repair markers (and possibly enemy detection markers) also affected.
 - Stun gun max charge effect at the wrong depth (Archived)
     Q-Beam has a similar issue
+- The neuromod cutscene that plays when you first use a neuromod only appears in the right eye (Archived)
 
 ### UX/Immersion
 - Shot from muzzle laser shows skewed (Archived)
@@ -137,4 +139,6 @@ Feature set tracking list, in broad terms:
     Having the player character model follow the headset and camera like a real body would follow someone's head while still allowing for things like physical leaning and crouching.
 - Physical interaction (**PARTIALLY IMPLEMENTED**)
     Player interaction with objects in the world. Encompasses touching, pushing and throwing stuff along with hitting things with the wrench.
+- Stereoscopic rendering (**IMPLEMENTED**)
+    Using the dormant stereoscopic rendering code in Prey's CryEngine fork. Cutscenes, fades and UI elements need special handling to display in both eyes correctly.
 - ...

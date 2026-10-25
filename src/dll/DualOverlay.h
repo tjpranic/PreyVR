@@ -13,7 +13,8 @@ namespace preyvr::dll {
 // screen fades). With this on, each such draw into the frame's own backbuffer
 // is made a second time, in the same frame, into the held first eye
 // (XrSessionHost HeldFirstEyeTarget): 2D images by RT_Draw2dImageInternal here,
-// Flash movies by HudLayer's movie display hook.
+// Flash movies by HudLayer's movie display hook. A fullscreen video is copied
+// whole instead of drawn again (VideoOverlay.h).
 //
 // Screen-space by construction: both eyes get the overlay at the same pixels,
 // so it reads as far away. Per-eye depth for the reticle and markers is later.

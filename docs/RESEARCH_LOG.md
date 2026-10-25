@@ -4141,3 +4141,33 @@ PreyVR-55, run `player-20261021-204006`.
 The guard covers both tests unchanged.
 
 See [the field result](CULL-CAMERA-CRASH-2026-10-17.md#field-result-2026-10-21-preyvr-55).
+
+## 2026-10-25 — Fullscreen videos in both eyes
+
+Reported: the first neuromod install's cutscene appeared in the right eye only.
+It is a Bink video (`neuromod_install.bk2`, 1920x1080, 3.0 s) played through the
+`Ark:BinkMovie` flow node.
+
+**Cause, static.** The same class as the 2026-10-11 after-world overlays, by a
+third path.
+- The render thread draws a playing fullscreen video in `0xEFA9B0`, after both
+  scene submissions, straight through D3D11. It is neither a 2D image nor a Flash
+  movie, so `DualOverlay` never repeated it into the held first eye.
+- In a headset the eye image is 2644x2644, so the draw first clears the whole
+  target to black and letterboxes the 16:9 video: the second eye showed black and
+  a video band, the first eye the world.
+
+**Fix.** The draw is hooked. Inside a both-eyes frame's overlay window, when the
+draw letterboxed (its own test, asked of `GetViewport` before it), the backbuffer
+is copied into the held first eye. It is not drawn a second time: its clear runs
+on the engine's own view of the backbuffer, which a redirected draw would wipe
+after the video. Part of `dual.overlay`.
+
+Offline:
+- 107/107 tests pass, `video_letterbox` and `video_overlay` among them;
+- `verify_fullscreen_video.py` passes against the supported image.
+
+**Headset, PreyVR-93** (run `player-20261025-192638`): the wearer saw the
+cutscene in both eyes. 243 draws copied, 0 refused, no pair refused while it
+played. That the copy ran at all confirms the neuromod node is `Fullscreen`.
+See [the both-eyes notes](STEREO-DUAL-SUBMISSION-2026-10-10.md#fullscreen-videos-in-both-eyes-2026-10-25).
