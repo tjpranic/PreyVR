@@ -159,6 +159,9 @@ const Case kCases[] = {
     {"markers.size 150", "markers.size result=0 ", MarkerDepthReport, processed},
     {"markers.size 10", "markers.size result=87 ", MarkerDepthReport, processed},
     {"markers.size abc", "markers.size result=0 ", MarkerDepthReport, processed},   // the default, 100
+    {"stars.depth", "stars.depth result=0 ", StarfieldDepthReport, processed},
+    {"stars.depth 2", "stars.depth result=87 ", StarfieldDepthReport, processed},
+    {"stars.depth abc", "stars.depth result=87 ", StarfieldDepthReport, processed},   // refused
     {"near.fxhide", "near.fxhide result=0 note=no_value_nothing_changed", nullptr, processed},
     {"dbg.report", "dbg.report result=0", DebugOverlayReport, processed},
     {"dbg.marks", "dbg.marks result=0\n", DebugOverlayMarks, processed},
@@ -428,7 +431,7 @@ const Case kCases[] = {
 //   view.observe, ik.mode, move.mode, use.hand, xr.stereo, ui.inventory,
 //   hud.layer, psi.target, medkit.slot, dual.observe, dual.mode, dual.overlay,
 //   dual.vr, cull.watch, cull.probe, cull.prepare; aim.shot, near.fx,
-//   markers.depth, ui.stereo and window.hold given 1; aim.beam and dual.capture
+//   markers.depth, stars.depth, ui.stereo and window.hold given 1; aim.beam and dual.capture
 //   even bare; hud.var, hud.setvar, hud.call, hud.fit and hud.probe given
 //   arguments that parse.
 // - post input or arm hardware breakpoints: menu, input.key, mem.watch with an

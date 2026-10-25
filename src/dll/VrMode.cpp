@@ -12,6 +12,7 @@
 #include "NearViewStereo.h"
 #include "NearParticleStereo.h"
 #include "MarkerStereo.h"
+#include "StarfieldStereo.h"
 #include "DualSceneStereo.h"
 #include "DualOverlay.h"
 #include "NearFovOverride.h"
@@ -215,6 +216,9 @@ void TickVrMode() {
         EnsureNearParticleStereo();
         // World markers at the depth they mark (MarkerStereo.h). Not fatal either.
         EnsureMarkerDepth();
+        // The stars at the sky's depth, not 1 m from the head (StarfieldStereo.h).
+        // Not fatal: without the hook Prey draws them as before.
+        EnsureStarfieldDepth();
         // Prey's re-read of the sticks finds the lanes' stick (StickReread.h).
         // Not fatal: the lanes' read-back still restores it within a frame.
         if(InstallStickReread()!=0) Log("stick_reread=unavailable fallback=read_back");
@@ -276,7 +280,7 @@ void TickVrMode() {
             // The same text dual.report and hud.layer answer with.
             Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
                 " } torso={"+TorsoLaneReport()+" } move={"+MoveLaneStatusReport()+StickRereadReport()+
-                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" focus={"+
+                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" focus={"+
                 FocusHoldReport()+" } hold={"+XrHoldReport()+" } prompts={"+ControllerPromptsReport()+" }");
         }
         const auto owner=AnimIkOwnerGeneration();

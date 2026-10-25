@@ -29,8 +29,8 @@ does not show.
   cannot set an unintended value. Where a command has no default to fall back
   to, it refuses the line with `87` instead: the `arm.*` settings, `ui.offset`,
   and the numbers of `hud.setvar`, `hud.call` and `hud.probe`.
-  `dbg.draw`, `aim.shot`, `near.fx`, `markers.depth`, `near.fov` and `ik.align`
-  also refuse one, because a fallback there would switch something on.
+  `dbg.draw`, `aim.shot`, `near.fx`, `markers.depth`, `stars.depth`, `near.fov`
+  and `ik.align` also refuse one, because a fallback there would switch something on.
 - A setting given some of its values but not all, such as `body.torso 30`,
   is refused with `87`.
 - A line that is not a command is answered `result=rejected` and changes
@@ -418,6 +418,7 @@ The body turns to face your torso again, without the jitter:
 | `near.fxhide` / `near.zero` / `near.lineage` / `near.dump` | | 0 | Test switches. |
 | `markers.depth` | 0/1 | 1 | World markers (objectives, repair, danger, enemy awareness, points of interest) at the depth they mark. Bare: report. |
 | `markers.size` | 50–200 % | 100 | Marker Size for this session; VR Options saves it. |
+| `stars.depth` | 0/1 | 1 | The stars at the sky's depth in both eyes; 0 draws them 1 m from the head as Prey does, for A/B ([starfield depth](STARFIELD-DEPTH-2026-10-25.md)). Bare: report. Report: `hooks` and `gate` (`ok`, `refused` = bytes mismatch, `hook_failed`), `draws` (ArkStars draws, one per eye), `far` (drawn 10 km out), `native` (drawn as Prey's, with `stars.depth 0`), `unread` (the element or its star block could not be read; drawn as Prey's), `distanceM`. `PREYVR_STAR_DEPTH=0` at launch leaves it unhooked. |
 | `xr.mirrorfov` | 50–400 % | 100 | Field declared for flat-mirror frames (no eye pair). |
 | `xr.native` / `xr.srgb` / `xr.submit` | 0/1 | 0 → VR 1 | Native projection; sRGB swapchain (before start only); per-eye submission. |
 | `xr.stereo [ipdMm] [halfFov]` | 45–85 (0 off), 20–70 | | Fixed-IPD camera stereo, over the runtime's IPD. |

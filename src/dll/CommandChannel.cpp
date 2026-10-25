@@ -31,6 +31,7 @@
 #include "DualOverlay.h"
 #include "NearParticleStereo.h"
 #include "MarkerStereo.h"
+#include "StarfieldStereo.h"
 #include "ReticleFollow.h"
 #include "SceneQuery.h"
 #include "ShotRay.h"
@@ -595,6 +596,16 @@ constexpr Verb kVerbs[] = {
         // Marker Size for this session (VR Options saves it): 50..200 percent.
         const DWORD result = Valued(args) ? SetMarkerSizePercent(static_cast<unsigned>(Arg(args, 1, 100))) : 0;
         out << "markers.size result=" << result << " " << MarkerDepthReport();
+    }},
+    {"stars.depth", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
+        // Bare `stars.depth` only reports. 1 = the stars at the sky's depth
+        // (default), 0 = 1 m from the head as Prey draws them, for A/B.
+        DWORD result = 0;
+        if (Valued(args)) {
+            const int value = Arg(args, 1, -1);
+            result = value == 0 || value == 1 ? SetStarfieldDepth(static_cast<unsigned>(value)) : ERROR_INVALID_PARAMETER;
+        }
+        out << "stars.depth result=" << result << " " << StarfieldDepthReport();
     }},
     {"near.fxhide", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
         out << "near.fxhide result=" << (Valued(args) ? SetNearParticleHide(static_cast<unsigned>(Arg(args, 1, 1))) : 0)

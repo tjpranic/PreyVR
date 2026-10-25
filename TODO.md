@@ -2,9 +2,6 @@
 
 ## TODO
 
-### Bugs
-- The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision).
-
 ### UX/Game Feel
 - Rotate to face direction
     Add in an option to rotate the camera in the direction the right hand is facing. Alternatively, having the player body and camera follow the left/right hand when holding a certain button?
@@ -35,6 +32,7 @@
     The mod is starting to lag a bit due to all the feature work. Two types of optimizations are needed. Big O optimization of code and actual targeted optimization of bottlenecks (this will require instrumentation). Will need to look for quick wins on both, if any.
 - Tuning parameter cleanup
     One set of functionality that's going to need to be refactored out at the end of the project is all the tuning parameters. If they can be made debug build only, then that is preferred, otherwise they should be removed.
+    Some tuning options literally just gate bug fixes behind commands. Absolutely no reason for this, they need to be identified and removed.
 - Instrumentation cleanup
     Removing (or gating behind a debug only build) of all the console logging and bug-finding instrumentation needs to be done at some point.
 - Documentation cleanup
@@ -53,6 +51,8 @@
     It also still feels like the shoulders are attached to the head and not the torso, will need to double check this.
 - Physical crouching
     Crouching in real life should enable crouch mode. Standing up should disable crouch mode.
+- The Earth and Moon are very obviously rendered way too close
+    Having them rendered at a more realisitic depth would be nice but challenging.
 
 ### HUD
 - Psi energy shows on wrist before installing first neuromod
@@ -112,4 +112,19 @@
 - Hand animation plays when taking the wrench out
     It causes the right hand to spin. The animation should not play.
 
-### Development
+### Rendering
+- The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision).
+
+---
+
+I want to overhaul the existing player body handling logic. First, we need to investigate the codebase for the following code/logic related to:
+- Having the player's body follow the headset when turning, moving laterally and vertically
+- The various camera control options and how they affect body positioning
+- The known logic controlling the player skeleton
+- What previous work has been done and undone
+The plan will be to investigate, decide what current logic needs to be redone completely, re-do the identified functionalities and then consolidate documentation into less files than before.
+As it stands right now, the existing implementation is okay to start with, but definitely not ready to be considered complete. The ultimate goal is to have the game handle physical movement in the following way:
+- The player character's body moves and rotates with the headset
+- When the player physically moves vertically (standing/sitting/crouching) the player character body should move accordingly (we should leverage the IK solver to do this)
+- When I look down, I should *not* be able to see into the player character model. Some form of pinning will be needed to keep the player body in the correct position relative to the head.
+Any changes must not re-introduce camera jittering, physics bugs (like the movement stoppage bug) or rendering bugs (be able to see into the player character model or see the model from an angle impossible in real life).
