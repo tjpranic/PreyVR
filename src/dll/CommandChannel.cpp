@@ -33,6 +33,7 @@
 #include "NearParticleStereo.h"
 #include "MarkerStereo.h"
 #include "StarfieldStereo.h"
+#include "BodyDepthHook.h"
 #include "ReticleFollow.h"
 #include "SceneQuery.h"
 #include "ShotRay.h"
@@ -507,6 +508,18 @@ constexpr Verb kVerbs[] = {
         // body.torso <deadzoneDeg> <relax per mille per second>; arm.torso sets the same filter.
         out << "body.torso result=" << (args.size() > 2 ? SetBodyTorso(Arg(args, 1, 35), Arg(args, 2, 600)) : TooFewValues(args))
             << TorsoLaneReport();
+    }},
+    {"body.depth", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
+        // Bare `body.depth` only reports. 1 = the body drawn in the world, hidden
+        // by what is in front of it (default), 0 = Prey's near pass, drawn over
+        // everything, for A/B.
+        DWORD result = 0;
+        if (Valued(args)) {
+            const int value = Arg(args, 1, -1);
+            result = value == 0 || value == 1 ? SetBodyDepth(static_cast<unsigned>(value)) : ERROR_INVALID_PARAMETER;
+        }
+        // Near Clip Distance (HeadTrackingHook.h) is what cuts the body once it is in the world.
+        out << "body.depth result=" << result << " " << BodyDepthReport() << " " << ViewNearClipReport();
     }},
     {"pose.report", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
         out << "pose.report result=0" << HandPoseReport();

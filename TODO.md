@@ -1,36 +1,52 @@
 # PreyVR
 
+## SCOPING
+
+### Rendering
+- DLSS
+- Upscaling
+- Foveated rendering
+
+### UX/Immersion
+- Rotate to face direction
+    Add in an option to rotate the camera in the direction the right hand is facing. Alternatively, having the player body and camera follow the left/right hand when holding a certain button?
+- Two-handed wrench
+    Add in a two-handed wrench mode that automatically triggers heavy wrench attacks. One handed mode would always be a light attack. This would replace the speed based light/heavy attack system.
+
 ## TODO
 
 ### Bugs
-- The player body renders over the top of everything
-- The neuromod cutscene that plays when you first use a neuromod only appears in the right eye
+- The neuromod cutscene that plays when you first use a neuromod only appears in the right eye (High Priority)
 - Reticle drifts from the actual aim point sometimes
     Seems to happen after reloading?
-- Interacting with computers and screen is off
+- Interacting with computers and screen is off (High Priority)
     Depth/pointer offset issues
+- Focusing on keypads brings the camera *way* too close (High Priority)
 
-### Rendering
-- DLSS?
-- Upscaling?
-
-### UX/Game Feel
-- Rotate to face direction
-    Add in an option to rotate the camera in the direction the right hand is facing. Alternatively, having the player body and camera follow the left/right hand when holding a certain button?
+### UX/Immersion
+- The wrench tends to hit around the hand area instead of the head of the wrench
+- Flashlight should be aimable
+    With either a hand or the head.
 - Adjustable wrench bounding box
     Add in an adjustable wrench bounding box lengthening system that only registers hits against enemies. Essentially, an additional bounding box would be added to the wrench, but it would be longer and only used to find collisions with enemies. This would preserve existing correct physical interaction between wrench/hands and objects, but allow for smoother feeling combat.
-- Two-handed wrench
-    Add in a two-handed wrench mode that automatically triggers heavy wrench attacks. One handed mode would always be a light attack. This would replace the speed based light/heavy attack system.
 - Immersive reloading
     Right now it just plays the animation. It would be better to allow the player to physically attach and detach weapon ammunition.
-- The wrench tends to hit around the hand area instead of the head of the wrench
-- Focusing on keypads brings the camera *way* too close
 - Better throwing
     Add an option to impart extra force to objects that are physically thrown.
     Maybe an option to point with left hand where you want the grenade to go?
-- Flashlight should be aimable with left hand
 - Wrench hits use too much stamina
     I think swings *back*, away from the target may be getting counted. Maybe add a very short cooldown after a hit connects?
+- Fine dextrous finger controls
+    Definitely want this for the glass button pressing jumpscare.
+- Stopping hand -> object interactions from pushing objects through other objects
+    e.g. Pressing down on a mug on a desk can push the mug through the desk
+- Physical crouching
+    Crouching in real life should enable crouch mode. Standing up should disable crouch mode.
+- Optional body model rendering
+    Have it only render the hands like in Half Life Alyx?
+- The Earth and Moon are very obviously rendered way too close
+    Having them rendered at a more realisitic depth would be nice but challenging.
+    Technically everything is working game wise, it would just be an improvement.
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -50,17 +66,6 @@
 - Documentation cleanup
     Feature work has been tracked across multiple documents. These should be summarized and combined into one document.
 
-### Immersion
-- Fine dextrous finger controls
-    Definitely want this for the glass button pressing jumpscare.
-- Stopping hand -> object interactions from pushing objects through other objects
-    e.g. Pressing down on a mug on a desk can push the mug through the desk
-- The Earth and Moon are very obviously rendered way too close
-    Having them rendered at a more realisitic depth would be nice but challenging.
-- Physical crouching
-    Crouching in real life should enable crouch mode. Standing up should disable crouch mode.
-- An option to not render the body and only render the hands like in Half Life Alyx?
-
 ### HUD
 - Psi energy shows on wrist before installing first neuromod
 - Some UI elements still only display at the periphery of vision
@@ -73,13 +78,14 @@
 - Have bindings section let you change your bindings
 - Group related options in the tabs into sections
 - Audit every option and rework and/or remove and/or consolidate as many as needed
-    The arms length option doesn't affect the whole arm, just the hands
+    Pre-audit findings:
+    - The arms length option doesn't affect the whole arm, just the hands.
 - Development tab
     This tab will be used to run input tuning commands because sending commands through the "Tune Prey VR.cmd" script is way too annoying to use properly.
 
 ## IN PROGRESS
 
-### Bugs
+### Engine Instability
 - Use-after-free camera bug
     Causes an access violation that then crashes the game. Have got instrumentation in place to catch it. See CameraCullWatch.cpp.
 - Very rare render freeze
@@ -94,31 +100,41 @@
 ## DONE
 
 ### Controls
-- The movement stoppage bug
+- The movement stoppage bug (Archived)
     > Prey re-read the stick from the physical gamepad whenever an action filter changed (mostly the interaction prompt as the view swept over usable objects) and zeroed what the mod had posted. Fixed in PreyVR-72, worn OK 2026-10-24. See docs/MOVE-STOP-2026-10-24.md.
-- The X to transfer junk in the recycler doesn't work
-
-### UX/Game Feel
-- Shot from muzzle laser shows skewed
-    The game naturally skews the aim laser when it comes from the muzzle. It should be straightened.
+- The X to transfer junk in the recycler doesn't work (Archived)
 
 ### UI
-- Controller Prompts option doesn't seem to apply sometimes
-- The game doesn't render loading screens
+- Controller Prompts option doesn't seem to apply sometimes (Archived)
+- The game doesn't render loading screens (Archived)
     It just shows a black screen instead.
-
-### Immersion
-- Objective markers don't display at the proper depth
+- Objective markers don't display at the proper depth (Archived)
     They need to be at the depth they appear at in the world. Repair markers (and possibly enemy detection markers) also affected.
-- Stun gun max charge effect at the wrong depth
+- Stun gun max charge effect at the wrong depth (Archived)
     Q-Beam has a similar issue
-- Weapons and hands don't stop against surfaces
+
+### UX/Immersion
+- Shot from muzzle laser shows skewed (Archived)
+    The game naturally skews the aim laser when it comes from the muzzle. It should be straightened.
+- Weapons and hands don't stop against surfaces (Archived)
     > They now stop at fixed scenery and at heavy (Heavy Objects setting, 10 kg) or immovable loose objects, which slide when pressed. See docs/SURFACE-STOP-SCOPE-2026-10-21.md.
-- Hand animation plays when taking the wrench out
+- Hand animation plays when taking the wrench out (Archived)
     It causes the right hand to spin. The animation should not play.
-- Overhaul body follow and roomscale
-- Leaning over desks/railings
+- Body following and roomscale (Archived)
+    Body following and roomscale implementation needs to be redone from the ground up.
+- Leaning over desks/railings (Archived)
     Have the player body bend at the waist to allow leaning over furniture.
 
 ### Rendering
-- The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision).
+- The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision). (Archived)
+- The player body renders over the top of everything
+    > Prey drew the body, arms and weapon in its near pass, which is always in front of the world. It is now drawn in the world (`body.depth`), and Setup's Near Clip Distance (3 cm) stops the view cutting into it when you look down. PreyVR-92, worn OK 2026-10-25. See docs/BODY-FOLLOW.md, "How the body is drawn".
+
+---
+
+Feature set tracking list, in broad terms:
+- Body follow and roomscale (**IMPLEMENTED**)
+    Having the player character model follow the headset and camera like a real body would follow someone's head while still allowing for things like physical leaning and crouching.
+- Physical interaction (**PARTIALLY IMPLEMENTED**)
+    Player interaction with objects in the world. Encompasses touching, pushing and throwing stuff along with hitting things with the wrench.
+- ...

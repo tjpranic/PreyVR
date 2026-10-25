@@ -2615,3 +2615,29 @@ page and its action handler `0x164CE30` at +0x28) and `0x1E673B8` (+0x28: the
 popup opens from +0x40 `0x164BFA0`, and a highlight change closes it via +0x38
 `0x164C0D0`). Gamepad `menu_examine` (`xi_y`) opens the popup `0x164C550`. See
 [controller prompts](CONTROLLER-PROMPTS-2026-10-18.md).
+
+### 2026-10-25 addendum -- the body drawn in the world, and the view's near plane
+
+Static, `tools/re/verify_body_depth.py` (57 checks); worn OK on PreyVR-92. **Correction to
+R-085:** the near-flagged instance is the whole first-person character, arms, body, legs and the
+weapon on it, not the hands alone; every skin of a near character is near.
+
+- `CEntityObject::Render` `0x973400` (one caller, the entity draw loop `0x97CF2F`): RCX slot, R8
+  SRendParams, stack +0x30 pass info. Slot `+0x80` character, `+0xA8` object flags (ORed into
+  params `+0x80`, put back at `0x9748A7`), `+0xAC` word flags, bit 1 `ENTITY_SLOT_RENDER_NEAREST`
+  (read once, `0x9734AF`), which also picks the camera-relative matrix over the slot's world
+  transform (`+0x08`). Slot updates `0x9763F0`, `0x97D050` set `+0xA8` bit 23 from it.
+- Character vtable `0x1D22200`: `+0xC0` Render `0x81BCB0` (RenderCHR `0x81D0D0`, attachments
+  `0x821FD0`, inside the call), `+0xC8` SetFlags `0x82EC20` (`flags` `+0xAC8`, bit 1
+  CS_FLAG_DRAW_NEAR). Skins `0x7AABE0` and skeleton attachments `0x7C74E0` test the master's bit.
+- The near pass's depth slice: `r_DrawNearZRange` `0x2B1C718` (0.1), `r_DrawNearFarPlane`
+  `0x2B1C71C` (40); viewport setter `0xF90390` (`[0, range]`, `[1 - range, 1]` reversed);
+  LinearizeDepth `0xF39AC0` ("NearProjection"), ShadowMaskVolume `0xFAC5D0`, the packer `0xFB57A0`
+  and getter `0xF7AC60` read it.
+- The view's near plane: `CView::Update` `0x3D91C0` takes `SViewParams+0x2C` (`CView+0x40`) when at
+  least 0.01 (`0x1C7F774`), else `GetDefaultZNear` (view-system vtable `+0x78`, `CViewSystem+0x90`
+  = 0.1, constructor `0x3DAB30`), then `CCamera::SetFrustum` `0x2167E0`. `ArkPlayerCamera::UpdateView`
+  never writes `+0x2C`; `pl_cameraNearZ` (game cvars `+0x8D0`, 0.24) has no direct reader.
+- `r_DepthBits` default 24 (`0xE0B651`), `r_ReverseDepth` default 1 (`0xECC72B`).
+
+See [how the body is drawn](BODY-FOLLOW.md#how-the-body-is-drawn).

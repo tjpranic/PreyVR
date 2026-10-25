@@ -2,6 +2,7 @@
 
 #include "ArmsLane.h"
 #include "ActionMaps.h"
+#include "BodyDepthHook.h"
 #include "BodyEquipment.h"
 #include "CarryLane.h"
 #include "ConsoleBridgeWin32.h"
@@ -42,6 +43,8 @@ void PrepareGameplayFrame(GameplayPoseFrame& frame, bool allowed)
 
 void TickGameplayLanes(const GameplayPoseFrame& frame, bool allowed, bool tracking)
 {
+    // Before this frame's render: which slot is the player's, drawn in the world.
+    PublishBodyDepthPlayer(frame.player);
     UpdatePsiMedkit(frame, allowed);
     UpdatePsychoscopeGesture(frame, allowed);
     UpdateBodyEquipment(frame, allowed);

@@ -12,6 +12,7 @@
 #include "preyvr/EngineMap.h"
 #include "preyvr/StereoCamera.h"
 #include "preyvr/MotionController.h"
+#include "preyvr/NearClip.h"
 #include "preyvr/ComfortControls.h"
 #include "preyvr/RoomScale.h"
 #include "XrSessionHost.h"
@@ -234,6 +235,12 @@ std::atomic<unsigned long long> gObserved{0};
 std::atomic<unsigned long long> gApplied{0};
 // UseNativeViewYawOnce: set by a body turn, consumed by the next view.
 std::atomic<bool> gNativeViewYaw{false};
+// Near Clip Distance (VR Options' near_clip), cm (preyvr/NearClip.h).
+std::atomic<unsigned> gNearClipCm{nearclip::kDefaultCm};
+// The near plane last written: a value that is not it is Prey's own and kept,
+// and it is given back when VR no longer drives the view.
+std::atomic<float> gNearWritten{0.0f};
+std::atomic<unsigned long long> gNearFrames{0}, gNearKept{0}, gNearCleared{0};
 
 float ReadFloat(const std::uint8_t* base, std::size_t offset)
 {
@@ -257,6 +264,33 @@ std::optional<float> NativeViewYaw(const std::uint8_t* camera)
     return stereo::CameraYawOf(stereo::MatrixFromPose(Pose{rotation, Vec3{}}));
 }
 
+// After Prey's UpdateView: the view's near plane is Near Clip Distance while VR
+// drives the view, and the view system's default once it does not; a near plane
+// Prey set itself is kept (nearclip::Next). The field persists in the view
+// (CView's m_viewParams), so it stays ours until given back.
+void ApplyNearClip(std::uint8_t* viewParams, bool driving)
+{
+    float current = 0.0f;
+    std::memcpy(&current, viewParams + kViewNearPlane, sizeof(current));
+    const nearclip::Step step = nearclip::Next(current, gNearWritten.load(std::memory_order_relaxed), driving,
+                                               gNearClipCm.load(std::memory_order_relaxed));
+    switch (step.action) {
+    case nearclip::Action::keep:
+        gNearKept.fetch_add(1, std::memory_order_relaxed);
+        return;
+    case nearclip::Action::none:
+        return;
+    case nearclip::Action::clear:
+        gNearCleared.fetch_add(1, std::memory_order_relaxed);
+        break;
+    case nearclip::Action::write:
+        gNearFrames.fetch_add(1, std::memory_order_relaxed);
+        break;
+    }
+    std::memcpy(viewParams + kViewNearPlane, &step.value, sizeof(step.value));
+    gNearWritten.store(step.value, std::memory_order_relaxed);
+}
+
 void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
 {
     // The fallback seam for a queued snap, when ArkPlayer::Update's took none
@@ -274,6 +308,7 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
         return;
     }
     gObserved.fetch_add(1, std::memory_order_relaxed);
+    ApplyNearClip(viewParams, gApplying.load(std::memory_order_acquire));
 
     if (!gApplying.load(std::memory_order_acquire) ||
         !gHaveReference.load(std::memory_order_acquire)) {
@@ -468,6 +503,18 @@ DWORD SetViewPositionScaleMilli(unsigned int scaleMilli)
     lifecycle::Log("preyvr_view_hook result=0 detail=position_scale_milli value=" +
                    std::to_string(scaleMilli));
     return 0;
+}
+
+void SetViewNearClipCm(unsigned cm) { viewhook::gNearClipCm.store(nearclip::ClampCm(cm), std::memory_order_relaxed); }
+
+unsigned ViewNearClipCm() { return viewhook::gNearClipCm.load(std::memory_order_relaxed); }
+
+std::string ViewNearClipReport()
+{
+    std::ostringstream out;
+    out << "nearClip={cm=" << ViewNearClipCm() << " written=" << viewhook::gNearFrames.load()
+        << " kept=" << viewhook::gNearKept.load() << " cleared=" << viewhook::gNearCleared.load() << '}';
+    return out.str();
 }
 
 unsigned long long ViewPositionAppliedCount()

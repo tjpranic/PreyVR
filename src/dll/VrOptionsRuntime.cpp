@@ -223,6 +223,7 @@ constexpr Wiring wiring[]={
  {options::HeavyMass,Set<SetSurfaceHeavyMass>,Get<SurfaceHeavyMass>},
  {options::LeanZone,Set<SetRoomScaleLeanZoneCm>,Get<RoomScaleLeanZoneCm>},
  {options::HipsBack,Set<SetBodyHipsBackCm>,Get<BodyHipsBackCm>},
+ {options::NearClip,Set<SetViewNearClipCm>,Get<ViewNearClipCm>},
 };
 constexpr bool InSettingOrder(){
  for(unsigned i=0;i<std::size(wiring);++i)if(wiring[i].id!=i)return false;

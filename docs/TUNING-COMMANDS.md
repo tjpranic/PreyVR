@@ -29,8 +29,9 @@ does not show.
   cannot set an unintended value. Where a command has no default to fall back
   to, it refuses the line with `87` instead: the `arm.*` settings, `ui.offset`,
   and the numbers of `hud.setvar`, `hud.call` and `hud.probe`.
-  `dbg.draw`, `aim.shot`, `near.fx`, `markers.depth`, `stars.depth`, `near.fov`
-  and `ik.align` also refuse one, because a fallback there would switch something on.
+  `dbg.draw`, `aim.shot`, `near.fx`, `markers.depth`, `stars.depth`, `body.depth`,
+  `near.fov` and `ik.align` also refuse one, because a fallback there would switch
+  something on.
 - A setting given some of its values but not all, such as `body.torso 30`,
   is refused with `87`.
 - A line that is not a command is answered `result=rejected` and changes
@@ -158,6 +159,7 @@ this session. "Menu only" means no command reaches it.
 | Abilities | Body slot feedback (`belt_hints`) | on/off | on | menu only |
 | Setup | Lean zone (`lean_zone`): how far your head may lead the body before it steps after you; the torso bends over it | off (0), 5–50 cm | 25 | menu only (`body.report`'s `leanZoneCm`) |
 | Setup | Hips and legs back (`hips_back`): the drawn hips and feet behind where Prey stands them | 0–20 cm | 8 | menu only (`body.report`'s `hipsBackCm`) |
+| Setup | Near clip distance (`near_clip`): how close to your eyes the world, your body included, is still drawn; Prey's own is 10 cm. Smaller costs depth precision far away | 1–10 cm | 3 | menu only (`body.depth`'s `nearClip`) |
 | Setup | Debug overlay (`debug_overlay`) | on (every layer) / off; the aim lasers are apart | off | `dbg.draw <on\|off\|mask>` |
 | Experimental | Physical carrying (`carry_hand`) | on/off | on | `carry.hand <0\|1>` |
 | Experimental | Stick charges to surfaces (`grenade_deploy`) | on/off | off | `grenade.deploy <0\|1>` |
@@ -427,6 +429,7 @@ worn OK (2026-10-25), as Body Follows You's commands had on 2026-10-24.
 | `markers.depth` | 0/1 | 1 | World markers (objectives, repair, danger, enemy awareness, points of interest) at the depth they mark. Bare: report. |
 | `markers.size` | 50–200 % | 100 | Marker Size for this session; VR Options saves it. |
 | `stars.depth` | 0/1 | 1 | The stars at the sky's depth in both eyes; 0 draws them 1 m from the head as Prey does, for A/B ([starfield depth](STARFIELD-DEPTH-2026-10-25.md)). Bare: report. Report: `hooks` and `gate` (`ok`, `refused` = bytes mismatch, `hook_failed`), `draws` (ArkStars draws, one per eye), `far` (drawn 10 km out), `native` (drawn as Prey's, with `stars.depth 0`), `unread` (the element or its star block could not be read; drawn as Prey's), `distanceM`. `PREYVR_STAR_DEPTH=0` at launch leaves it unhooked. |
+| `body.depth` | 0/1 | 1 | The player's body (arms, body, legs and the weapon on them) drawn in the world, so what is in front of it hides it; 0 draws it in Prey's near pass, over everything, for A/B ([how the body is drawn](BODY-FOLLOW.md#how-the-body-is-drawn)). Only the main view: shadows and other passes are Prey's. Bare: report. Report: `hooks` and `gate` (as `stars.depth`), `character` (1 when the player's character is known), `nearSlots` (near-pass slot draws seen), `world` (the player's drawn in the world), `kept` (the player's in another pass, left near; `keptFlags` the last such pass's rendering flags), `others` (other characters' near draws), `native` (with `body.depth 0`), `characterNear` and `paramsNear` (draws where the character or the render parameters also asked for the near pass), `unread`. `PREYVR_BODY_DEPTH=0` at launch leaves it unhooked. Then `nearClip={...}`, the view's near plane, which is what cuts the body once it is in the world (Setup's Near Clip Distance): `cm`, `written` (views given it), `kept` (views where Prey set its own), `cleared` (times the view's default was given back after VR). |
 | `xr.mirrorfov` | 50–400 % | 100 | Field declared for flat-mirror frames (no eye pair). |
 | `xr.native` / `xr.srgb` / `xr.submit` | 0/1 | 0 → VR 1 | Native projection; sRGB swapchain (before start only); per-eye submission. |
 | `xr.stereo [ipdMm] [halfFov]` | 45–85 (0 off), 20–70 | | Fixed-IPD camera stereo, over the runtime's IPD. |

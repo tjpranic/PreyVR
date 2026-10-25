@@ -13,6 +13,7 @@
 #include "NearParticleStereo.h"
 #include "MarkerStereo.h"
 #include "StarfieldStereo.h"
+#include "BodyDepthHook.h"
 #include "DualSceneStereo.h"
 #include "DualOverlay.h"
 #include "NearFovOverride.h"
@@ -219,6 +220,9 @@ void TickVrMode() {
         // The stars at the sky's depth, not 1 m from the head (StarfieldStereo.h).
         // Not fatal: without the hook Prey draws them as before.
         EnsureStarfieldDepth();
+        // The player's body in the world, hidden by what is in front of it, not
+        // drawn over everything (BodyDepthHook.h). Not fatal either.
+        EnsureBodyDepth();
         // Prey's re-read of the sticks finds the lanes' stick (StickReread.h).
         // Not fatal: the lanes' read-back still restores it within a frame.
         if(InstallStickReread()!=0) Log("stick_reread=unavailable fallback=read_back");
@@ -280,7 +284,7 @@ void TickVrMode() {
             // The same text dual.report and hud.layer answer with.
             Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
                 " } torso={"+TorsoLaneReport()+" } move={"+MoveLaneStatusReport()+StickRereadReport()+
-                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" focus={"+
+                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" "+BodyDepthReport()+" focus={"+
                 FocusHoldReport()+" } hold={"+XrHoldReport()+" } prompts={"+ControllerPromptsReport()+" }");
         }
         const auto owner=AnimIkOwnerGeneration();

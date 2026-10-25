@@ -84,7 +84,9 @@ constexpr Spec specs[]={
  {"heavy_mass",L"HEAVY OBJECTS",L"Loose objects heavier than this stop your hands and weapon as walls do, and slide when you press into them. Lighter ones are pushed as before. Needs Hands Stop at Surfaces.",10,1,100,1,U::kg},
  // The room-scale and body lanes take the same 0-50 and 0-20 (RoomScaleLane.h, AnimIkTakeover.h).
  {"lean_zone",L"LEAN ZONE",L"How far your head can lean out before your body steps after it. Within it your torso bends to follow you; stand still and upright and the body catches up under you. Off: it follows your head at once.",25,0,50,5,U::cm,{},{},L"OFF"},
- {"hips_back",L"HIPS AND LEGS BACK",L"Moves your drawn hips and legs back, under your head rather than under your eyes. Raise it if your body seems to lean back when you look down; lower it if your legs seem to be behind you.",8,0,20,1,U::cm}
+ {"hips_back",L"HIPS AND LEGS BACK",L"Moves your drawn hips and legs back, under your head rather than under your eyes. Raise it if your body seems to lean back when you look down; lower it if your legs seem to be behind you.",8,0,20,1,U::cm},
+ // The view takes the same 1-10, default 3 (preyvr/NearClip.h; near_clip pins it).
+ {"near_clip",L"NEAR CLIP DISTANCE",L"How close to your eyes things are still drawn. Lower it if you can see through your own body when you look down; raise it if distant surfaces flicker. Prey's own is 10 cm.",3,1,10,1,U::cm}
 };
 static_assert(std::size(specs)==Count,"one Spec per Setting, in order");
 // Each default, name and choice belongs to its setting's range, one name per value.
@@ -108,7 +110,7 @@ constexpr int equipment[]={Holsters,ClearHolsterSlots,Wrist,WristSize,WristOnHud
     WristTilt};
 constexpr int feedback[]={Haptics,HapticStrength};
 constexpr int abilities[]={PsiTarget,Medkit,BeltHints};
-constexpr int setup[]={CalibratePosture,RecenterView,LeanZone,HipsBack,DebugOverlay};
+constexpr int setup[]={CalibratePosture,RecenterView,LeanZone,HipsBack,NearClip,DebugOverlay};
 // Features still being proven, together with the settings that tune them.
 constexpr int experimental[]={CarryHand,GrenadeDeploy,LongReach,MuzzleAim,
     InventoryLayer,InventoryStereo,InventoryDepth};

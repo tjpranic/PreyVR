@@ -180,11 +180,11 @@ inline std::uint64_t gFreeSinceNs = 0;     // when the free owner bound (fingers
 
 constexpr std::uint64_t kFreeGenerationBit = 1ull << 62;
 
-constexpr std::size_t kPlayerAnimatedCharacter = 0x1808;
+constexpr std::size_t kPlayerAnimatedCharacter = engine::ArkPlayerLayout::animatedCharacter;
 
-constexpr std::size_t kAnimatedCharacterInstance = 0x710;
+constexpr std::size_t kAnimatedCharacterInstance = engine::AnimatedCharacterLayout::characterInstance;
 
-constexpr std::uintptr_t kArmsCharacterVtableRva = 0x1D22200;
+constexpr std::uintptr_t kArmsCharacterVtableRva = engine::CharacterInstanceLayout::vtableRva;
 
 // Not during a cinematic: ArkPlayerInput (player+0x8E0, vtable 0x1E580E0) +0x94,
 // the gate Funk's body holsters use (BodyEquipment.cpp).

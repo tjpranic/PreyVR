@@ -204,9 +204,14 @@ void LayoutChecks(){
        "the arm is 56 cm by default, shoulder to wrist, 40 to 70");
  Check(MenuEntries(3)[0]==Holsters&&MenuEntries(3)[1]==ClearHolsterSlots&&MenuEntries(3)[2]==Wrist,
        "equipment: holsters, clearing them, then the wrist");
- Check(MenuEntries(6).size()==5&&MenuEntries(6)[0]==CalibratePosture&&MenuEntries(6)[1]==RecenterView&&
-       MenuEntries(6)[2]==LeanZone&&MenuEntries(6)[3]==HipsBack&&MenuEntries(6)[4]==DebugOverlay,
-       "setup: its two buttons, the body's lean zone and hips, and the debug overlay");
+ Check(MenuEntries(6).size()==6&&MenuEntries(6)[0]==CalibratePosture&&MenuEntries(6)[1]==RecenterView&&
+       MenuEntries(6)[2]==LeanZone&&MenuEntries(6)[3]==HipsBack&&MenuEntries(6)[4]==NearClip&&
+       MenuEntries(6)[5]==DebugOverlay,
+       "setup: its two buttons, the body's lean zone and hips, the near clip and the debug overlay");
+ Check(Defaults()[NearClip]==3&&Valid(NearClip,1)&&Valid(NearClip,10)&&!Valid(NearClip,0)&&!Valid(NearClip,11)&&
+       KindOf(NearClip)==Kind::range&&Display(NearClip,3)==L"3 CM"&&Display(NearClip,10)==L"10 CM"&&
+       std::string(Describe(NearClip).key)=="near_clip",
+       "the near clip: 3 cm by default, from the engine's 1 cm floor to Prey's own 10 cm");
  Check(Defaults()[LeanZone]==25&&Valid(LeanZone,0)&&Valid(LeanZone,50)&&!Valid(LeanZone,51)&&!Valid(LeanZone,-5)&&
        KindOf(LeanZone)==Kind::range&&Display(LeanZone,25)==L"25 CM"&&Display(LeanZone,0)==L"OFF"&&
        std::string(Describe(LeanZone).key)=="lean_zone",

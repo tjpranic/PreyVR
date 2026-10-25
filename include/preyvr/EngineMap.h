@@ -20,6 +20,23 @@ struct ArkPlayerLayout {
     static constexpr std::uintptr_t cachedReticleOrigin = 0x17D4;
     static constexpr std::uintptr_t cachedReticleDirection = 0x17E0;
     static constexpr std::uintptr_t reticleScreenPosition = 0x17EC;
+    // The animated character extension: the player's first-person character is
+    // at its AnimatedCharacterLayout::characterInstance.
+    static constexpr std::uintptr_t animatedCharacter = 0x1808;
+};
+
+struct AnimatedCharacterLayout {
+    static constexpr std::uintptr_t characterInstance = 0x710;   // CCharInstance*
+};
+
+// CCharInstance: the first-person character (arms, body, legs; the weapon is
+// one of its attachments). Vtable +0x90 StartAnimationProcessing, +0xC0 Render
+// (0x81BCB0, which calls RenderCHR 0x81D0D0), +0xC8 SetFlags (0x82EC20, the
+// store to `flags`).
+struct CharacterInstanceLayout {
+    static constexpr std::uintptr_t vtableRva = 0x1D22200;
+    static constexpr std::uintptr_t flags = 0xAC8;          // dword, CS_FLAG_*
+    static constexpr std::uint32_t drawNear = 0x2;          // CS_FLAG_DRAW_NEAR
 };
 
 // ArkPlayerInput, at ArkPlayer + ArkPlayerLayout::input (R-089).

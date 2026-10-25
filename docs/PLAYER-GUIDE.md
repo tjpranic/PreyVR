@@ -159,7 +159,10 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   lean before the body steps after you; 25 cm by default, off follows you at
   once), **Hips and Legs Back** (how far behind your eyes the drawn hips and legs
   stand; 8 cm by default, raise it if the body seems to lean back when you look
-  down), and **Debug Overlay (Testing)**,
+  down), **Near Clip Distance** (how close to your eyes things are still drawn;
+  3 cm by default, lower it if you can see through your own body when you look
+  down, raise it if distant surfaces flicker; Prey's own is 10 cm), and
+  **Debug Overlay (Testing)**,
   which draws each hand's ray and target, the body slots, the wrist test and the
   foregrip region in the world. Off by default, and separate from the aim
   lasers: switching it off leaves them as they are. See

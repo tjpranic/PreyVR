@@ -23,6 +23,7 @@ void SetSurfaceStop(unsigned v){applied[options::SurfaceStop]=v;}unsigned Surfac
 void SetSurfaceHeavyMass(unsigned v){applied[options::HeavyMass]=v;}unsigned SurfaceHeavyMass(){return applied[options::HeavyMass];}
 void SetRoomScaleLeanZoneCm(unsigned v){applied[options::LeanZone]=v;}unsigned RoomScaleLeanZoneCm(){return applied[options::LeanZone];}
 void SetBodyHipsBackCm(unsigned v){applied[options::HipsBack]=v;}unsigned BodyHipsBackCm(){return applied[options::HipsBack];}
+void SetViewNearClipCm(unsigned v){applied[options::NearClip]=v;}unsigned ViewNearClipCm(){return applied[options::NearClip];}
 void SetSwingSpeed(unsigned v){applied[options::SwingSpeed]=v;}unsigned SwingSpeed(){return applied[options::SwingSpeed];}
 void SetHeavySwingSpeed(unsigned v){applied[options::HeavySwingSpeed]=v;}unsigned HeavySwingSpeed(){return applied[options::HeavySwingSpeed];}
 void QueueHaptic(Hand,haptics::Event,const TrackingFrame&){}
@@ -247,7 +248,7 @@ int main(){
    {options::LongReach,0},{options::InventoryLayer,1},{options::InventoryStereo,1},{options::InventoryDepth,50},
    {options::UiCurve,50},{options::DebugOverlay,1},{options::FingerCurl,0},{options::AimLasers,0},
    {options::ControllerPrompts,0},{options::ArmLength,51},{options::SurfaceStop,0},{options::HeavyMass,40},
-   {options::LeanZone,40},{options::HipsBack,12}};
+   {options::LeanZone,40},{options::HipsBack,12},{options::NearClip,6}};
   VrOptionsUiResult result;
   for(const auto& [id,v]:chosen){options::Change change;change.setting=static_cast<int>(id);change.value=v;
    result.changes.push_back(change);}

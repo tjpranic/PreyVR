@@ -1,8 +1,8 @@
 # The player's body
 
 The one document for the player's body in VR: how it turns with you, follows you across the room
-and is posed under your head, where the shoulders the arms hang from come from, the engine facts
-all of it rests on, what was tried and removed, and the history. Merged on 2026-10-25, in two steps:
+and is posed under your head, how it is drawn, where the shoulders the arms hang from come from,
+the engine facts all of it rests on, what was tried and removed, and the history. Merged on 2026-10-25, in two steps:
 - from `BODY-YAW-2026-10-11.md` (turning), `ROOMSCALE-2026-10-11.md` (moving) and
   `TURN-STOP-FLASH-2026-10-24.md` (the flash);
 - then, at the end of the body overhaul, from `TURN-LEAN-ARMS-2026-10-19.md` (leaning push-back,
@@ -58,6 +58,10 @@ hips stand in VR Options (Setup → **Lean Zone**, **Hips and Legs Back**).
   yours, the spine bent to it, the pelvis and the knees down as you crouch, the hips and legs 8 cm
   further back than Prey stands them, under your head rather than your eyes. The arms hang from
   its collarbones ([the shoulders](#the-shoulders)).
+- **The drawn body is in the world** ([how the body is drawn](#how-the-body-is-drawn)): what is in
+  front of it hides it, a hand reached behind a crate included, where Prey drew it over everything.
+  The view's near plane is 3 cm (Setup → **Near Clip Distance**), so looking down does not cut
+  into the neck. Worn OK on PreyVR-92.
 - **Code:**
   - Turning: `src/dll/TorsoLane.{h,cpp}` (the lane and the shared torso), `include/preyvr/BodyTurn.h`
     and `src/common/BodyTurn.cpp` (the arithmetic and `NativeTurnWatch`); in `HeadTrackingHook`,
@@ -71,15 +75,21 @@ hips stand in VR Options (Setup → **Lean Zone**, **Hips and Legs Back**).
     `src/dll/AnimIkBody.cpp` (`BuildBodyRig`, `PlanBody`, `ApplyBody`).
   - The shoulders: `armpose::ShoulderFromHead` and `armpose::LevelEye` (`include/preyvr/ArmPose.h`)
     and `bodyrig::ShoulderFromAtlas`, placed by `PrepareArms` (`src/dll/AnimIkArms.cpp`).
+  - How it is drawn: `src/dll/BodyDepthHook.{h,cpp}` with `include/preyvr/BodyDepth.h` and
+    `BodyDepthNative.h` (the slot render); the near plane in `HeadTrackingHook.cpp`'s
+    `ApplyNearClip`, with `include/preyvr/NearClip.h`.
 - **Tests:** `body_turn` (`tests/BodyTurnTests.cpp`, with `TestSnapKeepsTheCameraOnTheBody` and
   `TestSmoothTurnPausesTheBody`), `room_scale`, `body_rig` (against the rig PreyVR-84 measured) and
-  `arm_pose`; `scheme_review` drives `MoveLane.cpp`'s walk start. **Static contracts**, run by
-  `ctest re_verifiers`: `tools/re/verify_view_rotation.py` (27 checks: the setter, the entity's
-  transform) and `tools/re/verify_room_scale_physics.py` (52: the living body's calls).
+  `arm_pose`; `scheme_review` drives `MoveLane.cpp`'s walk start; `body_depth`, `body_depth_hook`
+  and `near_clip` for how it is drawn. **Static contracts**, run by `ctest re_verifiers`:
+  `tools/re/verify_view_rotation.py` (27 checks: the setter, the entity's transform),
+  `tools/re/verify_room_scale_physics.py` (52: the living body's calls) and
+  `tools/re/verify_body_depth.py` (57: the slot render, the near pass's depth slice).
 - **Commands** ([TUNING-COMMANDS.md](TUNING-COMMANDS.md#body)): `body.report` (the torso and the
   turns, the body pin, room-scale) and `body.torso` / `arm.torso` (the torso filter: 35° and
-  600 ‰/s, one copy). Nothing else: the overhaul's switches and research commands went in
-  PreyVR-88 ([history](#history)).
+  600 ‰/s, one copy); the overhaul's switches and research commands went in PreyVR-88
+  ([history](#history)). `body.depth` (Stereo and rendering) reports how the body is drawn and the
+  near plane, and is the A/B for drawing it in the world (1, the default) or Prey's near pass (0).
 
 **Do not:**
 - **Turn the body while Prey turns the player** (a smooth turn). Every such frame shows the view
@@ -575,7 +585,9 @@ do. The view, the capsule and the shadow keep the game's.
   and the camera joint raised 10 cm together did not move it.
 - **Looking down** put the eyes about 15 cm lower (the head pitches about the neck), right at the
   throat joint: the camera was inside the throat.
-- **A desk hides the legs:** the drawn body is occluded by the world.
+- **Nothing in the world hid the body then.** It was drawn in Prey's near pass, in front of
+  everything; this line once read "a desk hides the legs", which was wrong. Since PreyVR-91 the
+  world hides it ([how the body is drawn](#how-the-body-is-drawn)).
 
 **It replaced the torso lift** (`arm.lift`, 2026-10-19 to 10-25). Calibrated seated then standing,
 the shoulders had risen off a torso left at the calibrated height. The lift stretched the spine by
@@ -636,6 +648,46 @@ offsets and arm length, with the head level (`evidence/arm-pose-2026-10-06/truth
 Scaling the player to the character instead was rejected: it changes how big the world feels, and
 the drawn arm is already the mod's, not the rig's (Prey's is 51.6 cm, stretched).
 
+## How the body is drawn
+
+**The body is drawn in the world, at the world's depth: what is in front of it hides it.** Prey
+drew it in front of everything, so a hand reached behind a crate showed through the crate (TODO,
+reported on PreyVR-86). Fixed in PreyVR-91 and 92, worn OK 2026-10-25.
+
+- **Why Prey drew it over everything.** Its first-person character (the rig above: arms, body,
+  legs, and the weapon, one of its attachments) is drawn in CryEngine's near pass. The entity slot
+  chooses it: `ENTITY_SLOT_RENDER_NEAREST`, slot `+0xAC` bit 1, puts `FOB_NEAREST` (bit 23) on the
+  slot's object flags (`+0xA8`) and so on each render object. The near pass draws into its own slice
+  at the front of the depth buffer, viewport depth `[0, r_DrawNearZRange]`, `[0.9, 1]` in reverse
+  depth with the default 0.1, through its own projection: near plane 0.03 m, far
+  `r_DrawNearFarPlane` (40 m). The world's near plane is 0.1 m, so only a surface within about
+  11 cm of the eyes ever reaches that slice. Every mesh of a near character is near (the skin
+  draw tests the master character's flag and ORs the render params'), and nothing lets one out.
+- **What changed (`body.depth`, default 1).** The slot render, `CEntityObject::Render`, is hooked.
+  For the player's slot (its character is the player's first-person one, published by the gameplay
+  lanes) in the main view's pass (the rendering flags `CSystem::Render` builds it with), the near
+  bits are clear for the call: the slot's own and `FOB_NEAREST`, on the slot and in the render
+  params, and the character's `CS_FLAG_DRAW_NEAR` (never seen set). They are put back after it.
+  Without the bit the slot is drawn at its world transform instead of camera-relative, and the
+  character, its meshes and the weapon are all drawn inside that call. Each eye's own view gives
+  the body its parallax.
+- **Every other pass is Prey's.** The shadow passes draw the slot about 4.7 times for each main
+  view (`kept`, `keptFlags=0xae5de`), still in the near pass, so the shadows are as before. Other
+  characters' near draws are Prey's too (`others`).
+- **The near plane (Setup → Near Clip Distance, `near_clip`, 1–10 cm, default 3).** Drawn in the
+  world, the body is cut at the view's near plane, 10 cm, where the near pass cut it at 3 cm:
+  looking down, PreyVR-91's view cut through the neck. `CView::Update` builds the camera with the
+  view's own near plane (`SViewParams` `+0x2C`) when it is at least 1 cm, else with the view
+  system's 10 cm default, and Prey's player view never sets one. So the view hook sets it, after
+  Prey's `UpdateView`, while VR drives the view; it keeps a near plane Prey set itself, and gives
+  the default back when VR stops. Everything built from the camera follows: the eyes' frusta,
+  culling, the near pass's scaling. `pl_cameraNearZ` (0.24 m) has no reader that reaches the view.
+- **What a smaller near plane costs: depth precision far away.** `r_DepthBits` is 24 by default
+  (D24S8, reverse depth), and no config changes it, so depth steps are about 3.3 times coarser at
+  3 cm than at 10: about 2 cm at 100 m against 6 mm. Raise the setting if distant surfaces flicker.
+- **Measured** (PreyVR-92, run `player-20261025-183819`): `world=7024 kept=30303
+  keptFlags=0xae5de others=105 characterNear=0 paramsNear=0 unread=0`.
+
 ## Height, posture and the body slots
 
 - **The body stands at the height you calibrate at.** VR start calibrates, and Setup → **Calibrate
@@ -687,6 +739,12 @@ Collected from the sections above, with how each was established.
 | Movement: AddMovement → `pe_action_move` | `0x4F5D00` → `0x4FC070` → living Action `0xB44E60` | decompile |
 | The stance change (`GetPos`, ceiling ray, `SetPos`) | `0x157B980` | decompile |
 | The rig, the capsule's span, the idle physics after the render | the body pin; the capsule | measured (PreyVR-84, 85) |
+| Slot render `CEntityObject::Render`: slot RCX, params R8, pass info stack `+0x30`; the near bit (`0x9734AF`), object flags into the params (`0x973471`), put back (`0x9748A7`); the character drawn at `0x9747F6`; one caller | `0x973400`; `0x97CF2F` | bytes (`verify_body_depth.py`) |
+| Slot updates set `+0xA8` bit 23 from `+0xAC` bit 1; character `SetFlags` (vtable `0x1D22200` `+0xC8`) | `0x9763F0`, `0x97D050`; `0x82EC20` | bytes |
+| Near in `RenderCHR` (params or `CS_FLAG_DRAW_NEAR`); skins and skeleton attachments | `0x81D13A`–`0x81D155`; `0x7AAE06`, `0x7C768A` | bytes |
+| The near pass's depth slice and projection: `UpdateNearestChange`, the viewport setter, `r_DrawNearZRange` | `0xF43D70`, `0xF90390`; `0x2B1C718` | bytes, decompile |
+| The view's near plane: `SViewParams+0x2C` if at least 0.01 (`0x1C7F774`), else `GetDefaultZNear` (vtable `+0x78`, `CViewSystem+0x90` = 0.1, constructor `0x3DAB30`); `SetFrustum` | `CView::Update` `0x3D977A`–`0x3D97FD`; `0x2167E0` | listing |
+| `r_DepthBits` default 24; `r_ReverseDepth` default 1 | `0xE0B651`; `0xECC72B` | listing |
 
 ## History
 
@@ -716,6 +774,8 @@ Collected from the sections above, with how each was established.
 | 10-25 | PreyVR-88 | Cleanup: the research commands (`body.capsule`, `body.posetest`, the automatic skeleton dump) and the switches (`body.follow`, `body.followafter`, `body.roomscale`, `body.pin`, `body.neck`, `body.pelvis`, `body.throat`, `ik.anchor`, `aim.bodyyaw`) removed, their defaults kept; one `body.report`; this document | The torso did not bend in a lean (in 87 too): the body slid under the headset |
 | 10-25 | PreyVR-89 | The lean zone: the capsule follows past 25 cm, or settles under a head that came to rest upright; upright learnt over the body | Worn OK (leaning); one crash with no dump in the first run, cause unknown |
 | 10-25 | PreyVR-90 | Two Setup options: Lean Zone (off to 50 cm, default 25) and Hips and Legs Back (0–20 cm, default 8: the hips under the head's pivot, not the eyes) | "Tested and verified working as expected." |
+| 10-25 | PreyVR-91 | The body drawn in the world, not Prey's near pass (`body.depth`) | A hand behind an object is hidden; looking down, the view cut into the body (the 10 cm near plane) |
+| 10-25 | PreyVR-92 | Setup → Near Clip Distance (1–10 cm, default 3): the view's near plane | "Tested and verified working." |
 
 ## Open
 
@@ -734,9 +794,11 @@ Collected from the sections above, with how each was established.
   a moment. A lean of 10 cm or less lowers the head too little to tell from a step, so held still,
   it settles. A stance relaxed below the calibrated height reads as a lean until you have stood
   over the body once (after a recenter, at once).
-- **The hands drawn over objects** (reported on PreyVR-86): likely Prey's own nearest pass for
-  the first-person arms (render object `+0x40` bit 23, with its own projection and depth range:
-  RE-H011), which the world's depth cannot hide. Not investigated beyond that.
+- **What is still drawn over everything:** Prey's DrawNear particles (muzzle flashes, the Q-Beam,
+  charge glows: NEAR-PARTICLES), other characters' near draws (`others`), and the aim lasers,
+  which the mod draws with depth off (TODO).
+- **Hands within 3 cm of the eyes are cut**, as in the near pass. Distant flicker from the smaller
+  near plane was not reported on PreyVR-92; if it is, Near Clip Distance trades it back.
 - **After the overhaul:** physical crouching into Prey's crouch stance; the holster and medkit
   slots on the drawn body (today they follow the head); the shadow, which keeps Prey's pose; the
   optional no-body mode in TODO.md.

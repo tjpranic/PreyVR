@@ -96,6 +96,20 @@ DWORD SetViewPositionScaleMilli(unsigned int scaleMilli);
 
 unsigned long long ViewPositionAppliedCount();
 
+// **Near Clip Distance** (VR Options, Setup): how close to the eyes the world is
+// still drawn, cm (1..10, default 3; out of range is taken as the nearer end).
+// While VR drives the view it is the view's near plane (SViewParams +0x2C),
+// which CView::Update builds the camera with in place of the view system's
+// 10 cm default; afterwards the view is given its default back. Prey's near
+// pass drew the body at 3 cm, and once the body is drawn in the world
+// (BodyDepthHook.h) the view's near plane is what cuts it. A smaller one costs
+// depth precision far away.
+void SetViewNearClipCm(unsigned cm);
+unsigned ViewNearClipCm();
+// "nearClip={cm= written= kept= cleared=}": frames written, frames where Prey's
+// own near plane was kept, and times the default was given back.
+std::string ViewNearClipReport();
+
 // Non-finite or implausibly large offsets, refused rather than written. Non-zero
 // means the pose or the reference frame is wrong -- a different problem from a
 // lane that never ran, which is why it is not folded into one counter.

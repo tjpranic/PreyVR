@@ -57,6 +57,7 @@ std::string DualReports() { return DualSceneReport() + DualOverlayReport(); }
 std::string WorldReticleReports() { return ReticleWorldReport() + " scene:" + SceneQueryReport(); }
 std::string VrOptionsReports() { return VrOptionsReport() + PsychoscopeReport() + BodyEquipmentReport(); }
 std::string BodyReports() { return TorsoLaneReport() + BodyPinReport() + RoomScaleReport(); }
+std::string BodyDepthReports() { return BodyDepthReport() + " " + ViewNearClipReport(); }
 std::string InventoryLayerReports()
 {
     return HudLayerReport() + " layerFrames=" + std::to_string(InventoryLayerFrameCount());
@@ -185,6 +186,9 @@ const Case kCases[] = {
     {"stars.depth", "stars.depth result=0 ", StarfieldDepthReport, processed},
     {"stars.depth 2", "stars.depth result=87 ", StarfieldDepthReport, processed},
     {"stars.depth abc", "stars.depth result=87 ", StarfieldDepthReport, processed},   // refused
+    {"body.depth", "body.depth result=0 ", BodyDepthReports, processed},
+    {"body.depth 2", "body.depth result=87 ", BodyDepthReports, processed},
+    {"body.depth abc", "body.depth result=87 ", BodyDepthReports, processed},   // refused
     {"near.fxhide", "near.fxhide result=0 note=no_value_nothing_changed", nullptr, processed},
     {"dbg.report", "dbg.report result=0", DebugOverlayReport, processed},
     {"dbg.marks", "dbg.marks result=0\n", DebugOverlayMarks, processed},
@@ -453,7 +457,7 @@ const Case kCases[] = {
 //   view.observe, ik.mode, move.mode, use.hand, xr.stereo, ui.inventory,
 //   hud.layer, psi.target, medkit.slot, dual.observe, dual.mode, dual.overlay,
 //   dual.vr, cull.watch, cull.probe, cull.prepare; aim.shot, near.fx,
-//   markers.depth, stars.depth, ui.stereo and window.hold given 1; aim.beam and dual.capture
+//   markers.depth, stars.depth, body.depth, ui.stereo and window.hold given 1; aim.beam and dual.capture
 //   even bare; hud.var, hud.setvar, hud.call, hud.fit and hud.probe given
 //   arguments that parse.
 // - post input or arm hardware breakpoints: menu, input.key, mem.watch with an
