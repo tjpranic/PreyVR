@@ -21,6 +21,8 @@ void SetPhysicalContact(unsigned v){applied[options::PhysicalContact]=v;}unsigne
 void SetPushStrength(unsigned v){applied[options::PushStrength]=v;}unsigned PushStrength(){return applied[options::PushStrength];}
 void SetSurfaceStop(unsigned v){applied[options::SurfaceStop]=v;}unsigned SurfaceStopEnabled(){return applied[options::SurfaceStop];}
 void SetSurfaceHeavyMass(unsigned v){applied[options::HeavyMass]=v;}unsigned SurfaceHeavyMass(){return applied[options::HeavyMass];}
+void SetRoomScaleLeanZoneCm(unsigned v){applied[options::LeanZone]=v;}unsigned RoomScaleLeanZoneCm(){return applied[options::LeanZone];}
+void SetBodyHipsBackCm(unsigned v){applied[options::HipsBack]=v;}unsigned BodyHipsBackCm(){return applied[options::HipsBack];}
 void SetSwingSpeed(unsigned v){applied[options::SwingSpeed]=v;}unsigned SwingSpeed(){return applied[options::SwingSpeed];}
 void SetHeavySwingSpeed(unsigned v){applied[options::HeavySwingSpeed]=v;}unsigned HeavySwingSpeed(){return applied[options::HeavySwingSpeed];}
 void QueueHaptic(Hand,haptics::Event,const TrackingFrame&){}
@@ -244,7 +246,8 @@ int main(){
    {options::WristHover,50},{options::WristTilt,30},{options::CarryHand,0},{options::GrenadeDeploy,1},
    {options::LongReach,0},{options::InventoryLayer,1},{options::InventoryStereo,1},{options::InventoryDepth,50},
    {options::UiCurve,50},{options::DebugOverlay,1},{options::FingerCurl,0},{options::AimLasers,0},
-   {options::ControllerPrompts,0},{options::ArmLength,51},{options::SurfaceStop,0},{options::HeavyMass,40}};
+   {options::ControllerPrompts,0},{options::ArmLength,51},{options::SurfaceStop,0},{options::HeavyMass,40},
+   {options::LeanZone,40},{options::HipsBack,12}};
   VrOptionsUiResult result;
   for(const auto& [id,v]:chosen){options::Change change;change.setting=static_cast<int>(id);change.value=v;
    result.changes.push_back(change);}

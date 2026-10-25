@@ -164,16 +164,18 @@ PinResult SolvePin(const PinInput& in, const PinSettings& s)
         atlas = Sub(atlas, Scale(facing, out.throatPush));
     }
 
-    // The pelvis, the spine's length from the neck: back as the neck drops.
+    // The pelvis, the spine's length from the neck: back by hipsBack, the feet
+    // with it, and further back as the neck drops.
     out.drop = std::max(0.0f, neck0.z - neckGoal.z);
-    const Vec3 wanted = Sub(pelvis0, Scale(kForward, s.pelvisBack * out.drop));
+    const Vec3 back = Scale(kForward, std::isfinite(s.hipsBack) ? -s.hipsBack : 0.0f);
+    const Vec3 wanted = Sub(Add(pelvis0, back), Scale(kForward, s.pelvisBack * out.drop));
     const Vec3 leanWanted = Scale(Level(Sub(neckGoal, wanted)), 1.0f / length);
     const Vec3 lean = LimitLean(leanWanted, s);
     Leg legs[2];
     for (int side = 0; side < 2; ++side) {
         const int hip = side == 0 ? kUpperLegR : kUpperLegL;
         legs[side].hip = Sub(n[hip].t, pelvis0);
-        legs[side].ankle = n[hip + 2].t;
+        legs[side].ankle = Add(n[hip + 2].t, back);
         legs[side].reach = s.legReach * (Length(Sub(n[hip + 1].t, n[hip].t)) + Length(Sub(n[hip + 2].t, n[hip + 1].t)));
     }
     // How far the legs are outside their fold and reach, and whether one folds too far.
@@ -287,14 +289,15 @@ PinResult SolvePin(const PinInput& in, const PinSettings& s)
         out.pose[kNeck] = {Normalize(Multiply(Multiply(crane, bend), n[kNeck].q)), at[kNeck]};
     }
 
-    // The legs, from the hip the pelvis carries to the planted foot, sunk if need be.
+    // The legs, from the hip the pelvis carries to the planted foot, moved back
+    // with the pelvis and sunk if need be.
     for (int side = 0; side < 2; ++side) {
         const int hipIndex = side == 0 ? kUpperLegR : kUpperLegL;
         const Joint& hip0 = n[hipIndex];
         const Joint& knee0 = n[hipIndex + 1];
         const Joint& foot0 = n[hipIndex + 2];
         const Vec3 hip = Add(pelvis, Rotate(delta[kPelvis], Sub(hip0.t, pelvis0)));
-        Vec3 ankle = Sub(foot0.t, Scale(kUp, out.sink));
+        Vec3 ankle = Sub(Add(foot0.t, back), Scale(kUp, out.sink));
         const float thigh = Length(Sub(knee0.t, hip0.t)), shin = Length(Sub(foot0.t, knee0.t));
         // Out of reach even straight: the foot comes up off the floor to it.
         const float reach = thigh + shin;

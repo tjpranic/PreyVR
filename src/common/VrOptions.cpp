@@ -81,7 +81,10 @@ constexpr Spec specs[]={
  // The arm lane takes the same 40-70 (AnimIkTakeover's arm.length).
  {"arm_length",L"ARM LENGTH",L"Your arm from shoulder to wrist. Lower it if your arms look bent when yours are straight; raise it if your hands stop short of the controllers.",56,40,70,1,U::cm},
  {"surface_stop",L"HANDS STOP AT SURFACES",L"Your drawn hands and weapon stop against walls, floors, desks and glass, though your real hands go on. Loose objects are still pushed.",1,0,1,1},
- {"heavy_mass",L"HEAVY OBJECTS",L"Loose objects heavier than this stop your hands and weapon as walls do, and slide when you press into them. Lighter ones are pushed as before. Needs Hands Stop at Surfaces.",10,1,100,1,U::kg}
+ {"heavy_mass",L"HEAVY OBJECTS",L"Loose objects heavier than this stop your hands and weapon as walls do, and slide when you press into them. Lighter ones are pushed as before. Needs Hands Stop at Surfaces.",10,1,100,1,U::kg},
+ // The room-scale and body lanes take the same 0-50 and 0-20 (RoomScaleLane.h, AnimIkTakeover.h).
+ {"lean_zone",L"LEAN ZONE",L"How far your head can lean out before your body steps after it. Within it your torso bends to follow you; stand still and upright and the body catches up under you. Off: it follows your head at once.",25,0,50,5,U::cm,{},{},L"OFF"},
+ {"hips_back",L"HIPS AND LEGS BACK",L"Moves your drawn hips and legs back, under your head rather than under your eyes. Raise it if your body seems to lean back when you look down; lower it if your legs seem to be behind you.",8,0,20,1,U::cm}
 };
 static_assert(std::size(specs)==Count,"one Spec per Setting, in order");
 // Each default, name and choice belongs to its setting's range, one name per value.
@@ -105,7 +108,7 @@ constexpr int equipment[]={Holsters,ClearHolsterSlots,Wrist,WristSize,WristOnHud
     WristTilt};
 constexpr int feedback[]={Haptics,HapticStrength};
 constexpr int abilities[]={PsiTarget,Medkit,BeltHints};
-constexpr int setup[]={CalibratePosture,RecenterView,DebugOverlay};
+constexpr int setup[]={CalibratePosture,RecenterView,LeanZone,HipsBack,DebugOverlay};
 // Features still being proven, together with the settings that tune them.
 constexpr int experimental[]={CarryHand,GrenadeDeploy,LongReach,MuzzleAim,
     InventoryLayer,InventoryStereo,InventoryDepth};

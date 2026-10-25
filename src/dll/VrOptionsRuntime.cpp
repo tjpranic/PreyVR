@@ -25,6 +25,7 @@
 #include "GrenadeLane.h"
 #include "HudLayer.h"
 #include "InteractionLane.h"
+#include "RoomScaleLane.h"
 #include "WristLane.h"
 #include "preyvr/DebugOverlayScene.h"
 #include "preyvr/MonotonicClock.h"
@@ -220,6 +221,8 @@ constexpr Wiring wiring[]={
  {options::ArmLength,Set<SetArmLengthCm>,Get<ArmLengthCm>},
  {options::SurfaceStop,Set<SetSurfaceStop>,Get<SurfaceStopEnabled>},
  {options::HeavyMass,Set<SetSurfaceHeavyMass>,Get<SurfaceHeavyMass>},
+ {options::LeanZone,Set<SetRoomScaleLeanZoneCm>,Get<RoomScaleLeanZoneCm>},
+ {options::HipsBack,Set<SetBodyHipsBackCm>,Get<BodyHipsBackCm>},
 };
 constexpr bool InSettingOrder(){
  for(unsigned i=0;i<std::size(wiring);++i)if(wiring[i].id!=i)return false;

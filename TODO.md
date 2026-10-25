@@ -73,6 +73,7 @@
 - Have bindings section let you change your bindings
 - Group related options in the tabs into sections
 - Audit every option and rework and/or remove and/or consolidate as many as needed
+    The arms length option doesn't affect the whole arm, just the hands
 - Development tab
     This tab will be used to run input tuning commands because sending commands through the "Tune Prey VR.cmd" script is way too annoying to use properly.
 
@@ -87,6 +88,8 @@
     A weird bug that causes certain parts of the world to flash strangely. Might be a culling issue. A fix + instrumentation is in place.
 - Texture view use-after-free bug
     Instrumentation in place. See ResourceSetWatch.cpp.
+- Phantom crash
+    Didn't leave an error dump since it crashed before the process could write one.
 
 ## DONE
 
@@ -110,7 +113,7 @@
 - Stun gun max charge effect at the wrong depth
     Q-Beam has a similar issue
 - Weapons and hands don't stop against surfaces
-    They now stop at fixed scenery and at heavy (Heavy Objects setting, 10 kg) or immovable loose objects, which slide when pressed. See docs/SURFACE-STOP-SCOPE-2026-10-21.md.
+    > They now stop at fixed scenery and at heavy (Heavy Objects setting, 10 kg) or immovable loose objects, which slide when pressed. See docs/SURFACE-STOP-SCOPE-2026-10-21.md.
 - Hand animation plays when taking the wrench out
     It causes the right hand to spin. The animation should not play.
 - Overhaul body follow and roomscale

@@ -219,6 +219,34 @@ void TestLeaningIsNotAStep()
     Require(std::fabs(w.Away({0.0f, 1.6f, -0.32f}) - w.settings.leanZone) < 0.005f, "past the zone: followed to it");
 }
 
+// Lean Zone (VR Options): a wider zone holds a further lean; with none, the
+// capsule follows the head past the deadzone, as before there was one, and
+// only bending down bends the body.
+void TestLeanZoneSetting()
+{
+    Settings s;
+    s.leanZone = 0.40f;
+    Require(LeanAllowance(0.0f, s) == 0.40f, "a wider zone allows more");
+    s.leanZone = 0.0f;
+    Require(LeanAllowance(0.0f, s) == s.deadzone && LeanAllowance(0.10f, s) > s.deadzone + 0.24f,
+            "none: the deadzone, and bending down still allows the bend");
+    // A 30 cm lean over half a second, held a moment.
+    const float dt = 1.0f / 90.0f;
+    World wide, none;
+    wide.settings.leanZone = 0.40f;
+    none.settings.leanZone = 0.0f;
+    const auto head = [](float t) { return Vec3{0.0f, 1.6f - HingeDrop(0.30f * t, 0.75f), -0.30f * t}; };
+    for (int i = 0; i <= 60; ++i) {
+        const float t = std::fmin(i / 45.0f, 1.0f);
+        const float drop = HingeDrop(0.30f * t, 0.75f);
+        Require(Length(wide.Step(head(t), dt, drop)) == 0.0f, "a 30 cm lean in a 40 cm zone: held");
+        none.Step(head(t), dt, drop);
+    }
+    // Followed 2 cm behind until the drop explained the rest of the lean.
+    Require(none.Away(head(1.0f)) < 0.10f && Length(Sub(none.capsule, World{}.capsule)) > 0.2f,
+            "with none, the capsule followed the lean");
+}
+
 // **Settling.** A step within the zone moves nothing while it is made; standing
 // there upright, the capsule glides under the head, never faster than
 // settleSpeed, and the view never moves for it.
@@ -340,6 +368,7 @@ int main()
     TestNativeMovesAreNotAbsorbed();
     TestBendingDownIsNotAStep();
     TestLeaningIsNotAStep();
+    TestLeanZoneSetting();
     TestStepsSettleUnderYou();
     TestUprightIsLearnt();
     TestMovingOnStopsTheSettle();

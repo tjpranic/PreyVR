@@ -204,8 +204,17 @@ void LayoutChecks(){
        "the arm is 56 cm by default, shoulder to wrist, 40 to 70");
  Check(MenuEntries(3)[0]==Holsters&&MenuEntries(3)[1]==ClearHolsterSlots&&MenuEntries(3)[2]==Wrist,
        "equipment: holsters, clearing them, then the wrist");
- Check(MenuEntries(6).size()==3&&MenuEntries(6)[0]==CalibratePosture&&MenuEntries(6)[1]==RecenterView&&
-       MenuEntries(6)[2]==DebugOverlay,"setup: its two buttons and the debug overlay");
+ Check(MenuEntries(6).size()==5&&MenuEntries(6)[0]==CalibratePosture&&MenuEntries(6)[1]==RecenterView&&
+       MenuEntries(6)[2]==LeanZone&&MenuEntries(6)[3]==HipsBack&&MenuEntries(6)[4]==DebugOverlay,
+       "setup: its two buttons, the body's lean zone and hips, and the debug overlay");
+ Check(Defaults()[LeanZone]==25&&Valid(LeanZone,0)&&Valid(LeanZone,50)&&!Valid(LeanZone,51)&&!Valid(LeanZone,-5)&&
+       KindOf(LeanZone)==Kind::range&&Display(LeanZone,25)==L"25 CM"&&Display(LeanZone,0)==L"OFF"&&
+       std::string(Describe(LeanZone).key)=="lean_zone",
+       "the lean zone: 25 cm by default, off to 50 cm");
+ Check(Defaults()[HipsBack]==8&&Valid(HipsBack,0)&&Valid(HipsBack,20)&&!Valid(HipsBack,21)&&!Valid(HipsBack,-1)&&
+       KindOf(HipsBack)==Kind::range&&Display(HipsBack,8)==L"8 CM"&&Display(HipsBack,0)==L"0 CM"&&
+       std::string(Describe(HipsBack).key)=="hips_back",
+       "hips and legs back: 8 cm by default, Prey's own (0) to 20 cm");
  for(unsigned i=0;i<Count;++i){
   const Spec& s=Describe(i);
   Check(Valid(i,s.initial)&&s.min<s.max&&s.step>0,"each spec's default is valid and it can step");

@@ -143,6 +143,11 @@ std::string ArmReport();
 // For body.report: the rig, and what the pin did on the last frame and at most
 // since the last report (then started afresh).
 std::string BodyPinReport();
+// Hips and Legs Back (VR Options, Setup): the drawn pelvis and feet this many cm
+// (0..20, default 8; more is taken as 20) behind where Prey stands them, so the
+// hips are under the player's head rather than under the eyes.
+void SetBodyHipsBackCm(unsigned cm);
+unsigned BodyHipsBackCm();
 // Settings, the measured error of each hand against the controller (palm
 // position, hand axes) and the grip pose relative to the aim pose.
 std::string HandPoseReport();

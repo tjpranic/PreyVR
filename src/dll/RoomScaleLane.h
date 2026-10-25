@@ -12,8 +12,9 @@
 // build), so the move applies at once rather than queued behind a step.
 //  - **What it follows:** the player's eye as it would be with the head level
 //    and facing the torso (armpose::LevelEye), once it leads the capsule by
-//    more than the 25 cm lean zone, or bent well down more than the lean that
-//    drop explains; within it the body pin bends the torso. A head that comes
+//    more than the lean zone (Lean Zone, 25 cm by default), or bent well down
+//    more than the lean that drop explains; within it the body pin bends the
+//    torso. A head that comes
 //    to rest upright, not lowered as a lean, was a step: the capsule glides
 //    under it (preyvr/RoomScale.h).
 //  - **How it moves:** the living body's own stance test says how much of the
@@ -39,5 +40,10 @@ bool BodyHeadOut();
 bool RoomScaleActive();
 // Frames moved and why not, as body.report reports it.
 std::string RoomScaleReport();
+// Lean Zone (VR Options, Setup): how far the head may lead the capsule before
+// it follows, cm (0..50, default 25; more is taken as 50). 0 is no zone: the
+// capsule follows past the 2 cm deadzone, as before there was one.
+void SetRoomScaleLeanZoneCm(unsigned cm);
+unsigned RoomScaleLeanZoneCm();
 
 } // namespace preyvr::dll

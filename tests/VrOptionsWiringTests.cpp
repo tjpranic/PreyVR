@@ -1,5 +1,5 @@
 // VR Options' wiring against the real lanes (vr_options_runtime has stubs in
-// their place): each of the 66 settings' lanes starts at its Spec default, and
+// their place): each of the 64 settings' lanes starts at its Spec default, and
 // takes the Spec's whole range -- its minimum, maximum and default each read
 // back as applied. A lane writes its default and range again in its own terms
 // (a bool, milli-degrees, metres), so this is what keeps them the menu's.

@@ -155,7 +155,11 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
 - **Abilities:** psychic targeting (Original / Head / Left Controller), the
   optional left-hip medkit slot, and body slot feedback. Original targeting and
   slot off are the defaults.
-- **Setup:** calibrate posture, reset VR view, and **Debug Overlay (Testing)**,
+- **Setup:** calibrate posture, reset VR view, **Lean Zone** (how far you can
+  lean before the body steps after you; 25 cm by default, off follows you at
+  once), **Hips and Legs Back** (how far behind your eyes the drawn hips and legs
+  stand; 8 cm by default, raise it if the body seems to lean back when you look
+  down), and **Debug Overlay (Testing)**,
   which draws each hand's ray and target, the body slots, the wrist test and the
   foregrip region in the world. Off by default, and separate from the aim
   lasers: switching it off leaves them as they are. See

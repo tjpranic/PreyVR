@@ -39,7 +39,8 @@ All engine addresses are RVAs in the Steam `PreyDll.dll` (SHA-256 `7D6E322F...05
 
 **The body is the player's: it turns to face your torso, its capsule follows you across the room,
 and the drawn body is posed under your head.** The overhaul was worn OK on PreyVR-87; PreyVR-88 is
-its cleanup.
+its cleanup, and the lean zone (PreyVR-89) was worn OK. PreyVR-90 puts the lean zone and where the
+hips stand in VR Options (Setup → **Lean Zone**, **Hips and Legs Back**).
 
 | When you turn | What turns the body | When |
 |---|---|---|
@@ -49,12 +50,14 @@ its cleanup.
 
 - **Walking in the room moves the capsule under you** ([room-scale](#room-scale)), after the
   frame's render, with the turn. **Leaning bends the torso instead:** the capsule follows only once
-  your head leads it by more than 25 cm, or once you come to rest upright after a step. Where the
+  your head leads it by more than the lean zone (25 cm by default), or once you come to rest
+  upright after a step. Where the
   capsule cannot follow, at a desk or a wall, the torso bends to your head too; a head through
   geometry fades the view.
 - **The drawn body is posed under your head** ([the body pin](#the-body-pin)): the neck under
-  yours, the spine bent to it, the pelvis and the knees down as you crouch. The arms hang from its
-  collarbones ([the shoulders](#the-shoulders)).
+  yours, the spine bent to it, the pelvis and the knees down as you crouch, the hips and legs 8 cm
+  further back than Prey stands them, under your head rather than your eyes. The arms hang from
+  its collarbones ([the shoulders](#the-shoulders)).
 - **Code:**
   - Turning: `src/dll/TorsoLane.{h,cpp}` (the lane and the shared torso), `include/preyvr/BodyTurn.h`
     and `src/common/BodyTurn.cpp` (the arithmetic and `NativeTurnWatch`); in `HeadTrackingHook`,
@@ -306,7 +309,9 @@ applied, so the view never moves.
   tracking glitch.
 - **The lean zone** (PreyVR-89): your head may lead the capsule by up to 25 cm before it follows,
   and over that the body pin bends the torso to your head, as a lean from the hips does. Past
-  25 cm the capsule follows the rest at once, so walking, it trails your head by at most that.
+  the zone the capsule follows the rest at once, so walking, it trails your head by at most that.
+  Setup → **Lean Zone** (`lean_zone`, PreyVR-90) sets it, off to 50 cm in 5 cm steps; off follows
+  beyond the 2 cm deadzone, as PreyVR-87 and 88 did.
   Bent well down, more than 4 cm below the calibrated height, your head may lead by the lean a hip
   hinge of 60 cm explains for that drop, if that is more, at most 37 cm
   (`roomscale::LeanAllowance`): bending to the floor bends the body. PreyVR-87 and 88 followed
@@ -524,6 +529,13 @@ do. The view, the capsule and the shadow keep the game's.
   drops; Prey's own crouch takes it back 0.48 cm per cm. If that would fold a leg tighter than 30 cm
   hip to ankle, the back leans further forward. Lower than the deepest squat, the feet sink into the
   floor, which hides them.
+- **The hips and legs stand back, under your head** (PreyVR-90). Prey's standing idle has the hips
+  on the model's axis, under its eye, and the neck 10.6 cm behind it. With the neck under yours,
+  the back leaned 10° back from the hips, and looking down your legs seemed ahead of you. The pelvis
+  and both feet now stand back together by **Hips and Legs Back** (Setup, `hips_back`, 0–20 cm,
+  default 8 cm): 8 cm is your eyes from your head's pivot, which a person's hips stand under. The
+  legs keep their shape, the pelvis drops about 1 cm as the back straightens, and the back stands
+  within 3° of upright. At 0, Prey's own stance.
 - **The spine bends instead of stretching.** 60% of a lean is at the hips and the rest is spread up
   `spine1` to `spine4`. The spine turns towards the torso the shoulders face, for example in a long
   weapon's stance, at most 45°; the pelvis does not turn.
@@ -551,7 +563,9 @@ do. The view, the capsule and the shadow keep the game's.
   `vr_headset`, `flashlight` and `psychoscope_light` on it; `neckTwist` (94) carries `throat_jnt`
   (100). `camera_jnt` sits on the model's axis, 1.70 m up standing and 1.00 m crouched: Prey's
   crouch drops the eye 0.700 m. Standing, `spine1` to the neck sit at 1.044, 1.166, 1.309, 1.423 and
-  1.530 m, the neck 10.6 cm behind the model's origin.
+  1.530 m, the neck 10.6 cm behind the model's origin. `hip_jnt` sits on the axis, 0.93 m up, so
+  the spine leans back 10° from the hips to the neck; the idle's feet are staggered, the right
+  11 cm forward and the left 30 cm back.
 - **Prey's crouch** moves the pelvis 0.42 m down and 0.20 m back, and moves `spine2` and everything
   above it straight down by exactly 0.700 m, which is the kink.
 - **What Prey keeps of a write.** Joint writes made after the native pass hold, the pelvis's and
@@ -700,7 +714,8 @@ Collected from the sections above, with how each was established.
 | 10-25 | PreyVR-86 | The body pin replaces the torso lift (`arm.lift`, `arm.anchor` removed) | "Very promising"; the shoulders lagged the chest in smooth turns |
 | 10-25 | PreyVR-87 | The shoulders on the chest as Prey turned it; room-scale back, after the render, with the fit test and the head-in-wall line | "Tested and verified working. Everything checks out." |
 | 10-25 | PreyVR-88 | Cleanup: the research commands (`body.capsule`, `body.posetest`, the automatic skeleton dump) and the switches (`body.follow`, `body.followafter`, `body.roomscale`, `body.pin`, `body.neck`, `body.pelvis`, `body.throat`, `ik.anchor`, `aim.bodyyaw`) removed, their defaults kept; one `body.report`; this document | The torso did not bend in a lean (in 87 too): the body slid under the headset |
-| 10-25 | PreyVR-89 | The lean zone: the capsule follows past 25 cm, or settles under a head that came to rest upright; upright learnt over the body | Awaiting the headset |
+| 10-25 | PreyVR-89 | The lean zone: the capsule follows past 25 cm, or settles under a head that came to rest upright; upright learnt over the body | Worn OK (leaning); one crash with no dump in the first run, cause unknown |
+| 10-25 | PreyVR-90 | Two Setup options: Lean Zone (off to 50 cm, default 25) and Hips and Legs Back (0–20 cm, default 8: the hips under the head's pivot, not the eyes) | "Tested and verified working as expected." |
 
 ## Open
 
@@ -713,7 +728,7 @@ Collected from the sections above, with how each was established.
   looking down at it.
 - **A torso from the controllers** (the hands' average yaw) rather than the head alone, for
   looking sideways while holding a weapon forward. Not tried.
-- **What the lean zone costs** (PreyVR-89): walking, the capsule trails your head by up to 25 cm,
+- **What the lean zone costs** (PreyVR-89): walking, the capsule trails your head by up to the zone,
   so collision lags it and the drawn body leans into the walk until it settles; rounding a tight
   corner, the head-in-wall line from a trailing capsule could cut the corner and fade the view for
   a moment. A lean of 10 cm or less lowers the head too little to tell from a step, so held still,

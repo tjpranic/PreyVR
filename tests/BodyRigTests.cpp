@@ -278,6 +278,33 @@ void TestLean()
     Require(a.valid && NearVec(a.pose[kNeck].t, away.native[kNeck].t, 0.01f), "a metre away, the body stays as it was");
 }
 
+// Hips and Legs Back. Prey's standing idle has the hips under the eyes and the
+// neck 10.6 cm behind them: the back leans 10 degrees back. Moved back the 8 cm
+// from the eyes to the head's pivot, the pelvis and the feet go together, the
+// legs as they were, and the back stands near upright under the same neck.
+void TestHipsBack()
+{
+    const PinInput in = InputFor(kStand, {}, 0.0f);
+    PinSettings s{};
+    s.hipsBack = 0.08f;
+    const PinResult r = SolvePin(in, s);
+    const PinResult game = SolvePin(in, PinSettings{});
+    Require(r.valid && r.shortfall < 2e-3f, "hips back: the neck stays under the head");
+    const auto level = [](Vec3 v) { return Vec3{v.x, v.y, 0.0f}; };
+    const Vec3 back{0.0f, -0.08f, 0.0f};
+    Require(NearVec(level(r.pose[kPelvis].t), level(Add(in.native[kPelvis].t, back)), 3e-3f) &&
+                Near(r.pose[kPelvis].t.z, in.native[kPelvis].t.z, 0.02f),
+            "the pelvis stands 8 cm back");
+    for (const int hip : {kUpperLegR, kUpperLegL}) {
+        Require(NearVec(r.pose[hip + 2].t, Add(in.native[hip + 2].t, back), 1e-4f), "the feet go back with it");
+        Require(NearVec(level(Sub(r.pose[hip + 2].t, r.pose[hip].t)), level(Sub(in.native[hip + 2].t, in.native[hip].t)), 0.01f),
+                "each foot stays where it was from its hip");
+    }
+    Require(BonesKept(in, r), "no bone stretches");
+    Require(game.leanDeg > 9.0f && r.leanDeg < 4.0f, "the back no longer leans back");
+    Require(r.drop < 1e-3f && r.sink == 0.0f && !r.folded, "and nothing else was needed");
+}
+
 void TestTwist()
 {
     PinInput in = InputFor(kStand, {}, 0.0f);
@@ -353,6 +380,7 @@ int main()
     TestDeepCrouch();
     TestLookingDown();
     TestLean();
+    TestHipsBack();
     TestTwist();
     TestPreyCrouch();
     TestStraighten();

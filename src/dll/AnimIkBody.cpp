@@ -54,6 +54,11 @@ constexpr float kMaxTwistRad = 45.0f * kRadiansPerDegree;
 // The head followed level while room-scale moves the capsule (m): out to what
 // the spine's lean reaches, and given up only well beyond it.
 constexpr float kRoomFollowFull = 1.0f, kRoomFollowNone = 1.5f;
+// Hips and Legs Back (VR Options' hips_back), cm: the pin's hipsBack. 8 cm is
+// the eyes from the head's pivot (armpose::kNeckFromEye), which a person's hips
+// stand under; Prey's standing idle has them under the eyes.
+constexpr unsigned kHipsBackMaxCm = 20;
+std::atomic<unsigned> gHipsBackCm{8};
 
 bodyrig::Joint ToJoint(const QuatT& a)
 {
@@ -260,6 +265,7 @@ void PlanBody(const GameplayPoseFrame& frame, const animik::Location& location, 
     const Vec3 chest = Rotate(in.native[bodyrig::kSpine4].q, Vec3{0.0f, 1.0f, 0.0f});
     in.twist = std::clamp(bodyrig::TurnAbout(chest, torso), -kMaxTwistRad, kMaxTwistRad);
     bodyrig::PinSettings s{};
+    s.hipsBack = 0.01f * static_cast<float>(gHipsBackCm.load(std::memory_order_relaxed));
     // With room-scale following, a head away from the capsule is a lean in its
     // lean zone, or one the capsule could not follow (a desk, a wall): the
     // spine leans as far as it can rather than give up on it as a step away.
@@ -267,6 +273,7 @@ void PlanBody(const GameplayPoseFrame& frame, const animik::Location& location, 
         s.followFull = kRoomFollowFull;
         s.followNone = kRoomFollowNone;
     }
+    s.hipsBack *= unit;
     s.throatBack *= unit;
     s.throatDown *= unit;
     s.legFold *= unit;
@@ -361,6 +368,10 @@ void ApplyBody(std::uint8_t* absolute, unsigned count, const HandRig& rig, const
 
 } // namespace ik
 
+void SetBodyHipsBackCm(unsigned cm) { gHipsBackCm.store(std::min(cm, kHipsBackMaxCm), std::memory_order_relaxed); }
+
+unsigned BodyHipsBackCm() { return gHipsBackCm.load(std::memory_order_relaxed); }
+
 std::string BodyPinReport()
 {
     const auto deci = [](int tenths) {
@@ -368,6 +379,7 @@ std::string BodyPinReport()
     };
     std::ostringstream out;
     out << " pinReady=" << (gBodyReady.load() ? 1 : 0) << " straighten=" << (gBodyStraighten.load() ? 1 : 0)
+        << " hipsBackCm=" << gHipsBackCm.load()
         << " pinJoints=" << gBodyPosed.load() << " pinFrames=" << gBodyFrames.load()
         << " pinRefused=" << gBodyRefused.load() << " folded=" << gBodyFolded.load() << " dropMm=" << gBodyDropMm.load()
         << " leanDeg=" << deci(gBodyLeanDeci.load()) << " twistDeg=" << deci(gBodyTwistDeci.load())

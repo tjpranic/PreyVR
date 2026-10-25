@@ -87,6 +87,9 @@ std::uintptr_t gEntityVtable = 0, gLivingVtable = 0;
 roomscale::Follower gFollower;
 // A recenter or calibration redefines the height upright was learnt against.
 unsigned long long gUprightEpoch = ~0ull;
+// Lean Zone (VR Options' lean_zone), cm: roomscale::Settings' leanZone.
+constexpr unsigned kLeanZoneMaxCm = 50;
+std::atomic<unsigned> gLeanZoneCm{25};
 
 using Counter = std::atomic<unsigned long long>;
 Counter gServices{0}, gNotGameplay{0}, gNoFrame{0}, gNotPlayer{0}, gNoLiving{0}, gMoved{0}, gMovedMm{0};
@@ -388,7 +391,8 @@ void ServiceRoomScale(void* player, float torsoYaw, float dt, bool gameplay)
     const Pose follow{head.orientation, armpose::LevelEye(head, torsoYaw)};
     float drop = 0.0f;
     if (!HeadDropBelowCalibrated(follow.position, drop)) { drop = 0.0f; }
-    const roomscale::Settings settings{};
+    roomscale::Settings settings{};
+    settings.leanZone = 0.01f * static_cast<float>(gLeanZoneCm.load(std::memory_order_relaxed));
     gDropMm.store(Mm(drop), std::memory_order_relaxed);
     gAllowanceMm.store(Mm(roomscale::LeanAllowance(drop, settings)), std::memory_order_relaxed);
     Vec3 applied{};
@@ -533,7 +537,7 @@ std::string RoomScaleReport()
         << " notGameplay=" << gNotGameplay.load() << " noFrame=" << gNoFrame.load()
         << " roomNotPlayer=" << gNotPlayer.load() << " noLiving=" << gNoLiving.load() << " moved=" << gMoved.load()
         << " movedMm=" << gMovedMm.load() << " lastMoveMm=" << gLastMoveMm.load() << " residualMm=" << gResidualMm.load()
-        << " headDropMm=" << gDropMm.load() << " allowanceMm=" << gAllowanceMm.load() << " uprightMm=" << gUprightMm.load()
+        << " leanZoneCm=" << gLeanZoneCm.load() << " headDropMm=" << gDropMm.load() << " allowanceMm=" << gAllowanceMm.load() << " uprightMm=" << gUprightMm.load()
         << " settleMoves=" << gSettleMoves.load() << " blocked=" << gBlocked.load()
         << " fitRefused=" << gRefused.load()
         << " startOverlap=" << gStartOverlap.load() << " busy=" << gBusy.load() << " referenceBusy=" << gReferenceBusy.load()
@@ -543,5 +547,9 @@ std::string RoomScaleReport()
         << " headOutFrames=" << gHeadOutFrames.load() << " fadeFrames=" << XrFadeFrames();
     return out.str();
 }
+
+void SetRoomScaleLeanZoneCm(unsigned cm) { gLeanZoneCm.store(std::min(cm, kLeanZoneMaxCm), std::memory_order_relaxed); }
+
+unsigned RoomScaleLeanZoneCm() { return gLeanZoneCm.load(std::memory_order_relaxed); }
 
 } // namespace preyvr::dll

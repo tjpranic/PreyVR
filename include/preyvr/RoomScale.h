@@ -18,8 +18,8 @@
 // head level and facing the torso (armpose::LevelEye): turning or tipping the
 // head leaves it where it is.
 //
-// **The lean zone.** The head may lead the capsule by up to leanZone (25 cm)
-// before it follows; over that the body pin bends the torso to the head, as a
+// **The lean zone.** The head may lead the capsule by up to leanZone (25 cm,
+// VR Options' Lean Zone) before it follows; over that the body pin bends the torso to the head, as a
 // lean from the hips does. Bent well down -- the head more than dropBand below
 // its calibrated height -- it may lead by as much as a hinge that drops it that
 // far would take it, if that is more (LeanAllowance): bending to the floor bends

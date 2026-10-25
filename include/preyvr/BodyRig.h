@@ -39,10 +39,13 @@ CapsuleSpan SpanOf(float heightCollider, float heightPivot, float radius, float 
 //    down onto the throat joint);
 //  * the spine from the pelvis to the neck, bent along its length, not stretched,
 //    and turned towards the torso the arms face;
+//  * the pelvis and the feet hipsBack behind where the game stands them: its
+//    standing idle has the hips under the eyes, the neck behind them and the
+//    back leaning back; a person's hips are under the head's pivot;
 //  * the pelvis down and back as the neck drops, leaning the spine further
 //    forward where the legs would fold too far;
-//  * each leg from the hip to the foot the game planted, the knee bending the way
-//    the game's does, or forward.
+//  * each leg from the hip to the foot the game planted, moved back with the
+//    pelvis, the knee bending the way the game's does, or forward.
 //
 // All in the rig's model space, the space ik.skel dumps: x right, y forward,
 // z up, in the model's units (the caller divides metres by the character's
@@ -86,6 +89,9 @@ struct PinSettings {
     // The neck's share of the head's pitch below level, and above it.
     float neckFlex = 0.5f;
     float neckExtend = 0.25f;
+    // How far behind where the game stands them the pelvis and the feet stand,
+    // together (the Hips and Legs Back option; none: the game's).
+    float hipsBack = 0.0f;
     // How far the pelvis goes back for each unit the neck drops.
     float pelvisBack = 0.45f;
     // The throat at least `throatBack` behind the eye, along the head's facing,
