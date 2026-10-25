@@ -107,48 +107,6 @@ Body WithArmLength(Body body, float metres)
     return body;
 }
 
-float LevelEyeHeight(const Pose& head)
-{
-    // LevelEye's height does not depend on the torso's yaw.
-    return LevelEye(head, 0.0f).y;
-}
-
-float TorsoLift(float neckRise, float up, float down)
-{
-    if (!std::isfinite(neckRise)) { return 0.0f; }
-    return std::clamp(neckRise, -std::max(0.0f, down), std::max(0.0f, up));
-}
-
-void LiftClasses(const int* parent, int count, const int spine[kSpineJoints], int camera, signed char* classes)
-{
-    for (int j = 0; j < count; ++j) {
-        signed char found = 0;
-        // Up the hierarchy to the first spine joint or the camera joint; the
-        // depth bound refuses a cycle in a bad parent table.
-        for (int at = j, depth = 0; at >= 0 && at < count && depth <= count; at = parent[at], ++depth) {
-            if (at == camera) { break; }
-            int k = 0;
-            while (k < kSpineJoints && spine[k] != at) { ++k; }
-            if (k < kSpineJoints) {
-                found = static_cast<signed char>(k + 1);
-                break;
-            }
-        }
-        classes[j] = found;
-    }
-}
-
-bool LiftShares(float base, const float heights[kSpineJoints], float shares[kSpineJoints])
-{
-    const float span = heights[kSpineJoints - 1] - base;
-    if (!std::isfinite(span) || !(span > 1e-3f)) { return false; }
-    for (int k = 0; k < kSpineJoints; ++k) {
-        shares[k] = std::clamp((heights[k] - base) / span, 0.0f, 1.0f);
-    }
-    shares[kSpineJoints - 1] = 1.0f;
-    return true;
-}
-
 Vec3 PlaceShoulder(const Vec3& clavicleRoot, float clavicleLength, const Vec3& target, float stretch)
 {
     const Vec3 d = Sub(target, clavicleRoot);

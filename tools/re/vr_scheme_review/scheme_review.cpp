@@ -55,6 +55,7 @@ unsigned long long HeadTrackingReferenceGeneration() { return 0; }
 float HeadTrackingReferenceYaw() { return 0; }
 DWORD QueueSnapTurn(int, unsigned) { return 0; }
 void ApplyQueuedSnapTurn(bool) {}
+bool BodyHeadOut() { return false; }
 bool ArmsHolstered() { return false; }
 bool HolsterOwnsGrip() { return false; }
 void UpdateHolsterInput(const TrackingFrame&, bool) {}
@@ -221,9 +222,11 @@ int main() {
     Reset(); Held();
     Check(MoveLaneHeldMilli(0) == 800 && MoveLaneHeldMilli(1) == 600 && MoveLaneHeldMilli(2) == turnMilli,
           "the held values are what each lane delivered");
+    Check(MoveLaneStickStarted(MonotonicNanoseconds(), 150000000ull), "a stick just pushed is a walk's start");
     focused = false; Tick();
-    Check(MoveLaneHeldMilli(0) == 0 && MoveLaneHeldMilli(1) == 0 && MoveLaneHeldMilli(2) == 0,
-          "released, nothing is held");
+    Check(MoveLaneHeldMilli(0) == 0 && MoveLaneHeldMilli(1) == 0 && MoveLaneHeldMilli(2) == 0 &&
+          !MoveLaneStickStarted(MonotonicNanoseconds(), 150000000ull),
+          "released, nothing is held and no walk is starting");
 
     // Fix 2, the read-back: Prey's re-read (or anything else) zeroes the axes.
     Reset(); Held();

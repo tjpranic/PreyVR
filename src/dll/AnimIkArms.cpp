@@ -1,49 +1,14 @@
 #include "AnimIkTakeover.h"
 #include "AnimIkState.h"
 
-// The VR arm (arm.*): the player's shoulders placed before the native pass, the
-// torso's lift, and the arm rewritten from those shoulders after it.
+// The VR arm (arm.*): the torso the shoulders face, the player's shoulders
+// placed before the native pass, and the arm rewritten from those shoulders
+// after it.
 
 namespace preyvr::dll {
 using namespace ik;
 
 namespace {
-
-// The torso's lift (armpose::TorsoLift): how far the player's neck has risen
-// since calibration -- the head offset the view applies (cameraCentre less the
-// game's eye, vertical), less what tipping the head moved the eye -- along the
-// world's up in model space, shared up the spine by the joints' heights.
-TorsoLiftPlan PlanTorsoLift(const GameplayPoseFrame& frame, const animik::Location& location,
-                            const std::uint8_t* absolute, unsigned count, const PoseSettings& pose)
-{
-    TorsoLiftPlan lift{};
-    if (!pose.torsoLift || !gHandRig.liftReady || !frame.cameraCentreValid) {
-        gLiftMm.store(0, std::memory_order_relaxed);
-        return lift;
-    }
-    const Pose& head = frame.tracking.head;
-    const float rise = (frame.cameraCentre.z - frame.reticleOrigin.z) + (armpose::LevelEyeHeight(head) - head.position.y);
-    const float metres = armpose::TorsoLift(rise, pose.liftUp, pose.liftDown);
-    const Vec3 up = Sub(animik::WorldToModel(location, Add(frame.reticleOrigin, Vec3{0, 0, 1})),
-                        animik::WorldToModel(location, frame.reticleOrigin));
-    const float upLength = Length(up);
-    if (!(upLength > 1e-6f) || !std::isfinite(upLength)) { return lift; }
-    const Vec3 unit = Scale(up, 1.0f / upLength);
-    const auto height = [&](int joint, float& out) {
-        QuatT j{};
-        if (!ReadQuatT(const_cast<std::uint8_t*>(absolute), count, joint, j)) { return false; }
-        out = Dot(Vec3{j.t[0], j.t[1], j.t[2]}, unit);
-        return std::isfinite(out);
-    };
-    float base = 0.0f, heights[armpose::kSpineJoints]{};
-    bool read = height(gHandRig.spineBase, base);
-    for (int k = 0; k < armpose::kSpineJoints && read; ++k) { read = height(gHandRig.spine[k], heights[k]); }
-    if (!read || !armpose::LiftShares(base, heights, lift.shares)) { return lift; }
-    lift.model = Scale(up, metres);
-    lift.apply = true;
-    gLiftMm.store(static_cast<int>(std::lround(metres * 1000.0f)), std::memory_order_relaxed);
-    return lift;
-}
 
 // A child of `parent` re-placed under the parent's new pose; its offset along
 // the bone (local X) scaled with the segment.
@@ -63,46 +28,48 @@ void CarryChild(std::uint8_t* absolute, unsigned count, int child, const QuatT& 
 
 namespace ik {
 
-// Before the native pass, under gIkMutex: the torso and each shoulder, and the
-// torso's lift (applied after the pass; the shoulders are placed on it now).
-void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& location, std::uint8_t* absolute,
-                 unsigned count, const PoseSettings& pose, ArmPlan plan[2], TorsoLiftPlan& lift)
+// The torso the shoulders face this frame (radians, tracking space), under
+// gIkMutex: the shared one (TorsoLane), so the shoulders, the body and the body
+// slots agree, else this lane's own filter with that lane's settings; turned
+// right while two hands hold a long weapon.
+float ShoulderYaw(const GameplayPoseFrame& frame)
 {
-    lift = {};
+    const float headYaw = armpose::HeadYaw(frame.tracking.head.orientation);
+    std::lock_guard lock(gArmMutex);
+    const std::uint64_t now = preyvr::timing::MonotonicNanoseconds();
+    const float dt = gTorsoNs != 0 ? static_cast<float>(now - gTorsoNs) * 1e-9f : 0.0f;
+    gTorsoNs = now;
+    float yaw = 0.0f;
+    if (BodyTorsoYaw(yaw)) { gTorsoYaw.Reset(); }
+    else {
+        float deadzone = 0.0f, relax = 0.0f;
+        BodyTorsoSettings(deadzone, relax);
+        yaw = gTorsoYaw.Update(headYaw, dt, deadzone, relax);
+    }
+    // Two hands on a long weapon: the shooter's bladed stance, left shoulder
+    // forward (the torso turns right), so the drawn support arm reaches the
+    // foregrip. Eased by the hold's own blend.
+    const std::uint64_t longOwner = gLongGeneration.load(std::memory_order_relaxed);
+    const float twist = longOwner != 0 && frame.weaponGeneration == longOwner && frame.twoHand.blend > 0.0f
+        ? gLongTwistDeg.load(std::memory_order_relaxed) * 0.01745329f * frame.twoHand.blend : 0.0f;
+    const float shoulderYaw = yaw - twist;
+    gArmStats.torsoYawDeg = shoulderYaw * kDegreesPerRadian;
+    gArmStats.headYawDeg = headYaw * kDegreesPerRadian;
+    return shoulderYaw;
+}
+
+// Before the native pass, under gIkMutex, after the body is planned: each
+// shoulder. On the posed body the collarbone and the shoulder ride its chest,
+// the shoulder where armpose::ShoulderFromHead would put it with the body as
+// the game left it; without the pin, from the player's neck.
+void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& location, std::uint8_t* absolute,
+                 unsigned count, const PoseSettings& pose, float shoulderYaw, const BodyPlan& posed, ArmPlan plan[2])
+{
     if (pose.mode != 1 || pose.armMode == 0 || gHandRig.skeleton != gRigSkeleton.load()) { return; }
     XrMap map{&frame, {}, location};
-    if (!AnchorPoint(frame, IkAnchor(), map.anchor) || !(location.s > 1e-4f)) { return; }
-    lift = PlanTorsoLift(frame, location, absolute, count, pose);
+    if (!AnchorPoint(frame, kIkAnchor, map.anchor) || !(location.s > 1e-4f)) { return; }
     const Pose& head = frame.tracking.head;
-    const float headYaw = armpose::HeadYaw(head.orientation);
-    armpose::TorsoFrame torso;
-    float shoulderYaw = 0.0f;
-    {
-        std::lock_guard lock(gArmMutex);
-        const std::uint64_t now = preyvr::timing::MonotonicNanoseconds();
-        const float dt = gTorsoNs != 0 ? static_cast<float>(now - gTorsoNs) * 1e-9f : 0.0f;
-        gTorsoNs = now;
-        // The shared torso (TorsoLane), so the shoulders and the body slots
-        // agree; this filter only while that lane is not running, with that
-        // lane's settings.
-        float yaw = 0.0f;
-        if (BodyTorsoYaw(yaw)) { gTorsoYaw.Reset(); }
-        else {
-            float deadzone = 0.0f, relax = 0.0f;
-            BodyTorsoSettings(deadzone, relax);
-            yaw = gTorsoYaw.Update(headYaw, dt, deadzone, relax);
-        }
-        // Two hands on a long weapon: the shooter's bladed stance, left
-        // shoulder forward (the torso turns right), so the drawn support arm
-        // reaches the foregrip. Eased by the hold's own blend.
-        const std::uint64_t longOwner = gLongGeneration.load(std::memory_order_relaxed);
-        const float twist = longOwner != 0 && frame.weaponGeneration == longOwner && frame.twoHand.blend > 0.0f
-            ? gLongTwistDeg.load(std::memory_order_relaxed) * 0.01745329f * frame.twoHand.blend : 0.0f;
-        shoulderYaw = yaw - twist;
-        torso = armpose::TorsoFromYaw(shoulderYaw);
-        gArmStats.torsoYawDeg = shoulderYaw * kDegreesPerRadian;
-        gArmStats.headYawDeg = headYaw * kDegreesPerRadian;
-    }
+    const armpose::TorsoFrame torso = armpose::TorsoFromYaw(shoulderYaw);
     const armpose::Body& body = pose.body;
     for (int s = 0; s < 2; ++s) {
         QuatT clavicle{}, upper{};
@@ -110,14 +77,21 @@ void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& locatio
             !ReadQuatT(absolute, count, gHandRig.upperArm[s], upper)) { continue; }
         ArmPlan& p = plan[s];
         p.torso = torso;
-        // Where the lift will put them.
-        p.clavicleXr = map.ToXr(Add(Vec3{clavicle.t[0], clavicle.t[1], clavicle.t[2]},
-                                    lift.Of(gHandRig, gHandRig.clavicle[s])));
-        const Vec3 animated = map.ToXr(Add(Vec3{upper.t[0], upper.t[1], upper.t[2]},
-                                           lift.Of(gHandRig, gHandRig.upperArm[s])));
-        // From the neck, the twist turning the shoulders about it.
-        p.targetXr = pose.neckAnchor ? armpose::ShoulderFromHead(head, shoulderYaw, s == 0 ? 1 : -1, body)
-                                     : armpose::ShoulderTarget(head.position, torso, s == 0 ? 1 : -1, body);
+        const armpose::Side side = s == 0 ? 1 : -1;
+        Vec3 clavicleModel{clavicle.t[0], clavicle.t[1], clavicle.t[2]}, upperModel{upper.t[0], upper.t[1], upper.t[2]};
+        if (posed.apply) {
+            clavicleModel = posed.Chest(clavicleModel);
+            upperModel = posed.Chest(upperModel);
+            // The shoulder laid out from the chest as the game turned it, then
+            // carried with the chest's pose: as the chest turns, so do they.
+            const Vec3 offset = Rotate(handpose::AxisAngle(Vec3{0.0f, 0.0f, 1.0f}, posed.chestTurn),
+                                       Scale(bodyrig::ShoulderFromAtlas(body, side), 1.0f / location.s));
+            p.targetXr = map.ToXr(posed.Chest(Add(posed.atlas, offset)));
+        } else {
+            p.targetXr = armpose::ShoulderFromHead(head, shoulderYaw, side, body);
+        }
+        p.clavicleXr = map.ToXr(clavicleModel);
+        const Vec3 animated = map.ToXr(upperModel);
         p.shoulderXr = armpose::PlaceShoulder(p.clavicleXr, Dist3(animated, p.clavicleXr), p.targetXr,
                                               body.clavicleStretch);
         p.shoulderModel = map.ToModel(p.shoulderXr);
@@ -127,30 +101,12 @@ void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& locatio
     }
 }
 
-// After the native pass, before the arms: the torso and all it carries, up
-// (or down) by each joint's share of the lift. The camera's joint stays.
-void ApplyTorsoLift(std::uint8_t* absolute, unsigned count, const HandRig& rig, const TorsoLiftPlan& lift)
-{
-    if (!lift.apply || rig.skeleton != gRigSkeleton.load()) { return; }
-    const unsigned joints = std::min(count, kMaxJoints);
-    for (unsigned j = 0; j < joints; ++j) {
-        const Vec3 by = lift.Of(rig, static_cast<int>(j));
-        if (by.x == 0.0f && by.y == 0.0f && by.z == 0.0f) { continue; }
-        QuatT a{};
-        if (!ReadQuatT(absolute, count, static_cast<int>(j), a)) { return; }
-        const float t[3] = {a.t[0] + by.x, a.t[1] + by.y, a.t[2] + by.z};
-        if (!WriteFloatsGuarded(absolute + static_cast<std::size_t>(j) * kQuatTStride + 4 * sizeof(float), t, 3)) {
-            return;
-        }
-    }
-}
-
 void SolveArms(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsigned count,
                const animik::Location& location, const HandRig& rig, const ArmPlan plan[2],
                const PoseSettings& pose)
 {
     XrMap map{&frame, {}, location};
-    if (!AnchorPoint(frame, IkAnchor(), map.anchor)) { return; }
+    if (!AnchorPoint(frame, kIkAnchor, map.anchor)) { return; }
     const armpose::Body& body = pose.body;
     ArmStats stats{};
     const std::uint64_t now = preyvr::timing::MonotonicNanoseconds();

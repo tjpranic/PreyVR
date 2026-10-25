@@ -7,6 +7,7 @@
 #include "BodyEquipment.h"
 #include "ActionMaps.h"
 #include "InteractionLane.h"
+#include "RoomScaleLane.h"
 #include "CarryLane.h"
 #include "GrenadeLane.h"
 #include "PsiMedkit.h"
@@ -196,6 +197,7 @@ std::atomic<unsigned long long> gRecenters{0};
 // move Y, yaw. Written by the frame thread, read by StickReread's hook wherever
 // Prey re-reads the sticks.
 std::atomic<int> gHeldMilli[3]{};
+std::atomic<std::uint64_t> gStickPushedNs{0};
 std::atomic<unsigned> gSampleHoldMs{100};
 locomotion::SampleHold gMoveSamples;   // frame thread
 // Once a frame, for both lanes: a menu takes the sticks only after two frames.
@@ -221,8 +223,15 @@ constexpr const char* kAxisNames[3] = {"x", "y", "yaw"};
 
 std::uint64_t SampleHoldNs() { return gSampleHoldMs.load(std::memory_order_relaxed) * 1000000ull; }
 
-// The move stick's two axes delivered as held.
-void HoldMove(unsigned axis, int milli) { gHeldMilli[axis].store(milli, std::memory_order_relaxed); }
+// The move stick's two axes delivered as held: notes the moment it went from
+// released to pushed, for room-scale's walk start.
+void HoldMove(unsigned axis, int milli)
+{
+    const bool wasPushed = gHeldMilli[0].load(std::memory_order_relaxed) != 0 ||
+                           gHeldMilli[1].load(std::memory_order_relaxed) != 0;
+    gHeldMilli[axis].store(milli, std::memory_order_relaxed);
+    if (!wasPushed && milli != 0) { gStickPushedNs.store(MonotonicNanoseconds(), std::memory_order_relaxed); }
+}
 
 float StoredAxis(const StickAxes& axes, unsigned axis)
 {
@@ -614,7 +623,9 @@ void UpdateTurnAndFireLanes()
     if (!turnHold) { ReassertHeld(2, 2); }
 
     static bool awaitTriggerRelease=false;
-    if (menuFrame) { awaitTriggerRelease=true; }
+    // A head through a wall is blacked out (RoomScaleLane.h): no shots from the
+    // far side, and a held trigger waits for release after it comes back.
+    if (menuFrame || BodyHeadOut()) { awaitTriggerRelease=true; }
     if (haveInput && play.fire<=.05f) { awaitTriggerRelease=false; }
     const bool fireOn = gFireEnabled.load(std::memory_order_acquire) &&
                        HudGameplayInputAllowed() && !awaitTriggerRelease;
@@ -702,7 +713,7 @@ void UpdateTurnAndFireLanes()
         // with nothing to use, and the right grip only reloads, clearing the
         // selection first; with use.hand 0 the right grip is the button, as before.
         use::ButtonInput useIn{};
-        useIn.gameplay = actionsOn && !releaseActions && haveInput && !menuFrame;
+        useIn.gameplay = actionsOn && !releaseActions && haveInput && !BodyHeadOut() && !menuFrame;
         useIn.leftHand = UseHandLeft() != 0;
         useIn.leftPress = play.grabPressed;
         useIn.rightPress = play.reloadPressed;
@@ -734,7 +745,7 @@ void UpdateTurnAndFireLanes()
         // Prey's psi button, the left trigger: held to aim, let go to use. A
         // press the left hand is busy with waits for its release.
         static input::ReleaseGate psiGate;
-        const bool psi = psiGate.Update(play.psiPressed, menuFrame || leftBusy);
+        const bool psi = psiGate.Update(play.psiPressed, menuFrame || leftBusy || BodyHeadOut());
         gPsiHeld.store(actionsOn && !releaseActions && haveInput && psi, std::memory_order_release);
         if (useOut.releaseCarry) { RequestCarryRelease(); }
         if (useOut.drawWeapon) { RequestDrawWeapon(); }
@@ -910,6 +921,13 @@ int MoveLaneCinematicGate() { return gCinematic.load(std::memory_order_relaxed);
 unsigned long long MoveLaneRecenterCount() { return gRecenters.load(std::memory_order_relaxed); }
 
 int MoveLaneHeldMilli(unsigned axis) { return axis < 3 ? gHeldMilli[axis].load(std::memory_order_relaxed) : 0; }
+
+bool MoveLaneStickStarted(std::uint64_t now, std::uint64_t windowNs)
+{
+    const std::uint64_t pushed = gStickPushedNs.load(std::memory_order_relaxed);
+    return (gHeldMilli[0].load(std::memory_order_relaxed) != 0 || gHeldMilli[1].load(std::memory_order_relaxed) != 0) &&
+           pushed != 0 && now >= pushed && now - pushed <= windowNs;
+}
 
 DWORD SetStickSampleHoldMs(unsigned ms)
 {

@@ -105,6 +105,10 @@ unsigned long long ViewPositionRefusedCount();
 // number that says positional tracking is doing something: it should move as you
 // lean and sit near zero when you do not.
 DWORD ViewPositionOffsetMillimetres();
+// The same offset as a vector, engine axes, metres: the view less the game's own
+// eye point, as the last applied view wrote it. False before one was applied, or
+// when the last was more than 200 ms ago.
+bool ViewPositionOffset(Vec3& out);
 
 // The recenter yaw, shared with every lane that composes against the play space.
 //
@@ -159,6 +163,19 @@ void SetSnapTurnsAboutBody(bool aboutBody);
 // 3 the native turn was not made.
 int TurnHeadTrackingReferenceWithNative(const std::function<std::optional<float>(float referenceYaw)>& turnNative);
 
+// The positional twin (room-scale, RoomScaleLane.h): moves the native player
+// and the play-space origin together, so the view does not move. `moveNative`
+// runs under the recenter lock, is given the offset of `head` from the native
+// eye in the world (engine axes, metres) at `playSpaceYaw`, and returns the
+// world move it applied -- nothing if it applied none. The origin shifts by
+// exactly that move. No generation bump, for the same reason as the turn.
+// 0 moved, 1 no reference, 2 busy, 3 nothing applied, 4 positional tracking off.
+int MoveHeadTrackingOriginWithNative(const Pose& head, float playSpaceYaw,
+                                     const std::function<std::optional<Vec3>(const Vec3& headOffsetWorld)>& moveNative);
+// How far `head` is below the height calibrated (metres, tracking space); false
+// without a reference.
+bool HeadDropBelowCalibrated(const Vec3& head, float& drop);
+
 // **For this frame's view, Prey's look yaw comes from its camera's own rotation**
 // (m_rotation, the +0x13F0 the slot-52 setter writes) rather than from the view
 // Prey composes. TorsoLane calls it when a body turn moved the entity off where
@@ -166,8 +183,8 @@ int TurnHeadTrackingReferenceWithNative(const std::function<std::optional<float>
 // view and turns the head (the `#camera` attachment) to make up the difference,
 // and that frame's animation was computed before the turn -- so the composed
 // view would carry the old lag on top of the turned body, the one bad frame of
-// docs/BODY-FOLLOW.md. Consumed by the next view; not while
-// Prey's focus camera (player +0x9B0) supplies the view.
+// docs/BODY-FOLLOW.md. Consumed by the next view; not while Prey's focus
+// camera (player +0x9B0) supplies the view.
 void UseNativeViewYawOnce();
 
 // Bumped by recenter, runtime rebase and reset: the events that redefine which

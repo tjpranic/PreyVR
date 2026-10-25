@@ -4,6 +4,7 @@
 #include "VrOptionsRuntime.h"
 #include "Psychoscope.h"
 #include "BodyEquipment.h"
+#include "RoomScaleLane.h"
 #include "TorsoLane.h"
 
 #include "AimTakeover.h"
@@ -228,7 +229,6 @@ void WriteReport(std::ostringstream& out)
         << " hudElement=0x" << std::hex << HudElementPointer() << std::dec
         << " hudCalls=" << HudCallCount() << " hudRefused=" << HudRefusedCount()
         << " captures=" << CompletedFrameCaptureCount()
-        << " aimBodyYaw=" << AimBodyYawEnabled()
         << " camYawMdeg=" << AimCameraYawMilliDegrees()
         << " headYawMdeg=" << AimHeadYawMilliDegrees()
         << " playYawMdeg=" << AimPlaySpaceYawMilliDegrees()
@@ -429,8 +429,10 @@ constexpr Verb kVerbs[] = {
         }
         out << "use.filter result=" << result << UseReport();
     }},
-    {"ik.skel", Audience::research, 0, [](const Args&, std::ostringstream& out) {
-        out << "ik.skel result=" << RequestAnimIkSkeletonDump();
+    {"ik.skel", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
+        // ik.skel [label]: the label heads the dump in the log (letters, digits, - and _).
+        const std::string label = args.size() > 1 ? args[1] : "manual";
+        out << "ik.skel result=" << RequestAnimIkSkeletonDump(label) << " label=" << label;
     }},
     {"ik.widesupport", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
         out << "ik.widesupport result=" << (Valued(args) ? SetAnimIkWideSupport(static_cast<unsigned>(Arg(args, 1, 1))) : 0)
@@ -487,30 +489,19 @@ constexpr Verb kVerbs[] = {
     // The arm solver's settings (SetArmSetting), as TUNING-COMMANDS.md lists them.
     {"arm.torso", Audience::tuning, 0, ArmSetting},
     {"arm.mode", Audience::tuning, 0, ArmSetting},
-    {"arm.anchor", Audience::tuning, 0, ArmSetting},
     {"arm.shoulder", Audience::tuning, 0, ArmSetting},
     {"arm.len", Audience::tuning, 0, ArmSetting},
     {"arm.length", Audience::player, 0, ArmSetting},
-    {"arm.lift", Audience::tuning, 0, ArmSetting},
     {"arm.stretch", Audience::tuning, 0, ArmSetting},
     {"arm.prior", Audience::tuning, 0, ArmSetting},
     {"arm.rom", Audience::tuning, 0, ArmSetting},
     {"arm.hold", Audience::tuning, 0, ArmSetting},
     {"arm.knee", Audience::tuning, 0, ArmSetting},
     {"body.report", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
-        // The shared torso the shoulders and body slots sit on (TorsoLane.h).
-        out << "body.report result=0" << TorsoLaneReport();
-    }},
-    {"body.follow", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
-        // The body turning as you turn round in the room: 1 (default), 0 for an A/B.
-        out << "body.follow result=" << (Valued(args) ? SetBodyFollow(static_cast<unsigned>(Arg(args, 1, 1))) : 0)
-            << " enabled=" << BodyFollowEnabled();
-    }},
-    {"body.followafter", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
-        // When the follow turns the body: 1 (default) after the frame's render, 0 at the frame's start, for an A/B.
-        out << "body.followafter result="
-            << (Valued(args) ? SetBodyFollowAfterRender(static_cast<unsigned>(Arg(args, 1, 1))) : 0)
-            << " enabled=" << BodyFollowAfterRender();
+        // The shared torso the shoulders and body slots sit on and the body's
+        // turns (TorsoLane.h), the body pin (AnimIkTakeover.h) and room-scale
+        // (RoomScaleLane.h).
+        out << "body.report result=0" << TorsoLaneReport() << BodyPinReport() << RoomScaleReport();
     }},
     {"body.torso", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
         // body.torso <deadzoneDeg> <relax per mille per second>; arm.torso sets the same filter.
@@ -1024,12 +1015,6 @@ constexpr Verb kVerbs[] = {
     {"ik.hands", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
         out << "ik.hands result=" << (Valued(args) ? SetAnimIkHands(Arg(args, 1, 1)) : 0) << NoValue(args);
     }},
-    {"ik.anchor", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
-        out << "ik.anchor result=" << (Valued(args) ? SetAnimIkCameraAnchor(Arg(args, 1, 1)) : 0) << NoValue(args)
-            << " camera=" << AnimIkAnchorCameraCount()
-            << " reticle=" << AnimIkAnchorReticleCount()
-            << " missing=" << AnimIkAnchorMissingCount();
-    }},
     {"ik.trace", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
         if (Valued(args)) { out << "ik.trace result=" << SetAnimIkTrace(Arg(args, 1, 1)); }
         else { out << "ik.trace result=0"; }
@@ -1108,12 +1093,6 @@ constexpr Verb kVerbs[] = {
     {"aim.twohand", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
         out << "aim.twohand result=" << (Valued(args)?SetTwoHandedAim(Arg(args, 1,1)):0)
             << TwoHandedAimStatus();
-    }},
-    {"aim.bodyyaw", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
-        // 1 rotates head-relative offsets by the BODY yaw (camera - head), 0 by
-        // the camera yaw. 0 makes the hand and weapon swing with the headset.
-        out << "aim.bodyyaw result=" << (Valued(args) ? SetAimBodyYaw(Arg(args, 1, 1)) : 0)
-            << " value=" << AimBodyYawEnabled();
     }},
     {"aim.origin", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
         // Diagnostic controller-aim origin; this does not establish a muzzle

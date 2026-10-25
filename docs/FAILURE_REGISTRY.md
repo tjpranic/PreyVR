@@ -874,7 +874,7 @@ is the shape to perfect rather than abandon.
 - **Date:** found and fixed 2026-10-11, the day it was written.
 - **Target:** SteamVR/OpenXR on a Steam Frame; Steam `PreyDll.dll` `7D6E322F...`.
 - **Intent:** Black out the view with a quad layer while the head is through a wall (the
-  head-in-wall layer of room-scale, since removed; `BODY-FOLLOW.md`).
+  head-in-wall layer of room-scale: removed 2026-10-24, rebuilt 2026-10-25; `BODY-FOLLOW.md`).
 - **Mechanism:** The fade used a 4x4 black texture through `InventorySwapchain::Prepare`, built the
   same way as the slot card. `Supported()` refuses any source under 640x480. The fade code reset
   the swapchain on refusal without logging it.

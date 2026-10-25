@@ -28,7 +28,8 @@
 //    (docs/BODY-FOLLOW.md).
 // Body Follows You followed every frame regardless and also moved the capsule
 // under the head; both were removed on 2026-10-24, because with either on,
-// smooth turning jittered.
+// smooth turning jittered -- the turn, it was found. The capsule follows again
+// (RoomScaleLane.h), after the frame's render with this lane's turn.
 namespace preyvr::dll {
 
 // Installs the hook; VR mode calls it. 0 on success, 1 no PreyDll, 2 a byte or
@@ -40,17 +41,10 @@ DWORD SetTorsoLaneActive(unsigned active);
 DWORD SetBodyTorso(int deadzoneDegrees, int relaxPerMille);
 // The same settings as the filters use them: radians, and a fraction per second.
 void BodyTorsoSettings(float& deadzoneRadians, float& relax);
-// The body follows physical turns (1, the default); 0 leaves it to the stick
-// and snap turns, for an A/B (body.follow). Not saved.
-DWORD SetBodyFollow(unsigned enabled);
-unsigned BodyFollowEnabled();
 // After the frame's world render, on the main thread (FrameSchedule): makes the
-// follow's turn the entry decided, before the next frame's animation starts.
+// follow's turn the entry decided, then room-scale's move (RoomScaleLane.h),
+// before the next frame's animation starts.
 void ServiceBodyFollow();
-// 1 (default) turns the body after the render; 0 at ArkPlayer::Update's entry,
-// as before, for an A/B (body.followafter). Not saved.
-DWORD SetBodyFollowAfterRender(unsigned enabled);
-unsigned BodyFollowAfterRender();
 // The torso yaw (tracking space, armpose::YawOf convention), when the lane
 // estimated one within the last 100 ms.
 bool BodyTorsoYaw(float& yaw);

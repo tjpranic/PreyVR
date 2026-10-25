@@ -10,11 +10,6 @@ using namespace ik;
 
 namespace {
 
-std::string LiftLimitText(float metres)
-{
-    return std::isfinite(metres) ? std::to_string(static_cast<int>(std::lround(metres * 1000.0f))) : "none";
-}
-
 void CopyName(const char* name, char* out, std::size_t capacity)
 {
     __try {
@@ -85,14 +80,29 @@ void DumpWeaponFrames(const RigIdentity& owner)
 }
 
 void DumpSkeletonPose(std::uint8_t* character, std::uint8_t* relative, const std::uint8_t* before,
-                      std::uint8_t* absolute, unsigned count)
+                      std::uint8_t* absolute, unsigned count, const animik::Location* location,
+                      const std::string& label)
 {
     void* skeletonPtr = nullptr;
     if (!ReadPointer(character + kCharSkeleton, &skeletonPtr) || skeletonPtr == nullptr) { return; }
     auto* const skeleton = static_cast<std::uint8_t*>(skeletonPtr);
     void* table = nullptr;
     ReadPointer(skeleton + kSkelJoints, &table);
-    Log("skel begin joints=" + std::to_string(count));
+    // The header: what the request was for, where the rig was drawn from (its
+    // model space is the poses' below) and the joint the game's eye rides.
+    const auto owner = reinterpret_cast<std::uint64_t>(character);
+    char header[384];
+    if (location != nullptr) {
+        std::snprintf(header, sizeof(header),
+            "skel begin label=%s joints=%u character=0x%llx loc=%.4f,%.4f,%.4f,%.4f|%.4f,%.4f,%.4f s=%.4f cameraJoint=%d",
+            label.c_str(), count, static_cast<unsigned long long>(owner), location->q.x, location->q.y, location->q.z,
+            location->q.w, location->t.x, location->t.y, location->t.z, location->s, AttachmentJoint(owner, "#camera"));
+    } else {
+        std::snprintf(header, sizeof(header), "skel begin label=%s joints=%u character=0x%llx loc=unread cameraJoint=%d",
+                      label.c_str(), count, static_cast<unsigned long long>(owner), AttachmentJoint(owner, "#camera"));
+    }
+    Log(header);
+    Log("skel attachments" + AttachmentListText(owner));
     for (unsigned j = 0; j < count && j < kMaxJoints; ++j) {
         QuatT rel{}, abs{}, pre{};
         ReadFloats(relative + j * kQuatTStride, &rel.q[0], 7);
@@ -141,7 +151,7 @@ void CaptureMarks(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsign
                   const animik::Location& location, const HandRig& rig, const FingerPlan& fingers)
 {
     Vec3 anchor{};
-    if (!AnchorPoint(frame, IkAnchor(), anchor)) { return; }
+    if (!AnchorPoint(frame, kIkAnchor, anchor)) { return; }
     const PoseSettings settings = ReadPoseSettings();
     HandMarks marks{};
     const auto toXr = [&](const Vec3& model) {
@@ -388,14 +398,9 @@ std::string ArmReport()
     out << std::fixed;
     out.precision(1);
     const armpose::Body& b = p.body;
-    out << " armMode=" << p.armMode << " anchor=" << (p.neckAnchor ? "neck" : "eyes")
-        << " shoulderMm=" << b.shoulderForward * 1000 << ',' << b.shoulderOut * 1000
+    out << " armMode=" << p.armMode << " shoulderMm=" << b.shoulderForward * 1000 << ',' << b.shoulderOut * 1000
         << ',' << b.shoulderUp * 1000 << " lenMm=" << b.upper * 1000 << ',' << b.fore * 1000
         << " lengthCm=" << armpose::ArmLength(b) * 100
-        << " lift=" << p.torsoLift << " liftLimitsMm=" << LiftLimitText(p.liftUp) << ',' << LiftLimitText(p.liftDown)
-        << " liftMm=" << gLiftMm.load(std::memory_order_relaxed)
-        << " liftReady=" << gLiftReady.load(std::memory_order_relaxed)
-        << " cameraJoint=" << gLiftCamera.load(std::memory_order_relaxed)
         << " clavStretch=" << b.clavicleStretch << " armStretch=" << b.armStretch << " knee=" << p.armKnee
         << " priorDeg=" << p.wrist.flexionSigmaDeg << ',' << p.wrist.deviationRestDeg << ','
         << p.wrist.deviationSigmaDeg << ',' << p.wrist.swivelSigmaDeg
@@ -626,9 +631,19 @@ DWORD RequestAnimIkHelperDump()
     return 0;
 }
 
-DWORD RequestAnimIkSkeletonDump()
+DWORD RequestAnimIkSkeletonDump(const std::string& label)
 {
+    if (label.empty() || label.size() > 24) { return ERROR_INVALID_PARAMETER; }
+    for (const char c : label) {
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-')) {
+            return ERROR_INVALID_PARAMETER;
+        }
+    }
     if (!gInstalled.load(std::memory_order_acquire)) { return 1; }
+    {
+        std::lock_guard lock(gSkelLabelMutex);
+        gSkelLabel = label;
+    }
     gSkelDump.store(1);
     return 0;
 }

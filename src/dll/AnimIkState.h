@@ -1,15 +1,17 @@
 #pragma once
 
-// AnimIkTakeover's private state, shared by its five files:
+// AnimIkTakeover's private state, shared by its six files:
 //  - AnimIkTakeover.cpp: the ProcessAnimationDrivenIK hook, its install, and the
 //    setters and getters (AnimIkTakeover.h);
 //  - AnimIkRig.cpp: SEH-guarded raw reads and writes, rig identification, and the
 //    hand rig;
 //  - AnimIkHand.cpp: DriveHand, the wrist and grip point, and the fingers;
-//  - AnimIkArms.cpp: the player's shoulders, the torso lift and the arm solve;
+//  - AnimIkArms.cpp: the torso the shoulders face, the player's shoulders and
+//    the arm solve;
+//  - AnimIkBody.cpp: the body pin;
 //  - AnimIkReports.cpp: the trace, marks, dumps and reports.
 // The constants, types and state, moved from AnimIkTakeover.cpp as they were;
-// one instance of each (`inline`). Include it from those five files only.
+// one instance of each (`inline`). Include it from those six files only.
 #include "AnimIkTakeover.h"
 #include "SafeMemory.h"
 #include "HookInstall.h"
@@ -33,6 +35,7 @@
 #include "XrInput.h"
 #include "preyvr/AnimIk.h"
 #include "preyvr/ArmPose.h"
+#include "preyvr/BodyRig.h"
 #include "preyvr/HandPose.h"
 #include "preyvr/TwoHandedAim.h"
 #include "preyvr/WeaponRigAlignment.h"
@@ -47,7 +50,6 @@
 #include <sstream>
 #include <atomic>
 #include <cmath>
-#include <limits>
 #include <cstring>
 #include <span>
 #include <string>
@@ -246,10 +248,8 @@ struct IkTraceRecord {
     std::uint64_t trackingSequence = 0;
     std::uint64_t publishedNs = 0;
     std::uintptr_t owner = 0;
-    // The shared anchor: the camera centre by default (gCameraAnchor below), or
-    // in the A/B's old mode `GameplayPoseFrame::reticleOrigin`, the native cached
-    // RETICLE ray origin -- where a reticle write that moves it moves both
-    // hands. Recorded so that claim is measured rather than argued.
+    // The shared anchor the hands were placed with: the camera centre (kIkAnchor
+    // below). Recorded so the crosstalk fix stays measured rather than argued.
     Vec3 anchor{};
     float yaw = 0.0f;
     Pose head{}, grip{};
@@ -271,15 +271,6 @@ struct IkTraceRecord {
 inline IkTraceRecord gTrace[2]{};
 
 inline std::atomic<bool> gTraceEnabled{false};
-
-// **The crosstalk fix, switchable so it can be A/B'd by a wearer.**
-//
-// 1 (default) anchors both hands at the view camera's centre. 0 restores the
-// old reticle-derived anchor, which is kept ONLY so the two can be compared in
-// a headset -- it is the defect, not a fallback.
-inline std::atomic<bool> gCameraAnchor{true};
-
-inline std::atomic<unsigned long long> gAnchorCamera{0}, gAnchorReticle{0}, gAnchorMissing{0};
 
 inline std::atomic<int> gLastGoalMm[3]{0, 0, 0};
 
@@ -315,9 +306,6 @@ struct QuatT {
 //     arm the native solve may lengthen by pose.stretch -- instead of the
 //     original 65% linear compression, which moved every hand off its
 //     controller even at rest.
-// arm.lift's limits when none is set: the torso follows the neck all the way.
-constexpr float kNoLiftLimit = std::numeric_limits<float>::infinity();
-
 struct PoseSettings {
     unsigned mode = 1;          // 0 original, 1 hand pose
     float curl = 1.0f;          // relaxed flexion scale
@@ -329,13 +317,6 @@ struct PoseSettings {
     float stretch = 1.20f;      // reach limit over the rig's arm length (native solve allows 1.25)
     // The arm (arm.*, docs/ARM-POSE-2026-10-06.md): from the player's shoulder.
     unsigned armMode = 1;       // 0: the native arm, hung from the animated shoulder
-    // 1: the shoulder from the neck (armpose::ShoulderFromHead); 0: from the
-    // eyes, as before 2026-10-19 (arm.anchor, for A/B).
-    bool neckAnchor = true;
-    // The torso follows the neck up and down, the waist stretching (arm.lift;
-    // armpose::TorsoLift). Uncapped by default; arm.lift can set limits.
-    bool torsoLift = true;
-    float liftUp = kNoLiftLimit, liftDown = kNoLiftLimit;
     armpose::Body body{};
     // The torso filter's deadzone and relaxation are TorsoLane's
     // (BodyTorsoSettings): one torso for the arms and the body slots.
@@ -349,6 +330,13 @@ inline std::mutex gPoseSettingsMutex;
 inline PoseSettings gPoseSettings;
 
 inline PoseSettings ReadPoseSettings() { std::lock_guard lock(gPoseSettingsMutex); return gPoseSettings; }
+
+// The most joints the body pin poses itself (the player's rig: 40).
+constexpr int kMaxBodyJoints = 64;
+
+// In `HandRig::arm`: the joint rides the chest with the right (1) or left (2)
+// arm, and is in that hand (kArmHand added).
+constexpr unsigned char kArmHand = 4;
 
 // The hand's joints and frames on the identified rig. Rebuilt when the rig
 // changes; read and written under gIkMutex.
@@ -366,22 +354,69 @@ struct HandRig {
     // Carried rigidly with the upper arm (top, twist, muscle) and the forearm (twist).
     int upperChild[2][3]{{-1, -1, -1}, {-1, -1, -1}};
     int lowerTwist[2]{-1, -1};
-    // The torso's lift (armpose::LiftClasses): spine1-4, spine1's parent, the
-    // joint carrying the game's #camera, and each joint's share class.
-    bool liftReady = false;
-    int spine[armpose::kSpineJoints]{-1, -1, -1, -1};
-    int spineBase = -1, camera = -1;
-    std::array<signed char, kMaxJoints> liftClass{};
+    // The body pin (BuildBodyRig): its joints by bodyrig::Pinned, the joint
+    // the game's #camera rides, the throat, the hands, and the joints it poses
+    // -- the pelvis and all that hangs from it, less the camera joint and what
+    // hangs from it, the arms below the collarbones and the hands' IK targets --
+    // each after its parent. A slot's role is its bodyrig::Pinned (-1: carried
+    // with its parent, the slot `posedParent`). The arms ride the chest (`arm`).
+    bool bodyReady = false;
+    int pinned[bodyrig::kPinnedCount]{}, pinnedSlot[bodyrig::kPinnedCount]{};
+    int camera = -1, throat = -1, bodyHand[2]{-1, -1};
+    int posedCount = 0;
+    std::array<short, kMaxBodyJoints> posed{};
+    std::array<signed char, kMaxBodyJoints> posedRole{}, posedParent{};
+    std::array<unsigned char, kMaxJoints> arm{};
+    // The waist is straightened only on the rig its rest was measured on.
+    bool straighten = false;
 };
 
 inline HandRig gHandRig;
 
-// The torso's lift, for arm.report: the last lift, and the rig's readiness and camera joint.
-inline std::atomic<int> gLiftMm{0};   // the last lift, for arm.report
+// --- the body pin (AnimIkBody.cpp) ------------------------------------------------
+//
+// Planned before the native pass, so the arms are placed on the posed body
+// (PlanBody), and written into the pose after it (ApplyBody).
+struct BodyPlan {
+    bool apply = false;
+    int count = 0;
+    std::array<bodyrig::Joint, kMaxBodyJoints> pose{};   // by the rig's posed slots
+    // The chest (spine4) as the game left it and as posed, and the rig's
+    // atlas as the game left it: the arms' collarbones and shoulders ride the
+    // chest. `chestTurn` is how far the game had turned the chest from the
+    // model's facing (radians, positive left): during a smooth turn Prey turns
+    // the upper body towards the view while the body lags.
+    bodyrig::Joint chestOld{}, chestNew{};
+    Vec3 atlas{};
+    float chestTurn = 0.0f;
+    Vec3 Chest(const Vec3& native) const { return bodyrig::Carry(chestOld, chestNew, bodyrig::Joint{{}, native}).t; }
+};
 
-inline std::atomic<bool> gLiftReady{false};
+// For body.report: frames posed and refused, what the last one did
+// (mm, tenths of a degree), and the most since the last report.
+inline std::atomic<unsigned long long> gBodyFrames{0}, gBodyRefused{0}, gBodyFolded{0};
 
-inline std::atomic<int> gLiftCamera{-1};
+inline std::atomic<int> gBodyDropMm{0}, gBodyLeanDeci{0}, gBodyTwistDeci{0}, gBodyWaistMm{0};
+
+inline std::atomic<int> gBodyPushMm{0}, gBodySinkMm{0}, gBodyShortMm{0};
+
+inline std::atomic<int> gBodyPushMaxMm{0}, gBodySinkMaxMm{0}, gBodyShortMaxMm{0};
+
+// The game's eye under the view against the camera joint in this pose (mm):
+// whether the hands' anchor and the pose are one frame's.
+inline std::atomic<int> gBodyEyeGapMm{0}, gBodyEyeGapMaxMm{0};
+
+inline std::atomic<bool> gBodyReady{false}, gBodyStraighten{false};
+
+// The skeleton whose spine once matched the one the waist's rest was measured
+// on: matched once, it stays matched (a rebuild mid-animation can read the
+// offsets a few millimetres off). And what the last body_rig line said, so a
+// rebuild (every snap turn re-binds the rig) logs only a change. Under gIkMutex.
+inline std::uintptr_t gWaistSkeleton = 0;
+
+inline std::string gBodyRigLast;
+
+inline std::atomic<int> gBodyPosed{0};
 
 // Per callback: what the drive decided for the fingers, consumed around the
 // native pass.
@@ -468,20 +503,6 @@ struct ArmPlan {
     Quaternion rotation{};
 };
 
-// The torso's lift this frame: planned before the native pass (so the arms are
-// placed from the lifted torso), applied to the absolute pose after it.
-struct TorsoLiftPlan {
-    bool apply = false;
-    Vec3 model{};                                  // the whole lift, model units
-    float shares[armpose::kSpineJoints]{};         // spine1-4's part of it
-    Vec3 Of(const HandRig& rig, int joint) const
-    {
-        if (!apply || joint < 0 || static_cast<unsigned>(joint) >= kMaxJoints) { return {}; }
-        const int k = rig.liftClass[static_cast<std::size_t>(joint)];
-        return k > 0 ? Scale(model, shares[k - 1]) : Vec3{};
-    }
-};
-
 // What the last solve did, for arm.report and pose.marks.
 struct ArmStats {
     bool solved[2]{};
@@ -534,17 +555,15 @@ struct XrMap {
     }
 };
 
-// **The hands' anchor, and the whole point of the IK crosstalk fix** (ik.anchor).
-// The reticle origin is the native cached reticle ray origin: our reticle lane
+// **The hands' anchor, and the whole point of the IK crosstalk fix**
+// (RE-IK-CROSSTALK-2026-09-09): the view camera's centre. The reticle origin,
+// the old anchor, is the native cached reticle ray origin: our reticle lane
 // moves the reticle, the engine unprojects it, and the result lands there -- so
-// the right controller's aim reaches BOTH hands through this one term. The camera
+// the right controller's aim reached BOTH hands through this one term. The camera
 // centre does not move with the reticle. Anchor::camera refuses a frame without a
 // camera rather than fall back to the reticle origin, which would bring the
 // defect back on exactly the frames where the camera is unreadable.
-inline Anchor IkAnchor()
-{
-    return gCameraAnchor.load(std::memory_order_acquire) ? Anchor::camera : Anchor::reticle;
-}
+constexpr Anchor kIkAnchor = Anchor::camera;
 
 inline float Dist3(Vec3 a, Vec3 b) { return Length(Sub(a, b)); }
 
@@ -556,6 +575,11 @@ inline float Dist3(Vec3 a, Vec3 b) { return Length(Sub(a, b)); }
 // pose before and after the engine's ADIK pass. It is what the hand-pose work
 // is designed from; the derived parent does not trust any table offset.
 inline std::atomic<int> gSkelDump{0};   // 1 = requested, consumed by the next matched frame
+
+// The request's label, for the dump's header.
+inline std::mutex gSkelLabelMutex;
+
+inline std::string gSkelLabel;
 
 inline std::atomic<bool> gHelperDump{false};
 
@@ -598,7 +622,7 @@ struct PrimaryHand {
     bool written = false;
 };
 
-// Called across the five files.
+// Called across the six files.
 // AnimIkRig.cpp
 unsigned int DynArrayCount(const void* data);
 bool ReadPointer(const void* at, void** out);
@@ -617,6 +641,16 @@ void BuildHandRig(std::uint8_t* skeleton, unsigned jointCount, std::uint8_t* rel
                   std::uintptr_t character);
 bool WriteFloatsGuarded(std::uint8_t* at, const float* values, unsigned count);
 bool WriteQuatT(std::uint8_t* absolute, unsigned count, int index, const Quaternion& q, const Vec3& t);
+// The joint named `name` (-1: none), and every joint's parent (-1: none) from
+// the joint table; false when a parent cannot be read or lies outside the rig.
+int RigJointByName(const std::uint8_t* skeleton, unsigned count, const char* name);
+bool RigParents(const std::uint8_t* skeleton, unsigned count, int* parent);
+// AnimIkBody.cpp
+void BuildBodyRig(HandRig& rig, const std::uint8_t* skeleton, unsigned jointCount, std::uint8_t* relative,
+                  unsigned poseCount, std::uintptr_t character);
+void PlanBody(const GameplayPoseFrame& frame, const animik::Location& location, std::uint8_t* relative,
+              std::uint8_t* absolute, unsigned count, float shoulderYaw, BodyPlan& plan);
+void ApplyBody(std::uint8_t* absolute, unsigned count, const HandRig& rig, const BodyPlan& plan);
 // AnimIkHand.cpp
 void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFrame& frame,
                const EquippedRig& owner, const PoseSettings& pose, PrimaryHand* primaryOut,
@@ -625,16 +659,17 @@ bool ApplyRelaxedFingers(std::uint8_t* relative, unsigned count, float weight, c
                          int side, float carryFist);
 void PropagateFingers(std::uint8_t* relative, std::uint8_t* absolute, unsigned count, const HandRig& rig, int side = 1);
 // AnimIkArms.cpp
+float ShoulderYaw(const GameplayPoseFrame& frame);
 void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& location, std::uint8_t* absolute,
-                 unsigned count, const PoseSettings& pose, ArmPlan plan[2], TorsoLiftPlan& lift);
-void ApplyTorsoLift(std::uint8_t* absolute, unsigned count, const HandRig& rig, const TorsoLiftPlan& lift);
+                 unsigned count, const PoseSettings& pose, float shoulderYaw, const BodyPlan& body, ArmPlan plan[2]);
 void SolveArms(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsigned count,
                const animik::Location& location, const HandRig& rig, const ArmPlan plan[2],
                const PoseSettings& pose);
 // AnimIkReports.cpp
 void DumpWeaponFrames(const RigIdentity& owner);
 void DumpSkeletonPose(std::uint8_t* character, std::uint8_t* relative, const std::uint8_t* before,
-                      std::uint8_t* absolute, unsigned count);
+                      std::uint8_t* absolute, unsigned count, const animik::Location* location,
+                      const std::string& label);
 void CaptureMarks(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsigned count,
                   const animik::Location& location, const HandRig& rig, const FingerPlan& fingers);
 

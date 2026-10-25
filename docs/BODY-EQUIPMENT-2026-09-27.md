@@ -30,7 +30,10 @@ Zones are 14 cm spheres at head-relative offsets `(0.25,-0.65,0.02)` and
 head-turn deadband and follows at at most 90 degrees/second away from zones.
 It freezes while gripping or reaching a zone. Head pitch/roll do not rotate the
 zones. This is a torso estimate requiring seated/standing ergonomic acceptance,
-not a tracked body or a universal anthropometric calibration.
+not a tracked body or a universal anthropometric calibration. (Since 2026-10-24
+the zones follow the shared torso the shoulders and the body turn to, outside
+the zones as before; this estimate is only the fallback while that torso is
+unavailable. See [BODY-FOLLOW.md](BODY-FOLLOW.md#the-four-yaws).)
 
 Grip must first be released, then pressed inside a zone. Held grip cannot acquire
 a slot by drifting into it, or trigger another slot. Grip ownership suppresses

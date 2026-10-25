@@ -3,7 +3,7 @@
 
 // SEH-guarded reads and writes of the character's pose and skeleton, the rig's
 // identification (its IK targets and limbs), and the hand rig: the hand's joints
-// and frames on the identified rig, and the torso lift's joints.
+// and frames on the identified rig (and, from AnimIkBody.cpp, the body pin's).
 
 namespace preyvr::dll {
 using namespace ik;
@@ -46,46 +46,6 @@ int ParentOf(const std::uint8_t* skeleton, int index)
     // Low 16 bits: the parent (0xFFFF = none); high 16 bits: the depth.
     const int parent = field & 0xFFFF;
     return parent == 0xFFFF ? -1 : parent;
-}
-
-// Under gIkMutex. Names identify the joints; the joint table's parent field
-// must agree with the expected chain or the hand is left alone.
-// The torso's lift on this rig: spine1-4 by name, spine1's parent, the joint
-// the character's #camera attachment rides (never moved: the game's eye), and
-// every joint's share class from the joint table's parents. Not ready unless
-// all of them read.
-void BuildTorsoLift(HandRig& rig, const std::uint8_t* skeleton, unsigned jointCount, unsigned poseCount,
-                    std::uintptr_t character)
-{
-    static constexpr const char* kSpineNames[armpose::kSpineJoints] = {"spine1_jnt", "spine2_jnt", "spine3_jnt",
-                                                                        "spine4_jnt"};
-    const unsigned count = std::min({jointCount, poseCount, kMaxJoints});
-    bool ok = count > 0;
-    for (int k = 0; k < armpose::kSpineJoints && ok; ++k) {
-        rig.spine[k] = JointIndexByName(skeleton, jointCount, kSpineNames[k]);
-        ok = rig.spine[k] >= 0 && static_cast<unsigned>(rig.spine[k]) < count;
-    }
-    std::array<int, kMaxJoints> parent{};
-    for (unsigned j = 0; j < count && ok; ++j) {
-        parent[j] = ParentOf(skeleton, static_cast<int>(j));
-        ok = parent[j] >= -1 && parent[j] < static_cast<int>(count);
-    }
-    rig.camera = AttachmentJoint(character, "#camera");
-    if (ok) {
-        rig.spineBase = parent[static_cast<std::size_t>(rig.spine[0])];
-        armpose::LiftClasses(parent.data(), static_cast<int>(count), rig.spine, rig.camera, rig.liftClass.data());
-    }
-    rig.liftReady = ok && rig.spineBase >= 0;
-    gLiftReady.store(rig.liftReady, std::memory_order_relaxed);
-    gLiftCamera.store(rig.camera, std::memory_order_relaxed);
-    int lifted = 0;
-    for (unsigned j = 0; j < count; ++j) { lifted += rig.liftClass[j] > 0 ? 1 : 0; }
-    char line[192];
-    std::snprintf(line, sizeof(line),
-        "result=%d detail=torso_lift spine=%d,%d,%d,%d base=%d camera=%d lifted=%d",
-        rig.liftReady ? 0 : 1, rig.spine[0], rig.spine[1], rig.spine[2], rig.spine[3], rig.spineBase, rig.camera,
-        lifted);
-    Log(line);
 }
 
 } // namespace
@@ -290,6 +250,8 @@ bool ReadAlignmentMemory(void*, std::uintptr_t address, void* output, std::size_
     return SafeCopy(output, reinterpret_cast<const void*>(address), size);
 }
 
+// Under gIkMutex. Names identify the joints; the joint table's parent field
+// must agree with the expected chain or the hand is left alone.
 void BuildHandRig(std::uint8_t* skeleton, unsigned jointCount, std::uint8_t* relative, unsigned poseCount,
                   std::uintptr_t character)
 {
@@ -337,7 +299,7 @@ void BuildHandRig(std::uint8_t* skeleton, unsigned jointCount, std::uint8_t* rel
         rig.upperChild[s][2] = armJoint((p + "upperArmMuscle_jnt").c_str());
         rig.lowerTwist[s] = armJoint((p + "lowerArmTwist_jnt").c_str());
     }
-    BuildTorsoLift(rig, skeleton, jointCount, poseCount, character);
+    BuildBodyRig(rig, skeleton, jointCount, relative, poseCount, character);
     gHandRig = rig;
     char line[256];
     std::snprintf(line, sizeof(line),
@@ -364,6 +326,20 @@ bool WriteQuatT(std::uint8_t* absolute, unsigned count, int index, const Quatern
     const Quaternion n = Normalize(q);
     const float v[7] = {n.x, n.y, n.z, n.w, t.x, t.y, t.z};
     return WriteFloatsGuarded(absolute + static_cast<std::size_t>(index) * kQuatTStride, v, 7);
+}
+
+int RigJointByName(const std::uint8_t* skeleton, unsigned count, const char* name)
+{
+    return JointIndexByName(skeleton, count, name);
+}
+
+bool RigParents(const std::uint8_t* skeleton, unsigned count, int* parent)
+{
+    for (unsigned j = 0; j < count; ++j) {
+        parent[j] = ParentOf(skeleton, static_cast<int>(j));
+        if (parent[j] < -1 || parent[j] >= static_cast<int>(count)) { return false; }
+    }
+    return true;
 }
 
 } // namespace ik

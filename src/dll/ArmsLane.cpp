@@ -172,6 +172,21 @@ int AttachmentJoint(std::uint64_t character, std::string_view name)
     return -1;
 }
 
+std::string AttachmentListText(std::uint64_t character)
+{
+    AttachmentList list{};
+    if (!ReadAttachments(character, list)) { return " unread"; }
+    std::string out;
+    for (unsigned i = 0; i < list.count; ++i) {
+        std::uint64_t namePtr = 0;
+        int joint = -1;
+        Copy(list.items[i] + 0x10, &namePtr, 8);
+        Copy(list.items[i] + 0x15C, &joint, 4);
+        out += " " + SafeText(namePtr) + "@" + std::to_string(joint);
+    }
+    return out;
+}
+
 std::string ArmsReport()
 {
     std::ostringstream out;

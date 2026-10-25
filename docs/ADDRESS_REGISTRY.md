@@ -108,10 +108,12 @@ compares the same bytes in memory before it touches the slot.
 
 No R-number: static only, nothing called live yet. Supported Steam hash;
 `tools/re/verify_view_rotation.py`: 27 exact-byte/vtable checks. Purpose and design
-in [the body follow document](BODY-FOLLOW.md). `src/dll/BodyFollow.cpp`
+in [the body document](BODY-FOLLOW.md). `src/dll/BodyFollow.cpp`
 compared the same bytes in memory before its first call, until body following and room-scale
-were removed on 2026-10-24. `src/dll/TorsoLane.cpp` hooks slot 19 and, after each snap turn,
-calls the setter once, comparing the same bytes first.
+were removed on 2026-10-24. `src/dll/TorsoLane.cpp` hooks slot 19 and calls the setter to turn the
+body, after each snap turn and as the player turns round in the room; `src/dll/RoomScaleLane.cpp`
+(room-scale, back on 2026-10-25) calls the entity's `SetPos` and `GetPos`. Both compare the same
+bytes first.
 
 | RVA / field | Purpose and constraint |
 | --- | --- |
@@ -123,7 +125,7 @@ calls the setter once, comparing the same bytes first.
 | component `+0x1468`, copy at `+0x08` | Holds its own copy of the rotation (`0x1327050`); `0x1327070` is its per-frame update. **Writing `+0x13F0` alone leaves this copy stale; use the setter.** |
 | `0x1580AE4` | Entity rotation event copies entity `GetRotation` (virtual `+0x120`) back into `+0x13F0`. |
 | Concrete `CEntity` vtable `0x1D30BD0` | The one holding the hash-gated `GetPhysics` `0x9042B0` at `+0x228`. `+0xE8` GetWorldTM `0x10EA260` (matrix at `+0x60`); `+0x108` SetPos `0x90AF40`; `+0x110` GetPos `0x10EA250` (`m_vPos` at `+0x38`); `+0x118` SetRotation `0x90B220`; `+0x120` GetRotation `0x9043A0` (`+0x44`). |
-| `0x90AF40` SetPos(pos, whyFlags, recalcPhys, force) | Returns if unchanged; else stores `m_vPos`, `flags \|= 2`, tail-calls the transform update `+0x350`. The player's stance change (`0x157B980`) uses it after a `RayWorldIntersection(Game)`. Room-scale's seam until 2026-10-24, [BODY-FOLLOW.md](BODY-FOLLOW.md). |
+| `0x90AF40` SetPos(pos, whyFlags, recalcPhys, force) | Returns if unchanged; else stores `m_vPos`, `flags \|= 2`, tail-calls the transform update `+0x350`. The player's stance change (`0x157B980`) uses it after a `RayWorldIntersection(Game)`. Room-scale's seam (removed 2026-10-24, back 2026-10-25), [BODY-FOLLOW.md](BODY-FOLLOW.md). |
 
 ### H-018 static additions — 2026-09-06
 
@@ -2370,10 +2372,12 @@ playSpaceYaw = cameraYaw - headYaw        (= bodyYaw - referenceYaw)
 This is the composition the old hand lane called `BodyYaw()`, whose comment
 quotes the fleet playbook -- *parenting the shoulders to the HMD is the obvious
 implementation and it is wrong* -- and it was not carried into the ADIK lane.
-`aim.bodyyaw 0` restores the old behaviour for a live A/B; `report` carries
-`camYawMdeg`, `headYawMdeg` and `playYawMdeg` so the two can be compared rather
-than argued about. The unit test asserts both arms: the body yaw holds the hand
-still across three head yaws, and the camera yaw visibly moves it.
+`aim.bodyyaw 0` restored the old behaviour for a live A/B (the switch was removed
+on 2026-10-25); `report` carries `camYawMdeg`, `headYawMdeg` and `playYawMdeg`, so
+the two could be compared rather than argued about. The unit test asserted both arms: the body yaw held the hand
+still across three head yaws, and the camera yaw visibly moved it. Without the switch, the aim
+review (`tools/re/vr_scheme_review/aim_review.cpp`) holds the aim still across a 60° head sweep
+and checks that the camera turned through it.
 
 **Still to check when this is retested:** `ikClamped` ran at ~22/s during the
 drive phase, about a fifth of frames, meaning the goal was regularly outside the

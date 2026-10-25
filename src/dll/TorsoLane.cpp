@@ -4,6 +4,7 @@
 #include "HeadTrackingHook.h"
 #include "HookInstall.h"
 #include "Logger.h"
+#include "RoomScaleLane.h"
 #include "SafeMemory.h"
 #include "XrInput.h"
 #include "preyvr/ArmPose.h"
@@ -96,22 +97,19 @@ std::atomic<int> gDeadzoneMilliDeg{35000};
 std::atomic<int> gRelaxPerMille{600};
 // The snap turns the body has been turned after (HeadTrackingSnapCount).
 std::atomic<unsigned long long> gSnapsSeen{0};
-// The body follows physical turns (body.follow; on by default).
-std::atomic<bool> gFollow{true};
 
 // The main thread's own.
 armpose::TorsoYaw gTorso;
 std::uint64_t gTorsoNs = 0;
 unsigned long long gTorsoEpoch = ~0ull;
 bodyturn::NativeTurnWatch gWatch;
-// The follow's turn, decided at ArkPlayer::Update's entry and made after the
-// frame's render (ServiceBodyFollow); body.followafter 0 makes it at once.
+// What the frame's start decided for after its render (ServiceBodyFollow): the
+// follow's turn and room-scale's move.
 struct PendingFollow {
     void* player = nullptr;
     float torso = 0.0f, dt = 0.0f;
 };
 std::optional<PendingFollow> gPendingFollow;
-std::atomic<bool> gFollowAfterRender{true};
 
 struct TorsoSample {
     float yaw = 0.0f;
@@ -315,6 +313,11 @@ void Tick(void* player)
     gTorsoSample.Publish(TorsoSample{torso, now});
     gHeadMdeg.store(Mdeg(head), std::memory_order_relaxed);
     gTorsoMdeg.store(Mdeg(torso), std::memory_order_relaxed);
+    // The frame's animation started before this, posed for the body as it was:
+    // turned or moved now, the body is drawn so with that pose. So the follow's
+    // turn and room-scale's move wait for the frame's render (ServiceBodyFollow)
+    // and the next frame's animation.
+    gPendingFollow = PendingFollow{player, torso, dt};
 
     // After a snap, at once and all the way: the snap turned the view about the
     // body, which must turn with it (SetSnapTurnsAboutBody).
@@ -322,17 +325,7 @@ void Tick(void* player)
     if (snaps != gSnapsSeen.load(std::memory_order_relaxed)) {
         if (TurnToTorso(player, torso, 0.0f, gSnapTurns)) { gSnapsSeen.store(snaps, std::memory_order_relaxed); }
         else { gSnapWaits.fetch_add(1, std::memory_order_relaxed); }
-        return;
     }
-    if (!gFollow.load(std::memory_order_acquire)) { return; }
-    // The frame's animation started before this, posed for the body as it was:
-    // turned now, the body is drawn turned with that pose. So the turn waits for
-    // the frame's render (ServiceBodyFollow) and the next frame's animation.
-    if (gFollowAfterRender.load(std::memory_order_acquire)) {
-        gPendingFollow = PendingFollow{player, torso, dt};
-        return;
-    }
-    FollowTurn(player, torso, dt, now);
 }
 
 void __fastcall PlayerUpdateDetour(void* player, void* context, int slot)
@@ -418,37 +411,20 @@ void BodyTorsoSettings(float& deadzoneRadians, float& relax)
     relax = gRelaxPerMille.load(std::memory_order_relaxed) * 1e-3f;
 }
 
-DWORD SetBodyFollow(unsigned enabled)
-{
-    if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
-    gFollow.store(enabled != 0, std::memory_order_release);
-    Log(std::string("result=0 detail=follow value=") + (enabled ? "1" : "0"));
-    return 0;
-}
-
-unsigned BodyFollowEnabled() { return gFollow.load(std::memory_order_acquire) ? 1u : 0u; }
-
 void ServiceBodyFollow()
 {
     if (!gPendingFollow) { return; }
     const PendingFollow pending = *gPendingFollow;
     gPendingFollow.reset();
-    if (!gActive.load(std::memory_order_acquire) || !gFollow.load(std::memory_order_acquire)) { return; }
+    if (!gActive.load(std::memory_order_acquire)) { return; }
     // The player the frame started with, still the player.
     std::uintptr_t vtable = 0;
     if (!ReadAt(pending.player, 0, vtable) || vtable != gVtable.load(std::memory_order_relaxed)) { return; }
+    // The turn first: it changes G and R together and leaves the play space,
+    // and so the head's offset, alone.
     FollowTurn(pending.player, pending.torso, pending.dt, MonotonicNanoseconds());
+    ServiceRoomScale(pending.player, pending.torso, pending.dt, InGameplay(pending.player));
 }
-
-DWORD SetBodyFollowAfterRender(unsigned enabled)
-{
-    if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
-    gFollowAfterRender.store(enabled != 0, std::memory_order_release);
-    Log(std::string("result=0 detail=follow_after_render value=") + (enabled ? "1" : "0"));
-    return 0;
-}
-
-unsigned BodyFollowAfterRender() { return gFollowAfterRender.load(std::memory_order_acquire) ? 1u : 0u; }
 
 bool BodyTorsoYaw(float& yaw)
 {
@@ -471,8 +447,7 @@ std::string TorsoLaneReport()
         << " headDeg=" << gHeadMdeg.load() / 1000.0 << " torsoDeg=" << gTorsoMdeg.load() / 1000.0
         << " snapBodyTurn=" << (gSet.load() != nullptr && !gTurnFault.load()) << " turnFault=" << gTurnFault.load()
         << " snapTurns=" << gSnapTurns.load() << " lastSnapTurnMdeg=" << gLastSnapTurnMdeg.load()
-        << " snapWaits=" << gSnapWaits.load() << " follow=" << gFollow.load()
-        << " followAfterRender=" << gFollowAfterRender.load() << " followTurns=" << gFollowTurns.load()
+        << " snapWaits=" << gSnapWaits.load() << " followTurns=" << gFollowTurns.load()
         << " followPaused=" << gFollowPaused.load() << " readbackMaxMdeg=" << gReadbackMaxMdeg.load();
     return out.str();
 }

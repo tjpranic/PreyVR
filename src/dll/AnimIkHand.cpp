@@ -2,7 +2,7 @@
 #include "AnimIkState.h"
 
 // DriveHand: each hand's IK target from its controller, through the anchor the
-// hands are placed with (IkAnchor) -- on a held weapon's barrel, as a free hand,
+// hands are placed with (kIkAnchor) -- on a held weapon's barrel, as a free hand,
 // or calibrated -- with the reach shaped to the arm; and the fingers.
 
 namespace preyvr::dll {
@@ -114,7 +114,7 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
         const auto& state = frame.tracking.hands[static_cast<unsigned int>(hand == 0 ? Hand::right : Hand::left)];
         // Without a play-space yaw the world placement is unknown, and the
         // camera-relative fallback is the defect body yaw exists to remove.
-        if (AimBodyYawEnabled() && !frame.headYawUsable) {
+        if (!frame.headYawUsable) {
             gNoPose.fetch_add(1, std::memory_order_relaxed);
             return;
         }
@@ -122,19 +122,13 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
             gNoPose.fetch_add(1, std::memory_order_relaxed);
             return;
         }
-        // The hands' anchor (IkAnchor), chosen once for this hand: a frame
-        // without a camera is refused, and counted, never placed on the reticle
-        // origin instead.
-        const Anchor anchor = IkAnchor();
         const Hand drivenHand = hand == 0 ? Hand::right : Hand::left;
         // Surface stop (SurfaceStopLane.h): where fixed scenery holds the hand
         // back, the hand -- and the weapon it holds -- is drawn there instead.
+        // The hands' anchor (kIkAnchor): a frame without a camera is refused,
+        // never placed on the reticle origin instead.
         Pose world{};
-        if (!HandWorld(frame, drivenHand, ControllerPose::grip, anchor, Placement::drawn, world)) {
-            gAnchorMissing.fetch_add(1, std::memory_order_relaxed);
-            return;
-        }
-        (anchor == Anchor::camera ? gAnchorCamera : gAnchorReticle).fetch_add(1, std::memory_order_relaxed);
+        if (!HandWorld(frame, drivenHand, ControllerPose::grip, kIkAnchor, Placement::drawn, world)) { return; }
         const Vec3 stopped = SurfaceOffset(frame, drivenHand);
         if(supportLocked) world.orientation=frame.twoHand.supportOrientation;
         traceGrip = state.gripPose.position;
@@ -225,7 +219,7 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
                 supportGeometry.epoch=frame.tracking.epoch;
             }
             Pose aimWorld{};
-            HandWorld(frame, drivenHand, ControllerPose::aim, anchor, Placement::controller, aimWorld);
+            HandWorld(frame, drivenHand, ControllerPose::aim, kIkAnchor, Placement::controller, aimWorld);
             if(twoHand) aimWorld.orientation=frame.twoHand.orientation;
             if (!weaponrig::SolveWrist(location.q, aimWorld.orientation, gAlignBasis, rotation)) {
                 gAlignStatus = weaponrig::Status::invalidBasis;
@@ -271,7 +265,7 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
             // The raw controller, not a two-handed support orientation: the
             // support hold is the native one, blended in below.
             Pose raw{};
-            HandWorld(frame, drivenHand, ControllerPose::grip, anchor, Placement::controller, raw);
+            HandWorld(frame, drivenHand, ControllerPose::grip, kIkAnchor, Placement::controller, raw);
             const Quaternion wristWorld = AnatomicalWrist(hand, raw.orientation, pose);
             rotation = animik::WorldToModel(location, wristWorld);
             goal = animik::WorldToModel(location, Sub(Add(raw.position, stopped),
@@ -379,8 +373,7 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
                 t.owner = frame.player;
                 // The anchor the hands were placed with; the reticle origin with no
                 // camera, which only the test-offset path reaches.
-                AnchorPoint(frame, IkAnchor() == Anchor::camera ? Anchor::cameraElseReticle : Anchor::reticle,
-                            t.anchor);
+                AnchorPoint(frame, Anchor::cameraElseReticle, t.anchor);
                 t.yaw = frame.yaw;
                 t.head = frame.tracking.head;
                 t.grip.position = traceGrip;

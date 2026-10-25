@@ -20,8 +20,7 @@ enum class Anchor {
     camera,
     // The camera centre, else the reticle origin.
     cameraElseReticle,
-    // The engine's cached reticle-ray origin: where the aim ray starts, and
-    // ik.anchor 0's A/B.
+    // The engine's cached reticle-ray origin: where the aim ray starts.
     reticle,
 };
 

@@ -39,7 +39,7 @@ This was read-only: five parallel reviews, each covering one slice, with nothing
   - PreyVR-65 holds HandWorld, `IkAnchor`, the `reticleOrigin` rename, `DriveHand`'s structs and the torso owner. PreyVR-66 adds the AimTakeover, BodyFollow and AnimIk splits.
   - Build passes, 94/94 ctest pass, no new warnings, and the 75 export names are unchanged.
   - **Worn OK on PreyVR-65 and PreyVR-66 (10-24), and committed by you as `84d6c19`** ("Hand code refactor").
-  - The one issue seen, the fade when leaning over a desk, is the known 30 cm residual limit (fix 3 in [TURN-LEAN-ARMS-2026-10-19.md](TURN-LEAN-ARMS-2026-10-19.md)). It predates the batch, and you left it for later.
+  - The one issue seen, the fade when leaning over a desk, is the known 30 cm residual limit (fix 3 of the 10-19 lean investigation, now in [BODY-FOLLOW.md](BODY-FOLLOW.md); the rule was replaced on 2026-10-25). It predates the batch, and you left it for later.
 - **2026-10-24, the offline cleanup batch (batch A) is built** ([its scope](OFFLINE-CLEANUP-SCOPE-2026-10-24.md)): the XrSessionHost extractions, the options wiring test, the moves and renames, the ring search, the `log` helper, D3/D4 and the verifier runner.
   - Build passes, 97/97 ctest pass (`vr_options_wiring`, `position_ring` and `re_verifiers` are new), no new warnings, and the 75 export names are unchanged.
   - **Worn OK on PreyVR-67 (10-24), and committed by you as `3e1bb1a`** ("Big refactor").

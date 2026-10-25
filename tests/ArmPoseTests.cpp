@@ -5,7 +5,6 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
-#include <limits>
 
 using namespace preyvr;
 using namespace preyvr::armpose;
@@ -166,53 +165,6 @@ void TestArmLength()
     Require(offAxis(shorter) < 0.03f, "the player's own length draws it straight");
 }
 
-// The torso follows the neck up and down; the camera's joint never moves.
-void TestTorsoLift()
-{
-    // Tipping the head about the neck leaves the level eye's height alone.
-    const Pose level{AboutY(0.3f), Vec3{0, 1.2f, 0}};
-    const Vec3 neck = Add(level.position, Rotate(level.orientation, kNeckFromEye));
-    for (const float pitch : {-60.0f, -20.0f, 30.0f}) {
-        const Quaternion q = Multiply(level.orientation, AboutX(pitch * kDeg));
-        const Pose tipped{q, Sub(neck, Rotate(q, kNeckFromEye))};
-        Require(std::fabs(LevelEyeHeight(tipped) - 1.2f) < 1e-4f, "tipping the head does not lift the torso");
-    }
-    Require(std::fabs(LevelEyeHeight(Pose{Quaternion{}, Vec3{0, 1.65f, 0}}) - 1.65f) < 1e-5f, "level: the eye's own height");
-
-    Require(TorsoLift(0.45f, 0.40f, 0.15f) == 0.40f && TorsoLift(-0.4f, 0.40f, 0.15f) == -0.15f &&
-                TorsoLift(0.1f, 0.40f, 0.15f) == 0.1f && TorsoLift(std::nanf(""), 0.4f, 0.15f) == 0.0f,
-            "the lift is the neck's rise, within its limits");
-    const float none = std::numeric_limits<float>::infinity();
-    Require(TorsoLift(0.6f, none, none) == 0.6f && TorsoLift(-0.5f, none, none) == -0.5f,
-            "with no limits the torso follows the neck all the way");
-
-    // A rig shaped like Prey's 101-joint one: root 0 -> hips 1 -> spine1 2 ->
-    // spine2 3 -> spine3 4 -> spine4 5 -> neck 6 -> head 7 (the camera) -> headEnd 8;
-    // spine4 -> clavicle 9 -> arm 10; spine2 -> a helper 11; root -> a leg 12.
-    const int parent[] = {-1, 0, 1, 2, 3, 4, 5, 6, 7, 5, 9, 3, 0};
-    const int spine[kSpineJoints] = {2, 3, 4, 5};
-    signed char classes[13]{};
-    LiftClasses(parent, 13, spine, 7, classes);
-    const signed char expected[] = {0, 0, 1, 2, 3, 4, 4, 0, 0, 4, 4, 2, 0};
-    for (int j = 0; j < 13; ++j) { Require(classes[j] == expected[j], "each joint takes its spine joint's share"); }
-    // No camera joint: the head rides the neck.
-    LiftClasses(parent, 13, spine, -1, classes);
-    Require(classes[7] == 4 && classes[8] == 4, "with no camera joint the head is lifted too");
-    // A parent table with a cycle does not hang.
-    const int looped[] = {1, 0};
-    LiftClasses(looped, 2, spine, -1, classes);
-    Require(classes[0] == 0 && classes[1] == 0, "a cyclic table lifts nothing");
-
-    // Prey's spine heights (arms.joints, 2026-10-19), from a base at 0.95 m.
-    const float heights[kSpineJoints] = {1.044f, 1.166f, 1.309f, 1.423f};
-    float shares[kSpineJoints]{};
-    Require(LiftShares(0.95f, heights, shares), "a rising spine shares the lift");
-    Require(shares[0] > 0.15f && shares[0] < shares[1] && shares[1] < shares[2] && shares[2] < shares[3] &&
-                shares[3] == 1.0f, "the share grows up the spine, the chest takes it all");
-    const float flat[kSpineJoints] = {1.0f, 1.0f, 1.0f, 1.0f};
-    Require(!LiftShares(1.0f, flat, shares), "a spine that does not rise refuses");
-}
-
 void TestElbow()
 {
     const Vec3 s{0.185f, 1.37f, 0.09f};
@@ -312,7 +264,6 @@ int main()
     TestLevelEyeIgnoresHeadRotation();
     TestShoulderFromHead();
     TestArmLength();
-    TestTorsoLift();
     TestElbow();
     TestWristAngles();
     TestElbowFollowsHand();

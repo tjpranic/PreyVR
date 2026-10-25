@@ -99,6 +99,8 @@ add_library(preyvr_core STATIC
     src/common/AnimIk.cpp
     src/common/HandPose.cpp
     src/common/ArmPose.cpp
+    src/common/BodyRig.cpp
+    src/common/RoomScale.cpp
     src/common/BodyTurn.cpp
     src/common/ContactQuery.cpp
     src/common/SurfaceStop.cpp
@@ -235,6 +237,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/AnimIkRig.cpp
         src/dll/AnimIkHand.cpp
         src/dll/AnimIkArms.cpp
+        src/dll/AnimIkBody.cpp
         src/dll/AnimIkReports.cpp
         src/dll/Bootstrap.cpp
         src/dll/Exports.cpp
@@ -247,6 +250,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/Psychoscope.cpp
         src/dll/BodyEquipment.cpp
         src/dll/TorsoLane.cpp
+        src/dll/RoomScaleLane.cpp
         src/dll/DebugOverlay.cpp
         src/dll/ShotRay.cpp
         src/dll/ReticleRayHook.cpp
@@ -449,6 +453,8 @@ if(PREYVR_BUILD_TESTS)
     preyvr_add_test(hand_pose tests/HandPoseTests.cpp)
     preyvr_add_test(arm_pose tests/ArmPoseTests.cpp)
     preyvr_add_test(body_turn tests/BodyTurnTests.cpp)
+    preyvr_add_test(body_rig tests/BodyRigTests.cpp)
+    preyvr_add_test(room_scale tests/RoomScaleTests.cpp)
     preyvr_add_test(debug_draw tests/DebugDrawTests.cpp)
     preyvr_add_test(shot_ray tests/ShotRayTests.cpp)
     preyvr_add_test(near_particles tests/NearParticlesTests.cpp)

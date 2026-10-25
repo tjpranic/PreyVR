@@ -59,17 +59,7 @@ DWORD SetAnimIkJointSignature(unsigned int joints);
 // Read it with only the right controller moving: whichever of `ikAnchorL` or
 // `ikShoulderL` tracks that motion is the path, and if `ikGoalRawL` is static
 // while `ikGoalScaledL` moves, compression is responsible rather than the anchor.
-// **The crosstalk fix.** 1 (default) anchors both hands at the view camera's
-// centre; 0 restores the reticle-derived anchor so a wearer can A/B them.
-// `reticleOrigin` is the native cached RETICLE ray origin, which our own reticle
-// lane moves, so it carried the right controller's aim into both hands
-// (RE-IK-CROSSTALK-2026-09-09). Refuses the frame when the camera cannot be
-// read rather than falling back, since a silent fallback restores the defect.
-DWORD SetAnimIkCameraAnchor(unsigned int enabled);
-unsigned long long AnimIkAnchorCameraCount();
-unsigned long long AnimIkAnchorReticleCount();
-unsigned long long AnimIkAnchorMissingCount();
-
+// The anchor is now the view camera's centre (ik::kIkAnchor, the crosstalk fix).
 DWORD SetAnimIkTrace(unsigned int enabled);
 std::string AnimIkTraceReport();
 
@@ -82,8 +72,10 @@ int AnimIkReachPercent();
 // Logs the matched rig's ADIK table and limbs.
 DWORD DumpAnimIk();
 // Logs, once, every joint of the owning rig: name, parent (derived from the
-// pose), relative pose and absolute pose before/after the native ADIK pass.
-DWORD RequestAnimIkSkeletonDump();
+// pose), relative pose and absolute pose before/after the native ADIK pass,
+// after a header with `label` (letters, digits, '-' and '_', at most 24; others
+// refuse with 87), the rig's location, its camera joint and its attachments.
+DWORD RequestAnimIkSkeletonDump(const std::string& label);
 // ik.helpers: logs the held weapon's attachments, joints and bounds on the next
 // alignment pass (diagnostic, read-only).
 DWORD RequestAnimIkHelperDump();
@@ -128,12 +120,9 @@ DWORD SetHandPoseWeaponRoll(unsigned int enabled);
 DWORD SetHandPoseStretchPercent(int percent);
 // The arm from the player's shoulder (docs/ARM-POSE-2026-10-06.md), arm.<what>:
 //   mode 0|1                     native arm / player's shoulder (default 1)
-//   anchor 0|1                   shoulder from the eyes / from the neck (default 1)
 //   shoulder <fwd> <out> <up>    shoulder joint from the centre eye, torso frame, mm
 //   len <upper> <fore>           drawn segments, mm (default 285 275)
 //   length <cm>                  both segments, shoulder to wrist, 40-70 (default 56)
-//   lift 0|1 [upMm [downMm]]     the torso follows the neck up and down, the waist
-//                                stretching; optional limits from calibration, 0 = none (default 1, none)
 //   stretch <clav> <arm>         permille the clavicle may stretch, arm stretch limit (150 1100)
 //   prior <flexSd> <devRest> <devSd> <swivelSd>  the elbow's MAP priors, degrees (45 -8 12 25)
 //   rom <flex> <ext> <radial> <ulnar>            the wrist's range of motion, degrees (75 65 20 35)
@@ -147,6 +136,13 @@ int ArmLengthCm();
 // Also reports each arm's reach (the player's wrist from the shoulder) now and
 // at its longest since the last report, then starts that longest afresh.
 std::string ArmReport();
+// **The body pin** (docs/BODY-FOLLOW.md, bodyrig::SolvePin): after the native
+// pass the drawn body is posed under the player's head -- the neck under the
+// player's, the spine bent to it, the pelvis down and back as it drops, the
+// legs to the feet the game planted -- and the arms hang from its collarbones.
+// For body.report: the rig, and what the pin did on the last frame and at most
+// since the last report (then started afresh).
+std::string BodyPinReport();
 // Settings, the measured error of each hand against the controller (palm
 // position, hand axes) and the grip pose relative to the aim pose.
 std::string HandPoseReport();

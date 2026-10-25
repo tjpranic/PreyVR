@@ -30,5 +30,8 @@ bool ExecuteArmsCommand(const std::vector<std::string>& args, std::ostringstream
 // the attachment manager's array at character+0x38, the joint at +0x15C), or
 // -1. Reads only, guarded; any thread.
 int AttachmentJoint(std::uint64_t character, std::string_view name);
+// Every attachment of `character` as " name@joint" items, for a log line
+// (ik.skel's header); " unread" when the list cannot be read.
+std::string AttachmentListText(std::uint64_t character);
 
 }  // namespace preyvr::dll

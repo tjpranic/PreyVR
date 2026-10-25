@@ -58,8 +58,10 @@ evaluating whether this accelerates your own work, read the open list first.
     setter, with the play space turned by the same angle, so the view never moves.
   - After each snap turn at once; as you turn round in the room, every frame, but
     never while Prey itself is turning the player, and after the frame's render.
-  - It does not walk with you: room-scale was removed on 2026-10-24, with the
-    original Body Follows You, because smooth turning jittered with them on.
+  - It walks with you: the capsule follows you across the room after each
+    frame's render, stopping at walls and furniture (room-scale, rebuilt on
+    2026-10-25 after the original Body Follows You made smooth turning jitter).
+  - It is posed under your head: crouch or lean, and the drawn body bends with you.
   - Accepted on a Steam Frame; see [`docs/BODY-FOLLOW.md`](docs/BODY-FOLLOW.md).
 - **The reticle follows the controller.** Prey's HUD draws into a 16:9 canvas
   scaled to *cover* the frame, so a viewport fraction is correct at the centre and

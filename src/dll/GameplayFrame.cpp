@@ -2,7 +2,6 @@
 #include "AimTakeover.h"
 #include "EngineAccess.h"
 #include "HeadTrackingHook.h"
-#include "Logger.h"
 #include "XrInput.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/LatestSnapshot.h"
@@ -23,7 +22,6 @@ namespace {
 
 LatestSnapshot<GameplayPoseFrame> gGameplayFrame;
 std::atomic<unsigned int> gNativeMagnitude{0};
-std::atomic<bool> gBodyYaw{true};
 std::atomic<int> gCamYawMilli{0}, gHeadYawMilli{0}, gPlaySpaceYawMilli{0};
 std::atomic<int> gNativeEyeMilli[3]{0,0,0};
 std::atomic<int> gTrackedHeadMilli[3]{0,0,0};
@@ -89,45 +87,37 @@ FrameBuild BuildGameplayFrame(std::uintptr_t player, GameplayPoseFrame& frame, b
     // tracking into that camera. Subtracting the head's own yaw leaves the
     // body, which is what a head-relative offset must be rotated by; using the
     // camera directly applies the head twice and the hand follows the headset.
-    frame.yaw = frame.cameraYaw - frame.referenceYaw;   // aim.bodyyaw 0 behaviour
-    // Measured unconditionally. Recording it only on the body-yaw path made the
-    // instrument unable to describe the mode it was meant to be compared
-    // against: an A/B on 2026-09-08 reported a 0-degree head sweep for
-    // `aim.bodyyaw 0` purely because nothing sampled the head there.
-    const auto measuredHeadYaw = haveTracking
+    // The camera-relative yaw stands only on a frame no head yaw is defined
+    // for, which the consumers refuse (headYawUsable).
+    frame.yaw = frame.cameraYaw - frame.referenceYaw;
+    const auto headYaw = haveTracking
         ? stereo::RecenterYawFromHeadPose(frame.tracking.head)
         : std::optional<float>{};
-    if (measuredHeadYaw) {
-        gHeadYawMilli.store(static_cast<int>(*measuredHeadYaw * 57295.78f),
-                            std::memory_order_relaxed);
-    }
-    if (gBodyYaw.load(std::memory_order_acquire)) {
-        const auto headYaw = measuredHeadYaw;
-        if (headYaw) {
-            gLastHeadYaw.store(*headYaw, std::memory_order_release);
-            gHaveHeadYaw.store(true, std::memory_order_release);
-            frame.headYaw = *headYaw;
-            frame.headYawUsable = true;
-            frame.yaw = frame.cameraYaw - *headYaw;
-        } else if (gHaveHeadYaw.load(std::memory_order_acquire)) {
-            // Looking near-vertical. **Never fall through to the camera yaw
-            // here**: that is precisely the defect this lane exists to fix, and
-            // silently restoring it would make the hands swing again whenever a
-            // player looked up. Hold the last defined head yaw instead -- the
-            // body has not turned just because the head tilted, and body turning
-            // still arrives through the camera yaw.
-            const float held = gLastHeadYaw.load(std::memory_order_acquire);
-            frame.headYaw = held;
-            frame.headYawUsable = true;
-            frame.yaw = frame.cameraYaw - held;
-            gHeadYawHeld.fetch_add(1, std::memory_order_relaxed);
-        } else {
-            // No head yaw has ever been defined. Reject rather than invent:
-            // consumers below refuse the sample instead of driving from a frame
-            // whose orientation is unknown.
-            frame.headYawUsable = false;
-            gHeadYawUnavailable.fetch_add(1, std::memory_order_relaxed);
-        }
+    if (headYaw) {
+        gHeadYawMilli.store(static_cast<int>(*headYaw * 57295.78f), std::memory_order_relaxed);
+        gLastHeadYaw.store(*headYaw, std::memory_order_release);
+        gHaveHeadYaw.store(true, std::memory_order_release);
+        frame.headYaw = *headYaw;
+        frame.headYawUsable = true;
+        frame.yaw = frame.cameraYaw - *headYaw;
+    } else if (gHaveHeadYaw.load(std::memory_order_acquire)) {
+        // Looking near-vertical. **Never fall through to the camera yaw
+        // here**: that is precisely the defect this lane exists to fix, and
+        // silently restoring it would make the hands swing again whenever a
+        // player looked up. Hold the last defined head yaw instead -- the
+        // body has not turned just because the head tilted, and body turning
+        // still arrives through the camera yaw.
+        const float held = gLastHeadYaw.load(std::memory_order_acquire);
+        frame.headYaw = held;
+        frame.headYawUsable = true;
+        frame.yaw = frame.cameraYaw - held;
+        gHeadYawHeld.fetch_add(1, std::memory_order_relaxed);
+    } else {
+        // No head yaw has ever been defined. Reject rather than invent:
+        // consumers below refuse the sample instead of driving from a frame
+        // whose orientation is unknown.
+        frame.headYawUsable = false;
+        gHeadYawUnavailable.fetch_add(1, std::memory_order_relaxed);
     }
     gCamYawMilli.store(static_cast<int>(frame.cameraYaw * 57295.78f), std::memory_order_relaxed);
     gPlaySpaceYawMilli.store(static_cast<int>(frame.yaw * 57295.78f), std::memory_order_relaxed);
@@ -178,15 +168,6 @@ bool TryGetGameplayPoseFrame(GameplayPoseFrame& out, bool requireTracking)
     return IsPoseUsable(out.tracking.head, out.tracking.headValidity, kMaxPoseAgeNs);
 }
 
-DWORD SetAimBodyYaw(unsigned int enabled)
-{
-    if (enabled > 1) { return 1; }
-    gBodyYaw.store(enabled != 0u, std::memory_order_release);
-    lifecycle::Log(std::string("preyvr_aim_takeover result=0 detail=body_yaw value=") + (enabled ? "1" : "0"));
-    return 0;
-}
-
-unsigned int AimBodyYawEnabled() { return gBodyYaw.load(std::memory_order_relaxed) ? 1u : 0u; }
 unsigned long long AimHeadYawHeldCount() { return gHeadYawHeld.load(std::memory_order_relaxed); }
 unsigned long long AimHeadYawUnavailableCount() { return gHeadYawUnavailable.load(std::memory_order_relaxed); }
 int AimCameraYawMilliDegrees() { return gCamYawMilli.load(std::memory_order_relaxed); }

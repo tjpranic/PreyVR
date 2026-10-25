@@ -582,20 +582,22 @@ void ServiceXrFrame(void* renderer)
     const bool wristActive=BuildWristLayer(view,nativeWristTexture,wristLayer);
     XrCompositionLayerQuad slotLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
     const bool slotActive=BuildSlotLayer(view,slotLayer);
+    XrCompositionLayerQuad fadeLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
+    const bool fadeActive=BuildFadeLayer(view,fadeLayer);
     // **VR Options is drawn over what is shown**: the game's menu while one is
     // up, else the world -- the running game (ui::ComposeFrame has the order).
     ui::FrameShown shown;
     shown.menu=panelActive;shown.menuCylinder=panelActive&&surface.angle>0;shown.menuRightEye=inventoryStereoSubmitted;
     shown.guide=guideActive;shown.hud=hudActive;shown.reticle=reticleActive;shown.wheel=wheelActive;shown.note=noteActive;shown.text=textActive;
     shown.options=optionsActive;
-    shown.beam=beamActive;shown.cursor=cursorActive;shown.wrist=wristActive;shown.slot=slotActive;
+    shown.beam=beamActive;shown.cursor=cursorActive;shown.wrist=wristActive;shown.slot=slotActive;shown.fade=fadeActive;
     // By value, so a successful frame can be kept for hold frames.
     FrameLayerSet built;
     built.shown=shown;built.views[0]=projViews[0];built.views[1]=projViews[1];built.world=layer;
     built.menu=panelLayer;built.menuCylinder=cylinderLayer;built.menuRightEye=rightPanelLayer;built.guide=guideLayer;
     built.hud=hudLayer;built.reticle=reticleLayer;built.wheel=wheelLayer;built.note=noteLayer;built.text=textLayer;
     built.options=options.layer;built.beam=beamLayer;built.cursor=cursorLayer;built.wrist=wristLayer;
-    built.slot=slotLayer;
+    built.slot=slotLayer;built.fade=fadeLayer;
     const auto layers=built.Ordered();
 
     XrFrameEndInfo endInfo{XR_TYPE_FRAME_END_INFO};

@@ -108,7 +108,7 @@ void AfterEngineRender(const EngineRenderBracket& bracket)
     ProbeRecord(ProbeStep::renderExit, handshakeAfter, 0, write, read);
     CullPrepareAfterRender(bracket.handshake, handshakeAfter);
     // After the world render took the body's transform, before the next frame's
-    // animation starts: the body follow's turn (TorsoLane.h).
+    // animation starts: the body follow's turn and room-scale's move (TorsoLane.h).
     ServiceBodyFollow();
 }
 

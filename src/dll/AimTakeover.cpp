@@ -85,8 +85,8 @@ void OverrideAimRay(const GameplayPoseFrame& frame, bool haveTracking)
 {
     if (!haveTracking) { gRejNoPose.fetch_add(1); return; }
     // A frame whose play-space yaw is unknown cannot aim, and must not silently
-    // aim with the camera-relative yaw the body-yaw mode exists to replace.
-    if (AimBodyYawEnabled() != 0u && !frame.headYawUsable) {
+    // aim with the camera-relative yaw the body yaw exists to replace.
+    if (!frame.headYawUsable) {
         gRejNoPose.fetch_add(1, std::memory_order_relaxed);
         return;
     }

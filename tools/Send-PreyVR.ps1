@@ -85,7 +85,7 @@ try {
         'vr.status             where VR setup got to'
         'vr.recenter           re-centre the view (F12 and both grips + left Y do this too)'
         'vr.enable / vr.disable'
-        'ik.anchor 1           1 = camera-anchored hands (0 restores the crosstalk, for A/B)'
+        'body.report           the body: its turns, the body pin, room-scale'
         'move.turn 1           enable right-stick turning'
         'move.snap 45          snap angle 15..90 degrees; 0 = smooth turning'
         'move.headrelative 1   move relative to head yaw (0 = native body axes)'

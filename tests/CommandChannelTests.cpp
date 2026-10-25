@@ -56,6 +56,7 @@ struct Case {
 std::string DualReports() { return DualSceneReport() + DualOverlayReport(); }
 std::string WorldReticleReports() { return ReticleWorldReport() + " scene:" + SceneQueryReport(); }
 std::string VrOptionsReports() { return VrOptionsReport() + PsychoscopeReport() + BodyEquipmentReport(); }
+std::string BodyReports() { return TorsoLaneReport() + BodyPinReport() + RoomScaleReport(); }
 std::string InventoryLayerReports()
 {
     return HudLayerReport() + " layerFrames=" + std::to_string(InventoryLayerFrameCount());
@@ -113,7 +114,9 @@ const Case kCases[] = {
     {"ik.widesupport", "ik.widesupport result=0 wide=1", nullptr, processed},
     {"ik.supportlatch", "ik.supportlatch result=0 latch=1", nullptr, processed},
     {"ik.longreach", "ik.longreach result=0", AnimIkLongReachReport, processed},
-    {"ik.skel", "ik.skel result=1", nullptr, processed},
+    {"ik.skel", "ik.skel result=1 label=manual", nullptr, processed},
+    {"ik.skel stand", "ik.skel result=1 label=stand", nullptr, processed},
+    {"ik.skel bad!label", "ik.skel result=87 label=bad!label", nullptr, processed},   // refused before the lane
     {"ik.helpers", "ik.helpers result=1 (see PreyVR.log: preyvr_anim_ik helper)", nullptr, processed},
     {"pose.mode", "pose.mode result=0", HandPoseReport, processed},
     {"pose.curl", "pose.curl result=0", HandPoseReport, processed},
@@ -125,14 +128,34 @@ const Case kCases[] = {
     {"pose.roll", "pose.roll result=0", HandPoseReport, processed},
     {"pose.stretch", "pose.stretch result=0", HandPoseReport, processed},
     {"arm.report", "arm.report result=0", ArmReport, processed},
-    {"body.report", "body.report result=0", TorsoLaneReport, processed},
+    {"body.report", "body.report result=0", BodyReports, processed},
     {"body.torso 1", "body.torso result=87", TorsoLaneReport, processed},   // needs 2
-    {"body.follow", "body.follow result=0 enabled=1", nullptr, processed},
-    {"body.follow 2", "body.follow result=87 enabled=1", nullptr, processed},
-    // Room-scale, removed 2026-10-24: its verbs are gone.
-    {"body.roomscale", "result=rejected verb=\"body.roomscale\" detail=not_a_channel_verb_and_not_allowlisted",
+    // The body overhaul's research verbs and test switches are gone, as are the
+    // old room-scale's tuning verbs, arm.lift (the spine stretch the body pin
+    // replaced) and arm.anchor.
+    {"body.follow 0", "result=rejected verb=\"body.follow\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
+     rejected},
+    {"body.followafter 0",
+     "result=rejected verb=\"body.followafter\" detail=not_a_channel_verb_and_not_allowlisted", nullptr, rejected},
+    {"body.roomscale 0", "result=rejected verb=\"body.roomscale\" detail=not_a_channel_verb_and_not_allowlisted",
      nullptr, rejected},
-    {"arm.lift", "arm.lift result=0", ArmReport, processed},
+    {"body.pin 0", "result=rejected verb=\"body.pin\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
+     rejected},
+    {"body.neck 500 250", "result=rejected verb=\"body.neck\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
+     rejected},
+    {"body.pelvis 450", "result=rejected verb=\"body.pelvis\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
+     rejected},
+    {"body.throat 80 120", "result=rejected verb=\"body.throat\" detail=not_a_channel_verb_and_not_allowlisted",
+     nullptr, rejected},
+    {"body.capsule", "result=rejected verb=\"body.capsule\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
+     rejected},
+    {"body.posetest sequence",
+     "result=rejected verb=\"body.posetest\" detail=not_a_channel_verb_and_not_allowlisted", nullptr, rejected},
+    {"body.zone 30 5", "result=rejected verb=\"body.zone\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
+     rejected},
+    {"arm.lift", "result=rejected verb=\"arm.lift\" detail=not_a_channel_verb_and_not_allowlisted", nullptr, rejected},
+    {"arm.anchor 1", "result=rejected verb=\"arm.anchor\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
+     rejected},
     {"arm.torso abc 600", "arm.torso result=87", ArmReport, processed},   // no default to fall back to
     {"pose.report", "pose.report result=0", HandPoseReport, processed},
     {"pose.marks", "pose.marks result=0\n", HandPoseMarks, processed},
@@ -346,8 +369,8 @@ const Case kCases[] = {
     {"ik.reach 10", "ik.reach result=1 percent=120", nullptr, processed},
     {"ik.reach abc", "ik.reach result=0 percent=100", nullptr, processed},
     {"ik.hands", "ik.hands result=0 note=no_value_nothing_changed", nullptr, processed},
-    {"ik.anchor", "ik.anchor result=0 note=no_value_nothing_changed camera=0 reticle=0 missing=0", nullptr,
-     processed},
+    {"ik.anchor 0", "result=rejected verb=\"ik.anchor\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
+     rejected},
     {"ik.trace", "ik.trace result=0", AnimIkTraceReport, processed},
     {"ik.dump", "ik.dump result=1", nullptr, processed},
     // The console allowlist decides; only the last line is queued, and nothing
@@ -370,9 +393,8 @@ const Case kCases[] = {
     {"aim.reticlecanvas", "aim.reticlecanvas result=0 mode=1 native=0 nativeFailed=0", nullptr, processed},
     {"aim.reticlestage", "aim.reticlestage result=0 note=no_value_nothing_changed", nullptr, processed},
     {"aim.twohand", "aim.twohand result=0", TwoHandedAimStatus, processed},
-    {"aim.bodyyaw", "aim.bodyyaw result=0 value=1", nullptr, processed},
-    {"aim.bodyyaw 2", "aim.bodyyaw result=1 value=1", nullptr, processed},
-    {"aim.bodyyaw abc", "aim.bodyyaw result=0 value=1", nullptr, processed},
+    {"aim.bodyyaw 0", "result=rejected verb=\"aim.bodyyaw\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
+     rejected},
     {"aim.origin", "aim.origin result=0 mode=0(native)", nullptr, processed},
     {"aim.calibratebarrel", "aim.calibratebarrel result=1 offsetMm=0,0,0", nullptr, processed},
     {"aim.enable", "aim.enable result=0 note=no_value_nothing_changed applied=0 nativeMagMilli=0", nullptr,
@@ -470,7 +492,7 @@ std::vector<std::string> ReportSkeleton(unsigned long long processedCount, unsig
            "reticleDispatched", "reticleDispatchFailed"});
     s.push_back(ReticleProjectionReport());
     names({"aimDirMilli", "aimRawQMilli", "recenters", "reticleOriginMm", "reticleConvergeMm", "hudElement",
-           "hudCalls", "hudRefused", "captures", "aimBodyYaw", "camYawMdeg", "headYawMdeg", "playYawMdeg", "eyeMm",
+           "hudCalls", "hudRefused", "captures", "camYawMdeg", "headYawMdeg", "playYawMdeg", "eyeMm",
            "headMm", "yawHeld", "yawUnavailable", "weaponMountMm", "weaponBaseline", "aimApplied", "aimNoPose",
            "aimNoPlayer", "aimCompose", "aimNativeMagMilli", "menuActions", "inputPosted", "menuDiscarded",
            "moveMode", "moveHooked", "moveOursX", "moveOursY", "moveNative", "movePosted", "moveDropped",

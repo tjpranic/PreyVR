@@ -270,27 +270,36 @@ value report, as described above.
 
 ### Body
 
-Body Follows You was removed on 2026-10-24, with its menu row, its three
-tuning rows and the `body.roomscale`, `body.zone`, `body.radius`,
-`body.physics`, `body.standaside`, `body.level`, `body.turn` and `body.nudge`
-commands (`body.follow` came back for the new following, below). It turned the body to face you and moved it under
-you as you walked, and with either part on, smooth turning jittered.
-
-The body turns to face your torso again, without the jitter:
-- **With the stick:** Prey turns it, as always.
-- **After each snap turn:** at once. A snap turns the view about the body, as
-  smooth turning does, so the camera keeps its place on the model; it turns
-  about your head only if the body cannot be turned (`snapBodyTurn=0`).
-- **As you turn round in the room:** every frame, no faster than 360 degrees a
-  second, but never while Prey is turning the player itself (a smooth turn),
-  nor for 150 ms after. A physical turn made during a smooth turn is caught up
-  after it. It does not move the body under you: room-scale did that.
+The drawn body is the player's (docs/BODY-FOLLOW.md), and nothing here has a
+switch: the overhaul's test switches and research commands went once it was
+worn OK (2026-10-25), as Body Follows You's commands had on 2026-10-24.
+- **Turning:** with the stick, Prey turns the body, as always. After each snap
+  turn, at once: a snap turns the view about the body, as smooth turning does,
+  so the camera keeps its place on the model; it turns about your head only if
+  the body cannot be turned (`snapBodyTurn=0`). As you turn round in the room,
+  after each frame's render: no faster than 360 degrees a second, but never
+  while Prey is turning the player itself (a smooth turn), nor for 150 ms
+  after. A physical turn made during a smooth turn is caught up after it.
+- **Room-scale:** after each frame's render, with the turn, the capsule moves
+  under you: your eyes as they would be with your head level. **Lean, and the
+  torso bends:** your head may lead the body by 25 cm before it follows (more
+  when you are bent well down). **Step, and it catches up:** once your head has
+  rested upright for half a second, not lowered as a lean would lower it, the
+  capsule glides under you. Each move is first tested to fit by the body's own collision test,
+  so the capsule stops at walls and furniture, and the body pin bends the torso
+  the rest of the way. A walking body keeps its motion. The view never moves
+  for it. When your head goes through something, the view fades to black and
+  firing, using and psi wait until it comes back.
+- **The body pin:** after Prey animates the body, the mod poses it again under
+  your head: your neck under the headset's, the spine bent to it, the pelvis
+  down and back as you crouch, and the legs bent to the feet Prey planted. The
+  arms hang from its collarbones. Looking down, the drawn neck bends with your
+  head and its throat stays behind your eyes. Only the drawn body: the view is
+  never moved.
 
 | Command | Values | Default | What it does |
 |---|---|---|---|
-| `body.follow` | 0/1 | 1 | The body turns as you turn round in the room. 0 leaves it to the stick and snap turns, for an A/B. Not saved. |
-| `body.followafter` | 0/1 | 1 | When the follow turns the body: 1 after the frame's render, so the next frame's animation is posed for the turned body; 0 at the frame's start, as before, when that frame's pose (posed for the old facing) is drawn on the turned body for one frame (docs/BODY-FOLLOW.md). Not saved. |
-| `body.report` | report | | The shared torso the shoulders and body slots sit on: `hooked`, `active`, `torsoDeadzoneDeg`, `torsoRelax`, `ticks`, `notPlayer`, `noHead`, `headDeg`, `torsoDeg`. The body's turn: `snapBodyTurn` (1 when it can run), `turnFault`, `snapTurns` (turns after a snap), `lastSnapTurnMdeg`, `snapWaits` (frames a snap's turn waited for gameplay or a busy reference), `follow`, `followTurns` (frames the body followed a physical turn), `followAfterRender`, `followPaused` (frames it waited because Prey was turning the player) and `readbackMaxMdeg` (how far the engine's rotation differed from the one asked for). The status line carries the same as `torso={...}`. |
+| `body.report` | report | | The body, in three parts. **The torso and the turns:** the shared torso the shoulders and body slots sit on (`hooked`, `active`, `torsoDeadzoneDeg`, `torsoRelax`, `ticks`, `notPlayer`, `noHead`, `headDeg`, `torsoDeg`); `snapBodyTurn` (1 when the body can be turned), `turnFault`, `snapTurns` (turns after a snap), `lastSnapTurnMdeg`, `snapWaits` (frames a snap's turn waited for gameplay or a busy reference), `followTurns` (frames the body followed a physical turn), `followPaused` (frames it waited because Prey was turning the player) and `readbackMaxMdeg` (how far the engine's rotation differed from the one asked for). **The body pin:** `pinReady` (the rig has every joint the pin needs), `straighten` (the waist Prey's crouch kinks can be straightened: the rig is the one it was measured on), `pinJoints` (joints the pin places), `pinFrames` and `pinRefused` (frames posed, and frames it could not pose), `folded` (frames where the legs' fold set how far the back leans); for the last frame `dropMm` (your neck below the game's), `leanDeg` (the back from upright), `twistDeg` (the chest turned onto your torso), `waistMm` (the kinked waist moved back), `throatPushMm` (the neck pushed back to keep the throat behind your eyes), `sinkMm` (the feet sunk, when you are lower than the deepest squat) and `shortMm` (how far the neck stayed from under yours), and the most of the last three since the last report (`throatPushMaxMm`, `sinkMaxMm`, `shortMaxMm`); `eyeGapMm` and `eyeGapMaxMm`, how far the game's eye under the view lies from the camera joint in the pose being posed, near zero when the two are one frame's (walking, a stale view would show as about one frame's step). **Room-scale:** `roomAvailable` (the engine calls it needs matched; `unchecked` before the first gameplay frame), `roomFault` (an engine call faulted: off until Prey restarts), `roomActive`, `roomServices`; frames `moved`, and `movedMm`, `lastMoveMm` and `residualMm` (how far your eyes stayed from over the body); `headDropMm` (your head below its calibrated height), `allowanceMm` (how far it may then lead the body: the lean zone, or more bent down), `uprightMm` (the height learnt as standing upright, below the calibrated one) and `settleMoves` (frames the capsule glided under you after a step); why it did not move: `notGameplay`, `noFrame`, `roomNotPlayer`, `noLiving`, `blocked` (a wall or furniture stopped part of a move), `fitRefused` (none of it fitted), `startOverlap` (the body was already touching something), `busy` (physics was stepping: the move waited a frame), `referenceBusy`, `stepSettling` (climbing a step), `jumps` (tracking glitches refused); how it moved: `keptMotion`, `startKept` (a walk's first frames), `restMoves`, `raced`; and the head in a wall: `headOut`, `headOutEvents`, `headOutFrames`, `fadeFrames`. The status line carries the first part as `torso={...}`. |
 
 ### Arms and hands (IK)
 
@@ -298,11 +307,9 @@ The body turns to face your torso again, without the jitter:
 |---|---|---|---|
 | `arm.torso <deg> <relax>` | 0–180, 0–10000 ‰/s | 35 600 | Torso yaw deadzone and settling, for the shoulders and the body slots. The same setting as `body.torso`. |
 | `arm.mode` | 0 native arm, 1 your shoulder | 1 | Where the arm is solved from. |
-| `arm.anchor` | 0 the eyes, 1 the neck | 1 | Where the shoulder hangs from. The neck keeps it still when you look down or around; 0 is the behaviour before 2026-10-19, for A/B. |
-| `arm.shoulder <fwd> <out> <up>` | mm | | The shoulder joint from the centre eye, with the head level and facing the torso, in the torso's frame. |
+| `arm.shoulder <fwd> <out> <up>` | mm | | The shoulder joint from the centre eye, with the head level and facing the torso, in the torso's frame. With the body pin it rides the drawn chest from there. |
 | `arm.len <upper> <fore>` | 150–450 mm | 285 275 | Drawn arm segments. |
 | `arm.length <cm>` | 40–70 | 56 | Both segments at once, shoulder to wrist, split as the defaults are. **Menu** (Arm length). |
-| `arm.lift <0\|1> [upMm [downMm]]` | 0–600, 0–400 mm (0 = no limit) | 1, no limits | The torso follows your neck up and down (stand up after calibrating seated), the waist stretching. Optional limits on how far above or below the calibrated height it follows. The joint carrying the game's camera never moves. `arm.report` gives `liftMm`, `liftReady` and `cameraJoint`. |
 | `arm.stretch <clavicle> <arm>` | 0–500 ‰, 1000–1300 ‰ | 150 1100 | How far the clavicle and the arm may stretch. |
 | `arm.prior <flexSd> <devRest> <devSd> <swivelSd>` | degrees | 45 −8 12 25 | The elbow solver's priors. |
 | `arm.rom <flex> <ext> <radial> <ulnar>` | 10–120 degrees | 75 65 20 35 | The wrist's range of motion. |
@@ -320,11 +327,11 @@ The body turns to face your torso again, without the jitter:
 | `ik.drive` / `ik.align` | 0/1 | 0 → VR 1 | Controllers drive the hands; weapon orientation from its authored aim. |
 | `ik.hands` | 1 right, 2 left, 3 both | 1 → VR 3 | Which hands IK drives. |
 | `ik.reach` | 50–150 % | 100 → VR 65 | Linear reach compression; only used with `pose.reach 0`. |
-| `ik.anchor` | 0/1 | 1 | Hands anchored at the view camera (0: the old reticle anchor). |
 | `ik.joints` | 1–768 | 101 | Joint-count signature of the first-person rig. |
 | `ik.calibrate` | action | | Controller-to-wrist rotation, next frame. VR runs it on each weapon. |
 | `ik.test <x> <y> <z>` | ±2000 mm | 0 0 0 | Test offset on the wrist goal. |
-| `ik.trace` / `ik.dump` / `ik.skel` / `ik.helpers` | | | Diagnostics, written to the log. |
+| `ik.trace` / `ik.dump` / `ik.helpers` | | | Diagnostics, written to the log. |
+| `ik.skel [label]` | letters, digits, `-`, `_` (24 at most) | `manual` | Writes every joint of the player's rig to the log on the next frame the IK sees it (`preyvr_anim_ik skel`): a header with the label, the rig's location (its model-to-world transform) and the joint the game's `#camera` rides; the character's attachments (`name@joint`); then per joint its name, the joint table's fields, its parent (derived from the pose), and its relative pose, its absolute pose before the native pass (`pre`) and after it and the mod's arms (`abs`), in model space. |
 | `pose.mode` | 0/1 | 1 | Anatomical hand pose (1) or the original lane (0). |
 | `pose.grip <along‰> <outMm> <thumbMm> <leanDeci>` | all four | 550 35 0 150 | Where the controller sits in the drawn hand. |
 | `pose.reach <mode> <knee%>` | both | 1 85 | Exact reach to the knee then soft (1), or `ik.reach` (0). |
@@ -384,7 +391,6 @@ The body turns to face your torso again, without the jitter:
 | `aim.reticle` / `aim.reticledispatch` | 0/1 | 0 → VR 1 | The crosshair follows the controller; the movie call half of that write. |
 | `aim.reticlecanvas` | 0 raw, 1 model, 2 native | 1 | How the reticle maps onto the HUD canvas. |
 | `aim.reticlestage` | 0/1 | 0 | The engine's stage scale flag, canvas mode 2 only. |
-| `aim.bodyyaw` | 0/1 | 1 | Hand offsets turn with the body (0: with the camera, a known defect kept for A/B). |
 | `aim.origin` | 0 eye, 1 hand, 2 muzzle | 0 | Where the aim ray starts. Diagnostic. |
 | `aim.calibratebarrel` | action | | Learns the muzzle offset from the last shot. |
 | `aim.shotprobe` / `aim.beam` | | | Research probes. |

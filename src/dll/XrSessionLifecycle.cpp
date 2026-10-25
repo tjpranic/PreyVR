@@ -477,6 +477,7 @@ void Teardown()
     gHost.reticleSwapchain.reset();
     gHost.optionsLayer.Reset();
     gHost.slotImage.Reset();
+    gHost.fadeImage.Reset();
     ClearSlotFeedback();
     gHost.wristSwapchain.reset();
     gHost.wristFitter.reset();

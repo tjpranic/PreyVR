@@ -302,8 +302,8 @@ the body mesh in VR. Investigated, with a native seam and a design, in
    second submission and the overlay redraws while the menu panel is up; decide
    whether shadow maps and other per-frame work can be shared between submissions.
 2. ~~Body yaw following the headset, or hiding the body.~~ Done on
-   `playability-improvements`: the body turns with the player, and walked with them until
-   room-scale was removed on 2026-10-24 ([BODY-FOLLOW.md](BODY-FOLLOW.md)).
+   `playability-improvements`: the body turns with the player, and walks with them (room-scale,
+   removed on 2026-10-24 and rebuilt on 2026-10-25; [BODY-FOLLOW.md](BODY-FOLLOW.md)).
 3. Marker depth, if markers look wrong in play (see the limits above).
 4. A proper fix for UI in VR space, the crosshair included (the VR reticle was
    removed ahead of it).

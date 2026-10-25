@@ -2,6 +2,18 @@
 
 ## TODO
 
+### Bugs
+- The player body renders over the top of everything
+- The neuromod cutscene that plays when you first use a neuromod only appears in the right eye
+- Reticle drifts from the actual aim point sometimes
+    Seems to happen after reloading?
+- Interacting with computers and screen is off
+    Depth/pointer offset issues
+
+### Rendering
+- DLSS?
+- Upscaling?
+
 ### UX/Game Feel
 - Rotate to face direction
     Add in an option to rotate the camera in the direction the right hand is facing. Alternatively, having the player body and camera follow the left/right hand when holding a certain button?
@@ -36,23 +48,18 @@
 - Instrumentation cleanup
     Removing (or gating behind a debug only build) of all the console logging and bug-finding instrumentation needs to be done at some point.
 - Documentation cleanup
-    Feature work has been tracked across multiple documents. These should be combined into one document.
+    Feature work has been tracked across multiple documents. These should be summarized and combined into one document.
 
 ### Immersion
 - Fine dextrous finger controls
     Definitely want this for the glass button pressing jumpscare.
 - Stopping hand -> object interactions from pushing objects through other objects
     e.g. Pressing down on a mug on a desk can push the mug through the desk
-- Leaning over desks/railings
-    Have the player body bend at the waist to allow leaning over furniture
-- Optional body rendering
-    An option to not render the body and only render the hands like in Half Life Alyx.
-    Or an overhaul to polish it up fully.
-    It also still feels like the shoulders are attached to the head and not the torso, will need to double check this.
-- Physical crouching
-    Crouching in real life should enable crouch mode. Standing up should disable crouch mode.
 - The Earth and Moon are very obviously rendered way too close
     Having them rendered at a more realisitic depth would be nice but challenging.
+- Physical crouching
+    Crouching in real life should enable crouch mode. Standing up should disable crouch mode.
+- An option to not render the body and only render the hands like in Half Life Alyx?
 
 ### HUD
 - Psi energy shows on wrist before installing first neuromod
@@ -61,18 +68,13 @@
 - The hand lasers start outside of player hands
     They seem to begin out of nowhere. Something like a fade in along the length (like when the laser fades out in menus when it's not hitting a surface) would make them look a bit nicer.
     The lasers also render over the top of everything.
-- The neuromod cutscene that plays when you first use a neuromod only appears in the right eye
-- Reticle drifts from the actual aim point sometimes
-    Seems to happen after reloading?
-- Interacting with computers and screen is off
-    Depth/pointer offset issues
 
 ### VR Options Menu
 - Have bindings section let you change your bindings
 - Group related options in the tabs into sections
 - Audit every option and rework and/or remove and/or consolidate as many as needed
-- In game console
-    In the VR Options menu, add a tab to show a console that allows me to enter tuning commands. It should also write the output to a log somewhere so agents can read it. Then remove the tuning command prompt stuff.
+- Development tab
+    This tab will be used to run input tuning commands because sending commands through the "Tune Prey VR.cmd" script is way too annoying to use properly.
 
 ## IN PROGRESS
 
@@ -111,20 +113,9 @@
     They now stop at fixed scenery and at heavy (Heavy Objects setting, 10 kg) or immovable loose objects, which slide when pressed. See docs/SURFACE-STOP-SCOPE-2026-10-21.md.
 - Hand animation plays when taking the wrench out
     It causes the right hand to spin. The animation should not play.
+- Overhaul body follow and roomscale
+- Leaning over desks/railings
+    Have the player body bend at the waist to allow leaning over furniture.
 
 ### Rendering
 - The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision).
-
----
-
-I want to overhaul the existing player body handling logic. First, we need to investigate the codebase for the following code/logic related to:
-- Having the player's body follow the headset when turning, moving laterally and vertically
-- The various camera control options and how they affect body positioning
-- The known logic controlling the player skeleton
-- What previous work has been done and undone
-The plan will be to investigate, decide what current logic needs to be redone completely, re-do the identified functionalities and then consolidate documentation into less files than before.
-As it stands right now, the existing implementation is okay to start with, but definitely not ready to be considered complete. The ultimate goal is to have the game handle physical movement in the following way:
-- The player character's body moves and rotates with the headset
-- When the player physically moves vertically (standing/sitting/crouching) the player character body should move accordingly (we should leverage the IK solver to do this)
-- When I look down, I should *not* be able to see into the player character model. Some form of pinning will be needed to keep the player body in the correct position relative to the head.
-Any changes must not re-introduce camera jittering, physics bugs (like the movement stoppage bug) or rendering bugs (be able to see into the player character model or see the model from an angle impossible in real life).

@@ -106,10 +106,12 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   speed, the move and turn stick deadzones, and sideways and backward walking
   speed. The character's body turns to face where you face: with the stick,
   with each snap turn, and as you turn round in the room (looking over your
-  shoulder does not turn it; turning further does). The stick and snap turns
-  turn you about the body, so you keep your place on it; if you have stepped
-  away from it, a snap swings you round it. It does not walk with you. (Body Follows You did both until 2026-10-24; it made smooth turning
-  jitter and was removed.)
+  shoulder does not turn it; turning further does). It walks with you as you
+  move round the room, stopping at walls and furniture, and bends with you as
+  you crouch and lean: lean, and the torso bends; step, and once you stand
+  still it catches up under you. The stick and snap turns turn you about the body, so you
+  keep your place on it. Push your head into a wall and the view fades to
+  black; firing, using and psi wait until you pull back.
 
   Reset VR view is on the Setup page.
 - **Hands:** **aim lasers** (on by default: a laser from each hand to what it
@@ -282,9 +284,12 @@ the stick to neutral after changing modes.
 The in-headset option is what persists.
 
 `view.height` reports the chosen reference space and calibrated height.
-`view.calibrate` sets a new standing/seated baseline from the current tracked
-head position. Ordinary recenter preserves that height baseline. Floor tracking
-does not yet implement physical crouch, avatar-height matching or a vignette.
+`view.calibrate` (Setup, Calibrate Current Posture) sets a new baseline from the
+current tracked head position; ordinary recenter preserves it. The body takes
+that height as standing, so calibrate standing up straight; calibrated seated,
+your seated height is the body's standing height. Crouching physically bends
+the drawn body, but Prey's own crouch, with its smaller collision, is still the
+B button. Avatar-height matching and a vignette are not implemented.
 
 ## Display
 

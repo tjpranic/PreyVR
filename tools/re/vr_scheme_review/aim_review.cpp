@@ -118,6 +118,7 @@ int main() {
     hand.aimPose.orientation = Normalize({0.13f, -0.21f, 0.07f, 0.95f});
     gOriginMode = 1;
     Vec3 heldDirection{};
+    int firstCameraMdeg = 0, lastCameraMdeg = 0;
     for (int degrees = -30; degrees <= 30; degrees += 5) {
         const float yaw = degrees * 0.0174532925199433f;
         tracked.head.orientation = {0, std::sin(yaw / 2), 0, std::cos(yaw / 2)};
@@ -129,7 +130,8 @@ int main() {
         UpdateAimReticleForRender();
         aim::Sample swept{};
         const bool available = TryGetAimSample(swept);
-        if (degrees == -30) heldDirection = swept.direction;
+        if (degrees == -30) { heldDirection = swept.direction; firstCameraMdeg = AimCameraYawMilliDegrees(); }
+        lastCameraMdeg = AimCameraYawMilliDegrees();
         Check(available && Same(swept.direction, heldDirection) &&
             Same(drawnDirection, heldDirection), "fixed LOCAL controller, head yaw=" + std::to_string(degrees));
         Check(drawnContext.trackingSequence == tracked.sequence &&
@@ -137,12 +139,10 @@ int main() {
               drawnContext.controller.orientation.w == hand.aimPose.orientation.w,
               "render provenance belongs to selected aim publication");
     }
-    gBodyYaw = false;
-    tracked.publishedNs = MonotonicNanoseconds();
-    UpdateCachedRayWithTakeover(player.data());
-    aim::Sample control{};
-    Check(TryGetAimSample(control) && !Same(control.direction, heldDirection),
-        "positive control: camera-relative mode reintroduces head yaw");
+    // Positive control: the sweep turned the camera through 60 degrees, so a
+    // camera-relative composition would have turned the aim with it.
+    Check(std::abs(lastCameraMdeg - firstCameraMdeg - 60000) < 100,
+        "positive control: the camera turned through the sweep");
     focused = false;
     UpdateCachedRayWithTakeover(player.data());
     aim::Sample sample;

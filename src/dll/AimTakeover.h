@@ -58,9 +58,8 @@ std::string TwoHandedAimStatus();
 // the foregrip hold, into frame.twoHand.
 void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking);
 
-// Which yaw rotates a head-relative controller offset into the world.
-//
-// **1 (default): body yaw.** The engine's view camera CARRIES head tracking --
+// **The body yaw rotates a head-relative controller offset into the world**
+// (GameplayPoseFrame::yaw). The engine's view camera CARRIES head tracking --
 // this mod writes it -- so its yaw is `body + (head - reference)`. Rotating an
 // offset that is already measured from the head by that angle applies the head
 // twice, and the hand and weapon swing with the headset. A wearer reported
@@ -68,13 +67,9 @@ void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking);
 // Subtracting the head's own yaw cancels it: `playSpace = camera - head`.
 // This is the composition the old hand lane called BodyYaw(), quoting the
 // fleet playbook -- parenting the shoulders to the HMD is the obvious
-// implementation and it is wrong.
-//
-// **0: the previous camera-relative yaw**, kept so the two can be compared
-// live rather than argued about. Falls back to 0's behaviour whenever the head
-// yaw is unusable (near-vertical), whose fix is to reject rather than invent.
-DWORD SetAimBodyYaw(unsigned int enabled);
-unsigned int AimBodyYawEnabled();
+// implementation and it is wrong. Near-vertical the last defined head yaw is
+// held; with none ever defined the frame is refused, never composed from the
+// camera yaw.
 // Frames that held the last defined head yaw because the wearer was looking
 // near-vertical, and frames refused because no head yaw has ever been defined.
 // Held frames are correct, not degraded: the body has not turned.

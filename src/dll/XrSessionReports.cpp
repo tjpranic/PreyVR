@@ -71,6 +71,7 @@
 namespace preyvr::dll {
 using namespace xrsession;
 
+unsigned long long XrFadeFrames() { return gFadeFrames.load(std::memory_order_relaxed); }
 
 DWORD SetXrTimingEnabled(unsigned int enabled, unsigned int displayHz)
 {

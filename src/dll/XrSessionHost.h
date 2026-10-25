@@ -233,6 +233,8 @@ DWORD UiFitMarginPercent();
 // menu's vertical budget, so turning it off also makes the menu bigger.
 DWORD SetUiGuideEnabled(unsigned int enabled);
 DWORD UiGuideEnabled();
+// Frames the head-in-wall fade was drawn (RoomScaleLane.h BodyHeadOut).
+unsigned long long XrFadeFrames();
 
 DWORD SetXrTimingEnabled(unsigned int enabled, unsigned int displayHz);
 

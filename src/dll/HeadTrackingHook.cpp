@@ -13,6 +13,7 @@
 #include "preyvr/StereoCamera.h"
 #include "preyvr/MotionController.h"
 #include "preyvr/ComfortControls.h"
+#include "preyvr/RoomScale.h"
 #include "XrSessionHost.h"
 
 #include <MinHook.h>
@@ -226,6 +227,9 @@ std::atomic<float> gPositionScale{1.0f};
 std::atomic<unsigned long long> gPositionApplied{0};
 std::atomic<unsigned long long> gPositionRefused{0};
 std::atomic<unsigned int> gLastOffsetMillimetres{0};
+// The same offset as a vector, and when it was written (ViewPositionOffset).
+std::atomic<float> gLastOffset[3]{0.0f, 0.0f, 0.0f};
+std::atomic<std::uint64_t> gLastOffsetNs{0};
 std::atomic<unsigned long long> gObserved{0};
 std::atomic<unsigned long long> gApplied{0};
 // UseNativeViewYawOnce: set by a body turn, consumed by the next view.
@@ -386,6 +390,10 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     gLastOffsetMillimetres.store(
         static_cast<unsigned int>(std::sqrt(offsetSquared) * 1000.0f + 0.5f),
         std::memory_order_relaxed);
+    gLastOffset[0].store(dx, std::memory_order_relaxed);
+    gLastOffset[1].store(dy, std::memory_order_relaxed);
+    gLastOffset[2].store(dz, std::memory_order_relaxed);
+    gLastOffsetNs.store(MonotonicNanoseconds(), std::memory_order_release);
 }
 
 bool Install()
@@ -481,6 +489,15 @@ unsigned long long ViewPositionRefusedCount()
 DWORD ViewPositionOffsetMillimetres()
 {
     return viewhook::gLastOffsetMillimetres.load(std::memory_order_relaxed);
+}
+
+bool ViewPositionOffset(Vec3& out)
+{
+    const std::uint64_t written = viewhook::gLastOffsetNs.load(std::memory_order_acquire);
+    if (written == 0 || !FreshSample(MonotonicNanoseconds(), written, 200000000ull)) { return false; }
+    out = {viewhook::gLastOffset[0].load(std::memory_order_relaxed), viewhook::gLastOffset[1].load(std::memory_order_relaxed),
+           viewhook::gLastOffset[2].load(std::memory_order_relaxed)};
+    return true;
 }
 
 DWORD SetViewHookApplying(unsigned int enabled)
@@ -632,6 +649,33 @@ int TurnHeadTrackingReferenceWithNative(const std::function<std::optional<float>
     room.yaw=controller::WrapAngle(room.yaw+*turned);
     gRoomReference.Publish(room);gReferenceYaw.store(room.yaw,std::memory_order_release);
     return 0;
+}
+int MoveHeadTrackingOriginWithNative(const Pose& head, float playSpaceYaw,
+                                     const std::function<std::optional<Vec3>(const Vec3& headOffsetWorld)>& moveNative) {
+    // Without the head's position in the view, moving the player would move it.
+    if(!viewhook::gApplying.load(std::memory_order_acquire) ||
+       !viewhook::gApplyingPosition.load(std::memory_order_acquire)) return 4;
+    const float scale=viewhook::gPositionScale.load(std::memory_order_relaxed);
+    const auto sampledReference=gReferenceGeneration.load();
+    if(!gHaveReference.load(std::memory_order_acquire)) return 1;
+    std::unique_lock lock(gRecenterMutex,std::try_to_lock);
+    RoomReference room{};
+    if(!lock.owns_lock() || !stereo::ReferenceCurrent(sampledReference, gReferenceGeneration.load()) ||
+       !gRoomReference.TryRead(room)) return 2;
+    const auto applied=moveNative(roomscale::HeadOffsetWorld(head.position,room.origin,playSpaceYaw,scale));
+    if(!applied) return 3;
+    // The head's offset drops by exactly the move, so the eye stays put: no
+    // generation bump.
+    const Vec3 shift=roomscale::OriginShift(*applied,playSpaceYaw,scale);
+    room.origin={room.origin.x+shift.x,room.origin.y+shift.y,room.origin.z+shift.z};
+    gRoomReference.Publish(room);
+    return 0;
+}
+bool HeadDropBelowCalibrated(const Vec3& head, float& drop) {
+    RoomReference room{};
+    if(!gHaveReference.load(std::memory_order_acquire) || !gRoomReference.TryRead(room)) return false;
+    drop=room.origin.y-head.y;
+    return std::isfinite(drop);
 }
 unsigned long long HeadTrackingRecenterEpoch() { return gRecenterEpoch.load(); }
 unsigned long long HeadTrackingSpaceEpoch() { return gHeadSpaceEpoch.load(); }

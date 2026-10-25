@@ -68,7 +68,7 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
     FingerPlan fingerPlan{};
     FingerPlan rightFingers{};
     ArmPlan armPlan[2]{};
-    TorsoLiftPlan liftPlan{};
+    BodyPlan bodyPlan{};
     PoseSettings ownedSettings{};
     std::uint8_t* ownedRelative = nullptr;
     std::uint8_t* ownedAbsolute = nullptr;
@@ -130,8 +130,12 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
                                      static_cast<std::uint8_t*>(relative), static_cast<unsigned>(poseCount),
                                      owner.character);
                     }
-                    PrepareArms(frame, location, static_cast<std::uint8_t*>(absolute),
-                                static_cast<unsigned>(poseCount), poseSettings, armPlan, liftPlan);
+                    // The body first, so the shoulders are placed on it.
+                    const float shoulderYaw = ShoulderYaw(frame);
+                    PlanBody(frame, location, static_cast<std::uint8_t*>(relative), static_cast<std::uint8_t*>(absolute),
+                             static_cast<unsigned>(poseCount), shoulderYaw, bodyPlan);
+                    PrepareArms(frame, location, static_cast<std::uint8_t*>(absolute), static_cast<unsigned>(poseCount),
+                                poseSettings, shoulderYaw, bodyPlan, armPlan);
                     armPlan[0].forceRotation = armPlan[1].forceRotation = free;
                     // The hand that holds a carried object closes around it.
                     {
@@ -206,6 +210,8 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
     std::uint8_t* dumpRelative = nullptr;
     std::uint8_t* dumpAbsolute = nullptr;
     unsigned dumpCount = 0;
+    animik::Location dumpLocation{};
+    bool dumpLocationValid = false;
     static std::uint8_t dumpBefore[kMaxJoints * kQuatTStride];
     if (gSkelDump.load() == 1 && haveOwner && owner.character == reinterpret_cast<std::uintptr_t>(character) &&
         params != nullptr) {
@@ -223,6 +229,14 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
             dumpAbsolute = static_cast<std::uint8_t*>(abs);
             dumpCount = static_cast<unsigned>(n);
         }
+        float loc[8] = {0};
+        if (ReadFloats(p + kParamsLocQ, &loc[0], 4) && ReadFloats(p + kParamsLocT, &loc[4], 3) &&
+            ReadFloats(p + kParamsLocS, &loc[7], 1)) {
+            dumpLocation.q = Quaternion{loc[0], loc[1], loc[2], loc[3]};
+            dumpLocation.t = Vec3{loc[4], loc[5], loc[6]};
+            dumpLocation.s = loc[7];
+            dumpLocationValid = animik::ValidLocation(dumpLocation);
+        }
     }
     if (stateLock.owns_lock()) { stateLock.unlock(); }
     const ProcessAdikFn original = gOriginal.load(std::memory_order_acquire);
@@ -230,8 +244,8 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
         original(character, params);
     }
     if (ownedAbsolute != nullptr) {
-        // First the torso, so the fingers and the arms below are placed on it.
-        ApplyTorsoLift(ownedAbsolute, ownedCount, ownedHandRig, liftPlan);
+        // First the body, so the fingers and the arms below are placed on it.
+        ApplyBody(ownedAbsolute, ownedCount, ownedHandRig, bodyPlan);
         if (fingerPlan.apply) { PropagateFingers(ownedRelative, ownedAbsolute, ownedCount, ownedHandRig); }
         if (rightFingers.apply) { PropagateFingers(ownedRelative, ownedAbsolute, ownedCount, ownedHandRig, 0); }
         SolveArms(frame, ownedAbsolute, ownedCount, ownedLocation, ownedHandRig, armPlan, ownedSettings);
@@ -239,7 +253,13 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
     }
     int expected = 1;
     if (dumpCount != 0 && gSkelDump.compare_exchange_strong(expected, 0)) {
-        DumpSkeletonPose(static_cast<std::uint8_t*>(character), dumpRelative, dumpBefore, dumpAbsolute, dumpCount);
+        std::string label;
+        {
+            std::lock_guard labelLock(gSkelLabelMutex);
+            label = gSkelLabel;
+        }
+        DumpSkeletonPose(static_cast<std::uint8_t*>(character), dumpRelative, dumpBefore, dumpAbsolute, dumpCount,
+                         dumpLocationValid ? &dumpLocation : nullptr, label);
     }
 }
 
@@ -369,21 +389,6 @@ DWORD SetAnimIkReachPercent(int percent)
 
 int AnimIkReachPercent() { return gReachPercent.load(std::memory_order_relaxed); }
 
-DWORD SetAnimIkCameraAnchor(unsigned int enabled)
-{
-    const bool on = enabled != 0;
-    gCameraAnchor.store(on, std::memory_order_release);
-    lifecycle::Log(std::string("preyvr_anim_ik result=0 detail=camera_anchor enabled=") +
-                   (on ? "1" : "0"));
-    return 0;
-}
-
-unsigned long long AnimIkAnchorCameraCount() { return gAnchorCamera.load(std::memory_order_relaxed); }
-
-unsigned long long AnimIkAnchorReticleCount() { return gAnchorReticle.load(std::memory_order_relaxed); }
-
-unsigned long long AnimIkAnchorMissingCount() { return gAnchorMissing.load(std::memory_order_relaxed); }
-
 DWORD SetAnimIkTrace(unsigned int enabled)
 {
     const bool on = enabled != 0;
@@ -442,14 +447,6 @@ DWORD SetArmSetting(const std::string& what, const int* v, unsigned n)
     const auto mm = [](int x) { return x * 0.001f; };
     if (what == "mode" && n >= 1 && v[0] >= 0 && v[0] <= 1) {
         p.armMode = static_cast<unsigned>(v[0]);
-    } else if (what == "anchor" && n >= 1 && v[0] >= 0 && v[0] <= 1) {
-        p.neckAnchor = v[0] != 0;
-    } else if (what == "lift" && n >= 1 && v[0] >= 0 && v[0] <= 1 && (n < 2 || (v[1] >= 0 && v[1] <= 600)) &&
-               (n < 3 || (v[2] >= 0 && v[2] <= 400))) {
-        p.torsoLift = v[0] != 0;
-        // 0: no limit that way.
-        if (n >= 2) { p.liftUp = v[1] > 0 ? mm(v[1]) : kNoLiftLimit; }
-        if (n >= 3) { p.liftDown = v[2] > 0 ? mm(v[2]) : kNoLiftLimit; }
     } else if (what == "length" && n >= 1 && v[0] >= kArmLengthMinCm && v[0] <= kArmLengthMaxCm) {
         b = armpose::WithArmLength(b, v[0] * 0.01f);
     } else if (what == "shoulder" && n >= 3 && std::abs(v[0]) <= 300 && v[1] >= 50 && v[1] <= 350 &&
