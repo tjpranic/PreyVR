@@ -13,16 +13,16 @@
 - Two-handed wrench
     Add in a two-handed wrench mode that automatically triggers heavy wrench attacks. One handed mode would always be a light attack. This would replace the speed based light/heavy attack system.
 - Two-handed carrying
+- Physical touch screen controls for computer monitors and keypads
 
 ## TODO
 
 ### Bugs
 - The handheld device (PDA) thing renders over the top of the hand
 - Reticle drifts from the actual aim point sometimes
-    Seems to happen after reloading?
+    Happens after examining a monitor or keypad.
 - Interacting with computers and screen is off (High Priority)
-    Depth/pointer offset issues
-- Focusing on keypads brings the camera *way* too close (High Priority)
+    Depth/pointer offset issues.
 
 ### UX/Immersion
 - The wrench tends to hit around the hand area instead of the head of the wrench
@@ -126,6 +126,8 @@
     Body following and roomscale implementation needs to be redone from the ground up.
 - Leaning over desks/railings (Archived)
     Have the player body bend at the waist to allow leaning over furniture.
+- Focusing on keypads brings the camera *way* too close (Archived)
+    > Prey places the zoom camera so the screen fills the whole view. In the headset that view is ~120° and square, so a keypad landed about 12 cm from the eyes. Interface's Screen Distance (30 cm) moves the camera back along its view, never past where you stood. PreyVR-94, worn OK 2026-10-26. See docs/KEYPAD-CAMERA-SCOPE-2026-10-26.md.
 
 ### Rendering
 - The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision). (Archived)
@@ -141,4 +143,5 @@ Feature set tracking list, in broad terms:
     Player interaction with objects in the world. Encompasses touching, pushing and throwing stuff along with hitting things with the wrench.
 - Stereoscopic rendering (**IMPLEMENTED**)
     Using the dormant stereoscopic rendering code in Prey's CryEngine fork. Cutscenes, fades and UI elements need special handling to display in both eyes correctly.
+- VR Options Menu (**IN PROGRESS**)
 - ...

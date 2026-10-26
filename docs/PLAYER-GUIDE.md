@@ -142,7 +142,10 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   while the wrench is out).
 - **Interface:** size, visible-area limit, panel curvature, controls guide, where
   the game's menus float (distance, left/right, up/down), the text panel's
-  distance, which hand's laser points at menus, **controller prompts** (on by
+  distance, **Screen Distance** (how far your view stays back when you use a
+  keypad, terminal, security station or fabricator; 30 cm by default, never
+  further back than you were standing; Prey's own camera puts the screen a hand's
+  width from your eyes), which hand's laser points at menus, **controller prompts** (on by
   default: menus show your controller's buttons, not the keyboard's, while the
   laser points at them), the HUD style (floating
   panel, or in the world as Prey draws it), and the reticle: in the world or on

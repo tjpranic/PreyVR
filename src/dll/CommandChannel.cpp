@@ -33,6 +33,7 @@
 #include "NearParticleStereo.h"
 #include "MarkerStereo.h"
 #include "StarfieldStereo.h"
+#include "ExamineCamera.h"
 #include "BodyDepthHook.h"
 #include "ReticleFollow.h"
 #include "SceneQuery.h"
@@ -600,6 +601,12 @@ constexpr Verb kVerbs[] = {
         // Marker Size for this session (VR Options saves it): 50..200 percent.
         const DWORD result = Valued(args) ? SetMarkerSizePercent(static_cast<unsigned>(Arg(args, 1, 100))) : 0;
         out << "markers.size result=" << result << " " << MarkerDepthReport();
+    }},
+    {"examine.pullback", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
+        // Screen Distance for this session (VR Options saves it): 0..100 cm,
+        // 0 Prey's own camera. Bare: report.
+        const DWORD result = Valued(args) ? SetExaminePullbackCm(static_cast<unsigned>(Arg(args, 1, -1))) : 0;
+        out << "examine.pullback result=" << result << " " << ExamineCameraReport();
     }},
     {"stars.depth", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
         // Bare `stars.depth` only reports. 1 = the stars at the sky's depth

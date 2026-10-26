@@ -187,6 +187,12 @@ void LayoutChecks(){
  Check(MenuEntries(0)[0]==Turn&&Has(MenuEntries(0),BackwardSpeed),"comfort: turning first, then walking");
  for(const int e:{UiDistance,UiOffsetRight,UiOffsetUp,UiText,PointerHand,HudLayer,ReticleWorld,ReticleSize,ReticleFallback,MarkerSize})
   Check(Has(MenuEntries(2),e),"menu placement, the HUD, the reticle and the markers on the interface tab");
+ {const auto page=MenuEntries(2);const auto text=std::find(page.begin(),page.end(),static_cast<int>(UiText));
+  Check(text!=page.end()&&text+1!=page.end()&&text[1]==ScreenPullback,"the screen distance sits under the text panel's");}
+ Check(Defaults()[ScreenPullback]==30&&Valid(ScreenPullback,0)&&Valid(ScreenPullback,100)&&!Valid(ScreenPullback,101)&&
+       !Valid(ScreenPullback,-5)&&KindOf(ScreenPullback)==Kind::range&&Display(ScreenPullback,30)==L"30 CM"&&
+       Display(ScreenPullback,0)==L"PREY'S OWN"&&std::string(Describe(ScreenPullback).key)=="screen_pullback",
+       "screen distance: 30 cm back by default, Prey's own (0) to 100 cm");
  Check(Defaults()[MarkerSize]==100&&Valid(MarkerSize,50)&&Valid(MarkerSize,200)&&!Valid(MarkerSize,40)&&!Valid(MarkerSize,210)&&
        std::string(Describe(MarkerSize).key)=="marker_size"&&Display(MarkerSize,150)==L"150%",
        "marker size: Prey's size by default, half to double");

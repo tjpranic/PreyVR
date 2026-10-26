@@ -14,6 +14,7 @@
 #include "MarkerStereo.h"
 #include "StarfieldStereo.h"
 #include "BodyDepthHook.h"
+#include "ExamineCamera.h"
 #include "DualSceneStereo.h"
 #include "DualOverlay.h"
 #include "NearFovOverride.h"
@@ -75,6 +76,7 @@ void StopFeatures() {
     SetMenuNavigation(0); SetMoveLaneMode(0);
     SetTurnLaneEnabled(0); SetFireLaneEnabled(0); SetInteractionEnabled(0);
     SetTorsoLaneActive(0);
+    StopExamineCamera();
     // Prey's keyboard/mouse prompts again, if VR start had set the controller's.
     SetControllerPrompts(0);
     // Leave the input drain alive to deliver the owned releases on the next frame.
@@ -223,6 +225,9 @@ void TickVrMode() {
         // The player's body in the world, hidden by what is in front of it, not
         // drawn over everything (BodyDepthHook.h). Not fatal either.
         EnsureBodyDepth();
+        // Keypads and terminals examined from Screen Distance, not a hand's
+        // width (ExamineCamera.h). Not fatal: without the hook Prey's camera.
+        EnsureExamineCamera();
         // Prey's re-read of the sticks finds the lanes' stick (StickReread.h).
         // Not fatal: the lanes' read-back still restores it within a frame.
         if(InstallStickReread()!=0) Log("stick_reread=unavailable fallback=read_back");
@@ -284,7 +289,7 @@ void TickVrMode() {
             // The same text dual.report and hud.layer answer with.
             Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
                 " } torso={"+TorsoLaneReport()+" } move={"+MoveLaneStatusReport()+StickRereadReport()+
-                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" "+BodyDepthReport()+" focus={"+
+                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" "+BodyDepthReport()+" "+ExamineCameraReport()+" focus={"+
                 FocusHoldReport()+" } hold={"+XrHoldReport()+" } prompts={"+ControllerPromptsReport()+" }");
         }
         const auto owner=AnimIkOwnerGeneration();

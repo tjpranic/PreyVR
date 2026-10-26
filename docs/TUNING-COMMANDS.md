@@ -137,6 +137,7 @@ this session. "Menu only" means no command reaches it.
 | Interface | Menu left / right (`ui_offset_right`) | −90–90 degrees, + is right | 0 | `ui.offset <right> <up>` |
 | Interface | Menu up / down (`ui_offset_up`) | −45–45 degrees, + is up | 0 | `ui.offset <right> <up>` |
 | Interface | Text panel distance (`ui_text`) | 100–200 cm | 140 | `ui.text <100..200>` |
+| Interface | Screen distance (`screen_pullback`): how far the view stays back from keypads, terminals and other screens you use, never further back than you stood; 0 is Prey's own camera ([keypad camera](KEYPAD-CAMERA-SCOPE-2026-10-26.md)) | 0–100 cm | 30 | `examine.pullback <cm>` |
 | Interface | Laser hand (`pointer_hand`) | left (0), right (1), buttons only (2) | right | `ui.pointer <0..2>` |
 | Interface | Controller prompts (`controller_prompts`) | on/off | on | `ui.prompts <0\|1>` |
 | Interface | HUD style (`hud_layer`) | in the world (0), floating panel (1) | panel | `hud.layer <0\|1>` |
@@ -228,6 +229,7 @@ value report, as described above.
 | `ui.distance` | 100–400 cm | 200 | Game menu distance, same apparent size. VR Options is placed apart (dragged by the laser). **Menu.** |
 | `ui.offset <right> <up>` | −90..90, −45..45 degrees | 0 0 | Moves the game menus around you on a cylinder, upright. Both values or neither. **Menu.** |
 | `ui.text` | 100–200 cm | 140 | Distance of notes, books, subtitles and tutorial cards. An open book or note moves to the new distance in the direction it opened. **Menu.** |
+| `examine.pullback` | 0–100 cm | 30 | Screen distance: how far the camera stays back from a keypad, terminal or other screen you use, never further back than the eye was when you pressed use; 0 is Prey's own camera ([keypad camera](KEYPAD-CAMERA-SCOPE-2026-10-26.md)). Bare: report. Report: `active` (VR drives it), `hooks` and `gate` (`ok`, `refused` = bytes mismatch, `hook_failed`); counts of `fits` (Prey's fit for any examination), `begins` (world UIs examined), `moved`, `capped` (held short by where the eye was), `noEye` (no begin seen), `otherCaller`, `unread`, `unwritten`; and from the last begin `screenMm` (Prey's camera from the screen), `eyeMm` (the eye behind it), `pullMm`, `fovDeci` and `bufferMm` (Prey's viewingBuffer). `PREYVR_EXAMINE_CAMERA=0` at launch leaves it unhooked. **Menu.** |
 | `ui.pointer` | 0 left, 1 right, 2 buttons only | 1 | Which hand's laser points at menus. **Menu.** |
 | `ui.prompts` | 0/1 | VR 1 | Game menus keep the controller's prompts under the laser: Prey's `hud_forceControllerGlyphs`, set and read back through the console. 0 puts Prey's 0 back. `applied=` is the value read back. **Menu.** |
 | `ui.panel` | 0 scene, 1 automatic, 2 force | 0 → VR 1 | Whether modal screens go to the floating panel. 2 is diagnostic. |

@@ -303,6 +303,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/NearParticleStereo.cpp
         src/dll/MarkerStereo.cpp
         src/dll/StarfieldStereo.cpp
+        src/dll/ExamineCamera.cpp
         src/dll/BodyDepthHook.cpp
         src/dll/DualSceneStereo.cpp
         src/dll/DualOverlay.cpp
@@ -464,6 +465,7 @@ if(PREYVR_BUILD_TESTS)
     preyvr_add_test(starfield_depth tests/StarfieldDepthTests.cpp)
     preyvr_add_test(body_depth tests/BodyDepthTests.cpp)
     preyvr_add_test(near_clip tests/NearClipTests.cpp)
+    preyvr_add_test(examine_pullback tests/ExaminePullbackTests.cpp)
     preyvr_add_test(video_letterbox tests/VideoLetterboxTests.cpp)
     preyvr_add_test(hand_carry tests/HandCarryTests.cpp)
     preyvr_add_test(grenade_throw tests/GrenadeThrowTests.cpp)
@@ -529,6 +531,9 @@ if(PREYVR_BUILD_TESTS)
             DLL
             LIBS preyvr_core minhook)
         preyvr_add_test(starfield_stereo tests/StarfieldStereoTests.cpp
+            DLL
+            LIBS preyvr_core minhook)
+        preyvr_add_test(examine_camera tests/ExamineCameraTests.cpp
             DLL
             LIBS preyvr_core minhook)
         preyvr_add_test(body_depth_hook tests/BodyDepthHookTests.cpp

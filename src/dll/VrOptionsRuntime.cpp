@@ -12,6 +12,7 @@
 #include "BodyEquipment.h"
 #include "ControllerPrompts.h"
 #include "HeadTrackingHook.h"
+#include "ExamineCamera.h"
 #include "UiMode.h"
 #include "MoveLane.h"
 #include "InputPost.h"
@@ -224,6 +225,7 @@ constexpr Wiring wiring[]={
  {options::LeanZone,Set<SetRoomScaleLeanZoneCm>,Get<RoomScaleLeanZoneCm>},
  {options::HipsBack,Set<SetBodyHipsBackCm>,Get<BodyHipsBackCm>},
  {options::NearClip,Set<SetViewNearClipCm>,Get<ViewNearClipCm>},
+ {options::ScreenPullback,Set<SetExaminePullbackCm>,Get<ExaminePullbackCm>},
 };
 constexpr bool InSettingOrder(){
  for(unsigned i=0;i<std::size(wiring);++i)if(wiring[i].id!=i)return false;

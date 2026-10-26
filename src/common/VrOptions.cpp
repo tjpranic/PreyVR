@@ -86,7 +86,9 @@ constexpr Spec specs[]={
  {"lean_zone",L"LEAN ZONE",L"How far your head can lean out before your body steps after it. Within it your torso bends to follow you; stand still and upright and the body catches up under you. Off: it follows your head at once.",25,0,50,5,U::cm,{},{},L"OFF"},
  {"hips_back",L"HIPS AND LEGS BACK",L"Moves your drawn hips and legs back, under your head rather than under your eyes. Raise it if your body seems to lean back when you look down; lower it if your legs seem to be behind you.",8,0,20,1,U::cm},
  // The view takes the same 1-10, default 3 (preyvr/NearClip.h; near_clip pins it).
- {"near_clip",L"NEAR CLIP DISTANCE",L"How close to your eyes things are still drawn. Lower it if you can see through your own body when you look down; raise it if distant surfaces flicker. Prey's own is 10 cm.",3,1,10,1,U::cm}
+ {"near_clip",L"NEAR CLIP DISTANCE",L"How close to your eyes things are still drawn. Lower it if you can see through your own body when you look down; raise it if distant surfaces flicker. Prey's own is 10 cm.",3,1,10,1,U::cm},
+ // The examination camera takes the same 0-100, default 30 (preyvr/ExaminePullback.h; examine_pullback pins it).
+ {"screen_pullback",L"SCREEN DISTANCE",L"How far your view stays back from keypads, terminals and other screens you use. Prey brings a screen close enough to fill your whole view, which in the headset is a hand's width from your eyes. Never further back than you were standing.",30,0,100,5,U::cm,{},{},L"PREY'S OWN"}
 };
 static_assert(std::size(specs)==Count,"one Spec per Setting, in order");
 // Each default, name and choice belongs to its setting's range, one name per value.
@@ -104,7 +106,7 @@ static_assert(Consistent(),"every Spec describes its own range");
 constexpr int comfort[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,StrafeSpeed,BackwardSpeed};
 constexpr int hands[]={AimLasers,TwoHand,GripToggle,SupportSnap,Psychoscope,ArmsFree,FingerCurl,ArmLength,CarryHold,GrenadeHand,
     CarryThrowStrength,GrenadeThrowStrength,SurfaceStop,HeavyMass,PhysicalContact,PushStrength,FreeSwing,SwingSpeed,HeavySwingSpeed};
-constexpr int interface_[]={UiScale,UiMargin,UiCurve,UiGuide,UiDistance,UiOffsetRight,UiOffsetUp,UiText,
+constexpr int interface_[]={UiScale,UiMargin,UiCurve,UiGuide,UiDistance,UiOffsetRight,UiOffsetUp,UiText,ScreenPullback,
     PointerHand,ControllerPrompts,HudLayer,ReticleWorld,ReticleSize,ReticleFallback,MarkerSize};
 constexpr int equipment[]={Holsters,ClearHolsterSlots,Wrist,WristSize,WristOnHud,WristTick,WristAlong,WristHover,
     WristTilt};
