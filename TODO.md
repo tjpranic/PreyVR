@@ -42,6 +42,8 @@
 - The Earth and Moon are very obviously rendered way too close
     Having them rendered at a more realisitic depth would be nice but challenging.
     Technically everything is working game wise, it would just be an improvement.
+- Arms can clip into the player model
+- Recenter player body when the player stops moving?
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
