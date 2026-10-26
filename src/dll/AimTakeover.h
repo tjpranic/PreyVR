@@ -125,6 +125,26 @@ unsigned long long AimMuzzleOriginAppliedCount();
 unsigned long long AimMuzzleUnavailableCount();
 unsigned long long AimOriginAppliedCount();
 
+// **A screen highlights what the crosshair sits on.** A terminal's or keypad's
+// cursor -- what it highlights and presses -- is cast from the player's cached
+// ray (preyvr/WorldUiNative.h), whose origin stays the eye, while the crosshair
+// is drawn from the aim sample: from the muzzle with a gun drawn. Half a metre
+// from a screen the two land as far apart as the muzzle is from the eyes.
+//
+// VR start: the world UI's read of the ray (its function's body checked first)
+// is handed the sample's ray instead, through the getter's filter. A refusal is
+// reported, never fatal: the screen keeps Prey's ray.
+//
+// While the player examines a screen (ExaminingScreen) the ray, and the sample,
+// start on the right hand's line level with the eye (preyvr/ExamineRay.h),
+// whatever aim.origin says; the edit is undone before the next rebuild, as
+// aim.origin's is. docs/WORLD-UI-POINTER-2026-10-26.md.
+void EnsureWorldUiRay();
+// screenAim={frames refused worldUi={gate steered}}: frames pointed from the
+// hand at an examined screen (and refused, with no camera), whether the world
+// UI's read is steered, and the reads handed the sample's ray.
+std::string ScreenAimReport();
+
 // Frames the cached ray was overwritten.
 unsigned long long AimTakeoverAppliedCount();
 

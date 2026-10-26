@@ -228,6 +228,9 @@ void TickVrMode() {
         // Keypads and terminals examined from Screen Distance, not a hand's
         // width (ExamineCamera.h). Not fatal: without the hook Prey's camera.
         EnsureExamineCamera();
+        // A screen's cursor cast from the crosshair's ray (AimTakeover.h). Not
+        // fatal: without it the screen keeps Prey's ray.
+        EnsureWorldUiRay();
         // Prey's re-read of the sticks finds the lanes' stick (StickReread.h).
         // Not fatal: the lanes' read-back still restores it within a frame.
         if(InstallStickReread()!=0) Log("stick_reread=unavailable fallback=read_back");
@@ -289,7 +292,7 @@ void TickVrMode() {
             // The same text dual.report and hud.layer answer with.
             Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
                 " } torso={"+TorsoLaneReport()+" } move={"+MoveLaneStatusReport()+StickRereadReport()+
-                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" "+BodyDepthReport()+" "+ExamineCameraReport()+" focus={"+
+                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" "+BodyDepthReport()+" "+ExamineCameraReport()+" "+ScreenAimReport()+" focus={"+
                 FocusHoldReport()+" } hold={"+XrHoldReport()+" } prompts={"+ControllerPromptsReport()+" }");
         }
         const auto owner=AnimIkOwnerGeneration();

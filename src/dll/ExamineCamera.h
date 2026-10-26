@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <string>
 
 // `examine.pullback`: Screen Distance (VR Options, Interface). How far the
@@ -26,6 +27,13 @@ unsigned ExaminePullbackCm();
 void EnsureExamineCamera();
 // VR stop: Prey's own camera again (the hook stays and passes through).
 void StopExamineCamera();
+
+// Main thread: whether `player` (ArkPlayer*) is examining a world UI -- a
+// terminal's or keypad's screen, from the glide in until it leaves -- which is
+// when Prey casts the screen's cursor from the player's reticle ray
+// (preyvr/WorldUiNative.h). False until VR start has found the examination's
+// three bodies the ones read, with or without the camera hook.
+bool ExaminingScreen(std::uintptr_t player);
 
 std::string ExamineCameraReport();
 

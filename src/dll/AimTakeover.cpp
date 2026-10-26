@@ -1,8 +1,11 @@
 #include "AimTakeover.h"
 #include "HookInstall.h"
 #include "EngineAccess.h"
+#include "ExamineCamera.h"
 #include "FrameSchedule.h"
 #include "HandWorld.h"
+#include "ReticleRayHook.h"
+#include "SafeMemory.h"
 #include "SceneQuery.h"
 #include "ShotRay.h"
 #include "WeaponAttachment.h"
@@ -16,8 +19,11 @@
 #include "ReticleFollow.h"
 #include "XrInput.h"
 #include "preyvr/EngineMap.h"
+#include "preyvr/ExamineRay.h"
 #include "preyvr/MotionController.h"
+#include "preyvr/NativeContract.h"
 #include "preyvr/StereoCamera.h"
+#include "preyvr/WorldUiNative.h"
 
 #include <MinHook.h>
 
@@ -76,6 +82,72 @@ void UndoOriginEdit(void* player)
             std::memcpy(originAt, &current, sizeof(current));
         }
         gLastOriginEdit = {};
+    }
+}
+
+// --- screens (AimTakeover.h, preyvr/ExamineRay.h) ---------------------------------
+std::atomic<unsigned long long> gScreenFrames{0}, gScreenRefused{0};
+// The world UI's read of the ray: its return address once its body was checked.
+namespace wn = worldui::native;
+static_assert(contract::Gated(wn::Contracts, wn::CursorRay) && wn::RayReadReturn > wn::CursorRay &&
+              wn::RayReadReturn < wn::CursorRay + wn::Contracts[0].size);
+std::atomic<std::uintptr_t> gWorldUiReturn{0};
+std::atomic<const char*> gWorldUiGate{"unchecked"};
+std::atomic<unsigned long long> gWorldUiSteered{0};
+
+// While a screen is examined: the cached ray, which Prey casts the screen's
+// cursor from, and the sample start on the right hand's line level with the
+// eye. The hand is placed against the camera centre the world is drawn from,
+// as the drawn hands are, not against Prey's cached origin: that is a near-plane
+// point that moves with Prey's own examination cursor. False leaves the ray as
+// it was (no camera this frame).
+bool AimAtScreen(const GameplayPoseFrame& frame, const Vec3& engineOrigin, const Vec3& direction,
+                 preyvr::aim::Sample& sample)
+{
+    Pose hand{};
+    if (!HandWorld(frame, Hand::right, ControllerPose::aim, Anchor::camera, Placement::controller, hand)) {
+        gScreenRefused.fetch_add(1, std::memory_order_relaxed);
+        return false;
+    }
+    const Vec3 origin = examine::ScreenRayOrigin(hand.position, frame.cameraCentre, direction);
+    if (!Finite(origin)) {
+        gScreenRefused.fetch_add(1, std::memory_order_relaxed);
+        return false;
+    }
+    std::memcpy(reinterpret_cast<void*>(frame.player + engine::ArkPlayerLayout::cachedReticleOrigin), &origin,
+                sizeof(origin));
+    gLastOriginEdit = {frame.player, engineOrigin, origin};
+    sample.origin = origin;
+    sample.cameraAnchored = true;
+    gScreenFrames.fetch_add(1, std::memory_order_relaxed);
+    return true;
+}
+
+// The getter's filter (ReticleRayHook.h), last in line. The world UI's cursor
+// raycast is handed the ray the crosshair is drawn from -- the published sample:
+// from the muzzle with a gun drawn, from the hand's line at an examined screen,
+// else from the eye -- instead of the cached one, whose origin stays the eye. So
+// what a screen highlights is what the crosshair sits on. With no usable sample
+// Prey's own ray is left.
+void WorldUiRay(std::uintptr_t, void* out, void* result, std::uintptr_t caller)
+{
+    const std::uintptr_t expected = gWorldUiReturn.load(std::memory_order_acquire);
+    if (expected == 0 || caller != expected || result != out) { return; }
+    preyvr::aim::Sample sample{};
+    if (!gAimSample.TryRead(sample) ||
+        !preyvr::aim::Usable(sample, WeaponEquipGeneration(), HeadTrackingReferenceGeneration(),
+                             MonotonicNanoseconds())) { return; }
+    const float ray[6] = {sample.origin.x, sample.origin.y, sample.origin.z,
+                          sample.direction.x, sample.direction.y, sample.direction.z};
+    if (SafeCopy(out, ray, sizeof(ray))) { gWorldUiSteered.fetch_add(1, std::memory_order_relaxed); }
+}
+
+bool WorldUiBodyMatches(std::uintptr_t base)
+{
+    __try {
+        return contract::BodiesMatch(base, wn::Contracts);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
     }
 }
 
@@ -140,7 +212,10 @@ void OverrideAimRay(const GameplayPoseFrame& frame, bool haveTracking)
     gApplied.fetch_add(1, std::memory_order_relaxed);
 
     const unsigned int originMode = gOriginMode.load(std::memory_order_acquire);
-    if (originMode != 0) {
+    // A screen being examined is pointed at from the hand, whatever aim.origin
+    // says (AimAtScreen).
+    const bool screen = ExaminingScreen(playerAddress) && AimAtScreen(frame, engineOrigin, ray->direction, sample);
+    if (!screen && originMode != 0) {
         Vec3 chosen = hand.position;
         bool haveMuzzle = false;
         if (originMode == 2) {
@@ -190,8 +265,9 @@ void OverrideAimRay(const GameplayPoseFrame& frame, bool haveTracking)
     }
     // aim.shot: the published ray starts at the muzzle the shot leaves from, so
     // the scene query, the reticles and the overlay all describe the shot. The
-    // engine's cached origin stays the eye (see ShotRay.h).
-    if (originMode == 0) { ShotRayFrame(frame, sample); }
+    // engine's cached origin stays the eye (see ShotRay.h). Not at a screen: its
+    // ray is the hand's.
+    if (originMode == 0 && !screen) { ShotRayFrame(frame, sample); }
     QueryAimScene(frame,sample);
     sample.publishedNs = MonotonicNanoseconds();
     gAimSample.Publish(sample);
@@ -312,6 +388,39 @@ DWORD SetAimOriginFromHand(unsigned int mode)
 }
 
 unsigned int AimOriginMode() { return gOriginMode.load(std::memory_order_relaxed); }
+
+void EnsureWorldUiRay()
+{
+    if (gWorldUiReturn.load(std::memory_order_acquire) != 0) { return; }
+    const std::uintptr_t base = PreyBase();
+    if (base == 0) {
+        gWorldUiGate = "no_preydll";
+        return;
+    }
+    if (!WorldUiBodyMatches(base)) {
+        gWorldUiGate = "refused";
+        Log("result=unavailable detail=bytes_mismatch target=WorldUiCursorRay");
+        return;
+    }
+    if (!EnsureReticleRayHook()) {
+        gWorldUiGate = "no_getter_hook";
+        Log("result=unavailable detail=no_getter_hook target=WorldUiCursorRay");
+        return;
+    }
+    SetReticleRayFilter(ReticleRayClient::worldUi, &WorldUiRay);
+    gWorldUiReturn.store(base + wn::RayReadReturn, std::memory_order_release);
+    gWorldUiGate = "ok";
+    Log("result=0 detail=steering target=WorldUiCursorRay");
+}
+
+std::string ScreenAimReport()
+{
+    std::ostringstream s;
+    s << "screenAim={frames=" << gScreenFrames.load() << " refused=" << gScreenRefused.load()
+      << " worldUi={gate=" << gWorldUiGate.load() << " steered=" << gWorldUiSteered.load() << "}}";
+    return s.str();
+}
+
 unsigned long long AimMuzzleOriginAppliedCount()
 {
     return gMuzzleOriginApplied.load(std::memory_order_relaxed);

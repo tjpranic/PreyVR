@@ -39,6 +39,9 @@ std::atomic<bool> gActive{false};
 std::mutex gInstallMutex;
 bool gInstallTried = false;
 std::atomic<bool> gInstalled{false};
+// The three bodies were found the ones read, before anything hooked the fit:
+// the examination's layout ExaminingScreen reads is known.
+std::atomic<bool> gLayout{false};
 std::atomic<const char*> gGate{"unchecked"};
 std::atomic<std::uint64_t> gFits{0}, gBegins{0}, gMoved{0}, gCapped{0}, gNoEye{0}, gOtherCaller{0}, gUnread{0},
     gUnwritten{0};
@@ -46,31 +49,9 @@ std::atomic<std::uint64_t> gFits{0}, gBegins{0}, gMoved{0}, gCapped{0}, gNoEye{0
 // began (examine::EyeDepth). Main thread only writes them.
 std::atomic<std::uint32_t> gEyeEntity{0};
 std::atomic<float> gEyeDepth{std::numeric_limits<float>::quiet_NaN()};
-// For the report, from the last begin: the fit's distance from the screen, the
-// eye's behind it, the view camera's vertical FOV and Prey's viewingBuffer; and
-// the last pull applied. Millimetres and tenths of a degree; -1 unknown.
-std::atomic<int> gLastScreenMm{-1}, gLastEyeMm{-1}, gLastFovDeci{-1}, gLastBufferMm{-1}, gLastPullMm{0};
-
-int Millimetres(float metres) { return std::isfinite(metres) ? static_cast<int>(std::lround(metres * 1000.0f)) : -1; }
 
 // --- reads and the one write (main thread) ----------------------------------------
-// The examined entity's position: IEntity::GetWorldTM (vtable +0xE8), which the
-// fit has just called on it. Its translation is the screen's corner.
-bool EntityOrigin(void* entity, Vec3& out)
-{
-    __try {
-        const auto table = *reinterpret_cast<const std::uintptr_t* const*>(entity);
-        using WorldTm = const float*(__fastcall*)(void*);
-        const float* m = reinterpret_cast<WorldTm>(table[0xE8 / sizeof(std::uintptr_t)])(entity);
-        if (m == nullptr) { return false; }
-        out = {m[3], m[7], m[11]};
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
 // Tests replace the engine here.
-bool (*gEntityOrigin)(void*, Vec3&) = EntityOrigin;
 const std::uint8_t* (*gViewCamera)() = LiveViewCamera;
 
 bool WriteTarget(float* target, const Vec3& position)
@@ -84,34 +65,23 @@ bool WriteTarget(float* target, const Vec3& position)
 }
 
 // The examination begins: the view camera is still the eye. Latch how far
-// behind the fit point it is, and what the report shows.
-void Begin(const std::uint8_t* examination, std::uint32_t entityId, Vec3 fit, Vec3 forward, void* entity)
+// behind the fit point it is.
+void Begin(std::uint32_t entityId, Vec3 fit, Vec3 forward)
 {
     gBegins.fetch_add(1, std::memory_order_relaxed);
-    float eyeDepth = std::numeric_limits<float>::quiet_NaN(), fov = std::numeric_limits<float>::quiet_NaN();
+    float eyeDepth = std::numeric_limits<float>::quiet_NaN();
     float matrix[12]{};
     const std::uint8_t* camera = gViewCamera();
-    if (camera != nullptr && SafeCopy(matrix, camera + engine::CameraLayout::matrix, sizeof(matrix)) &&
-        SafeRead(camera + engine::CameraLayout::fov, fov)) {
+    if (camera != nullptr && SafeCopy(matrix, camera + engine::CameraLayout::matrix, sizeof(matrix))) {
         eyeDepth = examine::EyeDepth(fit, forward, Vec3{matrix[3], matrix[7], matrix[11]});
     }
     gEyeDepth.store(eyeDepth, std::memory_order_relaxed);
     gEyeEntity.store(entityId, std::memory_order_relaxed);
-    Vec3 origin{};
-    float buffer = std::numeric_limits<float>::quiet_NaN();
-    gLastScreenMm.store(gEntityOrigin(entity, origin) ? Millimetres(Dot(Sub(origin, fit), forward)) : -1,
-                        std::memory_order_relaxed);
-    gLastEyeMm.store(Millimetres(eyeDepth), std::memory_order_relaxed);
-    gLastFovDeci.store(std::isfinite(fov) ? static_cast<int>(std::lround(fov * 1800.0f / kPi)) : -1,
-                       std::memory_order_relaxed);
-    gLastBufferMm.store(SafeRead(examination + en::ExamViewingBuffer, buffer) ? Millimetres(buffer) : -1,
-                        std::memory_order_relaxed);
 }
 
 // After Prey's fit, which `from` (an RVA) called. Only a world UI's fit, from
 // one of the two known callers, is moved; the begin's latches the eye first.
-void AfterFit(std::uint8_t* examination, float* target, const float* facing, void* entity, bool fitted,
-              std::uintptr_t from)
+void AfterFit(std::uint8_t* examination, float* target, const float* facing, bool fitted, std::uintptr_t from)
 {
     gFits.fetch_add(1, std::memory_order_relaxed);
     int type = 0;
@@ -128,7 +98,7 @@ void AfterFit(std::uint8_t* examination, float* target, const float* facing, voi
         gUnread.fetch_add(1, std::memory_order_relaxed);
         return;
     }
-    if (from == en::BeginReturn) { Begin(examination, entityId, fit, examine::Forward(facingNow), entity); }
+    if (from == en::BeginReturn) { Begin(entityId, fit, examine::Forward(facingNow)); }
     const unsigned cm = gPullbackCm.load(std::memory_order_relaxed);
     if (!gActive.load(std::memory_order_acquire) || cm == 0) { return; }
     const float eyeDepth = gEyeEntity.load(std::memory_order_relaxed) == entityId
@@ -147,14 +117,13 @@ void AfterFit(std::uint8_t* examination, float* target, const float* facing, voi
         gMoved.fetch_add(1, std::memory_order_relaxed);
     }
     if (placed.pull < examine::Metres(cm)) { gCapped.fetch_add(1, std::memory_order_relaxed); }
-    gLastPullMm.store(Millimetres(placed.pull), std::memory_order_relaxed);
 }
 
 std::uintptr_t __fastcall FitViewDetour(void* examination, float* target, float* facing, void* entity)
 {
     const std::uintptr_t result = gOriginal.load(std::memory_order_acquire)(examination, target, facing, entity);
     const auto from = reinterpret_cast<std::uintptr_t>(_ReturnAddress()) - gBase;
-    AfterFit(static_cast<std::uint8_t*>(examination), target, facing, entity, (result & 0xFF) != 0, from);
+    AfterFit(static_cast<std::uint8_t*>(examination), target, facing, (result & 0xFF) != 0, from);
     return result;
 }
 
@@ -215,6 +184,7 @@ bool InstallHook()
         return false;
     }
     gBase = base;
+    gLayout.store(true, std::memory_order_release);
     if (!gInstall(base + en::FitView)) {
         gGate = "hook_failed";
         return false;
@@ -223,6 +193,16 @@ bool InstallHook()
     gInstalled.store(true, std::memory_order_release);
     Log("result=0 detail=hook_installed target=ExamineFitView rows=" + std::to_string(std::size(en::Contracts)));
     return true;
+}
+
+// The layout without the hook (PREYVR_EXAMINE_CAMERA=0): nothing hooks the fit,
+// so its bytes can be read whenever this runs.
+void LatchLayout()
+{
+    std::lock_guard lock(gInstallMutex);
+    if (gLayout.load(std::memory_order_acquire)) { return; }
+    std::uintptr_t base = 0;
+    if (gResolve(base) == ERROR_SUCCESS) { gLayout.store(true, std::memory_order_release); }
 }
 
 } // namespace
@@ -238,9 +218,11 @@ unsigned ExaminePullbackCm() { return gPullbackCm.load(std::memory_order_relaxed
 
 void EnsureExamineCamera()
 {
-    // PREYVR_EXAMINE_CAMERA=0: Prey's camera, not even hooked.
+    // PREYVR_EXAMINE_CAMERA=0: Prey's camera, not even hooked. Screens are still
+    // pointed at from the hand (ExaminingScreen).
     if (EnvSwitchOff(L"PREYVR_EXAMINE_CAMERA")) {
         gActive.store(false, std::memory_order_release);
+        LatchLayout();
         Log("result=0 detail=disabled_by_environment hooks=0");
         return;
     }
@@ -249,6 +231,15 @@ void EnsureExamineCamera()
 
 void StopExamineCamera() { gActive.store(false, std::memory_order_release); }
 
+bool ExaminingScreen(std::uintptr_t player)
+{
+    if (player == 0 || !gLayout.load(std::memory_order_acquire)) { return false; }
+    const auto* examination = reinterpret_cast<const std::uint8_t*>(player + en::PlayerExamination);
+    int state = 0, type = 0;
+    return SafeRead(examination + en::ExamState, state) && state == en::StateOn &&
+           SafeRead(examination + en::ExamType, type) && type == en::TypeWorldUi;
+}
+
 std::string ExamineCameraReport()
 {
     std::ostringstream s;
@@ -256,9 +247,7 @@ std::string ExamineCameraReport()
       << " hooks=" << (gInstalled.load() ? 1 : 0) << " gate=" << gGate.load() << " fits=" << gFits.load()
       << " begins=" << gBegins.load() << " moved=" << gMoved.load() << " capped=" << gCapped.load()
       << " noEye=" << gNoEye.load() << " otherCaller=" << gOtherCaller.load() << " unread=" << gUnread.load()
-      << " unwritten=" << gUnwritten.load() << " last={screenMm=" << gLastScreenMm.load()
-      << " eyeMm=" << gLastEyeMm.load() << " pullMm=" << gLastPullMm.load() << " fovDeci=" << gLastFovDeci.load()
-      << " bufferMm=" << gLastBufferMm.load() << "}}";
+      << " unwritten=" << gUnwritten.load() << "}";
     return s.str();
 }
 

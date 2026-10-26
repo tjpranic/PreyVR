@@ -652,6 +652,7 @@ bool ShotRayFrame(const GameplayPoseFrame& frame, aim::Sample& sample)
     }
     sample.origin = muzzle;
     sample.muzzleOrigin = true;
+    sample.cameraAnchored = true;
     gFramesMuzzle.fetch_add(1, std::memory_order_relaxed);
     Pose aim{};
     if (AimWorld(frame, aim)) {

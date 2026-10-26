@@ -12,6 +12,9 @@ cause, the constraints a fix has to respect, and the changes made.
   42 cm from the screen.
 - No examination was capped, had no eye, came from an unknown caller, or failed a read or a write.
 
+The report's readings from the last begin (`last={screenMm eyeMm pullMm fovDeci bufferMm}`) were there to choose
+the default from. With 30 cm kept, they were removed on 2026-10-26. The counters stay.
+
 It follows the recommended route below:
 - `src/dll/ExamineCamera.cpp`: the detour on the fit, with the eye cap and no scenery ray.
 - `include/preyvr/ExaminePullback.h`: the math.

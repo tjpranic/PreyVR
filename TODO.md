@@ -1,30 +1,24 @@
 # PreyVR
 
-## SCOPING
-
-### Rendering
-- DLSS
-- Upscaling
-- Foveated rendering
-
-### UX/Immersion
-- Rotate to face direction
-    Add in an option to rotate the camera in the direction the right hand is facing. Alternatively, having the player body and camera follow the left/right hand when holding a certain button?
-- Two-handed wrench
-    Add in a two-handed wrench mode that automatically triggers heavy wrench attacks. One handed mode would always be a light attack. This would replace the speed based light/heavy attack system.
-- Two-handed carrying
-- Physical touch screen controls for computer monitors and keypads
-
 ## TODO
 
 ### Bugs
 - The handheld device (PDA) thing renders over the top of the hand
 - Reticle drifts from the actual aim point sometimes
     Happens after examining a monitor or keypad.
-- Interacting with computers and screen is off (High Priority)
-    Depth/pointer offset issues.
+
+### Rendering
+- DLSS?
+- Upscaling?
+- Foveated rendering?
 
 ### UX/Immersion
+- Rotate to face direction (?)
+    Add in an option to rotate the camera in the direction the right hand is facing. Alternatively, having the player body and camera follow the left/right hand when holding a certain button?
+- Two-handed wrench (?)
+    Add in a two-handed wrench mode that automatically triggers heavy wrench attacks. One handed mode would always be a light attack. This would replace the speed based light/heavy attack system.
+- Two-handed carrying (?)
+- Physical touch screen controls for computer monitors and keypads (?)
 - The wrench tends to hit around the hand area instead of the head of the wrench
 - Flashlight should be aimable
     With either a hand or the head.
@@ -114,6 +108,8 @@
 - Stun gun max charge effect at the wrong depth (Archived)
     Q-Beam has a similar issue
 - The neuromod cutscene that plays when you first use a neuromod only appears in the right eye (Archived)
+- Interacting with computers and screen is off (Archived)
+    > A screen highlights what Prey's own pointing ray hits, which starts at the eyes. With a gun drawn the crosshair starts at the muzzle, so the highlight sat 20-40 cm from it. The screen now gets the crosshair's ray. PreyVR-96, worn OK 2026-10-26. See docs/WORLD-UI-POINTER-2026-10-26.md.
 
 ### UX/Immersion
 - Shot from muzzle laser shows skewed (Archived)

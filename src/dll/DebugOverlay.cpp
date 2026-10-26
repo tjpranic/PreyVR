@@ -613,8 +613,10 @@ void DebugOverlayAim(const GameplayPoseFrame& frame, const aim::Sample& sample)
     } else {
         ray.origin = right.aimPose.position;
         // The aim sample's ray starts at the native eye (or the hand with
-        // aim.origin); its target is converted with the same anchor it was built from.
-        ray.target = EngineToXr(frame, frame.reticleOrigin, dd::Add(sample.origin, dd::Scale(sample.direction, distance)));
+        // aim.origin, or on the hand's line at a screen); its target is
+        // converted with the same anchor it was built from.
+        const Vec3 anchor = sample.cameraAnchored && frame.cameraCentreValid ? frame.cameraCentre : frame.reticleOrigin;
+        ray.target = EngineToXr(frame, anchor, dd::Add(sample.origin, dd::Scale(sample.direction, distance)));
     }
     ray.hit = hit;
     ray.distance = dd::Length(dd::Sub(ray.target, ray.origin));

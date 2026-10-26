@@ -2660,3 +2660,18 @@ weapon on it, not the hands alone; every skin of a near character is near.
 - `r_DepthBits` default 24 (`0xE0B651`), `r_ReverseDepth` default 1 (`0xECC72B`).
 
 See [how the body is drawn](BODY-FOLLOW.md#how-the-body-is-drawn).
+
+### 2026-10-26 addendum -- a world UI's cursor ray
+
+Static, `tools/re/verify_world_ui_cursor.py` (27 checks). A FlashUI element's cursor raycast `0x3017C0` (666 bytes,
+`WorldUiNative.h`) reads the player's cached reticle ray: `gEnv->pGame` (`0x224DA28`) vtable `+0x198` returns the
+IArkPlayer, whose slot 0 (vtable `0x1E56EB8`) is the getter `0x157CBB0`, called at `0x30190F` and returning to
+`0x301911`. It casts the ray element WorldUI `distance` (`+0x1E8`) long with types 7 and flags `0x40F`. A hit on the
+element's screen goes to `0x301A60`, which maps it through the screen's local bounds to pixels at `+0x200/+0x204`.
+The element's WorldUI block (`0x2FF380`): `enable` `+0x1E0`, `cursorEvents` `+0x1E1`, `distance` `+0x1E8`,
+`poolSize` `+0x1E4`. `0x1585320` builds the cached ray from the examination cursor `player+0xA10` while
+`player+0xA48 == 1` (`0x158536C`, `CMOVNZ` `0x15853B6`), else from `+0x17EC`. A screen entity is an `ArkWorldUI`
+entity named `"%s Screen"`, spawned at the owner's screen helper by `0x13DDD40`. The element update `0x3010C0`
+sends the cursor as a move (Flash player `+0x1C0` ScreenToClient `0xE8C9F0`, then `+0xF0`); element vtable
+`0x1CAB358` `+0x1E8` (`0x2FC3D0`) forwards to the player's viewport `+0x38`. The hardware-mouse dispatch `0x2CEF30` skips
+an enabled world UI. See [the world UI pointer](WORLD-UI-POINTER-2026-10-26.md).

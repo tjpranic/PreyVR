@@ -27,7 +27,7 @@ using GetterFn = void*(__fastcall*)(std::uintptr_t receiver, void* out);
 std::mutex gInstallMutex;
 std::atomic<bool> gInstalled{false};
 std::atomic<GetterFn> gOriginal{nullptr};
-std::array<std::atomic<ReticleRayFilter>, 2> gFilters{};
+std::array<std::atomic<ReticleRayFilter>, 3> gFilters{};
 
 bool BodyMatches(std::uintptr_t address, const engine::Landmark& landmark)
 {

@@ -23,6 +23,10 @@ inline constexpr std::size_t PlayerExamination=0x9B0;
 // sets the type and the entity before it calls the fit.
 inline constexpr std::size_t ExamTarget=0x68,ExamViewingBuffer=0x7C,ExamType=0x94,ExamState=0x98,ExamEntity=0x9C;
 inline constexpr int TypeWorldUi=1;
+// State 1: what makes ArkPlayer::UpdateCachedReticleViewPosAndDir (0x1585320)
+// build the player's reticle ray from the examination's cursor (+0x60), the ray
+// a world UI's cursor is cast from (preyvr/WorldUiNative.h).
+inline constexpr int StateOn=1;
 struct Contract {std::uintptr_t rva;std::size_t size;std::uint64_t hash;};
 inline constexpr Contract Contracts[]={
     {0x15AA660,1999,0x9C0A571B21F26875ull}, // ExamineFitView

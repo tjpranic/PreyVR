@@ -486,9 +486,10 @@ void PublishReticleTarget(const GameplayPoseFrame& frame, const aim::Sample& sam
     if (!hit) { distance = static_cast<float>(gConvergenceMm.load(std::memory_order_acquire)) * 0.001f; }
     distance = std::max(distance, kReticleNearestM);
     // Converted with the anchor the sample was built from, as the debug ray is:
-    // the muzzle with aim.shot, else the native eye the ray starts at.
+    // the camera centre for the muzzle with aim.shot or the hand's line at a
+    // screen, else the native eye the ray starts at.
     Vec3 anchor{};
-    AnchorPoint(frame, sample.muzzleOrigin ? Anchor::cameraElseReticle : Anchor::reticle, anchor);
+    AnchorPoint(frame, sample.cameraAnchored ? Anchor::cameraElseReticle : Anchor::reticle, anchor);
     const Vec3 world{sample.origin.x + sample.direction.x * distance, sample.origin.y + sample.direction.y * distance,
                      sample.origin.z + sample.direction.z * distance};
     ReticleTarget target{};

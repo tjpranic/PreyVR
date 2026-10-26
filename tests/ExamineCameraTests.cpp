@@ -18,7 +18,7 @@ using preyvr::test::Check;
 using preyvr::test::Logged;
 namespace en = preyvr::examine::native;
 
-// "examine={pullbackCm=30 ... last={screenMm=...}}" with each field between spaces.
+// "examine={pullbackCm=30 ... unwritten=0}" with each field between spaces.
 bool Reports(const char* field)
 {
     std::string report = " " + ExamineCameraReport() + " ";
@@ -34,9 +34,9 @@ template <class T> void Put(void* base, std::size_t offset, const T& value)
 }
 bool Near(float a, float b) { return std::fabs(a - b) < 1e-5f; }
 
-// The examination as Prey's begin leaves it: a world UI, entity 7, a 5 cm
-// viewingBuffer. The screen's corner at the origin, in the plane y = 0; Prey's
-// fit puts the camera 10 cm in front of it, facing it (looking along -Y).
+// The examination as Prey's begin leaves it: a world UI, entity 7. The screen's
+// corner at the origin, in the plane y = 0; Prey's fit puts the camera 10 cm in
+// front of it, facing it (looking along -Y).
 alignas(16) std::uint8_t examination[0x120]{};
 constexpr Vec3 kFit{0.2f, 0.1f, 1.5f};
 constexpr Quaternion kFacing{0.0f, 0.0f, 1.0f, 0.0f};
@@ -53,26 +53,18 @@ void Examine(int type, std::uint32_t entity)
 {
     Put(examination, en::ExamType, type);
     Put(examination, en::ExamEntity, entity);
-    Put(examination, en::ExamViewingBuffer, 0.05f);
     Put(examination, en::ExamTarget, kFit);   // what Prey's fit wrote, every call
 }
 
-// The view camera: the eye, and the vertical FOV (117.5 degrees).
+// The view camera: the eye.
 alignas(16) std::uint8_t camera[engine::CameraLayout::size]{};
 void Eye(Vec3 at)
 {
     float matrix[12] = {1, 0, 0, at.x, 0, 1, 0, at.y, 0, 0, 1, at.z};
     std::memcpy(camera + engine::CameraLayout::matrix, matrix, sizeof(matrix));
-    Put(camera, engine::CameraLayout::fov, 117.5f * kRadiansPerDegree);
 }
 const std::uint8_t* FakeViewCamera() { return camera; }
-int entityToken = 0;
-bool FakeEntityOrigin(void* entity, Vec3& out)
-{
-    Check(entity == &entityToken, "the examined entity's position is the one asked for");
-    out = {};
-    return true;
-}
+int entityToken = 0;   // the entity the detour is handed, passed on to Prey's fit
 
 // Prey's fit: writes the camera's target and facing, AL 1.
 unsigned fits = 0;
@@ -84,8 +76,8 @@ std::uintptr_t __fastcall FakeFit(void*, float* target, float* facingOut, void*)
     return 0x1234500000000001ull;
 }
 
-void Begin() { AfterFit(examination, Target(), &facing.x, &entityToken, true, en::BeginReturn); }
-void Frame() { AfterFit(examination, Target(), &facing.x, &entityToken, true, en::FrameReturn); }
+void Begin() { AfterFit(examination, Target(), &facing.x, true, en::BeginReturn); }
+void Frame() { AfterFit(examination, Target(), &facing.x, true, en::FrameReturn); }
 
 unsigned resolves = 0, installs = 0;
 DWORD readiness = ERROR_SUCCESS;
@@ -108,12 +100,20 @@ void Retry()
     gInstallTried = false;
     gGate = "unchecked";
 }
+
+// The player whose examination ExaminingScreen reads (ArkPlayer +0x9B0).
+alignas(16) std::uint8_t player[en::PlayerExamination + 0x120]{};
+std::uintptr_t Player(int state, int type)
+{
+    Put(player, en::PlayerExamination + en::ExamState, state);
+    Put(player, en::PlayerExamination + en::ExamType, type);
+    return reinterpret_cast<std::uintptr_t>(player);
+}
 } // namespace
 
 int main()
 {
     gViewCamera = FakeViewCamera;
-    gEntityOrigin = FakeEntityOrigin;
     Check(Reports("pullbackCm=30") && Reports("active=0") && Reports("hooks=0") && Reports("gate=unchecked"),
           "30 cm by default, nothing hooked, not moving the camera");
     Check(SetExaminePullbackCm(101) == ERROR_INVALID_PARAMETER && ExaminePullbackCm() == 30, "over 100 cm is refused");
@@ -141,6 +141,7 @@ int main()
           "mismatched bytes refuse the hook");
     EnsureExamineCamera();
     Check(resolves == 3, "and a refusal is not retried");
+    Check(!ExaminingScreen(Player(en::StateOn, en::TypeWorldUi)), "other bytes: no screen is known to be examined");
 
     // The real installer with MinHook never initialised: the hook cannot be made.
     Retry();
@@ -151,13 +152,15 @@ int main()
               Logged("result=failed", "create_hook", "ExamineFitView"),
           "a hook that cannot be created is reported, and Prey's camera kept");
 
-    // PREYVR_EXAMINE_CAMERA=0 at launch: unhooked.
+    // PREYVR_EXAMINE_CAMERA=0 at launch: unhooked, but the layout is still read.
     Retry();
     gInstall = FakeInstall;
+    gLayout = false;
     SetEnvironmentVariableW(L"PREYVR_EXAMINE_CAMERA", L"0");
     EnsureExamineCamera();
     SetEnvironmentVariableW(L"PREYVR_EXAMINE_CAMERA", nullptr);
     Check(installs == 0 && Reports("active=0") && Logged("disabled_by_environment"), "the launch switch leaves it unhooked");
+    Check(ExaminingScreen(Player(en::StateOn, en::TypeWorldUi)), "and a screen is still pointed at from the hand");
 
     // VR start: hooked, and moving the camera.
     EnsureExamineCamera();
@@ -167,14 +170,20 @@ int main()
     EnsureExamineCamera();
     Check(installs == 1, "once");
 
+    // Which examinations are a screen: a world UI from the glide in until it leaves.
+    Check(ExaminingScreen(Player(en::StateOn, en::TypeWorldUi)), "a world UI being examined is a screen");
+    Check(!ExaminingScreen(Player(0, en::TypeWorldUi)) && !ExaminingScreen(Player(2, en::TypeWorldUi)),
+          "not before it begins, nor while it leaves (Prey's cursor ray is then the crosshair's)");
+    Check(!ExaminingScreen(Player(en::StateOn, 2)) && !ExaminingScreen(Player(en::StateOn, 3)),
+          "a telescope or another entity is not a screen");
+    Check(!ExaminingScreen(0), "no player, no screen");
+
     // The begin: the eye 90 cm from the screen, 80 behind the fit. 30 cm back.
     Eye(Vec3{0.5f, 0.9f, 1.6f});
     Examine(en::TypeWorldUi, 7);
     Begin();
     Check(At(Vec3{0.2f, 0.4f, 1.5f}), "the begin's camera is 30 cm back along its view, centred on the screen");
-    Check(Reports("begins=1") && Reports("moved=1") && Reports("screenMm=100") && Reports("eyeMm=800") &&
-              Reports("pullMm=300") && Reports("fovDeci=1175") && Reports("bufferMm=50"),
-          "the report: the fit 10 cm from the screen, the eye 80 cm behind it, Prey's FOV and buffer");
+    Check(Reports("begins=1") && Reports("moved=1") && Reports("capped=0"), "the report counts the begin and the move");
     // Every frame Prey's fit writes its own again; it is moved back again.
     Examine(en::TypeWorldUi, 7);
     Frame();
@@ -184,14 +193,13 @@ int main()
     SetExaminePullbackCm(100);
     Examine(en::TypeWorldUi, 7);
     Frame();
-    Check(At(Vec3{0.2f, 0.9f, 1.5f}) && Reports("capped=1") && Reports("pullMm=800"), "100 cm stops at the eye, 80 back");
+    Check(At(Vec3{0.2f, 0.9f, 1.5f}) && Reports("capped=1"), "100 cm stops at the eye, 80 back");
     SetExaminePullbackCm(30);
     // Standing nearer the screen than Prey's camera: Prey's own.
     Eye(Vec3{0.2f, 0.05f, 1.5f});
     Examine(en::TypeWorldUi, 9);
     Begin();
-    Check(At(kFit) && Reports("eyeMm=-50") && Reports("pullMm=0") && Reports("capped=2"),
-          "an eye nearer the screen than the fit: not moved backwards");
+    Check(At(kFit) && Reports("capped=2"), "an eye nearer the screen than the fit: not moved backwards");
 
     // An examination whose begin was not seen: its eye is not known.
     Examine(en::TypeWorldUi, 11);
@@ -204,12 +212,11 @@ int main()
     Begin();
     Check(At(kFit) && Reports("begins=2"), "a telescope is Prey's");
     Examine(en::TypeWorldUi, 7);
-    AfterFit(examination, Target(), &facing.x, &entityToken, false, en::BeginReturn);
+    AfterFit(examination, Target(), &facing.x, false, en::BeginReturn);
     Check(At(kFit) && Reports("begins=2"), "a fit that failed is Prey's");
-    AfterFit(examination, Target(), &facing.x, &entityToken, true, 0x15AB000);
+    AfterFit(examination, Target(), &facing.x, true, 0x15AB000);
     Check(At(kFit) && Reports("otherCaller=1"), "an unknown caller is Prey's");
-    AfterFit(examination, reinterpret_cast<float*>(std::uintptr_t{0x10}), &facing.x, &entityToken, true,
-             en::FrameReturn);
+    AfterFit(examination, reinterpret_cast<float*>(std::uintptr_t{0x10}), &facing.x, true, en::FrameReturn);
     Check(Reports("unread=1"), "an unreadable target is left");
 
     // 0, or VR stopped: Prey's own camera. The begin still sees the eye.

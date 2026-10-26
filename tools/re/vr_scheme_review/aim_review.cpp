@@ -13,7 +13,7 @@ HMODULE WINAPI ReviewModule(LPCWSTR);
 
 preyvr::dll::TrackingFrame tracked;
 preyvr::Vec3 drawnOrigin, drawnDirection;
-bool focused = true, calibrated = false;
+bool focused = true, calibrated = false, examiningScreen = false;
 const preyvr::Vec3 eye{10, 20, 30}, muzzle{10.3f, 20.5f, 29.8f};
 int failures = 0;
 std::array<std::uint8_t, preyvr::engine::SystemLayout::viewCamera +
@@ -60,6 +60,11 @@ void PublishReticleTarget(const GameplayPoseFrame&, const aim::Sample&) {}
 void QueueHaptic(Hand, haptics::Event, const TrackingFrame&) {}
 void DebugOverlayAim(const GameplayPoseFrame&, const aim::Sample&) {}
 void DebugOverlayForegrip(const GameplayPoseFrame&, const twohand::Input&, const twohand::Output&, bool) {}
+// Whether a screen is examined (ExamineCamera.h), and the getter hook the world
+// UI's watcher would register with (ReticleRayHook.h): none here.
+bool ExaminingScreen(std::uintptr_t) { return examiningScreen; }
+bool EnsureReticleRayHook() { return false; }
+void SetReticleRayFilter(ReticleRayClient, ReticleRayFilter) {}
 // The gameplay schedule the frame is handed to (FrameSchedule.h).
 namespace schedule {
 void PrepareGameplayFrame(GameplayPoseFrame&, bool) {}
@@ -143,9 +148,79 @@ int main() {
     // camera-relative composition would have turned the aim with it.
     Check(std::abs(lastCameraMdeg - firstCameraMdeg - 60000) < 100,
         "positive control: the camera turned through the sweep");
+    // A screen being examined: the cached ray -- the one Prey casts the screen's
+    // cursor from -- starts on the hand's line level with the eye, placed against
+    // the camera centre, whatever aim.origin says (still 1 here).
+    examiningScreen = true;
+    ++tracked.sequence;
+    tracked.publishedNs = MonotonicNanoseconds();
+    UpdateCachedRayWithTakeover(player.data());
+    Vec3 atScreen{};
+    std::memcpy(&atScreen, player.data() + engine::ArkPlayerLayout::cachedReticleOrigin, sizeof(atScreen));
+    aim::Sample screenSample{};
+    GameplayPoseFrame screenFrame{};
+    Pose screenHand{};
+    const bool screenRead = TryGetAimSample(screenSample) && TryGetGameplayPoseFrame(screenFrame) &&
+        HandWorld(screenFrame, Hand::right, ControllerPose::aim, Anchor::camera, Placement::controller, screenHand);
+    Check(screenRead && Same(atScreen, examine::ScreenRayOrigin(screenHand.position, screenFrame.cameraCentre,
+                                                                screenSample.direction)),
+          "a screen: the cached ray starts on the hand's line, level with the eye");
+    Check(screenRead && std::fabs(Dot(Sub(atScreen, screenFrame.cameraCentre), screenSample.direction)) < 1e-4f &&
+              !Same(atScreen, screenHand.position) && !Same(atScreen, eye),
+          "a screen: neither the hand aim.origin would use nor the eye");
+    Check(screenRead && Same(screenSample.origin, atScreen) && screenSample.cameraAnchored,
+          "a screen: the sample starts there too, drawn against the camera centre");
+    // The world UI's cursor raycast is handed the crosshair's ray (the sample).
+    // At an examined screen that is the cached ray already: nothing moves.
+    gWorldUiReturn = 0x301911;
+    float read[6]{};
+    std::memcpy(read, &atScreen, sizeof(atScreen));
+    std::memcpy(read + 3, &screenSample.direction, sizeof(screenSample.direction));
+    WorldUiRay(0, read, read, 0x301911);
+    Vec3 handed{}, handedDirection{};
+    std::memcpy(&handed, read, sizeof(handed));
+    std::memcpy(&handedDirection, read + 3, sizeof(handedDirection));
+    const std::string steered = ScreenAimReport();
+    Check(Same(handed, atScreen) && steered.find("frames=1 ") != std::string::npos &&
+              steered.find("steered=1}") != std::string::npos,
+          "an examined screen reads the hand's ray, as cached (" + steered + ")");
+    // Prey's ray from the eye -- a gun's crosshair starts at the muzzle -- is
+    // replaced by the sample's.
+    std::memcpy(read, &eye, sizeof(eye));
+    WorldUiRay(0, read, read, 0x301911);
+    std::memcpy(&handed, read, sizeof(handed));
+    std::memcpy(&handedDirection, read + 3, sizeof(handedDirection));
+    Check(Same(handed, screenSample.origin) && Same(handedDirection, screenSample.direction) &&
+              ScreenAimReport().find("steered=2}") != std::string::npos,
+          "an eye-origin ray is handed the crosshair's");
+    // Any other reader of the ray keeps what it read.
+    std::memcpy(read, &eye, sizeof(eye));
+    WorldUiRay(0, read, read, 0x159A70A);
+    Vec3 kept{};
+    std::memcpy(&kept, read, sizeof(kept));
+    Check(Same(kept, eye) && ScreenAimReport().find("steered=2}") != std::string::npos,
+          "another caller (the target selector) is left alone");
+    // Done examining: aim.origin's hand again, and the next rebuild got Prey's own.
+    examiningScreen = false;
+    ++tracked.sequence;
+    tracked.publishedNs = MonotonicNanoseconds();
+    UpdateCachedRayWithTakeover(player.data());
+    aim::Sample afterScreen{};
+    Check(TryGetAimSample(afterScreen) && !afterScreen.cameraAnchored && !Same(afterScreen.origin, atScreen),
+          "after the screen: the ray aim.origin asks for");
+    gWorldUiReturn = 0;
+
     focused = false;
     UpdateCachedRayWithTakeover(player.data());
     aim::Sample sample;
     Check(!TryGetAimSample(sample), "failed tracking invalidates previous aim publication");
+    // No usable sample: the screen keeps Prey's ray.
+    gWorldUiReturn = 0x301911;
+    std::memcpy(read, &eye, sizeof(eye));
+    WorldUiRay(0, read, read, 0x301911);
+    std::memcpy(&kept, read, sizeof(kept));
+    Check(Same(kept, eye) && ScreenAimReport().find("steered=2}") != std::string::npos,
+          "with no aim sample the screen's ray is Prey's");
+    gWorldUiReturn = 0;
     return failures ? 1 : 0;
 }

@@ -108,7 +108,7 @@ def verify():
     return {'target':str(DEFAULT_MODULE),'sha256':image.sha256,'environment':'static','game_launched':False,'checks':checks,
         'limits':'Proves native bytes and call routes. The fit formula is read from its decompilation '
                  '(docs/KEYPAD-CAMERA-SCOPE-2026-10-26.md); viewingBuffer and the keypads\' bounds come from encrypted '
-                 'paks and are reported live by examine.pullback. Not exercised: the hook in a running game, or how '
+                 'paks (measured once in a headset, PreyVR-94). Not exercised: the hook in a running game, or how '
                  'a keypad looks in a headset.'}
 
 if __name__=='__main__':
