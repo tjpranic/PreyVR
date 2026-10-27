@@ -89,7 +89,13 @@ int main(){
         Require(sx!=by.end()&&sy!=by.end()&&sx->second->value==0.0&&sy->second->value==0.0&&
             std::string(sx->second->base)=="_root.cam.m_halfStageWidth"&&std::string(sy->second->base)=="_root.cam.m_halfStageHeight",
             "and safe where HUDPos(0, 0) puts it, at half the stage, without the HUD's sway");
-        Require(by.size()==6,"nothing else is moved");
+        for(const char* clip:{"_root.safe.reticle_mc.reticle_master","_root.safe.reticle_mc.interact_icons"})
+            for(const char* axis:{"._x","._y"}){
+                const auto o=by.find(std::string(clip)+axis);
+                Require(o!=by.end()&&o->second->value==0.0&&!o->second->base,
+                    "the crosshair and interact icons where authored, 0, whatever an examination's reticlePosition left");
+            }
+        Require(by.size()==10,"nothing else is moved");
         // The two parts never lift the same clip.
         for(const char* r:hud::Reticle.roots)for(const char* w:hud::Wheel.roots)
             Require(std::string(r)!=w,"the reticle and the wheel carry different clips");

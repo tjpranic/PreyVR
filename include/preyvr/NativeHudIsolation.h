@@ -74,7 +74,7 @@ struct Part {
     std::span<const char* const> probes;
     std::span<const Override> overrides;
 };
-inline constexpr std::size_t MaxGates=4, MaxProbes=4, MaxOverrides=8;
+inline constexpr std::size_t MaxGates=4, MaxProbes=4, MaxOverrides=10;
 
 // **The Favorites Wheel and what Prey shows with it.** The wheel, its details
 // panel and quick-use prompts sit under wheel_mc. Opening it
@@ -135,10 +135,21 @@ inline constexpr std::array ReticleProbes{"_root.safe.reticle_mc.reticle_master"
 // round(StageWidth / 2)), and safe where HUDPos(0, 0) puts it, at half the stage
 // (Camera.HUDPos sets safe to X + m_halfStageWidth, Y + m_halfStageHeight; the
 // engine's HUD sway and shake move it from there).
-inline constexpr std::array<Override, 6> ReticleOverrides{{
+//
+// **And the crosshair and interact icons where they are authored in reticle_mc,
+// 0 and 0.** Reticles.reticlePosition(X, Y) moves those two children by X minus
+// the last reticleXOffset/YOffset value, and Prey sends it every frame of an
+// examination and once on leaving one, from ArkPlayer +0x17EC/+0x17F0 (0x15AB280).
+// Flat, that field is the value the offsets were sent, so the children return to
+// 0. Here it is the eye's viewport fraction while the offsets are the HUD canvas
+// fraction (ReticleFollow), so they kept the difference and the crosshair sat off
+// the laser after every keypad (docs/RETICLE-DRIFT-SCOPE-2026-10-27.md).
+inline constexpr std::array<Override, 10> ReticleOverrides{{
     {"_root.safe.reticle_mc._x", 0.0}, {"_root.safe.reticle_mc._y", 0.0},
     {"_root.safe.quadrant_C._x", 0.0}, {"_root.safe.quadrant_C._y", 0.0},
-    {"_root.safe._x", 0.0, "_root.cam.m_halfStageWidth"}, {"_root.safe._y", 0.0, "_root.cam.m_halfStageHeight"}}};
+    {"_root.safe._x", 0.0, "_root.cam.m_halfStageWidth"}, {"_root.safe._y", 0.0, "_root.cam.m_halfStageHeight"},
+    {"_root.safe.reticle_mc.reticle_master._x", 0.0}, {"_root.safe.reticle_mc.reticle_master._y", 0.0},
+    {"_root.safe.reticle_mc.interact_icons._x", 0.0}, {"_root.safe.reticle_mc.interact_icons._y", 0.0}}};
 inline constexpr Part Reticle{"reticle", ReticleRoots, {ReticleExcluded, ReticleRoots}, {}, ReticleProbes,
                               ReticleOverrides};
 

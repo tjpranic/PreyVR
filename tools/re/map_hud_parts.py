@@ -57,12 +57,16 @@ class Movie:
         n = ub(5); ub(4 * n)
         return end()
 
-    def _skip_matrix(self, p):
+    def _matrix(self, p):
+        """End of the MATRIX at p, and its translation in twips."""
         ub, end = self._bits(p)
+        def sb(n):
+            v = ub(n)
+            return v - (1 << n) if n and v >> (n - 1) else v
         if ub(1): n = ub(5); ub(2 * n)
         if ub(1): n = ub(5); ub(2 * n)
-        n = ub(5); ub(2 * n)
-        return end()
+        n = ub(5); tx = sb(n); ty = sb(n)
+        return end(), (tx, ty)
 
     def _skip_cxform(self, p):
         ub, end = self._bits(p)
@@ -94,14 +98,14 @@ class Movie:
         depth = struct.unpack_from("<H", b, p)[0]; p += 2
         if code == 70 and (flags2 & 0x08 or (flags2 & 0x10 and flags & 0x02)):
             _, p = self.cstr(p)
-        char = None
+        char = moved = None
         if flags & 0x02: char = struct.unpack_from("<H", b, p)[0]; p += 2
-        if flags & 0x04: p = self._skip_matrix(p)
+        if flags & 0x04: p, moved = self._matrix(p)
         if flags & 0x08: p = self._skip_cxform(p)
         if flags & 0x10: p += 2
         name = None
         if flags & 0x20: name, p = self.cstr(p)
-        return depth, char, name
+        return depth, char, name, moved
 
     def _walk(self, start, end, into, top):
         for code, q, length in self._tags(start, end):
@@ -126,7 +130,7 @@ class Movie:
     def children(self, places):
         """Named children over the whole timeline: depth -> {names}, last character."""
         out = {}
-        for depth, char, name in places:
+        for depth, char, name, _ in places:
             entry = out.setdefault(depth, {"names": set(), "char": None})
             if char is not None: entry["char"] = char
             if name: entry["names"].add(name)
@@ -152,6 +156,13 @@ class Movie:
             char = match[0]
             places = self.sprites.get(char, [])
         return char if len(parts) > 1 else "root"
+
+    def authored_positions(self, path):
+        """Every translation (twips) the timeline places a named clip at; a placement without a matrix is (0, 0)."""
+        parent, name = path.rsplit(".", 1)
+        char = self.resolve(parent)
+        places = self.root if char == "root" else self.sprites.get(char, [])
+        return {moved or (0, 0) for _, _, placed, moved in places if placed == name}
 
     def subtree(self, char, depth):
         places = self.root if char == "root" else self.sprites.get(char, [])
@@ -339,6 +350,24 @@ def verify(movie):
         check(f"push 'Loc' getMember push '{axis}', r3 setMember" in moved and
               f"push r2, 'safe' getMember push 'quadrant_C' getMember push '{axis}', r3 setMember" in moved,
               f"Reticles.{method} moves reticle_mc.{axis} and quadrant_C.{axis} together (the prompt follows the crosshair)")
+    # The world reticle's replay also puts the crosshair and interact icon back where they
+    # are authored (ReticleOverrides): an examination's reticlePosition moves them inside
+    # reticle_mc, by its X/Y less the last reticleXOffset/YOffset value.
+    check("push r1, 'retLoc', 'code' getVar push 'HUD' getMember push 'Reticles' getMember push 'Loc' getMember "
+          "push 'reticle_master' getMember setMember" in reticles and
+          "push r1, 'iconLoc', 'code' getVar push 'HUD' getMember push 'Reticles' getMember push 'Loc' getMember "
+          "push 'interact_icons' getMember setMember" in reticles,
+          "Reticles.retLoc and iconLoc are reticle_mc.reticle_master and reticle_mc.interact_icons")
+    placed = " ".join(line.strip() for line in movie.methods("code.HUD.Reticles", ["reticlePosition"]))
+    check(re.findall(r"push '(\w+)' getMember push '(_[xy])', r\d+ setMember", placed) ==
+          [("retLoc", "_x"), ("retLoc", "_y"), ("iconLoc", "_x"), ("iconLoc", "_y")] and
+          "r1, 'centerXOff' getMember" in placed and "r1, 'centerYOff' getMember" in placed,
+          "Reticles.reticlePosition moves retLoc and iconLoc, relative to the last reticleXOffset/YOffset")
+    check(len(re.findall(r"push '(?:retLoc|iconLoc)' getMember push '_[xy]'", reticles)) == 4,
+          "and nothing else in Reticles moves them")
+    check(all(movie.authored_positions("_root.safe.reticle_mc." + n) == {(0, 0)}
+              for n in ("reticle_master", "interact_icons")),
+          "both are authored at (0, 0) in reticle_mc, the value ReticleOverrides puts them back to")
     camera = " ".join(line.strip() for line in movie.listing(
         *movie.init_actions[movie.class_sprite("code.HUD.Camera")], [], None, True, []))
     position = " ".join(line.strip() for line in movie.methods("code.HUD.Camera", ["HUDPos"]))

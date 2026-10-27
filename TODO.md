@@ -4,8 +4,6 @@
 
 ### Bugs
 - The handheld device (PDA) thing renders over the top of the hand
-- Reticle drifts from the actual aim point sometimes
-    Happens after examining a monitor or keypad.
 
 ### Rendering
 - DLSS?
@@ -44,6 +42,8 @@
     Technically everything is working game wise, it would just be an improvement.
 - Arms can clip into the player model
 - Recenter player body when the player stops moving?
+- Left hand laser doesn't hit at surface of objects unlike the right hand aim laser
+    This might be intentional? Will need to investigate.
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -112,6 +112,9 @@
 - The neuromod cutscene that plays when you first use a neuromod only appears in the right eye (Archived)
 - Interacting with computers and screen is off (Archived)
     > A screen highlights what Prey's own pointing ray hits, which starts at the eyes. With a gun drawn the crosshair starts at the muzzle, so the highlight sat 20-40 cm from it. The screen now gets the crosshair's ray. PreyVR-96, worn OK 2026-10-26. See docs/WORLD-UI-POINTER-2026-10-26.md.
+- Reticle drifts from the actual aim point sometimes (Archived)
+    Happens after examining a monitor or keypad.
+    > Leaving an examination, Prey moves the crosshair inside its clip by the difference between its stored reticle position and the one the mod sends the HUD. Those differ in VR, so the crosshair kept an offset of several degrees. The world reticle now puts it back where the HUD movie places it. PreyVR-97, worn OK 2026-10-27. See docs/RETICLE-DRIFT-SCOPE-2026-10-27.md.
 
 ### UX/Immersion
 - Shot from muzzle laser shows skewed (Archived)
