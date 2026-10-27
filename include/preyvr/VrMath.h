@@ -58,6 +58,13 @@ inline float YawDistance(float a, float b) { return std::fabs(std::remainder(a -
 // in `dt` seconds: 1 - e^(-dt * perSecond). Not the time-constant form
 // 1 - e^(-dt / tau), which rounds differently.
 inline float ExpAlpha(float dt, float perSecond) { return 1.0f - std::exp(-dt * perSecond); }
+// Smoothstep on [0, 1]: `x` clamped as std::clamp does (NaN stays NaN), then
+// 3x^2 - 2x^3, which starts and ends with zero slope: a fade with no visible start or end.
+inline float SmoothStep(float x)
+{
+    x = x < 0.0f ? 0.0f : (1.0f < x ? 1.0f : x);
+    return x * x * (3.0f - 2.0f * x);
+}
 
 // The inverse of a unit quaternion.
 inline Quaternion Conjugate(Quaternion q) { return {-q.x, -q.y, -q.z, q.w}; }

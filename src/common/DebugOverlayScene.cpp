@@ -24,6 +24,14 @@ const char* NoticeText(Notice notice)
     }
 }
 
+// A laser line from the hand, easing in (kLaserFadeIn).
+Line Laser(Vec3 from, Vec3 to, Color color, float width, float minPixels)
+{
+    Line line{from, to, color, width, minPixels};
+    line.fadeIn = std::min(kLaserFadeIn, .5f * Length(Sub(to, from)));
+    return line;
+}
+
 // The left hand's use pointer: faint while it selects nothing, bright and
 // ending on the object when the game selected one, green while the use button
 // is held. A pick the native cone made off the line shows as a bend.
@@ -33,14 +41,14 @@ void AddUseRay(Scene& scene, const HandRay& ray, unsigned mask)
     if (ray.selected && !ray.onLine) {
         // The straight pointing line, faint, then the bend to the object.
         const float d = Length(Sub(ray.target, ray.origin));
-        scene.lines.push_back({ray.origin, Add(ray.origin, Scale(ray.direction, d)), WithAlpha(color, 70), .003f, 1.5f});
+        scene.lines.push_back(Laser(ray.origin, Add(ray.origin, Scale(ray.direction, d)), WithAlpha(color, 70), .003f, 1.5f));
         Line bend{Add(ray.origin, Scale(ray.direction, d * .55f)), ray.target, color, .004f, 2.0f};
-        scene.lines.push_back({ray.origin, bend.a, color, .0045f, 2.0f});
+        scene.lines.push_back(Laser(ray.origin, bend.a, color, .0045f, 2.0f));
         scene.lines.push_back(bend);
     } else {
-        scene.lines.push_back({ray.origin, ray.target, color, ray.selected ? .0045f : .003f, ray.selected ? 2.0f : 1.4f});
+        scene.lines.push_back(Laser(ray.origin, ray.target, color, ray.selected ? .0045f : .003f, ray.selected ? 2.0f : 1.4f));
     }
-    if (ray.selected) { scene.lines.push_back({ray.origin, ray.target, WithAlpha(color, 50), .012f, 4.0f}); }
+    if (ray.selected) { scene.lines.push_back(Laser(ray.origin, ray.target, WithAlpha(color, 50), .012f, 4.0f)); }
     Marker end{};
     end.centre = ray.target;
     end.color = color;
@@ -87,9 +95,9 @@ void AddRay(Scene& scene, const HandRay& ray, Color color, unsigned mask, bool r
     // follows it: drawn faint so it is not mistaken for a weapon's.
     if (rightHand && ray.role != RayRole::Weapon) { color = WithAlpha(color, 120); }
     // The path a shot (or a power) takes: from the hand to where the game's ray ends.
-    scene.lines.push_back({ray.origin, ray.target, color, .0045f, 2.0f});
+    scene.lines.push_back(Laser(ray.origin, ray.target, color, .0045f, 2.0f));
     // A soft halo makes a thin ray readable against bright surfaces.
-    scene.lines.push_back({ray.origin, ray.target, WithAlpha(color, 50), .012f, 4.0f});
+    scene.lines.push_back(Laser(ray.origin, ray.target, WithAlpha(color, 50), .012f, 4.0f));
     Marker end{};
     end.centre = ray.target;
     end.color = color;

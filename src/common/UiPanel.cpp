@@ -71,8 +71,7 @@ PointerQuads PointerQuadsFor(const Pose& aim, const std::optional<RayHit>& hit, 
 }
 float LaserFade(float along) {
     if(!std::isfinite(along))return 0;
-    const float s=std::clamp((along-.1f)/.9f,0.f,1.f);
-    return 1-s*s*(3-2*s); // smoothstep: no visible start or end to the fade
+    return 1-SmoothStep((along-.1f)/.9f);
 }
 namespace {
 bool Valid(const Pose& p) {

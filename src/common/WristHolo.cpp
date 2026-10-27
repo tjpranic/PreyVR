@@ -14,12 +14,6 @@ bool Unit(Vec3 a, Vec3& out, float minimum = 1e-5f)
     return true;
 }
 
-float SmoothStep(float x)
-{
-    x = std::clamp(x, 0.0f, 1.0f);
-    return x * x * (3.0f - 2.0f * x);
-}
-
 }  // namespace
 
 Card PlaceCard(const Arm& arm, const Pose& head, const Placement& placement)

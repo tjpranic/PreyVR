@@ -105,6 +105,67 @@ void TestLines()
     Require(v.empty(), "an off-image line is culled");
 }
 
+unsigned Alpha(const Vertex& v) { return v.color >> 24; }
+
+void TestFadeIn()
+{
+    const EyeView eye = Square();
+    Scene scene;
+    // 1 m across the view at 1 m, the first quarter fading in.
+    Line line{{-.5f, 0, -1}, {.5f, 0, -1}, {255, 0, 0, 200}, .01f, 1.0f};
+    line.fadeIn = .25f;
+    scene.lines.push_back(line);
+    std::vector<Vertex> v;
+    Tessellate(scene, eye, v, 10000);
+    // Quad order per segment: start, start, end, end, start, end.
+    Require(v.size() == 6 * 9, "eight fade pieces and the solid rest");
+    Require(Alpha(v[0]) == 0 && Alpha(v[1]) == 0 && Near(v[0].x, 250), "the line starts transparent at its start");
+    bool rising = true;
+    for (int i = 0; i < 8; ++i) {
+        const unsigned start = Alpha(v[6 * i]), end = Alpha(v[6 * i + 2]);
+        rising = rising && end > start && (i == 0 || start == Alpha(v[6 * (i - 1) + 2]));
+        rising = rising && Near(v[6 * i + 2].x, 250 + 125.0f * static_cast<float>(i + 1) / 8);
+        rising = rising && Near(static_cast<float>(end), std::round(200 * SmoothStep(static_cast<float>(i + 1) / 8)), 0);
+    }
+    Require(rising, "each piece rises along the eased curve and meets the next");
+    Require(Alpha(v[48]) == 200 && Alpha(v[50]) == 200 && Near(v[48].x, 375) && Near(v[50].x, 750),
+            "past the fade the line is solid to its end");
+
+    // Shorter than its fade: it fades over its whole length.
+    scene.lines[0].fadeIn = 5;
+    v.clear();
+    Tessellate(scene, eye, v, 10000);
+    Require(v.size() == 6 * 8 && Alpha(v[0]) == 0 && Alpha(v[47]) == 200 && Near(v[47].x, 750),
+            "a line shorter than its fade reaches full alpha at its end");
+
+    // No fade: one quad, solid at both ends, as before.
+    scene.lines[0].fadeIn = 0;
+    v.clear();
+    Tessellate(scene, eye, v, 10000);
+    Require(v.size() == 6 && Alpha(v[0]) == 200 && Alpha(v[2]) == 200, "without a fade the line is one solid quad");
+
+    // A dashed line ignores the fade.
+    scene.lines[0].fadeIn = .25f;
+    scene.lines[0].dash = .1f;
+    v.clear();
+    Tessellate(scene, eye, v, 10000);
+    Require(!v.empty() && Alpha(v[0]) == 200, "dashes are not faded");
+
+    // Through the eye: the pieces behind it are dropped, and the one cut at the
+    // near plane starts at the fade where it was cut. 2 m long, 0.4 m fade, so
+    // 5 cm pieces; the third runs z 0 to -0.05 and is cut 60% along, at -0.03.
+    // Just off the axis, so even the cut piece projects inside the image.
+    scene.lines[0] = {{.01f, 0, .1f}, {.01f, 0, -1.9f}, {255, 0, 0, 255}, .01f, 1.0f};
+    scene.lines[0].fadeIn = .4f;
+    v.clear();
+    Tessellate(scene, eye, v, 10000);
+    const float cut = SmoothStep(.25f) + (SmoothStep(.375f) - SmoothStep(.25f)) * .6f;
+    Require(v.size() == 6 * 7, "the two pieces behind the eye are gone");
+    Require(Near(static_cast<float>(Alpha(v[0])), 255 * cut, 1) &&
+                static_cast<long>(Alpha(v[2])) == std::lround(255 * SmoothStep(.375f)),
+            "a piece cut at the near plane keeps the curve");
+}
+
 void TestSpheresMarkersLabels()
 {
     const EyeView eye = Square();
@@ -290,6 +351,26 @@ void TestSceneLayers()
     BuildOverlayScene(f, kLaserLayers, scene);
     Require(!scene.lines.empty() && scene.markers.size() == 3 && scene.spheres.empty() && scene.labels.empty(),
             "the lasers draw both rays, and no slots, labels or status");
+    // Each laser line eases in from the hand; a short one over half its length.
+    bool fading = true;
+    for (const auto& line : scene.lines) { fading = fading && line.fadeIn == kLaserFadeIn; }
+    Require(fading, "every laser line fades in");
+    f.rays[1].target = {.2f, 1.4f, -.5f};
+    BuildOverlayScene(f, kRays, scene);
+    Require(Near(scene.lines[0].fadeIn, .1f, 1e-5f), "a 20 cm laser fades over its first half");
+    f.rays[0] = {};
+    f.rays[1] = {};
+    f.rays[0].valid = true;
+    f.rays[0].role = RayRole::Use;
+    f.rays[0].origin = {-.2f, 1.4f, -.3f};
+    f.rays[0].direction = {0, 0, -1};
+    f.rays[0].target = {-.1f, 1.4f, -1.3f};
+    f.rays[0].selected = true;
+    BuildOverlayScene(f, kRays, scene);
+    // The faint straight line, the leg to the bend, the bend, the halo.
+    Require(scene.lines.size() == 4 && scene.lines[0].fadeIn > 0 && scene.lines[1].fadeIn > 0 &&
+                scene.lines[2].fadeIn == 0 && scene.lines[3].fadeIn > 0,
+            "the use pointer fades in from the hand, not at its bend");
 }
 
 void TestDrawnLayers()
@@ -383,6 +464,7 @@ int main()
     TestProjection();
     TestNearClip();
     TestLines();
+    TestFadeIn();
     TestSpheresMarkersLabels();
     TestGestureTruth();
     TestWristMeasureMatchesVisibility();

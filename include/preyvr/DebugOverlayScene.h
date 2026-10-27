@@ -53,6 +53,11 @@ inline constexpr Color kStored{110, 160, 255, 235};
 inline constexpr Color kMuted{150, 150, 150, 140};
 
 enum class RayRole : std::uint8_t { None, Weapon, Psi, Pointer, Use };
+// **The lasers ease in from the hand** over their first kLaserFadeIn metres
+// (Line::fadeIn), never more than half their length. Without it a laser began
+// at full strength in mid-air: the weapon's starts at the controller's aim
+// pose, ahead of the hand drawn at its grip.
+inline constexpr float kLaserFadeIn = .2f;
 // The use pointer's states (InteractionLane): pointing at something the game
 // selected, using it (button held), or blanked while the right grip reloads.
 inline constexpr Color kUseHeld{90, 235, 120, 245};

@@ -81,9 +81,21 @@ bool OffImage(const EyeView& eye, float x0, float y0, float x1, float y1, float 
            std::max(y0, y1) < -margin || std::min(y0, y1) > eye.height + margin;
 }
 
-void Segment(Out& out, const EyeView& eye, Vec3 a, Vec3 b, const Line& line)
+// A colour with its alpha scaled by `fade` (0..1).
+std::uint32_t Faded(Color c, float fade) { return Pack(WithAlpha(c, static_cast<std::uint8_t>(std::lround(c.a * fade)))); }
+
+// `fadeA`/`fadeB` scale the line's alpha at each end; the GPU interpolates between them.
+void Segment(Out& out, const EyeView& eye, Vec3 a, Vec3 b, const Line& line, float fadeA = 1, float fadeB = 1)
 {
+    const Vec3 a0 = a, b0 = b;
     if (!ClipToNear(eye, a, b)) { return; }
+    // An end cut at the near plane (at most one is) takes the fade where it was cut.
+    const float span = Length(Sub(b0, a0));
+    if (fadeA != fadeB && span > 0) {
+        const float cutA = Length(Sub(a, a0)) / span, cutB = Length(Sub(b0, b)) / span;
+        if (cutA > 0) { fadeA += (fadeB - fadeA) * cutA; }
+        else if (cutB > 0) { fadeB += (fadeA - fadeB) * cutB; }
+    }
     const Projected p0 = FromView(eye, ToView(eye, a));
     const Projected p1 = FromView(eye, ToView(eye, b));
     const float focal = FocalPixels(eye);
@@ -97,17 +109,37 @@ void Segment(Out& out, const EyeView& eye, Vec3 a, Vec3 b, const Line& line)
     // a one pixel feather the pixel shader fades across.
     const float nx = -dy / length, ny = dx / length;
     const float e0 = h0 + 1, e1 = h1 + 1;
-    const auto c = Pack(line.color);
-    out.Quad(Make(p0.x + nx * e0, p0.y + ny * e0, 1, 0, c, Kind::Edge, e0),
-             Make(p0.x - nx * e0, p0.y - ny * e0, -1, 0, c, Kind::Edge, e0),
-             Make(p1.x + nx * e1, p1.y + ny * e1, 1, 0, c, Kind::Edge, e1),
-             Make(p1.x - nx * e1, p1.y - ny * e1, -1, 0, c, Kind::Edge, e1));
+    const auto c0 = Faded(line.color, fadeA), c1 = Faded(line.color, fadeB);
+    out.Quad(Make(p0.x + nx * e0, p0.y + ny * e0, 1, 0, c0, Kind::Edge, e0),
+             Make(p0.x - nx * e0, p0.y - ny * e0, -1, 0, c0, Kind::Edge, e0),
+             Make(p1.x + nx * e1, p1.y + ny * e1, 1, 0, c1, Kind::Edge, e1),
+             Make(p1.x - nx * e1, p1.y - ny * e1, -1, 0, c1, Kind::Edge, e1));
+}
+
+// A fade-in is drawn as this many pieces along the line, each with its own end
+// alphas, so the linear interpolation between them follows the eased curve.
+constexpr int kFadeInPieces = 8;
+
+void SolidLine(Out& out, const EyeView& eye, const Line& line)
+{
+    const Vec3 d = Sub(line.b, line.a);
+    const float total = Length(d);
+    const float fade = line.fadeIn > 0 ? std::min(line.fadeIn, total) : 0.0f;
+    if (!(fade > 0)) { Segment(out, eye, line.a, line.b, line); return; }
+    const Vec3 unit = Scale(d, 1 / total);
+    // Adjacent pieces share their end points exactly, so nothing is blended twice.
+    for (int i = 0; i < kFadeInPieces; ++i) {
+        const float t0 = static_cast<float>(i) / kFadeInPieces, t1 = static_cast<float>(i + 1) / kFadeInPieces;
+        Segment(out, eye, Add(line.a, Scale(unit, fade * t0)), Add(line.a, Scale(unit, fade * t1)), line,
+                SmoothStep(t0), SmoothStep(t1));
+    }
+    if (fade < total) { Segment(out, eye, Add(line.a, Scale(unit, fade)), line.b, line); }
 }
 
 void LineGeometry(Out& out, const EyeView& eye, const Line& line)
 {
     if (!Finite(line.a) || !Finite(line.b) || !(line.width >= 0)) { return; }
-    if (line.dash <= 0) { Segment(out, eye, line.a, line.b, line); return; }
+    if (line.dash <= 0) { SolidLine(out, eye, line); return; }
     const Vec3 d = Sub(line.b, line.a);
     const float total = Length(d);
     if (!(total > 0)) { return; }

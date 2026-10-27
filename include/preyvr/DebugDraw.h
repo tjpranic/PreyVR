@@ -36,13 +36,17 @@ inline std::uint32_t Pack(Color c)
 
 // A segment. `width` is physical (metres), so a ray thins with distance and
 // reads at the right depth; it never drops below `minPixels`. `dash` > 0 draws
-// dashes of that length (metres) separated by equal gaps.
+// dashes of that length (metres) separated by equal gaps. `fadeIn` > 0 (solid
+// lines only) eases the first `fadeIn` metres from `a` in from transparent
+// (SmoothStep), so the line has no visible start; a line shorter than that
+// fades over its whole length.
 struct Line {
     Vec3 a{}, b{};
     Color color{};
     float width = .004f;
     float minPixels = 1.5f;
     float dash = 0.0f;
+    float fadeIn = 0.0f;
 };
 // A sphere: its exact silhouette (the circle where the eye's lines of sight
 // graze it, filled and outlined) plus its horizontal great circle, which is

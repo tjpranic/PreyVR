@@ -42,8 +42,7 @@
     Technically everything is working game wise, it would just be an improvement.
 - Arms can clip into the player model
 - Recenter player body when the player stops moving (?)
-- Left hand laser doesn't hit at surface of objects unlike the right hand aim laser
-    This might be intentional? Will need to investigate.
+
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -70,6 +69,8 @@
 - The hand lasers start outside of player hands
     They seem to begin out of nowhere. Something like a fade in along the length (like when the laser fades out in menus when it's not hitting a surface) would make them look a bit nicer.
     The lasers also render over the top of everything.
+- Left hand laser doesn't hit at surface of objects unlike the right hand aim laser
+    Only sometimes? This might be intentional? Will need to investigate.
 
 ### VR Options Menu
 - Have bindings section let you change your bindings
