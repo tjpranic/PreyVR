@@ -1,6 +1,6 @@
 #pragma once
 
-// **Globals that are never destroyed** (docs/CRASHES-2026-10-24.md, section 2).
+// **Globals that are never destroyed** (docs/ENGINE-INSTABILITY.md, "Quit crash").
 //
 // At process exit Windows ends every other thread, then unloads this DLL, and
 // the C runtime runs its global destructors right after DllMain's

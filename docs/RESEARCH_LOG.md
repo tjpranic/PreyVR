@@ -3749,7 +3749,7 @@ It runs VR or not, so a flat run can be compared with a VR one. Offline only:
 - its CTest passes, and the full suite passes (73 tests);
 - the gate verifier passes against the supported image.
 
-Not yet run in the game. See [the crash notes](CULL-CAMERA-CRASH-2026-10-17.md).
+Not yet run in the game. See [the crash notes](ENGINE-INSTABILITY.md#cull-camera-crash-and-the-world-flashing).
 
 ## 2026-10-17 — The desktop window: minimised, sized, and Prey's focus handling
 
@@ -4059,7 +4059,7 @@ Offline only:
 - 86/86 tests pass;
 - the gate verifier passes against the supported image.
 
-Package PreyVR-47. See [the crash notes](CULL-CAMERA-CRASH-2026-10-17.md#the-frame-probe-2026-10-20).
+Package PreyVR-47. See [the crash notes](ENGINE-INSTABILITY.md#cull-camera-crash-and-the-world-flashing).
 
 ## 2026-10-20 — Black loading screens: cause and fix
 
@@ -4119,7 +4119,7 @@ Offline only:
 - 92/92 tests pass;
 - `verify_cull_camera_watch.py` passes against the supported image.
 
-See [the crash notes](CULL-CAMERA-CRASH-2026-10-17.md#the-handshake-2026-10-21).
+See [the crash notes](ENGINE-INSTABILITY.md#the-trigger-observed-in-the-field-2026-10-19-to-10-21).
 
 ## 2026-10-21 — Cull guard: first headset run
 
@@ -4140,7 +4140,7 @@ PreyVR-55, run `player-20261021-204006`.
 
 The guard covers both tests unchanged.
 
-See [the field result](CULL-CAMERA-CRASH-2026-10-17.md#field-result-2026-10-21-preyvr-55).
+See [the guard](ENGINE-INSTABILITY.md#the-guard-srcdllcullprepareguardhcpp).
 
 ## 2026-10-25 — Fullscreen videos in both eyes
 
@@ -4171,3 +4171,40 @@ Offline:
 cutscene in both eyes. 243 draws copied, 0 refused, no pair refused while it
 played. That the copy ran at all confirms the neuromod node is `Fullscreen`.
 See [the both-eyes notes](STEREO-DUAL-SUBMISSION-2026-10-10.md#fullscreen-videos-in-both-eyes-2026-10-25).
+
+## 2026-10-27 — Engine instability: a log sweep, two crashes closed, the phantom crash's cause
+
+**The sweep.** 61 runs since the cull guard (4.6 h), Steam's process log,
+SteamVR's compositor logs and the Windows logs.
+- **The cull-camera crash and the world flashing:** no stale or doomed item and
+  no lag in any run. The guard kicked 10 times, each on a pause-menu close with
+  `lastPrepare=skipped_no_world`.
+- **The texture-view crash:** 41 runs, 61.7 M rebuilds, all the render thread's
+  from `0xF6F01F`, with `races=0` and `grown=0`. No recurrence.
+- Both are closed pending recurrence. Their watches, and the frame probe's cull
+  steps, are removed. The guard stays.
+
+**The phantom crash was a stack overflow (observed).** Steam's
+`gameprocess_log.txt` records run `player-20261025-163504` (PreyVR-89) exiting
+with `-1073741571`, which is `0xC00000FD`, the only one in its record. Prey's
+handler runs on the overflowed thread, so it started and died without a dump.
+Which thread overflowed, and why, is not known.
+
+**The render freeze.**
+- 23 gameplay stalls in 61 runs, 10 of them in run `-143133`.
+- **Correction to the 2026-10-25 note:** the `preyvr_use menu open/closed` flips
+  around those stalls were not game UI. `menuOpen` includes a HUD menu poll more
+  than 200 ms old, so a late main thread reads as a menu opening.
+- SteamVR dropped frames in every session of PreyVR-86 to 93 (10-25 afternoon)
+  and in none before or after. A restart sits between 93 and 94, so build and
+  environment are confounded.
+
+**Built as PreyVR-98:**
+- an overflow capture (a first vectored handler and a waiting thread with its own
+  stack: dump, report, log line);
+- the frame probe as a stall flight recorder, triggered by the hold thread;
+- `menu open … why=`;
+- the launcher keeping the last session's Game.log and Prey's error files.
+
+110/110 tests pass. See
+[ENGINE-INSTABILITY.md](ENGINE-INSTABILITY.md).

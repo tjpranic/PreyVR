@@ -7,6 +7,7 @@
 #include "RuntimeSnapshotWin32.h"
 #include "Version.h"
 #include "WorkerThread.h"
+#include "OverflowCapture.h"
 #include "preyvr/EngineMap.h"
 
 #include <bcrypt.h>
@@ -217,6 +218,10 @@ DWORD RunBootstrap(HMODULE self)
                << " loader=\"" << Utf8(openxr.loader.wstring()) << "\""
                << " action=none";
     lifecycle::Log(openxrLine.str());
+
+    // A dump that survives a stack overflow (OverflowCapture.h): after the gate,
+    // so an unsupported build is left untouched, and before any hook.
+    ArmOverflowCapture();
 
     // The worker thread, and with it the command channel, starts only after the
     // landmark gate has passed, so an unsupported build never gets one. The

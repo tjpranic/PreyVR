@@ -16,9 +16,7 @@
 #include "StereoEyeCamera.h"
 #include "EyeRecords.h"
 #include "ConsoleBridgeWin32.h"
-#include "CullCameraWatch.h"
 #include "CullPrepareGuard.h"
-#include "ResourceSetWatch.h"
 #include "FrameProbe.h"
 #include "FocusHold.h"
 #include "ControllerPrompts.h"
@@ -667,31 +665,15 @@ constexpr Verb kVerbs[] = {
     {"dual.report", Audience::research, 0, [](const Args&, std::ostringstream& out) {
         out << "dual.report result=0" << DualSceneReport() << DualOverlayReport();
     }},
-    {"cull.report", Audience::research, 0, [](const Args&, std::ostringstream& out) {
-        // docs/CULL-CAMERA-CRASH-2026-10-17.md: the read-only pass-camera reset watch.
-        out << "cull.report result=0" << CullCameraWatchReport();
-    }},
-    {"cull.watch", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
-        out << "cull.watch result=" << (Valued(args) ? SetCullCameraWatch(ArgU(args, 1, 1)) : 0)
-            << CullCameraWatchReport();
-    }},
-    {"cull.probe", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
-        // The frame-step recorder around panel closes and cull-lag changes (FrameProbe.h).
-        out << "cull.probe result=" << (Valued(args) ? SetFrameProbe(ArgU(args, 1, 1)) : 0) << FrameProbeReport();
+    {"frame.probe", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
+        // The stall flight recorder for the render freeze (FrameProbe.h).
+        out << "frame.probe result=" << (Valued(args) ? SetFrameProbe(ArgU(args, 1, 1)) : 0) << FrameProbeReport();
     }},
     {"cull.prepare", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
         // The occlusion-prepare guard that keeps the culler from falling a frame
-        // behind (CullPrepareGuard.h): 1 guards, 0 only observes. No argument: report.
+        // behind (CullPrepareGuard.h): 1 guards, 0 off. No argument: its counts.
         out << "cull.prepare result=" << (Valued(args) ? SetCullPrepareGuard(ArgU(args, 1, 1)) : 0)
             << CullPrepareReport();
-    }},
-    {"rset.report", Audience::research, 0, [](const Args&, std::ostringstream& out) {
-        // docs/CRASHES-2026-10-24.md: who rebuilds a render item's resource set mid-pass.
-        out << "rset.report result=0" << ResourceSetWatchReport();
-    }},
-    {"rset.watch", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
-        out << "rset.watch result=" << (Valued(args) ? SetResourceSetWatch(ArgU(args, 1, 1)) : 0)
-            << ResourceSetWatchReport();
     }},
     {"window.hold", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
         // docs/DESKTOP-WINDOW-2026-10-17.md: Prey runs as though focused. The

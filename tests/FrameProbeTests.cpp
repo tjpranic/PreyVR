@@ -1,6 +1,9 @@
-// Exercise the frame probe's ring, windows, detours and report without loading
-// Prey. Including this TU exposes internal seams only inside this test executable.
+// Exercise the frame probe's ring, stall windows, summary and report without
+// loading Prey. Including this TU exposes internal seams only inside this test
+// executable.
 #include "../src/dll/FrameProbe.cpp"
+#include <condition_variable>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -8,30 +11,10 @@
 #include "TestSupport.h"
 
 PREYVR_TEST_CAPTURE_LOG()
-PREYVR_TEST_STUB_MINHOOK()
-namespace preyvr::dll {
-DWORD gPinned = 0;
-DWORD ModulePinStatus() { return gPinned; }
-// PassCreationHook's shared R-071 hook: unavailable without Prey.
-bool EnsurePassCreationHook() { return false; }
-// The cull watch's queue indices: a scripted sequence.
-std::vector<std::pair<std::uint32_t, std::uint32_t>> gIndices;
-std::size_t gIndexCall = 0;
-bool CullQueueIndices(std::uint32_t& write, std::uint32_t& read)
-{
-    if (gIndices.empty()) {
-        write = read = 0;
-        return false;
-    }
-    const auto& next = gIndices[(std::min)(gIndexCall++, gIndices.size() - 1)];
-    write = next.first;
-    read = next.second;
-    return true;
-}
-} // namespace preyvr::dll
 
 namespace {
 using namespace preyvr::dll;
+using preyvr::test::Count;
 using preyvr::test::gLines;
 using preyvr::test::Logged;
 using preyvr::test::Require;
@@ -44,37 +27,81 @@ void ResetProbe()
     for (auto& index : gTickIndex) index.store(0);
     gMainThread.store(0);
     gRenderThread.store(0);
+    gHoldThread.store(0);
     {
         std::lock_guard lock(gWindowMutex);
         gOpen = {};
         gReadyCount = 0;
     }
     gWindowOpen.store(false);
-    for (auto* counter : {&gTriggers, &gWritten, &gControls, &gSuppressed, &gLost, &gEmitted}) counter->store(0);
+    for (auto* counter : {&gStalls, &gLoads, &gWritten, &gSuppressed, &gLost, &gEmitted}) counter->store(0);
     gRecording.store(true);
     gStartAttempted.store(true);
-    gIndices.clear();
-    gIndexCall = 0;
     gLines.clear();
 }
 
-// One main frame: its start, then the world render around the cull queue.
+// One main frame, as the schedule records it.
 void Frame(unsigned frames = 1)
 {
     for (unsigned i = 0; i < frames; ++i) {
-        ProbeRecord(ProbeStep::tick, 1, 0, 10, 10);
-        ProbeRecord(ProbeStep::renderEnter, 0, 0, 10, 10);
-        ProbeRecord(ProbeStep::renderExit, 0, 0, 12, 10);
+        ProbeRecord(ProbeStep::tick);
+        ProbeRecord(ProbeStep::gameplay);
+        ProbeRecord(ProbeStep::renderEnter);
+        ProbeRecord(ProbeStep::renderExit);
     }
 }
 
-std::vector<std::string> Lines(const char* prefix)
-{
-    std::vector<std::string> out;
-    for (const auto& line : gLines) {
-        if (line.rfind(prefix, 0) == 0) out.push_back(line);
+// The hold thread's steps, all from one thread of its own, as in the game.
+class HoldThread {
+public:
+    HoldThread() : worker_([this] { Run(); }) {}
+    ~HoldThread()
+    {
+        {
+            std::lock_guard lock(mutex_);
+            stop_ = true;
+        }
+        wake_.notify_all();
+        worker_.join();
     }
-    return out;
+    void Record(ProbeStep step, std::uint32_t a, std::uint32_t b)
+    {
+        std::unique_lock lock(mutex_);
+        step_ = step;
+        a_ = a;
+        b_ = b;
+        pending_ = true;
+        wake_.notify_all();
+        wake_.wait(lock, [this] { return !pending_; });
+    }
+
+private:
+    void Run()
+    {
+        std::unique_lock lock(mutex_);
+        for (;;) {
+            wake_.wait(lock, [this] { return pending_ || stop_; });
+            if (pending_) {
+                ProbeRecord(step_, a_, b_);
+                pending_ = false;
+                wake_.notify_all();
+            } else if (stop_) {
+                return;
+            }
+        }
+    }
+    std::mutex mutex_;
+    std::condition_variable wake_;
+    ProbeStep step_ = ProbeStep::holdBegin;
+    std::uint32_t a_ = 0, b_ = 0;
+    bool pending_ = false, stop_ = false;
+    std::thread worker_;
+};
+HoldThread* gHold = nullptr;
+
+void Hold(ProbeStep step, std::uint32_t a, std::uint32_t b)
+{
+    gHold->Record(step, a, b);
 }
 
 void TestOff()
@@ -82,263 +109,237 @@ void TestOff()
     ResetProbe();
     gRecording.store(false);
     Frame(3);
-    ProbeRecord(ProbeStep::panelClose);
-    Require(gNext == 0 && gTicks == 0 && !gWindowOpen, "nothing is recorded while off");
+    ProbeRecord(ProbeStep::holdBegin, 100, 0);
+    Require(gNext == 0 && gTicks == 0 && !gWindowOpen && gStalls == 0, "off: nothing recorded, nothing opened");
+    Require(ProbeClock() == 0 && ProbeMicrosSince(0) == 0, "off: the clock reads 0, so callers skip their reads");
 }
 
-void TestControlWindow()
+void TestStallWindow()
 {
     ResetProbe();
     Frame(10);
-    ProbeRecord(ProbeStep::panelClose);
-    Require(gWindowOpen && gTriggers == 1, "a panel close opens a window");
-    Frame(11);
-    Require(gWindowOpen, "still open 11 frames after");
+    Hold(ProbeStep::holdBegin, 104, 0);
+    Require(gWindowOpen && gStalls == 1, "a stall opens a window");
+    Frame(3);
+    Hold(ProbeStep::holdEnd, 207, 1);
+    Frame(kAfterTicks - 3 - 1);
+    Require(gWindowOpen, "open until kAfterTicks after the trigger");
     Frame(1);
-    Require(!gWindowOpen && gReadyCount == 1 && gControls == 1, "closed at the 12th frame start, as a control");
+    Require(!gWindowOpen && gReadyCount == 1, "closed, queued for the worker");
     ServiceFrameProbe();
-    const auto headers = Lines("preyvr_frame_probe window=1 kinds=panel_close control=1");
-    Require(headers.size() == 1, "one header");
-    const auto events = Lines("preyvr_frame_probe w=1 ");
-    // From the tick 8 frames before the trigger to the tick that closed it:
-    // frames 2..10 (9 frames of 3), the trigger, frames 11..21 (11 of 3), tick 22.
-    Require(events.size() == 9 * 3 + 1 + 11 * 3 + 1, "the window spans 8 frames before to 12 after");
-    Require(events.front().find(" M tick depth=1") != std::string::npos && events.front().find(" -") != std::string::npos,
-            "it starts at a frame start, before the trigger");
-    Require(events.back().find(" M tick ") != std::string::npos, "and ends at the closing one");
-    std::size_t triggers = 0;
-    for (const auto& line : events) triggers += line.find("<trigger") != std::string::npos ? 1 : 0;
-    Require(triggers == 1 && Logged("panel_close <trigger"), "the trigger is marked");
-    Require(Logged("render_exit state=0 q=12/10") && Logged("window=1 end lost=0"), "args and the footer");
-    Require(gReadyCount == 0 && gEmitted == 1, "written once");
-    ServiceFrameProbe();
-    Require(Lines("preyvr_frame_probe window=").size() == 2, "and not again");
+    Require(Logged("window=1 kinds=stall stalls=1 stall_ms=207 held=1 gap_ms=104"), "the header carries the stall");
+    Require(Logged(" H hold_begin gap_ms=104 loading=0 <trigger") && Logged(" H hold_end stall_ms=207 held=1"),
+            "the hold thread's steps, the trigger marked");
+    Require(Count("w=1 -") > 0 && Logged(" M tick"), "frames from before the trigger");
+    Require(Logged("window=1 summary main=") && Logged("window=1 end lost=0"), "a summary and an end line");
+    Require(gWritten == 1 && gEmitted == 1, "one window written");
 }
 
-void TestQuotas()
+void TestLoadsOpenNothing()
 {
     ResetProbe();
-    for (int i = 0; i < 4; ++i) {
-        Frame(1);
-        ProbeRecord(ProbeStep::panelClose);
-        Frame(12);
-        ServiceFrameProbe();
-    }
-    Require(gControls == 3 && gSuppressed == 1, "three plain closes are kept as the control");
-    for (unsigned i = 0; i < kMaxWindows + 1; ++i) {
-        Frame(1);
-        ProbeRecord(ProbeStep::firstEyeRefused, i + 1);
-        Frame(12);
-        ServiceFrameProbe();
-    }
-    Require(gWritten == kMaxWindows && gSuppressed == 2, "refusal windows up to their own cap");
-    Require(Lines("preyvr_frame_probe window=").size() == 2 * (3 + kMaxWindows), "header and footer each");
+    Frame(10);
+    Hold(ProbeStep::holdBegin, 101, 1);
+    Require(!gWindowOpen && gLoads == 1 && gStalls == 1, "a stall with a loading screen waiting is a load");
+
+    // Captured only after the stall began: the window is dropped as a load.
+    Hold(ProbeStep::holdEnd, 9600, 480);
+    Hold(ProbeStep::holdBegin, 100, 0);
+    Require(gWindowOpen, "not known to be a load yet");
+    ProbeRecord(ProbeStep::load);
+    Hold(ProbeStep::holdEnd, 9500, 470);
+    Frame(kAfterTicks + 1);
+    ServiceFrameProbe();
+    Require(gLoads == 2 && gWritten == 0 && !Logged("kinds=stall"), "a window with a load in it is dropped");
 }
 
-void TestMergedTriggers()
+void TestWaitsForTheStallToEnd()
 {
     ResetProbe();
-    Frame(20);
-    ProbeRecord(ProbeStep::panelClose);
-    ProbeRecord(ProbeStep::firstEyeRefused, 1);
+    Frame(10);
+    Hold(ProbeStep::holdBegin, 100, 0);
+    // The main thread can go on ticking while the render thread is the one stuck.
+    Frame(kAfterTicks + 5);
+    Require(gWindowOpen, "not before the stall has ended");
+    Hold(ProbeStep::holdEnd, 390, 22);
+    Frame(kAfterEndTicks - 1);
+    Require(gWindowOpen, "and a few frames after it");
     Frame(1);
-    ProbeRecord(ProbeStep::lagChange, 1, 0, 300);
-    Require(gTriggers == 3, "three triggers");
-    Frame(11);  // tick 32: the close's own window would end here
-    Require(gWindowOpen, "the lag change extended the window");
-    Frame(1);
-    Require(!gWindowOpen && gWritten == 1 && gControls == 0, "one window, not a control");
+    Require(!gWindowOpen, "then closed");
     ServiceFrameProbe();
-    Require(Logged("kinds=panel_close+first_eye_refused+lag_change control=0"), "carrying every kind");
-    Require(Logged("first_eye_refused refused=1") && Logged("lag_change depth=1 was=0 pending=300"),
-            "with their args");
+    Require(Logged("stall_ms=390 held=22"), "with the stall's length");
 
     ResetProbe();
     Frame(10);
-    ProbeRecord(ProbeStep::lagChange, 2, 1, 5);
-    for (int i = 0; i < 100; ++i) {
-        Frame(1);
-        ProbeRecord(ProbeStep::lagChange, 1 + i % 2, 2 - i % 2, 5);
+    Hold(ProbeStep::holdBegin, 100, 0);
+    Frame(kMaxWindowTicks);
+    Require(!gWindowOpen, "never past kMaxWindowTicks");
+    ServiceFrameProbe();
+    Require(Logged("window=1 kinds=stall stalls=1 stall_ms=? held=0"), "an unended stall says so");
+}
+
+void TestMergedStalls()
+{
+    ResetProbe();
+    Frame(10);
+    Hold(ProbeStep::holdBegin, 100, 0);
+    Hold(ProbeStep::holdEnd, 210, 1);
+    Frame(2);
+    Hold(ProbeStep::holdBegin, 100, 0);
+    Frame(3);
+    Hold(ProbeStep::holdEnd, 164, 1);
+    Frame(kAfterTicks);
+    ServiceFrameProbe();
+    Require(gStalls == 2 && gWritten == 1 && Logged("window=1 kinds=stall stalls=2 stall_ms=210 held=2"),
+            "a second stall joins the window: the longest and the frames held by both");
+}
+
+void TestQuota()
+{
+    ResetProbe();
+    for (unsigned i = 0; i < kMaxWindows + 4; ++i) {
+        Frame(10);
+        Hold(ProbeStep::holdBegin, 100, 0);
+        Hold(ProbeStep::holdEnd, 150, 1);
+        Frame(kAfterTicks);
+        ServiceFrameProbe();
     }
-    Require(gWritten == 1, "a flickering lag cannot hold a window open past its cap");
+    Require(gWritten == kMaxWindows && gSuppressed == 4 && gEmitted == kMaxWindows, "kMaxWindows a session");
+
+    // More finished than the worker has collected: the extra are suppressed.
+    ResetProbe();
+    for (unsigned i = 0; i < kReadySlots + 2; ++i) {
+        Frame(10);
+        Hold(ProbeStep::holdBegin, 100, 0);
+        Hold(ProbeStep::holdEnd, 150, 1);
+        Frame(kAfterTicks);
+    }
+    Require(gReadyCount == kReadySlots && gSuppressed == 2, "the ready queue is bounded");
 }
 
 void TestOverwriteAndTimeout()
 {
+    // A window finished but not yet written, while the ring turns over it.
     ResetProbe();
     Frame(10);
-    ProbeRecord(ProbeStep::panelClose);
-    // Flood well past the ring before the window closes.
-    for (std::uint64_t i = 0; i < kRingSize + 100; ++i) ProbeRecord(ProbeStep::passCreated, 1, 1, 0x1000, 0);
-    Frame(12);
+    Hold(ProbeStep::holdBegin, 100, 0);
+    Hold(ProbeStep::holdEnd, 150, 1);
+    Frame(kAfterTicks);
+    Require(gReadyCount == 1, "queued");
+    for (std::uint64_t i = 0; i < kRingSize + 100; ++i) ProbeRecord(ProbeStep::sceneEnter, 0);
     ServiceFrameProbe();
-    const auto events = Lines("preyvr_frame_probe w=1 ");
-    Require(!events.empty() && events.size() <= kRingSize, "a window is bounded by the ring");
-    Require(Logged("frame=1/1 caller=0x1000 flags=0x0"), "pass args");
+    Require(gEmitted == 1 && gLost > 0 && Logged("window=1 end lost="), "overwritten events counted as lost");
 
+    // A stall that never ends, and a game that stopped ticking.
     ResetProbe();
     Frame(10);
-    ProbeRecord(ProbeStep::panelClose);
-    ServiceFrameProbe();
-    Require(gWindowOpen && gEmitted == 0, "no frame starts yet: still open");
+    Hold(ProbeStep::holdBegin, 100, 0);
     {
         std::lock_guard lock(gWindowMutex);
-        gOpen.triggerQpc -= 1000000000000LL; // far in the past, whatever the frequency
+        gOpen.triggerQpc -= 10 * Qpc(); // long ago
     }
     ServiceFrameProbe();
-    Require(!gWindowOpen && gEmitted == 1 && Logged("window=1 kinds=panel_close"),
-            "a window without frame starts is written after the timeout");
+    Require(!gWindowOpen && gEmitted == 1 && Logged("window=1 kinds=stall stalls=1 stall_ms=? held=0"),
+            "a window past the timeout is written with what it has");
 }
 
-void TestThreadsAndFormat()
+// The render thread's frame, ending stuck in the runtime's wait for `stuckMs`.
+void RenderFrameStuck(DWORD stuckMs)
 {
-    ResetProbe();
-    // The render thread stays alive while the job thread runs: Windows reuses
-    // the id of a thread that has exited.
-    std::atomic<bool> release{false};
-    std::thread render([&] {
+    std::thread([stuckMs] {
         ProbeRecord(ProbeStep::endFrame, 7); // the first end frame names the render thread
-        while (!release.load()) Sleep(1);
         ProbeRecord(ProbeStep::sceneEnter, 0);
         ProbeRecord(ProbeStep::sceneExit, static_cast<std::uint32_t>(ProbeScene::doubled), 0);
-    });
-    while (gRenderThread.load() == 0) Sleep(1);
-    Frame(9);
-    std::thread([] { ProbeRecord(ProbeStep::consumerEnter, 1500, 1499, 640, 320); }).join();
-    release.store(true);
-    render.join();
-    ProbeRecord(ProbeStep::tick, kLagUnknown, 0, 0, 0);
-    ProbeRecord(ProbeStep::panelClose);
-    Frame(12);
+        ProbeRecord(ProbeStep::xrAcquire, 900);
+        ProbeRecord(ProbeStep::xrEnd, 1500, 3);
+        ProbeRecord(ProbeStep::present, 2100);
+        ProbeRecord(ProbeStep::endFrame, 8);
+        Sleep(stuckMs);
+        ProbeRecord(ProbeStep::xrWait, stuckMs * 1000 + 1000, 1);
+    }).join();
+}
+
+void TestThreadsFormatAndSummary()
+{
+    ResetProbe();
+    Frame(2);
+    RenderFrameStuck(60);
+    Hold(ProbeStep::holdBegin, 102, 0);
+    ProbeRecord(ProbeStep::panelOpen);
+    std::thread([] { ProbeRecord(ProbeStep::gameplay); }).join(); // a thread with no role
+    Hold(ProbeStep::holdEnd, 160, 4);
+    Frame(1);
+    Sleep(150); // the main thread's longest gap: between its render and the next frame
+    Frame(kAfterTicks);
     ServiceFrameProbe();
-    Require(Logged(" M tick depth=? pending=0"), "an unobserved tick prints its depth as unknown");
-    Require(Logged(" R scene_exit outcome=doubled type=0"), "the render thread is tagged R");
-    Require(Logged(" J") && Logged("consumer_enter frame=1500/1499 q=640/320"),
-            "other threads are tagged J with their id");
-    Require(Logged(" main=") && Logged(" render="), "the header names the main and render threads");
-}
+    Require(Logged(" R end_frame frame=7") && Logged(" R scene_enter type=0") &&
+                Logged(" R scene_exit outcome=doubled type=0") && Logged(" R xr_acquire us=900") &&
+                Logged(" R xr_end us=1500 layers=3") && Logged(" R present us=2100") &&
+                Logged(" R xr_wait us=61000 render=1"),
+            "the render thread's steps");
+    Require(Logged(" M panel_open") && Logged(" J", " gameplay"), "main, and another thread by its id");
+    Require(Logged("window=1 summary main=", "ms(render_exit->tick) render=", "ms(end_frame->xr_wait)"),
+            "each thread's longest gap, between which two steps");
+    Require(Logged("window=1 summary", " call=xr_wait:61ms"), "and the longest timed call");
 
-void TestGuardSteps()
-{
+    // The same, with the loading screen captured inside it: a load, not written.
     ResetProbe();
-    Frame(10);
-    ProbeRecord(ProbeStep::prepare, 4, 4, 3);                // PostUpdate's: skipped at the origin
-    ProbeRecord(ProbeStep::prepareKick, 4, 1, 7, 0x100 | 3); // the guard's, before Render
-    Frame(12);
+    Frame(2);
+    Hold(ProbeStep::holdBegin, 102, 0);
+    std::thread([] { ProbeRecord(ProbeStep::load); }).join();
+    Hold(ProbeStep::holdEnd, 9000, 450);
+    Frame(kAfterTicks);
     ServiceFrameProbe();
-    Require(gWritten == 1 && gControls == 0 && Logged("kinds=prepare_kick control=0"),
-            "a kick opens a window of its own, not a control");
-    Require(Logged(" M prepare state=4->4 gates=rw-"), "the engine's prepare with the gate that closed");
-    Require(Logged(" M prepare_kick state=4->1 gates=rwc last=skipped <trigger"), "the kick and what preceded it");
-
-    ResetProbe();
-    Frame(10);
-    ProbeRecord(ProbeStep::renderEnter, kStateUnknown, 0, 1, 1);
-    ProbeRecord(ProbeStep::prepare, kStateUnknown, kStateUnknown, 8);
-    ProbeRecord(ProbeStep::orphan, 4, 3, 0, 0);
-    Frame(12);
-    ServiceFrameProbe();
-    Require(gWritten == 1 && Logged("kinds=orphan control=0"), "an orphan opens a window");
-    Require(Logged(" M orphan state=4->3 guard=0 last=none <trigger"), "with the guard and the prepare");
-    Require(Logged(" M render_enter state=? q=1/1") && Logged(" M prepare state=?->? gates=u"),
-            "unread states and gates print as such");
+    Require(gLoads == 1 && gWritten == 0 && gEmitted == 0, "the load in it dropped the window");
 }
 
-unsigned gConsumerCalls = 0;
-void* gConsumerParams = nullptr;
-void __fastcall FakeConsumer(void* params)
-{
-    ++gConsumerCalls;
-    gConsumerParams = params;
-}
-void TestDetours()
+void TestClock()
 {
     ResetProbe();
-    std::vector<std::uint8_t> params(0x48, 0);
-    const std::uint32_t frame = 900, frame2 = 899;
-    std::memcpy(params.data() + kJobFrameId, &frame, sizeof(frame));
-    std::memcpy(params.data() + kJobFrameId2, &frame2, sizeof(frame2));
-    gConsumerOriginal.store(&FakeConsumer);
-    gIndices = {{700, 400}, {700, 700}};
-    ConsumerJobDetour(params.data());
-    Require(gConsumerCalls == 1 && gConsumerParams == params.data(), "the consumer runs once, unchanged");
-    Require(gNext == 2, "entry and exit recorded");
-    Event in{}, out{};
-    Require(ReadEvent(0, in) && ReadEvent(1, out), "both readable");
-    Require(in.step == static_cast<std::uint32_t>(ProbeStep::consumerEnter) && in.a == 900 && in.b == 899 &&
-                in.c == 700 && in.d == 400,
-            "entry: its frame and the queue it starts on");
-    Require(out.step == static_cast<std::uint32_t>(ProbeStep::consumerExit) && out.c == 700 && out.d == 700,
-            "exit: the queue it left");
-    gRecording.store(false);
-    ConsumerJobDetour(params.data());
-    Require(gConsumerCalls == 2 && gNext == 2, "off: the consumer still runs, nothing recorded");
-
-    ResetProbe();
-    // A pass the original has filled: its two frame ids where 0x1E5B30 stores them.
-    std::vector<std::uint8_t> pass(0x40, 0);
-    const std::uint32_t passFrame = 4242, passFrame2 = 4241;
-    std::memcpy(pass.data() + kPassFrameId, &passFrame, sizeof(passFrame));
-    std::memcpy(pass.data() + kPassFrameId2, &passFrame2, sizeof(passFrame2));
-    const auto image = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
-    gBase.store(0);
-    ProbePassCreated(pass.data(), 0x2E5DF, reinterpret_cast<const void*>(image + 0x1234));
-    Event created{};
-    Require(ReadEvent(0, created) && created.a == 4242 && created.b == 4241 && created.d == 0x2E5DF &&
-                created.c == kCallerOutsidePreyDll,
-            "frame ids and flags, a caller with no PreyDll base marked as outside");
-    gBase.store(image);
-    ProbePassCreated(pass.data(), 0x2E5DF, reinterpret_cast<const void*>(image + 0x1234));
-    Require(ReadEvent(1, created) && created.c == 0x1234, "a caller inside PreyDll is its RVA");
-    ProbePassCreated(pass.data(), 0x2E5DF, reinterpret_cast<const void*>(image - 0x10));
-    Require(ReadEvent(2, created) && created.c == kCallerOutsidePreyDll, "a caller below it is outside");
-    ProbePassCreated(nullptr, 1, nullptr);
-    gRecording.store(false);
-    ProbePassCreated(pass.data(), 1, nullptr);
-    Require(gNext == 3, "no pass or not recording: nothing recorded");
+    const auto start = ProbeClock();
+    Require(start != 0, "recording: a real reading");
+    Sleep(5);
+    const auto us = ProbeMicrosSince(start);
+    Require(us >= 4000 && us < 1000000, "microseconds since it");
 }
 
-void TestGateAndCommands()
+void TestCommands()
 {
-    std::vector<std::uint8_t> code(std::begin(kConsumerJobCode), std::end(kConsumerJobCode));
-    code[48] ^= 1; // the call into the consumer loop
-    ConsumerJobFn ignored = nullptr;
-    Require(hook::InstallVerified(code.data(), kConsumerJobCode, reinterpret_cast<void*>(&ConsumerJobDetour), ignored)
-                    .step == hook::Step::prologue,
-            "a different consumer job is refused");
-
     ResetProbe();
     gRecording.store(false);
     Require(SetFrameProbe(2) == 1 && !gRecording, "bad value refused");
-    Require(SetFrameProbe(1) == 0 && gRecording, "recording without the hooks");
-    Require(Logged("detail=preydll_not_loaded hooks=none") && Logged("consumerHook=0 passHook=0 mutation=none"),
-            "the hooks' absence is logged");
-    Require(FrameProbeReport().find(" recording=1 consumerHook=0 passHook=0 events=") == 0, "report leads with state");
+    Require(SetFrameProbe(1) == 0 && gRecording && Logged("detail=recording value=1 trigger=hold_stall mutation=none"),
+            "recording");
+    Require(FrameProbeReport().find(" recording=1 events=") == 0 && FrameProbeReport().find(" stalls=0 loads=0") !=
+                std::string::npos,
+            "report leads with state");
     Require(SetFrameProbe(0) == 0 && !gRecording, "off");
 
     gStartAttempted.store(false);
-    gPinned = 0;
-    ServiceFrameProbe();
-    Require(!gStartAttempted, "start waits for the pin");
-    gPinned = 1;
     SetEnvironmentVariableW(L"PREYVR_FRAME_PROBE", L"0");
     ServiceFrameProbe();
     Require(gStartAttempted && !gRecording && Logged("detail=off reason=PREYVR_FRAME_PROBE"), "opt-out honoured");
     SetEnvironmentVariableW(L"PREYVR_FRAME_PROBE", nullptr);
+    gStartAttempted.store(false);
+    ServiceFrameProbe();
+    Require(gRecording, "otherwise it starts on the first poll");
 }
 } // namespace
 
 int main()
 {
+    HoldThread hold;
+    gHold = &hold;
     TestOff();
-    TestControlWindow();
-    TestQuotas();
-    TestMergedTriggers();
+    TestStallWindow();
+    TestLoadsOpenNothing();
+    TestWaitsForTheStallToEnd();
+    TestMergedStalls();
+    TestQuota();
     TestOverwriteAndTimeout();
-    TestThreadsAndFormat();
-    TestGuardSteps();
-    TestDetours();
-    TestGateAndCommands();
+    TestThreadsFormatAndSummary();
+    TestClock();
+    TestCommands();
     std::cout << "frame probe tests passed\n";
     return 0;
 }

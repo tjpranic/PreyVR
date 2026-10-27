@@ -81,6 +81,32 @@ function Get-PreyVRStartupCommands {
     'vr.enable'
 }
 
+function Save-PreyVRPreviousRunEvidence {
+    # **Keep the last session's game logs with its run.** Prey keeps one backup
+    # of Game.log, and its next crash replaces error.log and error.dmp, so the
+    # 2026-10-25 stack overflow's Game.log was gone within a day
+    # (docs/ENGINE-INSTABILITY.md). Before the next launch the game
+    # root still holds that session's files: each one written after its run
+    # folder was made, and not there already, is copied in. Never fatal: a file
+    # that cannot be copied is left where it is. Returns the names copied.
+    param([string]$GameRoot, [string]$RunRoot)
+    if (!(Test-Path -LiteralPath $RunRoot)) {return @()}
+    $previous=Get-ChildItem -LiteralPath $RunRoot -Directory -Filter 'player-*' | Sort-Object Name | Select-Object -Last 1
+    if (!$previous) {return @()}
+    $copied=@()
+    foreach ($name in @('Game.log','error.log','error.dmp')) {
+        $source=Join-Path $GameRoot $name
+        $target=Join-Path $previous.FullName $name
+        if (!(Test-Path -LiteralPath $source) -or (Test-Path -LiteralPath $target)) {continue}
+        if ((Get-Item -LiteralPath $source).LastWriteTime -lt $previous.CreationTime) {continue}
+        try {
+            Copy-Item -LiteralPath $source -Destination $target -ErrorAction Stop
+            $copied+=$name
+        } catch {}
+    }
+    $copied
+}
+
 function Save-PreyVRConfiguration {
     param([string]$Path, $Saved, [hashtable]$Settings, [bool]$MigrateLegacy)
     if ($MigrateLegacy) {
@@ -185,11 +211,14 @@ try {
     if ($DryRun) {Write-Host 'Preflight passed. Nothing launched.';exit 0}
     Save-PreyVRConfiguration -Path $config -Saved $saved -MigrateLegacy $renderSize.MigrateLegacy -Settings `
         @{GameExe=$GameExe;Width=$Width;Height=$Height;ReferenceSpace=$ReferenceSpace;DualStereo=$DualStereo}
+    $gameRoot=(Get-Item -LiteralPath $release).Parent.Parent.Parent.Parent.FullName
+    $kept=@(Save-PreyVRPreviousRunEvidence -GameRoot $gameRoot -RunRoot $RunRoot)
+    if ($kept.Count) {Write-Host "Kept the last session's $($kept -join ', ') with its diagnostics."}
     $run=Join-Path $RunRoot ('player-{0:yyyyMMdd-HHmmss}' -f (Get-Date))
     [void](New-Item -ItemType Directory -Path $run -Force)
     $info=New-Object System.Diagnostics.ProcessStartInfo
     $info.FileName=$GameExe
-    $info.WorkingDirectory=(Get-Item -LiteralPath $release).Parent.Parent.Parent.Parent.FullName
+    $info.WorkingDirectory=$gameRoot
     $info.UseShellExecute=$false
     $info.Arguments="+r_Fullscreen 0 +r_Width $Width +r_Height $Height"
     $info.EnvironmentVariables['SteamAppId']='480490'

@@ -37,7 +37,7 @@ bool gHookCreated = false;
 void __fastcall ObserveEndRendererScene(void* renderer)
 {
     const ULONGLONG count = gFrameCount.fetch_add(1, std::memory_order_relaxed) + 1;
-    // Ahead of the XR frame, so its panel and refusal records follow it.
+    // Ahead of the XR frame, so its records follow it (FrameProbe.h).
     ProbeRecord(ProbeStep::endFrame, static_cast<std::uint32_t>(count));
     gLastRenderer.store(renderer, std::memory_order_relaxed);
     if (count == 1) {
@@ -55,7 +55,11 @@ void __fastcall ObserveEndRendererScene(void* renderer)
 
     const EndRendererSceneFn original = gOriginal.load(std::memory_order_acquire);
     if (original != nullptr) {
+        // Prey's own end of frame, its present among it: how long the frame
+        // probe's render thread spent there.
+        const std::int64_t start = ProbeClock();
         original(renderer);
+        if (start != 0) ProbeRecord(ProbeStep::present, ProbeMicrosSince(start));
     }
 }
 

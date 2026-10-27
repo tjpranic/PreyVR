@@ -283,7 +283,7 @@ and Prey's view equalled `m_rotation`.
 | Candidate | Why not |
 |---|---|
 | Compositor frame synthesis (SteamVR at 120 Hz, Prey at about 63 fps) | Turning the follow off removed the flash |
-| The old cull lag ([CULL-CAMERA-CRASH-2026-10-17.md](CULL-CAMERA-CRASH-2026-10-17.md)) | No lag in 20 runs |
+| The old cull lag ([ENGINE-INSTABILITY.md](ENGINE-INSTABILITY.md#cull-camera-crash-and-the-world-flashing)) | No lag in 20 runs |
 | The stick turn lane (MoveLane) | Posts on change, always posts the zero |
 | The hands' frame | Previous camera minus the head yaw: independent of R |
 | Motion blur, temporal AA | `r_MotionBlur 0`, `r_AntialiasingMode 1`, both read back |

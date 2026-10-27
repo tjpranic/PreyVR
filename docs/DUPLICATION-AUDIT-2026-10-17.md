@@ -11,6 +11,10 @@ This was read-only: nothing was edited, built or run. Five parallel reviews cove
 
 Line numbers are as of commit 8c07a51, before the section A fixes. Files those fixes touched have shifted by a few lines.
 
+> **2026-10-27:** `CullCameraWatch`, `ResourceSetWatch` and `PassCreationHook` were removed and
+> `FrameProbe` rewritten ([ENGINE-INSTABILITY.md](ENGINE-INSTABILITY.md)).
+> Entries below that name them no longer apply.
+
 **Status:**
 - **2026-10-17:** the section A bugs were fixed; see the status table under A.
 - **2026-10-18:** B1, D1 and D2 were done, for about 800 lines net; see their status notes.

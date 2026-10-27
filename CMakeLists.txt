@@ -275,10 +275,9 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/StereoEyeCamera.cpp
         src/dll/EyeRecords.cpp
         src/dll/ConsoleBridgeWin32.cpp
-        src/dll/CullCameraWatch.cpp
         src/dll/CullPrepareGuard.cpp
-        src/dll/ResourceSetWatch.cpp
         src/dll/FrameProbe.cpp
+        src/dll/OverflowCapture.cpp
         src/dll/FocusHold.cpp
         src/dll/LoadingScreen.cpp
         src/dll/ControllerPrompts.cpp
@@ -309,7 +308,6 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/DualOverlay.cpp
         src/dll/VideoOverlay.cpp
         src/dll/WeaponAttachment.cpp
-        src/dll/PassCreationHook.cpp
         src/dll/ReticleFollow.cpp
         src/dll/XrInput.cpp
         src/dll/Haptics.cpp
@@ -355,7 +353,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
     endif()
     set_target_properties(preyvr PROPERTIES OUTPUT_NAME PreyVR)
     if(MSVC)
-        # **A PDB for every build** (docs/CRASHES-2026-10-24.md): without one a
+        # **A PDB for every build** (docs/ENGINE-INSTABILITY.md): without one a
         # crash dump's PreyVR frames can only be matched by disassembly. Debug
         # information in the objects, PreyVR.pdb beside the DLL; /DEBUG would
         # otherwise turn off /OPT:REF and /OPT:ICF, so the code stays as it was.
@@ -563,18 +561,16 @@ if(PREYVR_BUILD_TESTS)
         preyvr_add_test(near_fov_override tests/NearFovOverrideTests.cpp TARGET preyvr_near_fov_tests
             DLL
             LIBS minhook)
-        preyvr_add_test(cull_camera_watch tests/CullCameraWatchTests.cpp
-            DLL
-            LIBS minhook)
         preyvr_add_test(frame_probe tests/FrameProbeTests.cpp
             DLL
-            LIBS minhook)
+            LIBS preyvr_headers)
         preyvr_add_test(cull_prepare_guard tests/CullPrepareGuardTests.cpp
             DLL
-            LIBS minhook)
-        preyvr_add_test(resource_set_watch tests/ResourceSetWatchTests.cpp
+            LIBS preyvr_headers)
+        # Overflows a thread of its own child process and reads what was written.
+        preyvr_add_test(overflow_capture tests/OverflowCaptureTests.cpp
             DLL
-            LIBS minhook)
+            LIBS preyvr_headers)
         preyvr_add_test(focus_hold tests/FocusHoldTests.cpp
             DLL
             LIBS preyvr_headers minhook user32)
@@ -661,7 +657,7 @@ if(PREYVR_BUILD_TESTS)
 
     find_program(PREYVR_POWERSHELL_EXECUTABLE NAMES pwsh powershell)
     if(PREYVR_POWERSHELL_EXECUTABLE)
-        foreach(suite Resolution Settings Stereo)
+        foreach(suite Resolution Settings Stereo Evidence)
             string(TOLOWER "${suite}" suite_name)
             add_test(NAME launcher_${suite_name} COMMAND "${PREYVR_POWERSHELL_EXECUTABLE}"
                 -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/Launcher${suite}.Tests.ps1")

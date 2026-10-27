@@ -7,6 +7,7 @@
 
 #include "Logger.h"
 #include "FrameProbe.h"
+#include "OverflowCapture.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/XrFrameContract.h"
 #include "preyvr/XrHold.h"
@@ -136,6 +137,8 @@ void RecordStall(const xrhold::StallEnd& stall)
         gHoldLongestStallNs.store(stall.durationNs,std::memory_order_relaxed);
     if(stall.durationNs>=kHoldLogStallNs || stall.heldFrames)
         Log("hold stall_ms="+std::to_string(stall.durationNs/1000000)+" frames="+std::to_string(stall.heldFrames));
+    ProbeRecord(ProbeStep::holdEnd,static_cast<std::uint32_t>(stall.durationNs/1000000),
+                static_cast<std::uint32_t>(stall.heldFrames));
 }
 
 // **One hold frame**, on the hold thread with gMutex held: the last frame's
@@ -301,12 +304,21 @@ DWORD WINAPI HoldThread(LPVOID)
     xrhold::StallTracker stalls;
     for(;;) {
         Sleep(kHoldPollMs);
+        NoteCrashThread(CrashThread::hold);
         const bool running=gStatus.load(std::memory_order_acquire)==static_cast<DWORD>(XrSessionStatus::running);
         const std::uint64_t threshold=static_cast<std::uint64_t>(gHoldThresholdMs.load(std::memory_order_relaxed))*1000000ull;
         std::optional<xrhold::StallEnd> ended;
-        const bool stalled=stalls.Observe(MonotonicNanoseconds(),running?gLastServiceNs.load(std::memory_order_acquire):0,
-                                          threshold,ended);
+        const bool wasStalled=stalls.InStall();
+        const std::uint64_t now=MonotonicNanoseconds();
+        const std::uint64_t last=running?gLastServiceNs.load(std::memory_order_acquire):0;
+        const bool stalled=stalls.Observe(now,last,threshold,ended);
         if(ended)RecordStall(*ended);
+        // **The frame probe's trigger** (FrameProbe.h): a stall has just begun,
+        // fresh or straight after one that ended. A loading screen already
+        // captured makes it a load.
+        if(stalled && (!wasStalled || ended))
+            ProbeRecord(ProbeStep::holdBegin,static_cast<std::uint32_t>((now-last)/1000000),
+                        gLoadingCaptured.load(std::memory_order_acquire)!=0?1u:0u);
         if(!stalled || !gHoldActive.load(std::memory_order_acquire))continue;
         std::unique_lock lock(gMutex,std::try_to_lock);
         if(!lock.owns_lock())continue;
@@ -402,6 +414,8 @@ void CaptureXrLoadingScreen(void* renderer)
                 // copies from the image after it.
                 gLoadingCaptures.fetch_add(1, std::memory_order_relaxed);
                 if (gLoadingCaptured.fetch_add(1, std::memory_order_acq_rel) == 0) {
+                    // A stall the frame probe is watching is a load after all.
+                    ProbeRecord(ProbeStep::load);
                     Log("loading_screen captured size=" + std::to_string(desc.Width) + "x" +
                         std::to_string(desc.Height) + " format=" + std::to_string(desc.Format));
                 }

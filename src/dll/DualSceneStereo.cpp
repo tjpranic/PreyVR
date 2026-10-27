@@ -134,10 +134,6 @@ std::atomic<unsigned long long> gDeferredMain{0}, gDeferredShadow{0}, gDeferredC
 std::atomic<unsigned long long> gFirstMicros{0}, gSecondMicros{0}, gSingleMicros{0}, gSingles{0};
 std::atomic<unsigned long long> gArmedAtFrame{0}, gObservedAtFrame{0}, gCallsAtObserve{0};
 std::atomic<int> gStep{0};
-// A top-level submission in flight, by any path through the detour, and the
-// thread that runs them (CurrentSceneSubmission).
-std::atomic<bool> gSceneInFlight{false};
-std::atomic<unsigned long> gSceneThread{0};
 std::atomic<int> gMaxDepth{0};
 std::atomic<int> gLastFlags{0};
 std::atomic<const char*> gLastRefusal{"none"};
@@ -398,8 +394,7 @@ void __fastcall ClearDetour(void* view)
 
 // The frame probe's render-thread scene step (FrameProbe.h): one record in and
 // one out per top-level submission, the outcome read from the counters every
-// path below already keeps, so no exit can be missed. It also marks the
-// submission in flight for CurrentSceneSubmission, for the same reason.
+// path below already keeps, so no exit can be missed.
 class SceneProbe {
 public:
     SceneProbe(bool topLevel, int type)
@@ -407,14 +402,11 @@ public:
           doubled_(gDoubled.load()), misses_(gHeadsetBuildMisses.load()), refused_(gRefused.load())
     {
         if (!top_) return;
-        gSceneThread.store(GetCurrentThreadId(), std::memory_order_relaxed);
-        gSceneInFlight.store(true, std::memory_order_release);
         ProbeRecord(ProbeStep::sceneEnter, type_);
     }
     ~SceneProbe()
     {
         if (!top_) return;
-        gSceneInFlight.store(false, std::memory_order_release);
         const ProbeScene outcome = gDoubled.load() != doubled_ ? ProbeScene::doubled
             : gHeadsetBuildMisses.load() != misses_ ? ProbeScene::buildMiss
             : gRefused.load() != refused_ ? ProbeScene::refused
@@ -739,15 +731,6 @@ bool DualEyeSubmissionActive()
     const int step = gStep.load(std::memory_order_acquire);
     return (step == static_cast<int>(Step::first) || step == static_cast<int>(Step::second)) &&
            gMode.load(std::memory_order_acquire) >= 2;
-}
-
-SceneSubmission CurrentSceneSubmission()
-{
-    SceneSubmission now;
-    now.inFlight = gSceneInFlight.load(std::memory_order_acquire);
-    now.step = StepName(gStep.load(std::memory_order_acquire));
-    now.thread = gSceneThread.load(std::memory_order_relaxed);
-    return now;
 }
 
 DWORD SetDualSceneObserve(unsigned int enabled)

@@ -1,6 +1,6 @@
 #pragma once
 
-// The launcher's process-wide kill switches (PREYVR_CULL_WATCH=0, -NearFx 0 and
+// The launcher's process-wide kill switches (PREYVR_CULL_PREPARE=0, -NearFx 0 and
 // the like). Header-only so tests that compile a module's .cpp directly need
 // nothing extra.
 #include <windows.h>

@@ -41,13 +41,11 @@ void TickGameplayLanes(const GameplayPoseFrame& frame, bool allowed, bool tracki
 // Main thread, CSystem::Render, before the camera edit: the drains and the input
 // lanes. Runs in menus and with stereo off.
 void TickMainRender();
-// Around Prey's own Render: the cull guard and the frame probe. Before takes the
-// system Render was called with, and may be given null.
-struct EngineRenderBracket {
-    std::uint32_t handshake = 0;
-};
-EngineRenderBracket BeforeEngineRender(void* system);
-void AfterEngineRender(const EngineRenderBracket& bracket);
+// Around Prey's own Render: the cull guard and the frame probe before, the body
+// follow after. Before takes the system Render was called with, and may be given
+// null.
+void BeforeEngineRender(void* system);
+void AfterEngineRender();
 
 // Render thread, RT_EndFrame, before the original: the services that need a
 // frame boundary or Prey's backbuffer.

@@ -87,15 +87,4 @@ bool DualEyeSubmissionActive();
 // any thread, including while the render thread is stuck inside a submission.
 std::string DualSceneReport();
 
-// The render thread's top-level RT_RenderScene, as the detour sees it, read from
-// any thread (ResourceSetWatch): whether one is in flight by any path (single,
-// doubled or refused), DualSceneReport's step= name, and the thread that runs
-// them (0 until one has). Nothing in flight before the hooks are installed.
-struct SceneSubmission {
-    bool inFlight = false;
-    const char* step = "idle";
-    unsigned long thread = 0;
-};
-SceneSubmission CurrentSceneSubmission();
-
 } // namespace preyvr::dll

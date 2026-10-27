@@ -7,6 +7,10 @@ This was read-only: five parallel reviews, each covering one slice, with nothing
 4. Options, commands, UI and bootstrap wiring
 5. Cross-cutting structure, build, tests, tools and docs
 
+> **2026-10-27:** `CullCameraWatch`, `ResourceSetWatch` and `PassCreationHook` were removed and
+> `FrameProbe` rewritten ([ENGINE-INSTABILITY.md](ENGINE-INSTABILITY.md)).
+> Entries below that name them no longer apply.
+
 **[V]** marks a claim spot-checked by hand after the reviews came back. Line numbers are at 8d05696. Line counts are reviewer estimates. Counts that came from grep, not a link map, say so.
 
 **Baseline:** 93/93 ctest pass at 8d05696. **Correction, 10-23:** the "no warnings" reading came from a build that recompiled nothing. A clean rebuild shows pre-existing warnings, listed under T1 in section 3.
@@ -60,7 +64,7 @@ This was read-only: five parallel reviews, each covering one slice, with nothing
     - The pinned `command_channel` oddities in section 5 are fixed, apart from the carry and grenade calls before install.
     - Build passes, 97/97 ctest pass, and the 75 export names are unchanged.
     - Packaged as PreyVR-70, **worn OK (10-24)**, and committed by you as `e8a30af` ("Command handling refactor").
-    - That session's one crash was the engine's, not this batch's ([CRASHES-2026-10-24.md](CRASHES-2026-10-24.md)).
+    - That session's one crash was the engine's, not this batch's ([ENGINE-INSTABILITY.md](ENGINE-INSTABILITY.md#texture-view-crash)).
 
 **How this relates to [the 10-17 audit](DUPLICATION-AUDIT-2026-10-17.md):**
 - The older audit is still the reference for its items. Its "Constraints that shape every fix" and section F ("don't merge") still apply in full.

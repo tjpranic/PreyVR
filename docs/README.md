@@ -29,6 +29,8 @@ The notebook separates evidence from plans so implementation follows demonstrate
 > Why the player stopped while walking and turning, from the first report to the fix: room-scale
 > moved the capsule with the engine's teleport, and Prey re-read the stick from the physical
 > gamepad: [`MOVE-STOP-2026-10-24.md`](MOVE-STOP-2026-10-24.md).
+> The engine's crashes and freezes, in one document: what each is, what the mod keeps for it,
+> where the evidence lives and what to do when one recurs: [`ENGINE-INSTABILITY.md`](ENGINE-INSTABILITY.md).
 > The VR Options panel, drawn with Dear ImGui over the game or a game menu and moved with
 > the laser; it replaced the classic card, and each controller's bindings have their own
 > module: [`VR-OPTIONS-IMGUI-2026-10-13.md`](VR-OPTIONS-IMGUI-2026-10-13.md).

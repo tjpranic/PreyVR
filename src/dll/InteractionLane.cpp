@@ -8,6 +8,7 @@
 #include "CarryLane.h"
 #include "HeadTrackingHook.h"
 #include "UiMode.h"
+#include "VrOptionsRuntime.h"
 #include "Logger.h"
 #include "MinHookInit.h"
 #include "preyvr/EngineMap.h"
@@ -662,7 +663,13 @@ void UpdateInteractionLane(const GameplayPoseFrame& frame, bool tracking)
         Remember(s.carry ? std::string("carry ") + carried.label : std::string("carry end"));
     }
     if (menuOpen != gMenuWasOpen) {
-        Log(std::string("menu ") + (menuOpen ? "open" : "closed") + " epoch=" + std::to_string(HudMenuEpoch()));
+        // Why it reads as open. "stale" is no menu at all: the main thread's
+        // menu poll is over 200 ms old, which a stall leaves behind -- read on
+        // 2026-10-25 as game-UI transitions (docs/ENGINE-INSTABILITY.md).
+        const char* why = !menuOpen ? "" : VrOptionsInputOwned() ? " why=vr_options"
+                                         : !HudMenuStateKnown()   ? " why=stale"
+                                                                  : " why=menu";
+        Log(std::string("menu ") + (menuOpen ? "open" : "closed") + " epoch=" + std::to_string(HudMenuEpoch()) + why);
         Remember(menuOpen ? "menu open" : "menu closed");
         gMenuWasOpen = menuOpen;
     }

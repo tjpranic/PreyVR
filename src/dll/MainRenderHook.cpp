@@ -92,10 +92,10 @@ void __fastcall RenderWithCameraEdit(void* system)
         // One record per native render, including refusals and flat/menu frames.
         // A missing record would shift every subsequent image's metadata.
         if(gStereoIpd.load()>0.f) PublishRenderContract(renderContract);
-        // The cull guard and the frame probe around it (FrameSchedule.cpp).
-        const schedule::EngineRenderBracket bracket = schedule::BeforeEngineRender(target);
+        // The cull guard, the frame probe and the body follow around it (FrameSchedule.cpp).
+        schedule::BeforeEngineRender(target);
         original(target);
-        schedule::AfterEngineRender(bracket);
+        schedule::AfterEngineRender();
     };
 
     const bool stereoArmed = gStereoIpd.load(std::memory_order_acquire) > 0.0f;

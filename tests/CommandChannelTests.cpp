@@ -234,12 +234,21 @@ const Case kCases[] = {
     {"dual.ipd", "dual.ipd result=0", DualSceneReport, processed},
     {"dual.vr", "dual.vr result=0", DualSceneReport, processed},
     {"dual.overlay", "dual.overlay result=0", DualOverlayReport, processed},
-    {"cull.report", "cull.report result=0", CullCameraWatchReport, processed},
-    {"cull.watch", "cull.watch result=0", CullCameraWatchReport, processed},
-    {"cull.probe", "cull.probe result=0", FrameProbeReport, processed},
+    {"frame.probe", "frame.probe result=0", FrameProbeReport, processed},
+    {"frame.probe 2", "frame.probe result=1", FrameProbeReport, processed},
     {"cull.prepare", "cull.prepare result=0", CullPrepareReport, processed},
-    {"rset.report", "rset.report result=0", ResourceSetWatchReport, processed},
-    {"rset.watch", "rset.watch result=0", ResourceSetWatchReport, processed},
+    // The two use-after-free watches were removed when the bugs were closed
+    // pending recurrence (2026-10-27), and the frame probe left the cull verbs.
+    {"cull.report", "result=rejected verb=\"cull.report\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
+     rejected},
+    {"cull.watch 1", "result=rejected verb=\"cull.watch\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
+     rejected},
+    {"cull.probe 1", "result=rejected verb=\"cull.probe\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
+     rejected},
+    {"rset.report", "result=rejected verb=\"rset.report\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
+     rejected},
+    {"rset.watch 1", "result=rejected verb=\"rset.watch\" detail=not_a_channel_verb_and_not_allowlisted", nullptr,
+     rejected},
     {"window.hold", "window.hold result=0 note=no_value_nothing_changed", FocusHoldReport, processed},
     {"window.hold 2", "window.hold result=1", FocusHoldReport, processed},
     {"window.hold 0", "window.hold result=0", FocusHoldReport, processed},
@@ -461,7 +470,7 @@ const Case kCases[] = {
 //   near.fxhide, aim.shotprobe, aim.reticle, aim.enable, weapon.observe,
 //   view.observe, ik.mode, move.mode, use.hand, xr.stereo, ui.inventory,
 //   hud.layer, psi.target, medkit.slot, dual.observe, dual.mode, dual.overlay,
-//   dual.vr, cull.watch, cull.probe, cull.prepare; aim.shot, near.fx,
+//   dual.vr, frame.probe, cull.prepare; aim.shot, near.fx,
 //   markers.depth, stars.depth, body.depth, ui.stereo and window.hold given 1; aim.beam and dual.capture
 //   even bare; hud.var, hud.setvar, hud.call, hud.fit and hud.probe given
 //   arguments that parse.

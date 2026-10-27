@@ -8,9 +8,7 @@
 #include "ConsoleBridgeWin32.h"
 #include "ContactLane.h"
 #include "ControllerPrompts.h"
-#include "CullCameraWatch.h"
 #include "CullPrepareGuard.h"
-#include "ResourceSetWatch.h"
 #include "DebugOverlay.h"
 #include "FocusHold.h"
 #include "FrameCaptureWin32.h"
@@ -20,6 +18,7 @@
 #include "InputPost.h"
 #include "InteractionLane.h"
 #include "MoveLane.h"
+#include "OverflowCapture.h"
 #include "PsiMedkit.h"
 #include "Psychoscope.h"
 #include "SurfaceStopLane.h"
@@ -43,6 +42,9 @@ void PrepareGameplayFrame(GameplayPoseFrame& frame, bool allowed)
 
 void TickGameplayLanes(const GameplayPoseFrame& frame, bool allowed, bool tracking)
 {
+    // The frame probe's gameplay step (FrameProbe.h): splits the main thread's
+    // update at the player's frame.
+    ProbeRecord(ProbeStep::gameplay);
     // Before this frame's render: which slot is the player's, drawn in the world.
     PublishBodyDepthPlayer(frame.player);
     UpdatePsiMedkit(frame, allowed);
@@ -61,6 +63,9 @@ void TickGameplayLanes(const GameplayPoseFrame& frame, bool allowed, bool tracki
 
 void TickMainRender()
 {
+    // The frame probe's clock, and the main thread named for a crash report.
+    NoteCrashThread(CrashThread::main);
+    ProbeRecord(ProbeStep::tick);
     // **Queued input is drained here, not on the thread that produced it.**
     // `CSystem::Render` is the engine's main thread and, unlike the gameplay
     // camera callback, it still runs while a menu is up -- which is exactly the
@@ -83,7 +88,7 @@ void TickMainRender()
     ServiceWrenchDrawFrame();
 }
 
-EngineRenderBracket BeforeEngineRender(void* system)
+void BeforeEngineRender(void* system)
 {
     // After every drain and the camera edit, so it tests the camera Render
     // is about to: if this frame's occlusion prepare was skipped though the
@@ -92,24 +97,13 @@ EngineRenderBracket BeforeEngineRender(void* system)
     if (system != nullptr) {
         CullPrepareBeforeRender(static_cast<const std::uint8_t*>(system) + engine::SystemLayout::viewCamera);
     }
-    // The frame probe's main-thread bracket around the world render
-    // (FrameProbe.h): whether the cull queue drained inside it, and the cull
-    // handshake on each side (CullPrepareGuard.h), which shows an orphaned batch.
-    std::uint32_t write = 0, read = 0;
-    CullQueueIndices(write, read);
-    EngineRenderBracket bracket{};
-    bracket.handshake = CullThreadState();
-    ProbeRecord(ProbeStep::renderEnter, bracket.handshake, 0, write, read);
-    return bracket;
+    // The frame probe's main-thread bracket around Prey's own render (FrameProbe.h).
+    ProbeRecord(ProbeStep::renderEnter);
 }
 
-void AfterEngineRender(const EngineRenderBracket& bracket)
+void AfterEngineRender()
 {
-    std::uint32_t write = 0, read = 0;
-    CullQueueIndices(write, read);
-    const std::uint32_t handshakeAfter = CullThreadState();
-    ProbeRecord(ProbeStep::renderExit, handshakeAfter, 0, write, read);
-    CullPrepareAfterRender(bracket.handshake, handshakeAfter);
+    ProbeRecord(ProbeStep::renderExit);
     // After the world render took the body's transform, before the next frame's
     // animation starts: the body follow's turn and room-scale's move (TorsoLane.h).
     ServiceBodyFollow();
@@ -117,6 +111,7 @@ void AfterEngineRender(const EngineRenderBracket& bracket)
 
 void TickRenderThread(void* renderer, unsigned long long frame)
 {
+    NoteCrashThread(CrashThread::render);
     // Both return on a single atomic load when nothing is armed, so the
     // observer stays as close to free as it was. They run before the original
     // so a console command lands at a frame boundary, and so a capture reads the
@@ -132,12 +127,11 @@ void TickRenderThread(void* renderer, unsigned long long frame)
 
 void TickWorker()
 {
-    // Once, as soon as the module is pinned: VR or not (CullCameraWatch.h).
-    // The probe also writes its finished windows here, off the game threads.
-    ServiceCullCameraWatch();
+    NoteCrashThread(CrashThread::worker);
+    // The probe starts here and writes its finished windows here, off the game
+    // threads; the cull guard installs once the module is pinned, VR or not.
     ServiceFrameProbe();
     ServiceCullPrepareGuard();
-    ServiceResourceSetWatch();
     TickVrMode();
     ServiceVrOptions();
     ServiceFocusHold();

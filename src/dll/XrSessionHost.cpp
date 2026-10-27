@@ -149,7 +149,13 @@ void ServiceXrFrame(void* renderer)
     XrFrameWaitInfo waitInfo{XR_TYPE_FRAME_WAIT_INFO};
     XrFrameState frameState{XR_TYPE_FRAME_STATE};
     const std::uint64_t waitStart = timing ? preyvr::timing::MonotonicNanoseconds() : 0;
+    // The frame probe times the three calls that can block on the runtime
+    // (FrameProbe.h): this wait, the eye image's, and the end of frame.
+    const std::int64_t probeWait = ProbeClock();
     const XrResult waitResult = xrWaitFrame(gHost.session, &waitInfo, &frameState);
+    if (probeWait != 0) {
+        ProbeRecord(ProbeStep::xrWait, ProbeMicrosSince(probeWait), frameState.shouldRender != XR_FALSE ? 1u : 0u);
+    }
     if (timing) {
         gWaitFrame.AddNanoseconds(preyvr::timing::MonotonicNanoseconds() - waitStart);
     }
@@ -387,7 +393,9 @@ void ServiceXrFrame(void* renderer)
                 }
             }
             AcquiredImage image;
+            const std::int64_t probeAcquire = ProbeClock();
             if (matchingSize && !inventorySubmitted) image.Acquire(SessionSwapchainApi(), gHost.swapchain);
+            if (probeAcquire != 0) ProbeRecord(ProbeStep::xrAcquire, ProbeMicrosSince(probeAcquire));
             if(image.WaitFailed())gStopRequested.store(true);
             if (timing && matchingSize) {
                 gAcquireWait.AddNanoseconds(
@@ -606,7 +614,9 @@ void ServiceXrFrame(void* renderer)
     endInfo.layerCount = rendered ? static_cast<std::uint32_t>(layers.size()) : 0;
     endInfo.layers = rendered ? layers.data() : nullptr;
     const std::uint64_t endStart = timing ? preyvr::timing::MonotonicNanoseconds() : 0;
+    const std::int64_t probeEnd = ProbeClock();
     const auto endResult=xrEndFrame(gHost.session, &endInfo);
+    if (probeEnd != 0) ProbeRecord(ProbeStep::xrEnd, ProbeMicrosSince(probeEnd), endInfo.layerCount);
     // Arm only after a complete successful frame. Until then the native movie
     // keeps rendering normally and the existing full-menu panel remains usable.
     // inventoryPrepared needs the menu panel, which needs located views: the

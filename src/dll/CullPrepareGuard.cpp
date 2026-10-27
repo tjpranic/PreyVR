@@ -1,12 +1,8 @@
 #include "CullPrepareGuard.h"
 #include "Bootstrap.h"
 #include "EnvSwitch.h"
-#include "FrameProbe.h"
-#include "HookInstall.h"
 #include "Logger.h"
-#include "MinHookInit.h"
 #include "SafeMemory.h"
-#include <MinHook.h>
 #include <array>
 #include <atomic>
 #include <cmath>
@@ -18,8 +14,9 @@
 namespace preyvr::dll {
 namespace {
 // Steam PreyDll SHA256 7d6e322f...05311a7. Every offset below is fixed by the
-// exact code gate (kCode); docs/CULL-CAMERA-CRASH-2026-10-17.md, "The handshake",
-// has the disassembly they were read from.
+// exact code gate (kCode); docs/ENGINE-INSTABILITY.md, "The trigger", names the
+// functions, and tools/re/verify_cull_prepare_guard.py checks the gate and the
+// wiring offline.
 //
 // C3DEngine::PrepareOcclusion(const CCamera&), vtable +0x40, the whole function:
 //   if (cvars+0x1A4 && !gEnv+0x2AB && (|m03| > eps || |m13| > eps || |m23| > eps))
@@ -100,29 +97,19 @@ constexpr std::array<CodeSpan, 8> kCode{{
     {0x23EFE0, kEndOcclusionCode, sizeof(kEndOcclusionCode)},
 }};
 
-// Bounded telemetry: the first in full, then one in kStride.
-constexpr unsigned long long kLogged = 32, kStride = 256;
-constexpr unsigned long long kSummaryMs = 60000;
+// A kick that did not start a prepare: the first few are logged.
+constexpr unsigned long long kFailuresLogged = 8;
 
-// What PrepareOcclusion did since the last render: 0 none, else kSeen | gates |
-// the state it left << 4.
-constexpr std::uint32_t kSeen = 0x100;
-
-std::atomic<bool> gEnabled{false}, gInstalled{false}, gHooked{false}, gStartAttempted{false};
+std::atomic<bool> gEnabled{false}, gInstalled{false}, gStartAttempted{false};
 std::mutex gInstallMutex;
-bool gHookTried = false;
-std::atomic<PrepareOcclusionFn> gPrepareOriginal{nullptr}, gPrepareTarget{nullptr};
+std::atomic<PrepareOcclusionFn> gPrepareTarget{nullptr};
 // Absolute addresses, published by Install (a test points them at its own memory).
 std::atomic<std::uintptr_t> gObjManagerSlot{0}, gEngineSlot{0}, gEngineVtable{0};
 std::atomic<std::uintptr_t> gCVarsSlot{0}, gNoWorldFlag{0};
 std::atomic<float> gEpsilon{0.05f};
 
-std::atomic<unsigned long long> gPrepares{0}, gPrepareRan{0}, gSkippedOrigin{0}, gSkippedRenderTasks{0};
-std::atomic<unsigned long long> gSkippedNoWorld{0}, gGateUnread{0}, gRenders{0}, gUnprepared{0};
-std::atomic<unsigned long long> gKicks{0}, gKickFailed{0}, gOrphans{0}, gWrongReceiver{0}, gUnreadable{0};
-std::atomic<std::uint32_t> gLastPrepare{0}, gFrameLast{0};
-std::atomic<bool> gLoggedFirstOrigin{false};
-std::atomic<ULONGLONG> gNextSummary{0};
+// What cull.prepare reports: the guard's health, not a record of the frames.
+std::atomic<unsigned long long> gKicks{0}, gKickFailed{0}, gWrongReceiver{0}, gUnreadable{0};
 
 void Log(const std::string& line)
 {
@@ -177,17 +164,6 @@ std::uint32_t Gates(const void* camera)
     return gates;
 }
 
-const char* PrepareName(std::uint32_t last)
-{
-    if ((last & kSeen) == 0) return "none";
-    const std::uint32_t gates = last & 0xF;
-    if ((gates & kGateUnread) != 0) return "unread";
-    if ((gates & kGateRenderTasks) == 0) return "skipped_render_tasks";
-    if ((gates & kGateWorld) == 0) return "skipped_no_world";
-    if ((gates & kGateCamera) == 0) return "skipped_origin";
-    return "ran";
-}
-
 void AppendState(std::ostringstream& line, std::uint32_t state)
 {
     if (state == kCullStateUnknown) line << '?';
@@ -206,43 +182,10 @@ void AppendCamera(std::ostringstream& line, const void* camera)
     line << " camera=" << t[0] << ',' << t[1] << ',' << t[2];
 }
 
-bool Due(unsigned long long n)
-{
-    return n <= kLogged || n % kStride == 0;
-}
-
-// Read-only: what the engine's own call decided, then the original unchanged.
-void __fastcall ObservePrepare(void* engine, const void* camera)
-{
-    const auto original = gPrepareOriginal.load(std::memory_order_acquire);
-    const std::uint32_t before = CullThreadState();
-    const std::uint32_t gates = Gates(camera);
-    if (original != nullptr) {
-        original(engine, camera);
-    }
-    const std::uint32_t after = CullThreadState();
-    gPrepares.fetch_add(1, std::memory_order_relaxed);
-    if ((gates & kGateUnread) != 0) gGateUnread.fetch_add(1, std::memory_order_relaxed);
-    else if ((gates & kGateRenderTasks) == 0) gSkippedRenderTasks.fetch_add(1, std::memory_order_relaxed);
-    else if ((gates & kGateWorld) == 0) gSkippedNoWorld.fetch_add(1, std::memory_order_relaxed);
-    else if ((gates & kGateCamera) == 0) {
-        gSkippedOrigin.fetch_add(1, std::memory_order_relaxed);
-        if (!gLoggedFirstOrigin.exchange(true, std::memory_order_relaxed)) {
-            std::ostringstream line;
-            line << "detail=first_origin_skip state=";
-            AppendState(line, after);
-            AppendCamera(line, camera);
-            Log(line.str());
-        }
-    } else gPrepareRan.fetch_add(1, std::memory_order_relaxed);
-    gLastPrepare.store(kSeen | gates | (after & 0xF) << 4, std::memory_order_release);
-    ProbeRecord(ProbeStep::prepare, before, after, gates);
-}
-
 DWORD Install()
 {
-    // Caller holds gInstallMutex. The observation hook stays until process exit;
-    // cull.prepare 0 only turns the guard off.
+    // Caller holds gInstallMutex. Installed once; cull.prepare 0 only turns the
+    // guard off.
     if (gInstalled.load(std::memory_order_acquire)) {
         return 0;
     }
@@ -265,28 +208,16 @@ DWORD Install()
         return 4;
     }
     gEpsilon.store(eps, std::memory_order_relaxed);
-    // Published before the hook can run.
+    // Published before the guard can run.
     gObjManagerSlot.store(base + kObjManagerRva, std::memory_order_release);
     gEngineSlot.store(base + kThreeDEngineRva, std::memory_order_release);
     gEngineVtable.store(base + kEngineVtableRva, std::memory_order_release);
     gCVarsSlot.store(base + kCVarsRva, std::memory_order_release);
     gNoWorldFlag.store(base + kNoWorldFlagRva, std::memory_order_release);
     gPrepareTarget.store(reinterpret_cast<PrepareOcclusionFn>(base + kPrepareRva), std::memory_order_release);
-    // The observation is optional: the guard calls the gated function directly
-    // without it. MinHook relocates the RIP-relative load it displaces.
-    if (!gHookTried) {
-        gHookTried = true;
-        if (EnsureMinHook() &&
-            hook::HookAt(reinterpret_cast<void*>(base + kPrepareRva), kPrepareCode,
-                         reinterpret_cast<void*>(&ObservePrepare), gPrepareOriginal, "prepare_occlusion", &Log)) {
-            gHooked.store(true, std::memory_order_release);
-        }
-    }
-    gNextSummary.store(GetTickCount64() + kSummaryMs, std::memory_order_relaxed);
     gInstalled.store(true, std::memory_order_release);
     std::ostringstream line;
-    line << "result=0 detail=installed seam=CSystem::Render observe=PrepareOcclusion rva=0x20DA10 hooked="
-         << (gHooked.load() ? 1 : 0) << " epsilon=" << eps;
+    line << "result=0 detail=installed seam=CSystem::Render prepare=PrepareOcclusion rva=0x20DA10 epsilon=" << eps;
     Log(line.str());
     return 0;
 }
@@ -303,9 +234,6 @@ void CullPrepareBeforeRender(const void* viewCamera)
     if (!gInstalled.load(std::memory_order_acquire) || viewCamera == nullptr) {
         return;
     }
-    gRenders.fetch_add(1, std::memory_order_relaxed);
-    const std::uint32_t last = gLastPrepare.exchange(0, std::memory_order_acq_rel);
-    gFrameLast.store(last, std::memory_order_relaxed);
     const std::uint32_t state = CullThreadState();
     if (state == kCullStateUnknown) {
         gUnreadable.fetch_add(1, std::memory_order_relaxed);
@@ -321,9 +249,7 @@ void CullPrepareBeforeRender(const void* viewCamera)
     if (gates != kGatesOpen) {
         return;
     }
-    const auto unprepared = gUnprepared.fetch_add(1, std::memory_order_relaxed) + 1;
     if (!gEnabled.load(std::memory_order_acquire)) {
-        // Observe only: CullPrepareAfterRender counts the orphan this leaves.
         return;
     }
     std::uintptr_t engine = 0, vtable = 0;
@@ -332,51 +258,25 @@ void CullPrepareBeforeRender(const void* viewCamera)
         gWrongReceiver.fetch_add(1, std::memory_order_relaxed);
         return;
     }
-    PrepareOcclusionFn prepare = gPrepareOriginal.load(std::memory_order_acquire);
-    if (prepare == nullptr) prepare = gPrepareTarget.load(std::memory_order_acquire);
+    const PrepareOcclusionFn prepare = gPrepareTarget.load(std::memory_order_acquire);
     if (prepare == nullptr) {
         return;
     }
     prepare(reinterpret_cast<void*>(engine), viewCamera);
     const std::uint32_t after = CullThreadState();
     const bool kicked = after == kStatePreparing || after == kStatePrepared;
-    const auto n = (kicked ? gKicks : gKickFailed).fetch_add(1, std::memory_order_relaxed) + 1;
-    ProbeRecord(ProbeStep::prepareKick, state, after, gates, last);
-    if (!kicked || Due(n)) {
+    if (kicked) {
+        gKicks.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    const auto n = gKickFailed.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (n <= kFailuresLogged) {
         std::ostringstream line;
-        line << "detail=" << (kicked ? "kick" : "kick_failed") << " n=" << n << " state=";
+        line << "detail=kick_failed n=" << n << " state=";
         AppendState(line, state);
         line << "->";
         AppendState(line, after);
-        line << " lastPrepare=" << PrepareName(last) << " unprepared=" << unprepared;
         AppendCamera(line, viewCamera);
-        Log(line.str());
-    }
-}
-
-void CullPrepareAfterRender(std::uint32_t before, std::uint32_t after)
-{
-    if (!gInstalled.load(std::memory_order_acquire)) {
-        return;
-    }
-    // CullStart parked (3) with no prepare in flight to launch the consumer: the
-    // frame's batch will stay queued. A 3 after a 1 or 2 is the normal race,
-    // which RasterizeZBuffer resolves.
-    if (before == kStatePreparing || before == kStatePrepared || before == kCullStateUnknown ||
-        after != kStateWaiting) {
-        return;
-    }
-    const auto n = gOrphans.fetch_add(1, std::memory_order_relaxed) + 1;
-    const std::uint32_t last = gFrameLast.load(std::memory_order_relaxed);
-    const bool guarding = gEnabled.load(std::memory_order_relaxed);
-    ProbeRecord(ProbeStep::orphan, before, after, guarding ? 1 : 0, last);
-    if (Due(n)) {
-        std::ostringstream line;
-        line << "detail=orphan n=" << n << " state=";
-        AppendState(line, before);
-        line << "->";
-        AppendState(line, after);
-        line << " guard=" << (guarding ? 1 : 0) << " lastPrepare=" << PrepareName(last);
         Log(line.str());
     }
 }
@@ -410,15 +310,6 @@ void ServiceCullPrepareGuard()
         const bool off = EnvSwitchOff(L"PREYVR_CULL_PREPARE");
         if (off) Log("result=0 detail=guard_off reason=PREYVR_CULL_PREPARE");
         SetCullPrepareGuard(off ? 0 : 1);
-        return;
-    }
-    if (!gInstalled.load(std::memory_order_acquire)) {
-        return;
-    }
-    const ULONGLONG now = GetTickCount64();
-    ULONGLONG next = gNextSummary.load(std::memory_order_relaxed);
-    if (now >= next && gNextSummary.compare_exchange_strong(next, now + kSummaryMs, std::memory_order_relaxed)) {
-        Log("summary" + CullPrepareReport());
     }
 }
 
@@ -427,11 +318,7 @@ std::string CullPrepareReport()
     const auto n = [](const std::atomic<unsigned long long>& value) { return value.load(std::memory_order_relaxed); };
     std::ostringstream out;
     out << " installed=" << (gInstalled.load() ? 1 : 0) << " guard=" << (gEnabled.load() ? 1 : 0)
-        << " hooked=" << (gHooked.load() ? 1 : 0) << " prepares=" << n(gPrepares) << " ran=" << n(gPrepareRan)
-        << " skippedOrigin=" << n(gSkippedOrigin) << " skippedNoWorld=" << n(gSkippedNoWorld)
-        << " skippedRenderTasks=" << n(gSkippedRenderTasks) << " gateUnread=" << n(gGateUnread)
-        << " renders=" << n(gRenders) << " unprepared=" << n(gUnprepared) << " kicks=" << n(gKicks)
-        << " kickFailed=" << n(gKickFailed) << " orphans=" << n(gOrphans) << " wrongReceiver=" << n(gWrongReceiver)
+        << " kicks=" << n(gKicks) << " kickFailed=" << n(gKickFailed) << " wrongReceiver=" << n(gWrongReceiver)
         << " unreadable=" << n(gUnreadable) << " state=";
     AppendState(out, CullThreadState());
     return out.str();

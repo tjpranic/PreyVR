@@ -41,7 +41,7 @@
     Having them rendered at a more realisitic depth would be nice but challenging.
     Technically everything is working game wise, it would just be an improvement.
 - Arms can clip into the player model
-- Recenter player body when the player stops moving?
+- Recenter player body when the player stops moving (?)
 - Left hand laser doesn't hit at surface of objects unlike the right hand aim laser
     This might be intentional? Will need to investigate.
 
@@ -83,18 +83,21 @@
 ## IN PROGRESS
 
 ### Engine Instability
-- Use-after-free camera bug
-    Causes an access violation that then crashes the game. Have got instrumentation in place to catch it. See CameraCullWatch.cpp.
 - Very rare render freeze
-    The camera doesn't render any new frame for a short time. Not related to the use-after-free camera bug. Instrumentation in place: FrameProbe.cpp.
-- Camera flashing bug
-    A weird bug that causes certain parts of the world to flash strangely. Might be a culling issue. A fix + instrumentation is in place.
-- Texture view use-after-free bug
-    Instrumentation in place. See ResourceSetWatch.cpp.
+    > The camera doesn't render any new frame for a short time. Not related to the use-after-free camera bug. Instrumentation in place: FrameProbe.cpp, now a flight recorder that opens on the stall itself and sums up where each thread waited (PreyVR-98). See docs/ENGINE-INSTABILITY.md.
 - Phantom crash
     Didn't leave an error dump since it crashed before the process could write one.
+    > A stack overflow: Steam recorded exit code 0xC00000FD. OverflowCapture.cpp now writes a dump and a report that survive one, and the launcher keeps each session's Game.log (PreyVR-98). Waiting for it to happen again. See docs/ENGINE-INSTABILITY.md.
 
 ## DONE
+
+### Engine Instability
+- Use-after-free camera bug (Pending recurrence)
+    > A pause-menu close could leave the culler a frame behind for the rest of the session. The cull guard (CullPrepareGuard.cpp) pairs that frame. No sign of the lag in 61 runs, so the watch was removed on 2026-10-27; the guard stays. See docs/ENGINE-INSTABILITY.md.
+- Camera flashing bug (Pending recurrence)
+    > The same cull lag, fixed by the same guard.
+- Texture view use-after-free bug (Pending recurrence)
+    > Did not recur in 41 runs. The watch was removed on 2026-10-27. See docs/ENGINE-INSTABILITY.md for what to build if it comes back.
 
 ### Controls
 - The movement stoppage bug (Archived)
@@ -145,4 +148,5 @@ Feature set tracking list, in broad terms:
 - Stereoscopic rendering (**IMPLEMENTED**)
     Using the dormant stereoscopic rendering code in Prey's CryEngine fork. Cutscenes, fades and UI elements need special handling to display in both eyes correctly.
 - VR Options Menu (**IN PROGRESS**)
+- Engine Instability Bugs (**IN PROGRESS**)
 - ...

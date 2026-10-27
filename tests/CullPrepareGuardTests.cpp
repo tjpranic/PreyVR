@@ -1,5 +1,5 @@
-// Exercise the occlusion-prepare guard, its observation detour, gate and report
-// without loading Prey. Including this TU exposes internal seams only inside this
+// Exercise the occlusion-prepare guard, its gate and report without loading
+// Prey. Including this TU exposes internal seams only inside this
 // test executable.
 #include "../src/dll/CullPrepareGuard.cpp"
 #include <cstring>
@@ -10,20 +10,9 @@
 #include "TestSupport.h"
 
 PREYVR_TEST_CAPTURE_LOG()
-PREYVR_TEST_STUB_MINHOOK()
 namespace preyvr::dll {
 DWORD gPinned = 0;
 DWORD ModulePinStatus() { return gPinned; }
-// The frame probe, as the guard drives it.
-struct ProbeCall {
-    ProbeStep step;
-    std::uint32_t a, b, c, d;
-};
-std::vector<ProbeCall> gProbeCalls;
-void ProbeRecord(ProbeStep step, std::uint32_t a, std::uint32_t b, std::uint32_t c, std::uint32_t d)
-{
-    gProbeCalls.push_back({step, a, b, c, d});
-}
 } // namespace preyvr::dll
 
 namespace {
@@ -44,15 +33,6 @@ template <typename T> T Get(const std::vector<std::uint8_t>& memory, std::uintpt
     return value;
 }
 std::uintptr_t At(const std::vector<std::uint8_t>& memory) { return reinterpret_cast<std::uintptr_t>(memory.data()); }
-std::vector<ProbeCall> Calls(ProbeStep step)
-{
-    std::vector<ProbeCall> out;
-    for (const auto& call : gProbeCalls) {
-        if (call.step == step) out.push_back(call);
-    }
-    return out;
-}
-
 constexpr std::uintptr_t kFakeVtable = 0x7FF012346000;
 struct Fixture;
 Fixture* gFixture = nullptr;
@@ -92,8 +72,7 @@ struct Fixture {
         gCVarsSlot.store(reinterpret_cast<std::uintptr_t>(&cvarsGlobal));
         gNoWorldFlag.store(reinterpret_cast<std::uintptr_t>(&noWorld));
         gEpsilon.store(0.05f);
-        gPrepareOriginal.store(&FakePrepare);
-        gPrepareTarget.store(nullptr);
+        gPrepareTarget.store(&FakePrepare);
         gInstalled.store(true);
         gEnabled.store(true);
     }
@@ -125,16 +104,9 @@ struct Fixture {
 
 void Reset()
 {
-    for (auto* counter : {&gPrepares, &gPrepareRan, &gSkippedOrigin, &gSkippedRenderTasks, &gSkippedNoWorld,
-                          &gGateUnread, &gRenders, &gUnprepared, &gKicks, &gKickFailed, &gOrphans,
-                          &gWrongReceiver, &gUnreadable}) {
+    for (auto* counter : {&gKicks, &gKickFailed, &gWrongReceiver, &gUnreadable}) {
         counter->store(0);
     }
-    gLastPrepare.store(0);
-    gFrameLast.store(0);
-    gLoggedFirstOrigin.store(false);
-    gNextSummary.store(~0ull);
-    gProbeCalls.clear();
     gLines.clear();
 }
 
@@ -146,13 +118,7 @@ void TestNormalFrames()
         f.State(state);
         CullPrepareBeforeRender(f.Camera());
     }
-    Require(gPrepareCalls == 0 && gKicks == 0 && gUnprepared == 0 && gRenders == 2,
-            "a prepare in flight or done: nothing to do");
-    // CullStart parking behind a prepare in flight is the normal race.
-    CullPrepareAfterRender(1, 3);
-    CullPrepareAfterRender(2, 4);
-    CullPrepareAfterRender(4, 4);
-    Require(gOrphans == 0 && gProbeCalls.empty(), "and no orphan");
+    Require(gPrepareCalls == 0 && gKicks == 0 && gLines.empty(), "a prepare in flight or done: nothing to do");
 }
 
 void TestKick()
@@ -164,16 +130,8 @@ void TestKick()
         CullPrepareBeforeRender(f.Camera());
         Require(gPrepareCalls == 1 && gPrepareReceiver == f.engine.data() && gPrepareCamera == f.Camera(),
                 "no prepare in flight and a camera to render: the engine's prepare, on gEnv->p3DEngine");
-        Require(f.State() == 1 && gKicks == 1 && gKickFailed == 0 && gUnprepared == 1, "the handshake can pair");
-        const auto kicks = Calls(ProbeStep::prepareKick);
-        Require(kicks.size() == 1 && kicks[0].a == stale && kicks[0].b == 1 && kicks[0].c == kGatesOpen &&
-                    kicks[0].d == 0,
-                "a probe trigger with the states, the gates and no earlier prepare");
-        Require(Logged("preyvr_cull_prepare detail=kick n=1 state=") && Logged("->1 lastPrepare=none unprepared=1") &&
-                    Logged("camera=512.000,1024.000,30.000"),
-                "the kick is logged with the camera it prepared for");
-        CullPrepareAfterRender(1, 4);
-        Require(gOrphans == 0, "the render after it pairs");
+        Require(f.State() == 1 && gKicks == 1 && gKickFailed == 0, "the handshake can pair");
+        Require(gLines.empty(), "a kick that worked is counted, not logged");
     }
 }
 
@@ -185,7 +143,7 @@ void TestGates()
         f.State(4);
         const auto before = gPrepareCalls;
         CullPrepareBeforeRender(f.Camera());
-        Require(gPrepareCalls == before && gUnprepared == 0, message);
+        Require(gPrepareCalls == before && gKicks == 0, message);
     };
     f.Translate(0.04f, -0.05f, 0.0f);
     expectNoKick("within 5 cm of the origin on every axis: PrepareOcclusion and the world both skip");
@@ -206,67 +164,13 @@ void TestGates()
     Require(gKicks == 1 && f.State() == 1, "one axis past 5 cm is enough");
 }
 
-void TestGuardOffCountsOrphans()
+void TestGuardOff()
 {
     Reset();
     Fixture f;
     gEnabled.store(false);
-    // PostUpdate's own prepare saw the camera at the origin...
-    f.Translate(0.0f, 0.0f, 0.0f);
-    ObservePrepare(f.engine.data(), f.Camera());
-    Require(gSkippedOrigin == 1 && f.State() == 4 && Logged("detail=first_origin_skip state=4 camera=0.000"),
-            "the engine's prepare skipped at the origin");
-    // ...and Render's world had one by the time it ran.
-    f.Translate(10.0f, 20.0f, 1.7f);
     CullPrepareBeforeRender(f.Camera());
-    Require(gPrepareCalls == 1 && gUnprepared == 1 && gKicks == 0, "observe only: counted, not prepared");
-    f.State(3); // CullStart parked
-    CullPrepareAfterRender(4, 3);
-    Require(gOrphans == 1, "CullStart parked with no prepare in flight: orphaned");
-    const auto orphans = Calls(ProbeStep::orphan);
-    Require(orphans.size() == 1 && orphans[0].a == 4 && orphans[0].b == 3 && orphans[0].c == 0 &&
-                (orphans[0].d & kSeen) != 0 && (orphans[0].d & kGateCamera) == 0,
-            "a probe trigger carrying the guard and the skipped prepare");
-    Require(Logged("detail=orphan n=1 state=4->3 guard=0 lastPrepare=skipped_origin"), "and a log line");
-    CullPrepareAfterRender(3, 3);
-    Require(gOrphans == 2, "every frame it repeats is another");
-    CullPrepareAfterRender(kCullStateUnknown, 3);
-    Require(gOrphans == 2, "an unread state proves nothing");
-}
-
-void TestObservation()
-{
-    Reset();
-    Fixture f;
-    f.State(4);
-    ObservePrepare(f.engine.data(), f.Camera());
-    Require(gPrepareCalls == 1 && gPrepareCamera == f.Camera() && f.State() == 1, "the original runs unchanged");
-    Require(gPrepares == 1 && gPrepareRan == 1 && gLastPrepare == (kSeen | kGatesOpen | 1u << 4),
-            "a prepare that ran, and the state it left");
-    const auto prepares = Calls(ProbeStep::prepare);
-    Require(prepares.size() == 1 && prepares[0].a == 4 && prepares[0].b == 1 && prepares[0].c == kGatesOpen,
-            "recorded for the probe");
-    CullPrepareBeforeRender(f.Camera());
-    Require(gPrepareCalls == 1 && gLastPrepare == 0 && (gFrameLast & kSeen) != 0,
-            "the render consumes it and has nothing to do");
-    CullPrepareBeforeRender(f.Camera());
-    Require(gFrameLast == 0, "a render with no prepare since the last one sees none");
-
-    f.State(4);
-    Put(f.cvars, kCVarRenderTasks, 0);
-    ObservePrepare(f.engine.data(), f.Camera());
-    Put(f.cvars, kCVarRenderTasks, 1);
-    f.noWorld = 1;
-    ObservePrepare(f.engine.data(), f.Camera());
-    f.noWorld = 0;
-    f.cvarsGlobal = 0;
-    ObservePrepare(f.engine.data(), f.Camera());
-    f.cvarsGlobal = At(f.cvars);
-    Require(gSkippedRenderTasks == 1 && gSkippedNoWorld == 1 && gGateUnread == 1 && gPrepares == 4,
-            "each skip by its gate");
-    gPrepareOriginal.store(nullptr);
-    ObservePrepare(f.engine.data(), f.Camera());
-    Require(gPrepares == 5 && gPrepareCalls == 4, "no original: observed, nothing called");
+    Require(gPrepareCalls == 0 && gKicks == 0 && f.State() == 4, "off: only the engine's own handshake");
 }
 
 void TestKickFailedAndReceiver()
@@ -275,8 +179,14 @@ void TestKickFailedAndReceiver()
     Fixture f;
     gPrepareDoesNothing = true;
     CullPrepareBeforeRender(f.Camera());
-    Require(gKickFailed == 1 && gKicks == 0 && Logged("detail=kick_failed n=1 state=4->4"),
-            "a prepare that did not start is logged as failed");
+    Require(gKickFailed == 1 && gKicks == 0 && Logged("detail=kick_failed n=1 state=4->4") &&
+                Logged("camera=512.000,1024.000,30.000"),
+            "a prepare that did not start is logged as failed, with the camera");
+    for (unsigned i = 0; i < 20; ++i) {
+        f.State(4);
+        CullPrepareBeforeRender(f.Camera());
+    }
+    Require(gKickFailed == 21 && Count("detail=kick_failed") == kFailuresLogged, "the first few, then counted only");
 
     Reset();
     Fixture g;
@@ -288,10 +198,9 @@ void TestKickFailedAndReceiver()
 
     Reset();
     Fixture h;
-    gPrepareOriginal.store(nullptr);
-    gPrepareTarget.store(&Fixture::FakePrepare);
+    gPrepareTarget.store(nullptr);
     CullPrepareBeforeRender(h.Camera());
-    Require(gPrepareCalls == 1 && gKicks == 1, "without the observation hook, the gated function itself");
+    Require(gPrepareCalls == 0 && gKicks == 0, "nothing to call before install");
 }
 
 void TestUnreadableAndUninstalled()
@@ -310,26 +219,10 @@ void TestUnreadableAndUninstalled()
     Fixture g;
     gInstalled.store(false);
     CullPrepareBeforeRender(g.Camera());
-    CullPrepareAfterRender(4, 3);
-    Require(gRenders == 0 && gOrphans == 0 && gPrepareCalls == 0, "not installed: nothing");
+    Require(gUnreadable == 0 && gPrepareCalls == 0, "not installed: nothing");
     gInstalled.store(true);
     CullPrepareBeforeRender(nullptr);
-    Require(gRenders == 0, "no camera: nothing");
-}
-
-void TestLogBudget()
-{
-    Reset();
-    Fixture f;
-    for (unsigned i = 0; i < 300; ++i) {
-        f.State(4);
-        CullPrepareBeforeRender(f.Camera());
-        CullPrepareAfterRender(4, 3);
-    }
-    Require(gKicks == 300 && gOrphans == 300 && Calls(ProbeStep::prepareKick).size() == 300,
-            "every kick and orphan is counted and recorded");
-    Require(Count("detail=kick n=") == kLogged + 1 && Count("detail=orphan n=") == kLogged + 1,
-            "the first 32, then one in 256, are logged");
+    Require(gUnreadable == 0 && gPrepareCalls == 0, "no camera: nothing");
 }
 
 void TestGate()
@@ -361,7 +254,7 @@ void TestGate()
     VirtualFree(image, 0, MEM_RELEASE);
 }
 
-void TestCommandsAndSummary()
+void TestCommands()
 {
     Reset();
     gInstalled.store(false);
@@ -372,7 +265,9 @@ void TestCommandsAndSummary()
     gPinned = 1;
     Require(SetCullPrepareGuard(1) == 3 && Logged("detail=preydll_not_loaded") && !gEnabled,
             "no PreyDll: not installed");
-    Require(CullPrepareReport().find(" installed=0 guard=0 hooked=") == 0, "report leads with state");
+    Require(CullPrepareReport().find(" installed=0 guard=0 kicks=0 kickFailed=0 wrongReceiver=0 unreadable=0 state=") ==
+                0,
+            "report leads with state");
 
     gStartAttempted.store(false);
     gPinned = 0;
@@ -386,19 +281,16 @@ void TestCommandsAndSummary()
             "opt-out honoured");
     SetEnvironmentVariableW(L"PREYVR_CULL_PREPARE", nullptr);
 
-    // Installed: the guard switches without reinstalling, and the summary runs.
+    // Installed: the guard switches without reinstalling; nothing runs in the background.
     Fixture f;
     Require(SetCullPrepareGuard(0) == 0 && !gEnabled && Logged("detail=guard value=0"), "off");
     Require(SetCullPrepareGuard(1) == 0 && gEnabled && Logged("detail=guard value=1"), "on");
-    gNextSummary.store(0);
+    Require(CullPrepareReport().find(" installed=1 guard=1 kicks=0") == 0 &&
+                CullPrepareReport().find(" state=4") != std::string::npos,
+            "the counts and the handshake state, on request");
     gLines.clear();
     ServiceCullPrepareGuard();
-    Require(gLines.size() == 1 && gLines[0].find("preyvr_cull_prepare summary installed=1 guard=1") == 0 &&
-                gLines[0].find(" state=4") != std::string::npos,
-            "the minute summary, off the game thread");
-    gLines.clear();
-    ServiceCullPrepareGuard();
-    Require(gLines.empty(), "and not again before the next minute");
+    Require(gLines.empty(), "no summary any more");
 }
 } // namespace
 
@@ -407,13 +299,11 @@ int main()
     TestNormalFrames();
     TestKick();
     TestGates();
-    TestGuardOffCountsOrphans();
-    TestObservation();
+    TestGuardOff();
     TestKickFailedAndReceiver();
     TestUnreadableAndUninstalled();
-    TestLogBudget();
     TestGate();
-    TestCommandsAndSummary();
+    TestCommands();
     std::cout << "cull prepare guard tests passed\n";
     return 0;
 }
