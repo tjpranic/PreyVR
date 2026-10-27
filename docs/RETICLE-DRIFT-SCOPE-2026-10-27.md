@@ -6,7 +6,9 @@ keypad." This was found statically, from two sources:
 - The extracted DanielleHUD movie (`build/native-hud/verified/patch/libs/ui/gfx/danielle_hud.gfx`, SHA
   `35974883…c9dc`; `map_hud_parts.py verify` passes).
 
-**Status: fix 1, PreyVR-97, worn OK 2026-10-27.** The wearer confirmed it fixed. Changes:
+**Status: fix 1, PreyVR-97, worn OK 2026-10-27.** The wearer confirmed it fixed. Run `player-20261027-181857`
+has 2 examinations (`begins=2`), and the world reticle drew with all ten overrides: `overrides=14394/0`, none
+refused. Changes:
 - `include/preyvr/NativeHudIsolation.h`: four more `ReticleOverrides`, and `MaxOverrides` raised from 8 to 10.
 - `tests/HudPartsTests.cpp`: requires the two children at 0, and 10 overrides.
 - `tools/re/map_hud_parts.py verify` adds four movie checks, run by `re_verifiers`:

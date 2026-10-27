@@ -5,8 +5,9 @@ Branch `custom`. TODO: "Objective markers don't display at the proper depth... R
 Steam DLL, and the markers movie read offline). **Headset, 2026-10-21 (PreyVR-57): confirmed working
 by the wearer.**
 
-**Marker size.** Before 2026-10-21 no setting controlled it, in Prey or the mod. Since then VR
-Options has **Marker Size** (Interface tab, `marker_size`, 50–200%, default 100; `markers.size`):
+**Marker size** (PreyVR-58, worn OK; marked 2026-10-27). Before 2026-10-21 no setting controlled it, in
+Prey or the mod. Since then VR Options has **Marker Size** (Interface tab, `marker_size`, 50–200%, default
+100; `markers.size`):
 - Each marker the depth table names is scaled, icon and label together, about the point it marks
   (the clip's origin).
 - The scale is applied through the clip's `_xscale`/`_yscale`, read and set for both eyes' draws and

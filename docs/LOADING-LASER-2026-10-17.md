@@ -7,6 +7,8 @@ Status, 2026-10-17:
   on by default.
 - One render-thread wait timed out (`renderWaitMisses=1`); when and why is not
   established.
+- **The cursor on the surface the laser hit** (fixed afterwards, 2026-10-17, below): worn OK
+  (marked 2026-10-27).
 
 ## Why the laser froze
 
@@ -55,7 +57,7 @@ surface even when the hit was on VR Options, at the Options panel's (u, v). Over
 game menu the dot landed on the menu plane. Over the running game it landed where
 an empty surface puts it, near the tracking origin. The cursor now goes on the
 surface that was hit (`HeldPointer::surface`), in Prey's frames and hold frames
-alike. Not yet seen in the headset.
+alike. Worn OK.
 
 ### Threading
 

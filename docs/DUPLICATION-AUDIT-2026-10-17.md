@@ -24,7 +24,7 @@ Line numbers are as of commit 8c07a51, before the section A fixes. Files those f
   - PreyVR-15 passed in the headset; committed as `fc7b335`.
 - **2026-10-18, group 1:** B12 (most of it), D5, E1, E2 and E3 were done; see their status notes. Committed as `19edcd7`.
 - **2026-10-23:** three leftovers were done with [the 10-22 audit](REFACTOR-AUDIT-2026-10-22.md)'s easy-win batch: B5's per-frame lookup in AnimIk, and B12's InputPost and wrist-card repeats. B12's pointer visual was checked and kept. See the B5 and B12 notes.
-  - Build passes and 93/93 ctest pass. Not yet worn: InputPost and the wrist card are live paths, so the batch needs the usual headset smoke check.
+  - Build passes and 93/93 ctest pass. Committed in `baa6878` and worn with PreyVR-61 (the 10-23 cut batch, built on it, worn OK) and every package since.
   - Open items in this audit (B6–B11, D3, D4, E4, E5, E7) are tracked with fresh line numbers in the 10-22 audit's section 2.
 - **2026-10-18, C:** the signed-off dead code was cut. PreyVR-17 passed in the headset; committed as `1d8bae9`.
   - Build passes with no new warnings; 81/81 ctest pass (the four VR scheme replays are new), and 12 runs in a row at `-j12` were clean.

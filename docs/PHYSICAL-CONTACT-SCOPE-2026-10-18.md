@@ -1,8 +1,8 @@
 # Physical contact: scope for pushing objects with hands and weapons
 
-Status: **phase 0 (static contracts) done 2026-10-18**: `include/preyvr/ContactNative.h`,
-`tools/re/verify_physical_contact.py`, `contact_native` test (see "Phase 0 results"). No
-runtime code calls them yet. It replaces
+Status: **all phases done and worn OK 2026-10-18** (phases 1–5 on PreyVR-24 to PreyVR-34; see the
+phase table), committed through `f73ba15`. Phase 0 (static contracts): `include/preyvr/ContactNative.h`,
+`tools/re/verify_physical_contact.py`, `contact_native` test (see "Phase 0 results"). It replaces
 Object Nudges, removed the same day (see the end of
 [PHYSICAL-MELEE-2026-09-30.md](PHYSICAL-MELEE-2026-09-30.md)). The deferred wrench rebuild
 will reuse the query layer described here.

@@ -11,7 +11,7 @@ The first version (headset-tested 2026-10-13) copied the classic card's look.
 It now uses ImGui's own dark style and widgets. The restyled panel, menu
 placement, the D-pad and A on a checkbox were worn on 2026-10-13; step 3, the
 panel over the running game, and moving it were worn on 2026-10-14. Step 4 is
-offline-tested only.
+worn OK (marked 2026-10-27); only a bare `ui.curve` is still unworn (below).
 
 ![The panel, interface page](VR-OPTIONS-IMGUI-PREVIEW.png)
 
@@ -292,9 +292,9 @@ code, leftovers of the classic card, and logic kept in two places.
   wrist layer left to its caller; the Frame D-pad's right; Touch's Menu on the
   left; the weapon wheel in every set; the launcher keeping a retired key in
   DryRun, or retiring none.
-- **Not yet worn.** Worth a look: the Frame's D-pad and the stick in the panel,
-  the Experimental tab's longer list, and a bare `ui.curve` in **Tune Prey
-  VR.cmd** reporting without resetting.
+- **Worn OK** (marked 2026-10-27): the Frame's D-pad and the stick in the panel,
+  and the Experimental tab's longer list. **Not yet worn:** a bare `ui.curve` in
+  **Tune Prey VR.cmd** reporting without resetting.
 
 ## Validation
 
@@ -380,7 +380,7 @@ code, leftovers of the classic card, and logic kept in two places.
   targeted control.
 - Not specifically reported from a headset: the left/right repeat rate. Not
   yet measured: the per-frame draw's cost.
-- Step 3 was worn 2026-10-14. Step 4 (above) is offline-tested only.
+- Step 3 was worn 2026-10-14. Step 4 (above) is worn OK (marked 2026-10-27).
 - Moving it (worn 2026-10-14) is covered offline: `ui_panel` covers the drag (held still it stays;
   swung, raised and pushed it keeps the grabbed spot under the laser on the
   cylinder, upright and facing the head, at its physical size; the 60 degree

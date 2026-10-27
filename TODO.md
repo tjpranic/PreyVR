@@ -6,9 +6,9 @@
 - The handheld device (PDA) thing renders over the top of the hand
 
 ### Rendering
-- DLSS?
-- Upscaling?
-- Foveated rendering?
+- DLSS (?)
+- Upscaling (?)
+- Foveated rendering (?)
 
 ### UX/Immersion
 - Rotate to face direction (?)

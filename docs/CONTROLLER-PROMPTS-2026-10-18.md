@@ -149,7 +149,7 @@ stop until the stick moved again.
 
 **Evidence.** `tools/re/verify_controller_prompts.py` passes on the supported
 hash. build/headless Release passes 85/85 ctest, including seven new
-`controller_prompts` guard cases. No headset run yet.
+`controller_prompts` guard cases. **Headset: worn OK on PreyVR-45 (2026-10-20).**
 
 **Headset check:**
 

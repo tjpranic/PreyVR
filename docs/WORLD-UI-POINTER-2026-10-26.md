@@ -10,8 +10,11 @@ else, always offset the same way**. They aim with the right hand and press X.
 - Every read by a screen was handed the crosshair's ray (`reads=17366 steered=17366`).
 - Prey's own ray had run 362, 227 and 125 mm beside it at the three status lines, at 0°.
 
-The examined-screen path (`frames`) has not run in a headset yet. PreyVR-95 fixed the wrong case (below). With the
-fix confirmed, the report's diagnostic fields (`reads`, `offMm`, `offMdeg`, `backMm`) were removed afterwards.
+**The examined-screen path: worn OK 2026-10-27 on PreyVR-97**, run `player-20261027-181857`. There were 2 zoomed
+examinations (`begins=2`), with 307 frames pointed from the hand (`frames=307 refused=0`) and `steered=20151`.
+
+PreyVR-95 fixed the wrong case (below). With the fix confirmed, the report's diagnostic fields (`reads`, `offMm`,
+`offMdeg`, `backMm`) were removed afterwards.
 
 ## The cause
 
@@ -84,5 +87,5 @@ The status line (every minute) carries `screenAim={frames refused worldUi={gate 
 Checks:
 1. A workstation used without the zoom, with a gun drawn and with none: the button under the crosshair highlights,
    and X presses it.
-2. A keypad and a workstation that zoom in: the same, under the right laser.
+2. A keypad and a workstation that zoom in: the same, under the right laser. (Worn OK 2026-10-27, PreyVR-97.)
 3. After leaving the screen, aiming, shooting and using things are as before.
