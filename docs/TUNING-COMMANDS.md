@@ -387,7 +387,7 @@ worn OK (2026-10-25), as Body Follows You's commands had on 2026-10-24.
 
 | Command | Values | Default | What it does |
 |---|---|---|---|
-| `aim.twohand` | 0/1 | 1 | Two-hand support aim. **Menu.** |
+| `aim.twohand` | 0/1 | 1 | Two-hand support aim: a foregrip steers, a handgun's cupped grip only braces. The report's `grip=foregrip\|handgun` is the equipped weapon's kind. **Menu.** |
 | `aim.world` | 0/1 | 1 | Prey's crosshair in the world at the aim's hit (1), or on the HUD panel (0). Reports its targets and frames shown. **Menu** (Reticle). |
 | `aim.reticlesize` | 50–200 % | 100 | The world crosshair's size against the HUD's. **Menu.** |
 | `aim.scene` | 0/1 | 0 | Runs the aim's scene query on its own (diagnostics); the world reticle runs it whatever this is. The old Scene Reticle setting is retired, and a saved `scene_reticle` is skipped. |

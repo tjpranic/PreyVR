@@ -13,6 +13,7 @@
 ### UX/Immersion
 - Rotate to face direction (?)
     Add in an option to rotate the camera in the direction the right hand is facing. Alternatively, having the player body and camera follow the left/right hand when holding a certain button?
+- Recenter player body when the player stops moving (?)
 - Two-handed wrench (?)
     Add in a two-handed wrench mode that automatically triggers heavy wrench attacks. One handed mode would always be a light attack. This would replace the speed based light/heavy attack system.
 - Two-handed carrying (?)
@@ -41,8 +42,6 @@
     Having them rendered at a more realisitic depth would be nice but challenging.
     Technically everything is working game wise, it would just be an improvement.
 - Arms can clip into the player model
-- Recenter player body when the player stops moving (?)
-
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -62,13 +61,10 @@
 - Documentation cleanup
     Feature work has been tracked across multiple documents. These should be summarized and combined into one document.
 
-### HUD
+### HUD/UI
 - Psi energy shows on wrist before installing first neuromod
 - Some UI elements still only display at the periphery of vision
     It makes them hard to see. They need to be moved a little closer in.
-- The hand lasers start outside of player hands
-    They seem to begin out of nowhere. Something like a fade in along the length (like when the laser fades out in menus when it's not hitting a surface) would make them look a bit nicer.
-    The lasers also render over the top of everything.
 - Left hand laser doesn't hit at surface of objects unlike the right hand aim laser
     Only sometimes? This might be intentional? Will need to investigate.
 
@@ -76,8 +72,17 @@
 - Have bindings section let you change your bindings
 - Group related options in the tabs into sections
 - Audit every option and rework and/or remove and/or consolidate as many as needed
-    Pre-audit findings:
-    - The arms length option doesn't affect the whole arm, just the hands.
+    Audit findings:
+    - Comfort should be renamed to Movement
+    - The arms length option doesn't affect the whole arm, just the forearm
+    - Two-hand aim works, need to see if it's possible to have the pistol use two hand grip
+    - Having the support hand option set to Free is pointless as far as I can tell, it should be removed and Snapped should be the default
+    - Snap turning unsnaps the support hand
+    - Hands Without a Weapon should be removed and always on
+    - Need to add an option to auto-snap when in range
+    - Aim lasers causes a ray to be drawn when firing a weapon
+    - Can't grab when two-handing weapons
+    - ...
 - Development tab
     This tab will be used to run input tuning commands because sending commands through the "Tune Prey VR.cmd" script is way too annoying to use properly.
 
@@ -105,7 +110,7 @@
     > Prey re-read the stick from the physical gamepad whenever an action filter changed (mostly the interaction prompt as the view swept over usable objects) and zeroed what the mod had posted. Fixed in PreyVR-72, worn OK 2026-10-24. See docs/MOVE-STOP-2026-10-24.md.
 - The X to transfer junk in the recycler doesn't work (Archived)
 
-### UI
+### HUD/UI
 - Controller Prompts option doesn't seem to apply sometimes (Archived)
 - The game doesn't render loading screens (Archived)
     It just shows a black screen instead.
@@ -119,6 +124,9 @@
 - Reticle drifts from the actual aim point sometimes (Archived)
     Happens after examining a monitor or keypad.
     > Leaving an examination, Prey moves the crosshair inside its clip by the difference between its stored reticle position and the one the mod sends the HUD. Those differ in VR, so the crosshair kept an offset of several degrees. The world reticle now puts it back where the HUD movie places it. PreyVR-97, worn OK 2026-10-27. See docs/RETICLE-DRIFT-SCOPE-2026-10-27.md.
+- The hand lasers start outside of player hands
+    They seem to begin out of nowhere. Something like a fade in along the length (like when the laser fades out in menus when it's not hitting a surface) would make them look a bit nicer.
+    The lasers also render over the top of everything.
 
 ### UX/Immersion
 - Shot from muzzle laser shows skewed (Archived)

@@ -97,5 +97,45 @@ int main() {
         Input g=Base();g.region=far;g.support.position={qbeam.x,qbeam.y-.12f,qbeam.z};Solver s2;auto o=Hold(s2,g);
         Check(o.held&&Near(o.socket,g.support.position)&&Near(Rotate(o.orientation,{0,1,0}),{0,1,0}),"behind-foregrip grab holds without an aim jump");
     }
+    {
+        // Native support palms, metres in the barrel frame (2026-10-28): the
+        // pistol and the Disruptor both cup the grip; the shotgun holds its pump.
+        const Vec3 cup{-.044f,.073f,-.024f};Grip grip{};
+        Check(ClassifySocket(cup,true,grip)&&grip==Grip::handgun,"a cupped support hand is a handgun grip");
+        Check(ClassifySocket({.010f,.429f,.040f},true,grip)&&grip==Grip::foregrip,"a pump is a foregrip");
+        Check(ClassifySocket({.375f,.616f,.198f},true,grip)&&grip==Grip::foregrip,"the Q-Beam's side handle is a wide foregrip");
+        Check(!ClassifySocket({.375f,.616f,.198f},false,grip),"and refused without wide support");
+        Check(!ClassifySocket({-.3f,.05f,-.3f},true,grip),"a hand off the weapon is refused");
+        Check(!ClassifySocket({-.04f,-.06f,0},true,grip),"a hand behind the trigger wrist is not a cup");
+        Check(!ClassifySocket({0,std::numeric_limits<float>::quiet_NaN(),0},true,grip),"nonfinite palm refuses");
+        const Region r=SupportRegion(cup,0,LongReach{},Grip::handgun);
+        Check(r.grip==Grip::handgun&&Near(r.start,cup)&&Near(r.end,cup)&&r.radius==kHandgunGrab,"a handgun is grabbed around its cup");
+        // Two controllers cannot both be in the cup: the left one braces beside and below.
+        Input h=Base();h.region=r;h.support.position={cup.x-.06f,cup.y,cup.z-.05f};Solver hs;auto o=Hold(hs,h);
+        Check(o.held&&o.blend>.99f&&Near(o.socket,cup),"a braced controller grabs the cup");
+        Check(Near(Rotate(o.orientation,{0,1,0}),{0,1,0}),"grabbing a handgun leaves its aim alone");
+        h.support.position={cup.x-.10f,cup.y+.08f,cup.z+.04f};o=hs.Update(h);
+        Check(o.held&&Near(Rotate(o.orientation,{0,1,0}),{0,1,0})&&Near(Rotate(o.correction,{0,1,0}),{0,1,0}),
+              "the support hand never steers a handgun");
+        h.support.position={-.02f,.03f,-.02f};Check(hs.Update(h).held,"hands close together keep a handgun");
+        h.support.position={-.35f,.05f,0};o=hs.Update(h);Check(!o.held&&o.blend>0,"a hand gone from the gun lets go, blending");
+        h.support.position={cup.x-.06f,cup.y,cup.z-.05f};Check(!hs.Update(h).held,"coming back still squeezed does not grab");
+        h.squeeze=0;hs.Update(h);h.squeeze=1;Check(hs.Update(h).held,"a fresh squeeze grabs again");
+        h=Base();h.region=r;h.support.position={cup.x,cup.y+.25f,cup.z};Solver far;Check(!Hold(far,h).held,"a squeeze away from the cup does nothing");
+        Region off=r;off.start=off.end={-.3f,.05f,-.3f};h=Base();h.region=off;h.support.position=off.start;
+        Solver offHand;Check(!Hold(offHand,h).held,"a handgun region off the weapon never grabs");
+    }
+    {
+        // A snap turn turns both hands and the aim together and keeps the
+        // reference: the hold carries on, the steered weapon turned with it.
+        auto t=Base();Solver ts;Hold(ts,t);
+        t.support.position={.1f,.35f,0};const auto before=ts.Update(t);
+        const Quaternion turn{0,0,.3826834f,.9238795f};   // 45 degrees about engine up
+        t.aim.orientation=Multiply(turn,t.aim.orientation);t.support.orientation=Multiply(turn,t.support.orientation);
+        t.support.position=Rotate(turn,t.support.position);t.primary=Rotate(turn,t.primary);
+        const auto after=ts.Update(t);
+        Check(after.held&&Near(Rotate(after.orientation,{0,1,0}),Rotate(turn,Rotate(before.orientation,{0,1,0}))),
+              "a snap turn keeps the hold and turns the steered aim with it");
+    }
     std::cout<<"Two-handed aim geometry, lifecycle and barrel integration passed\n";
 }

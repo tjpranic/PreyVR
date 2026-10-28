@@ -81,6 +81,7 @@ FrameBuild BuildGameplayFrame(std::uintptr_t player, GameplayPoseFrame& frame, b
     haveTracking = TryGetTrackingFrame(frame.tracking) &&
         IsPoseUsable(frame.tracking.head, frame.tracking.headValidity, kMaxPoseAgeNs);
     frame.referenceGeneration = HeadTrackingReferenceGeneration();
+    frame.recenterEpoch = HeadTrackingRecenterEpoch();
     frame.referenceYaw = HeadTrackingReferenceYaw();
     frame.cameraYaw = GameCameraYaw();
     // Camera yaw is body + (head - reference) because this mod writes head

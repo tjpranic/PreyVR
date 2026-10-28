@@ -39,8 +39,13 @@ Release a held stick, trigger, or button after closing a menu before using it in
 
 For two-handed aiming, bring your left hand to the weapon's foregrip and squeeze
 the left grip. Keep it squeezed while aiming with both hands; release to return
-smoothly to one hand. A squeeze away from the weapon does nothing. Changing
-weapons, opening a menu or losing tracking requires releasing and grabbing again.
+smoothly to one hand. A squeeze away from the weapon does nothing. With the pistol
+or the Disruptor, bring the left controller under or beside the right one and
+squeeze: the drawn left hand cups the grip the way the game holds it. The right
+hand alone still aims; bracing one controller on the other is what steadies it.
+Moving the left hand away (about 30 cm) lets go. Changing weapons, opening a menu,
+recentering or losing tracking requires releasing and grabbing again; a snap turn
+does not.
 To recenter, squeeze both grips and press **Menu** (or Menu, then both grips): it neither pauses nor opens VR
 Options. F12 also works. With Menu held first, the right grip does not reload either.
 
@@ -235,8 +240,9 @@ On by default. See [the hologram note](WRIST-HOLOGRAM-2026-10-07.md).
 
 **Toggle foregrip:** squeeze near the foregrip to attach; release the grip button
 and squeeze again to detach. **Free support hand** keeps its visual position on
-the controller while both hands still steer the weapon. Weapon changes, menus,
-tracking loss and recenter invalidate the attachment.
+the controller while both hands still steer the weapon (a pistol is never steered
+by the left hand, so Free shows nothing there). Weapon changes, menus, tracking
+loss and recenter invalidate the attachment; snap turns keep it.
 
 **Psychoscope gesture is off by default.** Once enabled, bring the left hand to
 your forehead, squeeze, and pull down at least about 14 cm. Release before the

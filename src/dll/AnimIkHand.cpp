@@ -176,15 +176,15 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
                 gSupportSocketMm[0].store(static_cast<int>(socket.x*1000.f),std::memory_order_relaxed);
                 gSupportSocketMm[1].store(static_cast<int>(socket.y*1000.f),std::memory_order_relaxed);
                 gSupportSocketMm[2].store(static_cast<int>(socket.z*1000.f),std::memory_order_relaxed);
-                // A foregrip ahead of the grip, near the barrel. Wide (ik.widesupport,
+                // A foregrip ahead of the grip, near the barrel, or a handgun's cup
+                // beside it (twohand::ClassifySocket). Wide (ik.widesupport,
                 // default): the Q-Beam's front handle is on the side of a 1.25 m
                 // weapon, native left palm at (375, 616, 198) mm in the barrel frame
                 // (measured 2026-10-07); the solver's own ClosestGrip still bounds
                 // the reach to 0.8 m and requires it ahead of the grip.
-                const bool wide=gWideSupport.load(std::memory_order_relaxed);
-                const float side=wide?.45f:.25f, ahead=wide?.8f:.7f;
+                preyvr::twohand::Grip kind{};
                 supportCandidate=socket;
-                supportInBounds=socket.y>=.16f&&socket.y<=ahead&&std::fabs(socket.x)<side&&std::fabs(socket.z)<side;
+                supportInBounds=preyvr::twohand::ClassifySocket(socket,gWideSupport.load(std::memory_order_relaxed),kind);
             }
             // The handle does not move on the weapon; the native palm does
             // (firing/cooling animations). One settled socket per weapon
@@ -195,10 +195,14 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
                 std::lock_guard lock(gSupportLatchMutex);
                 haveSocket=gSupportLatch.Update(owner.generation,supportInBounds,supportCandidate,socket);
             } else if(supportInBounds) { socket=supportCandidate;haveSocket=true; }
+            // The kind of support, from the socket in use: a latched one keeps its weapon's.
+            preyvr::twohand::Grip grip{};
+            haveSocket=haveSocket&&preyvr::twohand::ClassifySocket(socket,gWideSupport.load(std::memory_order_relaxed),grip);
             // A long weapon (its foregrip beyond reach) is held back by the
             // difference, eased in once its socket is known; 0 for the others.
             const auto reachSettings=LongReachSettings();
-            const float holdTarget=haveSocket?preyvr::twohand::HoldBack(socket,reachSettings):0.0f;
+            const float holdTarget=haveSocket&&grip==preyvr::twohand::Grip::foregrip
+                ?preyvr::twohand::HoldBack(socket,reachSettings):0.0f;
             {
                 const std::uint64_t now=preyvr::timing::MonotonicNanoseconds();
                 if(gHoldBackOwner!=owner.generation){gHoldBackOwner=owner.generation;gHoldBackEased=0.0f;gHoldBackNs=0;}
@@ -211,11 +215,9 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
                 gLongGeneration.store(holdTarget>0?owner.generation:0,std::memory_order_relaxed);
             }
             if(haveSocket) {
-                const auto region=preyvr::twohand::SupportRegion(socket,holdTarget,reachSettings);
-                supportGeometry.region.start=region.start;
-                supportGeometry.region.end=region.end;
+                supportGeometry.region=preyvr::twohand::SupportRegion(socket,holdTarget,reachSettings,grip);
                 supportGeometry.owner=owner.generation;
-                supportGeometry.reference=frame.referenceGeneration;
+                supportGeometry.recenter=frame.recenterEpoch;
                 supportGeometry.epoch=frame.tracking.epoch;
             }
             Pose aimWorld{};
@@ -431,9 +433,9 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
         if(contactReady)PublishPhysicalWeapon(frame,owner,location,Pose{rotation,goal},contactGeometry);
         if(primaryOut) { primaryOut->goal=goal; primaryOut->written=true; }
         const Vec3 actual=animik::ModelToWorld(location,goal);
-        supportGeometry.primaryOffsetWorld={actual.x-traceControllerWorld.x,
-                                          actual.y-traceControllerWorld.y,
-                                          actual.z-traceControllerWorld.z};
+        // In play space, the frame's yaw taken out (SupportGripGeometry).
+        supportGeometry.primaryOffsetPlay=Rotate(stereo::YawQuaternion(-frame.yaw),
+            Vec3{actual.x-traceControllerWorld.x,actual.y-traceControllerWorld.y,actual.z-traceControllerWorld.z});
         supportGeometry.publishedNs=preyvr::timing::MonotonicNanoseconds();
         // **The region is in the NATIVE barrel frame; the solver reads it in the
         // aim frame.** They agree only while the barrel's roll is the native

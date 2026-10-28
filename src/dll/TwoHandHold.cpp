@@ -7,6 +7,7 @@
 #include "WeaponAttachment.h"
 #include "XrInput.h"
 #include "preyvr/LatestSnapshot.h"
+#include "preyvr/StereoCamera.h"
 #include "preyvr/TwoHandedAim.h"
 
 #include <atomic>
@@ -45,7 +46,8 @@ void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking)
     input.primary=primary.position;
     input.squeeze=left.squeezeValue;
     input.toggleGrip=gTwoHandToggle.load();
-    input.reference=frame.referenceGeneration;input.epoch=frame.tracking.epoch;
+    // A recenter ends a hold; a snap turn does not (SupportGripGeometry).
+    input.reference=frame.recenterEpoch;input.epoch=frame.tracking.epoch;
     EquippedRig owner{};
     if(TryGetEquippedRig(frame.player,owner)) input.owner=owner.generation;
     frame.weaponGeneration=input.owner;
@@ -60,9 +62,12 @@ void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking)
     SupportGripGeometry incoming{};
     if(gSupportGeometry.TryRead(incoming)) geometry=incoming;
     const bool region=geometry.owner==input.owner&&
-        geometry.reference==input.reference&&geometry.epoch==input.epoch&&
+        geometry.recenter==input.reference&&geometry.epoch==input.epoch&&
         FreshSample(now,geometry.publishedNs);
-    if(region) { input.region=geometry.region;input.visualPrimaryOffset=geometry.primaryOffsetWorld; }
+    if(region) {
+        input.region=geometry.region;
+        input.visualPrimaryOffset=Rotate(stereo::YawQuaternion(frame.yaw),geometry.primaryOffsetPlay);
+    }
     gTwoHandRegionReady.store(region);
     // Each gate as a bit, for aim.twohand: which one released a held foregrip.
     const unsigned gates=(region?0u:1u)|(tracking?0u:2u)|(MedkitOwnsGrip()?4u:0u)|
@@ -118,6 +123,7 @@ std::string TwoHandedAimStatus() {
        <<" gates="<<gTwoHandGates.load()<<" gatesSeen="<<gTwoHandGatesSeen.exchange(0);
     SupportGripGeometry geometry{};
     if(gSupportGeometry.TryRead(geometry)) out<<" owner="<<geometry.owner
+        <<" grip="<<(geometry.region.grip==twohand::Grip::handgun?"handgun":"foregrip")
         <<" supportMm="<<geometry.region.start.x*1000<<","<<geometry.region.start.y*1000<<","<<geometry.region.start.z*1000;
     twohand::Input input{};
     if(gSupportInput.TryRead(input)) {

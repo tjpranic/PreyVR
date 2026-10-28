@@ -29,6 +29,15 @@ bool ValidInput(const Input& i) {
         Finite(i.visualPrimaryOffset)&&Valid(i.aim.orientation)&&Valid(i.support.orientation)&&
         std::isfinite(i.squeeze)&&i.squeeze>=0&&i.squeeze<=1&&std::isfinite(i.dt)&&i.dt>0&&i.dt<=.2f;
 }
+// A handgun's cup: ahead of the trigger wrist, within kHandgunReach, never on it.
+bool HandgunCup(Vec3 s) { const float length=Dot(s,s); return s.y>0&&length>=.0016f&&length<=kHandgunReach*kHandgunReach; }
+}
+bool ClassifySocket(Vec3 s,bool wide,Grip& grip) {
+    if(!Finite(s)) return false;
+    const float side=wide?.45f:.25f, ahead=wide?.8f:.7f;
+    if(s.y>=.16f&&s.y<=ahead&&std::fabs(s.x)<side&&std::fabs(s.z)<side) { grip=Grip::foregrip;return true; }
+    if(HandgunCup(s)) { grip=Grip::handgun;return true; }
+    return false;
 }
 bool ClosestGrip(const Input& i,Vec3& point) {
     if(!ValidInput(i)||!Finite(i.region.start)||!Finite(i.region.end)||
@@ -38,18 +47,21 @@ bool ClosestGrip(const Input& i,Vec3& point) {
     const float n=Dot(segment,segment);
     const float t=n>1e-8f?std::clamp(Dot(Sub(local,i.region.start),segment)/n,0.f,1.f):0;
     point=Add(i.region.start,Scale(segment,t));
+    const bool inside=Dot(Sub(local,point),Sub(local,point))<=i.region.radius*i.region.radius;
+    if(i.region.grip==Grip::handgun) return inside&&HandgunCup(point);
     // Long-weapon support only. A native offhand beside/behind the grip is not a foregrip.
     const float length=Dot(point,point);
-    return point.y>=.12f&&length>=.0144f&&length<=.64f&&
-        Dot(Sub(local,point),Sub(local,point))<=i.region.radius*i.region.radius;
+    return point.y>=.12f&&length>=.0144f&&length<=.64f&&inside;
 }
 float HoldBack(Vec3 socket,const LongReach& reach) {
     if(!Finite(socket)||!std::isfinite(reach.comfortForward)||!std::isfinite(reach.maxHoldBack)) return 0;
     return std::clamp(socket.y-reach.comfortForward,0.f,std::max(reach.maxHoldBack,0.f));
 }
-Region SupportRegion(Vec3 socket,float holdBack,const LongReach& reach) {
+Region SupportRegion(Vec3 socket,float holdBack,const LongReach& reach,Grip grip) {
+    Region r{};r.grip=grip;
+    if(grip==Grip::handgun) { r.start=r.end=socket;r.radius=kHandgunGrab;return r; }
     const float back=.04f+(holdBack>0&&std::isfinite(reach.supportBack)?std::clamp(reach.supportBack,0.f,.3f):0.f);
-    Region r{};r.start={socket.x,socket.y-back,socket.z};r.end={socket.x,socket.y+.04f,socket.z};
+    r.start={socket.x,socket.y-back,socket.z};r.end={socket.x,socket.y+.04f,socket.z};
     return r;
 }
 bool RegionLatch::Update(std::uint64_t owner,bool candidateValid,Vec3 candidate,Vec3& socket) {
@@ -81,12 +93,16 @@ Output Solver::Update(const Input& i) {
         if(held_&&i.toggleGrip) held_=false;
         else if(!held_&&ClosestGrip(i,socket_)) {
             held_=true;
+            handgun_=i.region.grip==Grip::handgun;
             supportInAim_=Multiply(Conjugate(i.aim.orientation),i.support.orientation);
         }
     }
     const Vec3 line=Sub(i.support.position,Add(i.primary,i.visualPrimaryOffset));
-    if(held_&&Dot(line,line)<.0144f) { held_=false;armed_=false;blend_=0;swing_={}; }
-    if(held_) {
+    // A handgun's hands sit closer than this; only a steering foregrip spins.
+    if(held_&&!handgun_&&Dot(line,line)<.0144f) { held_=false;armed_=false;blend_=0;swing_={}; }
+    // A support hand gone from a handgun lets go, and blends out.
+    if(held_&&handgun_&&Dot(line,line)>kHandgunBreak*kHandgunBreak) { held_=false;armed_=false; }
+    if(held_&&!handgun_) {
         // Raw controllers steer. The displayed support hand never feeds back here.
         const Vec3 localLine=Rotate(Conjugate(i.aim.orientation),line);
         swing_=Swing(socket_,localLine);

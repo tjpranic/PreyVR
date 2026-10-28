@@ -36,6 +36,7 @@ bool TryGetTrackingFrame(TrackingFrame& out) {
     return true;
 }
 unsigned long long HeadTrackingReferenceGeneration() { return 2; }
+unsigned long long HeadTrackingRecenterEpoch() { return 1; }
 float HeadTrackingReferenceYaw() { return 0; }
 std::uint64_t WeaponEquipGeneration() { return 7; }
 bool TryGetMuzzleFromGrip(const Pose&, std::uint64_t, Vec3& out) {

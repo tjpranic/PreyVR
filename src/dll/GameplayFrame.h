@@ -44,6 +44,9 @@ struct GameplayPoseFrame {
     bool headYawUsable = false;
     float referenceYaw = 0.0f;
     std::uint64_t referenceGeneration = 0;
+    // HeadTrackingRecenterEpoch, read with the generation above: a recenter
+    // changes both, a snap turn only the generation.
+    std::uint64_t recenterEpoch = 0;
     std::uintptr_t player = 0;
     std::uint64_t publishedNs = 0;
     std::uint64_t weaponGeneration = 0;

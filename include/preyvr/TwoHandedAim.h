@@ -2,14 +2,35 @@
 #include "preyvr/VrMath.h"
 
 namespace preyvr::twohand {
+// The support a weapon's native offhand gives it (ClassifySocket).
+//
+// **A handgun's support hand braces; it does not steer.** The native offhand of
+// the pistol and of the Disruptor cups the grip 89 mm from the trigger wrist
+// (-44,73,-24 mm in the barrel frame, both, measured 2026-10-28). Steering from
+// a line that short, and across the barrel rather than along it, would turn a
+// 1 cm wobble between the hands into 6-7 degrees of aim (1.5 on the GLOO's
+// 0.39 m) and could barely pitch the weapon at all. Held, a handgun keeps the
+// trigger hand's aim and the support hand is drawn in the native cup; the
+// steadying is the player's own, one controller braced on the other.
+enum class Grip : std::uint8_t { foregrip, handgun };
+// A handgun's native cup lies ahead of the trigger wrist and within this of it.
+inline constexpr float kHandgunReach = .15f;
+// A squeeze this near the cup grabs it: two controllers cannot both be where
+// the drawn hands are, so the grab reaches past the cup.
+inline constexpr float kHandgunGrab = .15f;
+// Hands this far apart let go of a handgun, so the drawn hand does not stay on
+// the gun after the real one left.
+inline constexpr float kHandgunBreak = .30f;
 // Engine axes, metres. Endpoints are relative to the primary wrist in the
 // authored barrel frame. The animation observer supplies these, not XR poses.
-struct Region { Vec3 start{}, end{}; float radius = .10f; };
+struct Region { Vec3 start{}, end{}; float radius = .10f; Grip grip = Grip::foregrip; };
 struct Input {
     Pose aim{}, support{};
     Vec3 primary{}, visualPrimaryOffset{};
     Region region{};
     float squeeze = 0, dt = 0;
+    // `reference` changes with a recenter, which ends a hold. A snap turn turns
+    // the hands and the weapon together and keeps it (TwoHandHold.cpp).
     std::uint64_t owner = 0, reference = 0, epoch = 0;
     bool usable = false;
     bool toggleGrip = false;
@@ -28,6 +49,7 @@ private:
     std::uint64_t owner_ = 0, reference_ = 0, epoch_ = 0;
     bool held_ = false, armed_ = false;
     bool toggleGrip_ = false;
+    bool handgun_ = false;
     float blend_ = 0;
     Vec3 socket_{};
     Quaternion swing_{}, supportInAim_{};
@@ -75,7 +97,13 @@ struct LongReach {
 // `socket` is the foregrip in the barrel frame from the trigger wrist (+Y ahead).
 float HoldBack(Vec3 socket, const LongReach& reach);
 // The grab region along the barrel: from `back` behind the foregrip to 4 cm ahead.
-Region SupportRegion(Vec3 socket, float holdBack, const LongReach& reach);
+// A handgun's: its cup, grabbed from kHandgunGrab around it.
+Region SupportRegion(Vec3 socket, float holdBack, const LongReach& reach, Grip grip = Grip::foregrip);
+// The support a settled native offhand gives the weapon, `socket` in the barrel
+// frame from the trigger wrist: a foregrip ahead of the grip near the barrel
+// (wide, ik.widesupport: the Q-Beam's handle on the side of a 1.25 m weapon), or
+// a handgun's cup beside the grip. False for a hand off the weapon.
+bool ClassifySocket(Vec3 socket, bool wide, Grip& grip);
 // Also useful for diagnostics/authoring. Refuses malformed regions and poses.
 bool ClosestGrip(const Input& input, Vec3& localPoint);
 } // namespace preyvr::twohand

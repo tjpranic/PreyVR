@@ -38,10 +38,15 @@ namespace preyvr::dll {
 
 // Published only after a successful owned right-wrist target write. Geometry
 // comes from the native pre-IK wrists expressed in the authored barrel basis.
+// **A snap turn keeps it, and the hold.** It turns both hands and the weapon
+// together, so the region is keyed by the recenter epoch, not the reference
+// generation a snap bumps, and the drawn wrist's offset from the controller is
+// kept in play space (the frame's yaw taken out): the aim hook reads it a frame
+// later, and a snap in between must not turn it.
 struct SupportGripGeometry {
     twohand::Region region{};
-    Vec3 primaryOffsetWorld{};
-    std::uint64_t owner=0, reference=0, epoch=0, publishedNs=0;
+    Vec3 primaryOffsetPlay{};
+    std::uint64_t owner=0, recenter=0, epoch=0, publishedNs=0;
 };
 void PublishSupportGripGeometry(const SupportGripGeometry& geometry);
 DWORD SetTwoHandedAim(unsigned int enabled);
