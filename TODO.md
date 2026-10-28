@@ -2,9 +2,6 @@
 
 ## TODO
 
-### Bugs
-- The handheld device (PDA) thing renders over the top of the hand
-
 ### Rendering
 - DLSS (?)
 - Upscaling (?)
@@ -26,7 +23,6 @@
 - Immersive reloading
     Right now it just plays the animation. It would be better to allow the player to physically attach and detach weapon ammunition.
 - Better throwing
-    Add an option to impart extra force to objects that are physically thrown.
     Maybe an option to point with left hand where you want the grenade to go?
 - Wrench hits use too much stamina
     I think swings *back*, away from the target may be getting counted. Maybe add a very short cooldown after a hit connects?
@@ -75,13 +71,13 @@
     Audit findings:
     - Comfort should be renamed to Movement
     - The arms length option doesn't affect the whole arm, just the forearm
-    - Two-hand aim works, need to see if it's possible to have the pistol use two hand grip
     - Having the support hand option set to Free is pointless as far as I can tell, it should be removed and Snapped should be the default
-    - Snap turning unsnaps the support hand
     - Hands Without a Weapon should be removed and always on
     - Need to add an option to auto-snap when in range
     - Aim lasers causes a ray to be drawn when firing a weapon
     - Can't grab when two-handing weapons
+        Grabs are only allowed with the left hand, will need to rethink how this works
+    - Setup tab should be first
     - ...
 - Development tab
     This tab will be used to run input tuning commands because sending commands through the "Tune Prey VR.cmd" script is way too annoying to use properly.
@@ -141,17 +137,21 @@
     Have the player body bend at the waist to allow leaning over furniture.
 - Focusing on keypads brings the camera *way* too close (Archived)
     > Prey places the zoom camera so the screen fills the whole view. In the headset that view is ~120° and square, so a keypad landed about 12 cm from the eyes. Interface's Screen Distance (30 cm) moves the camera back along its view, never past where you stood. PreyVR-94, worn OK 2026-10-26. See docs/KEYPAD-CAMERA-SCOPE-2026-10-26.md.
+- Have pistols work with two-handed aiming
+    > Prey's own animation cups the pistol's and the Disruptor's grip with the left hand, 9 cm from the right wrist. Squeezing the left grip beside or under the right controller now snaps the drawn hand into that cup; the right hand alone aims, and moving the left hand 30 cm away lets go. Steering from a line that short would be too twitchy. PreyVR-100, worn OK 2026-10-28.
+- Snap turning unsnaps the support hand
+    > Each snap turn changed the tracking reference, which reset the hold. The hold now resets only on a recenter. PreyVR-100, worn OK 2026-10-28.
 
 ### Rendering
 - The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision). (Archived)
 - The player body renders over the top of everything
-    > Prey drew the body, arms and weapon in its near pass, which is always in front of the world. It is now drawn in the world (`body.depth`), and Setup's Near Clip Distance (3 cm) stops the view cutting into it when you look down. PreyVR-92, worn OK 2026-10-25. See docs/BODY-FOLLOW.md, "How the body is drawn".
+    > Prey drew the body, arms and weapon in its near pass, which is always in front of the world. PreyVR-91/92 drew the body in the world instead, which left the stun gun's charge sparks showing through the gun and its charge meter frozen. Since PreyVR-101 the body stays in the near pass and that pass gets the world's depth (`body.depth 1`; the old way is `body.depth 2`), so the weapon's effects, its display and the PDA stay with it. Setup's Near Clip Distance (3 cm) stops the view cutting into the body when you look down. Worn OK 2026-10-25 and 2026-10-28. See docs/BODY-FOLLOW.md, "How the body is drawn".
 
 ---
 
 Feature set tracking list, in broad terms:
 - Body follow and roomscale (**IMPLEMENTED**)
-    Having the player character model follow the headset and camera like a real body would follow someone's head while still allowing for things like physical leaning and crouching.
+    Having the player character model follow the headset and camera like a real body would follow someone's head while still allowing for things like physical leaning and crouching. Body depth rendering is also grouped in here.
 - Physical interaction (**PARTIALLY IMPLEMENTED**)
     Player interaction with objects in the world. Encompasses touching, pushing and throwing stuff along with hitting things with the wrench.
 - Stereoscopic rendering (**IMPLEMENTED**)

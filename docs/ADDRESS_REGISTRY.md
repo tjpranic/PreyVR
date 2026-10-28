@@ -2675,3 +2675,43 @@ entity named `"%s Screen"`, spawned at the owner's screen helper by `0x13DDD40`.
 sends the cursor as a move (Flash player `+0x1C0` ScreenToClient `0xE8C9F0`, then `+0xF0`); element vtable
 `0x1CAB358` `+0x1E8` (`0x2FC3D0`) forwards to the player's viewport `+0x38`. The hardware-mouse dispatch `0x2CEF30` skips
 an enabled world UI. See [the world UI pointer](WORLD-UI-POINTER-2026-10-26.md).
+
+### 2026-10-28 addendum -- the near pass at the world's depth, near particles and Flash textures
+
+Static, `tools/re/verify_body_depth.py` (94 checks); worn OK on PreyVR-101 (`body.depth 1`).
+
+- Render pass `SetViewport` `0xF90390` (173 bytes; seven callers): RCX the pass, RDX the viewport
+  (x, y, w, h, depth min/max at `+0x10`), stored at pass `+0x40` with its depth at `+0x50`
+  (`0xF903A6`); pass flags `+0xAC` bit 0 replaces the depth with `[0, r_DrawNearZRange]`, bit 1
+  flips it for reverse depth. The scene stage `0xF9DAE0` writes `reverse*2 | 1` to three passes'
+  flags each frame (`0xF9DE3C`, `0xF9DE42`/`+0x1A4`/`+0x26C`) and `reverse*2` to a fourth.
+- `FX_ObjectChange` `0xF39E00` calls `UpdateNearestChange` `0xF43D70` (646 bytes, its one caller
+  `0xF39EB8`) when the drawn object's `FOB_NEAREST` (object `+0x40`, shifted to bit 16) differs
+  from the renderer's near flag (`+0x4888`, `0x10000`). Entering: the renderer camera
+  (`+0x4A08 + thread*0x328`) saved at `+0x5620`, a near camera set (`0xF7FE70`), pending viewport
+  max depth `+0x94B4` = the slice; leaving: the saved camera back and `+0x94B4` = `+0x5820`
+  (its `zRangeMax`). Pending viewport `+0x94A0..+0x94B4`, dirty `+0x94B8`, applied by `0xF12D90`,
+  pushed/popped at `0xFE3780`. Skipped when the near field of view (`+0x95B4`) is not positive.
+- Per-view packer `0xFB57A0`: view-info (RDX, kept in RSI) `+0x20` translation-free world VP to
+  payload `+0x00` (`CV_ViewProjZeroMatr`), `+0x60` world VP to `+0x50`, `+0xA0` near VP to `+0x90`,
+  each transposed (view-info matrices are row-major, translation in row 3). It also packs the
+  depth linearisation constants (`+0x230..+0x238` world, `+0x240..+0x24C` near, `+0x248` the near
+  threshold) from `r_DrawNearFarPlane` and `r_DrawNearZRange`.
+- "Draw near" particles: `ResourceParticleParams` `bDrawNear` `+0x4C8` (the byte after it, `+0x4C9`,
+  unnamed, gives render-object bit `0x8`); `0x17DA6B` builds the render-object flags `+0x518` (mask `+0x520`) with `FOB_NEAREST`
+  from it; container render `0x1733D0` takes `(+0x518 | on) & ~(off | +0x520)` at `0x17363A`
+  (`SPartRenderParams` on/off `+0x10`/`+0x18`); geometry particles set `FOB_NEAREST` themselves
+  (`0x1B1D72`) and subtract the context camera (`0x1B1A7F`).
+- Weapon displays: Flash UI elements rendered as material textures (`"%s@%d.ui"`). The stun gun
+  (vtable `0x1E31290`, update `0x13BB530`) calls `updateChargeMeter` on its element (weapon
+  `+0x478`, `IUIElement::CallFunction` vtable `+0x210`); the GLOO's is `updateAmmoCounter`. The
+  texture source (unique-RT vtable `0x1DDA928`, shared-RT `0x1DDAA18`): `Update` (`+0x68`,
+  `0xF59630`) renders the movie into the texture and stamps last seen (`+0x18` time, `+0x20`
+  frame); `AutoUpdate` (`+0x58`, `0x100A790`) advances the movie only when per-frame (`+0x2D`)
+  or seen lately; `AutoUpdateRT` (`+0x60`, `0x100A880`) calls `Update` for per-frame sources not
+  yet updated this frame; `Apply` `+0x70`, `GetTexGenInfo` `+0x78`. Which draw marks it seen was
+  not found statically; a world draw of the weapon does not (PreyVR-91..100).
+- Permanent render objects (`e_PermanentRenderObjects`, the 3D engine CVars' first field, CVars at
+  `0x243A688`; gate `0x1F91E0`, six callers, all 3D-engine nodes) are not the near/world difference.
+
+See [how the body is drawn](BODY-FOLLOW.md#how-the-body-is-drawn).

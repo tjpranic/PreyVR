@@ -7,6 +7,7 @@
 #include "MainRenderHook.h"
 #include "EyeRecords.h"
 #include "Logger.h"
+#include "preyvr/BodyDepth.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/StereoCamera.h"
 
@@ -17,6 +18,7 @@
 #include <mutex>
 #include <cmath>
 #include <cstring>
+#include <sstream>
 #include <span>
 #include <string>
 
@@ -51,6 +53,12 @@ constexpr std::array<std::uint8_t, 22> kPackerPrologue{
 
 // Translation-free view x near projection, per the H-011 investigation.
 constexpr std::size_t kNearViewProjection = 0xA0;
+// The world's view-projections the packer reads before it: translation-free
+// (packed to the per-view payload +0x00, CV_ViewProjZeroMatr) and with the
+// camera's translation (payload +0x50). The near VP goes to payload +0x90
+// (verify_body_depth.py).
+constexpr std::size_t kViewProjectionZero = 0x20;
+constexpr std::size_t kViewProjection = 0x60;
 // The render view's own current CCamera, stored by the view-info builder
 // 0x180FB2AC0 (`param_1[1] = param_3`, caller passing renderView + 0x11A0).
 // This is the provenance anchor that replaces the main-thread eye global.
@@ -237,23 +245,108 @@ bool LooksLikeProjection(const float* m)
     return magnitude > 0.001f && magnitude < 1.0e9f;
 }
 
+// --- body.depth 1: the near pass at the world's depth (preyvr/BodyDepth.h) -----
+//
+// The near VP's depth column becomes the world's, in main-view packs (the same
+// eye provenance as the offset below); BodyDepthHook widens the pass's depth
+// slice to match. The world's depth is read from this view-info's own
+// translation-free world VP whenever that differs from the near VP's -- the
+// world camera's packs -- and kept per eye. The legacy pipeline's near draws
+// pack a view-info built from Prey's near camera (UpdateNearestChange), whose
+// every matrix carries the near depth: those get the eye's kept world depth,
+// all three of them.
+std::atomic<bool> gWorldDepth{false};
+std::array<std::atomic<std::uint64_t>, 2> gWorldMap{};   // per eye, PackMap; 0 = none yet
+std::atomic<std::uint64_t> gLastWorldMap{0};
+std::atomic<unsigned long long> gDepthRemapped{0}, gDepthFromView{0}, gDepthFromEye{0}, gDepthNoWorld{0},
+    gDepthRefused{0};
+
+std::uint64_t PackMap(bodydepth::DepthMap map)
+{
+    std::uint32_t a = 0, b = 0;
+    std::memcpy(&a, &map.a, sizeof(a));
+    std::memcpy(&b, &map.b, sizeof(b));
+    return (static_cast<std::uint64_t>(a) << 32) | b;
+}
+bodydepth::DepthMap UnpackMap(std::uint64_t packed)
+{
+    const auto a = static_cast<std::uint32_t>(packed >> 32), b = static_cast<std::uint32_t>(packed);
+    bodydepth::DepthMap map{};
+    std::memcpy(&map.a, &a, sizeof(a));
+    std::memcpy(&map.b, &b, sizeof(b));
+    return map;
+}
+
+// What the depth edit changed besides the near VP, to put back after the pack.
+struct DepthSaved {
+    bool zero = false, view = false;
+    float zeroVp[16]{}, viewVp[16]{};
+};
+
+// Rewrites the view-info's depth for `eye`; false if it left it as it was.
+bool RemapNearDepth(std::uint8_t* viewInfo, int eye, DepthSaved& saved)
+{
+    float* const nearVp = reinterpret_cast<float*>(viewInfo + kNearViewProjection);
+    float* const zeroVp = reinterpret_cast<float*>(viewInfo + kViewProjectionZero);
+    float* const viewVp = reinterpret_cast<float*>(viewInfo + kViewProjection);
+    bodydepth::DepthMap nearMap{}, zeroMap{};
+    if (!bodydepth::ReadDepthMap(nearVp, nearMap) || !bodydepth::ReadDepthMap(zeroVp, zeroMap)) {
+        gDepthRefused.fetch_add(1, std::memory_order_relaxed);
+        return false;
+    }
+    const bool nearCamera = bodydepth::SameDepthMap(zeroMap, nearMap);
+    bodydepth::DepthMap world = zeroMap;
+    if (!nearCamera) {
+        gWorldMap[static_cast<std::size_t>(eye)].store(PackMap(world), std::memory_order_relaxed);
+        gLastWorldMap.store(PackMap(world), std::memory_order_relaxed);
+        gDepthFromView.fetch_add(1, std::memory_order_relaxed);
+    } else {
+        const std::uint64_t kept = gWorldMap[static_cast<std::size_t>(eye)].load(std::memory_order_relaxed);
+        if (kept == 0) {
+            gDepthNoWorld.fetch_add(1, std::memory_order_relaxed);
+            return false;
+        }
+        world = UnpackMap(kept);
+        gDepthFromEye.fetch_add(1, std::memory_order_relaxed);
+        std::memcpy(saved.zeroVp, zeroVp, sizeof(saved.zeroVp));
+        bodydepth::WriteDepthMap(zeroVp, world);
+        saved.zero = true;
+        bodydepth::DepthMap viewMap{};
+        if (bodydepth::ReadDepthMap(viewVp, viewMap)) {
+            std::memcpy(saved.viewVp, viewVp, sizeof(saved.viewVp));
+            bodydepth::WriteDepthMap(viewVp, world);
+            saved.view = true;
+        }
+    }
+    bodydepth::WriteDepthMap(nearVp, world);
+    gDepthRemapped.fetch_add(1, std::memory_order_relaxed);
+    return true;
+}
+
 void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
                                            void* third, void* fourth)
 {
     const PackViewInfoFn original = gOriginal.load(std::memory_order_acquire);
-    if (!gEnabled.load(std::memory_order_acquire) || viewInfo == nullptr) {
+    const auto forward = [&]() -> void* {
         return original != nullptr ? original(owner, viewInfo, third, fourth) : nullptr;
+    };
+    // Both edits only with the near stereo on: while VR draws.
+    if (!gEnabled.load(std::memory_order_acquire) || viewInfo == nullptr) {
+        return forward();
     }
+    const bool depth = gWorldDepth.load(std::memory_order_acquire);
+    bool offset = true;
 
     if (tSuppressed) {
         gSuppressed.fetch_add(1, std::memory_order_relaxed);
-        return original != nullptr ? original(owner, viewInfo, third, fourth) : nullptr;
+        if (!depth) { return forward(); }
+        offset = false;   // the depth still applies to a suppressed draw
     }
 
     float* const nearVp = reinterpret_cast<float*>(viewInfo + kNearViewProjection);
     if (!LooksLikeProjection(nearVp)) {
         gRefused.fetch_add(1, std::memory_order_relaxed);
-        return original != nullptr ? original(owner, viewInfo, third, fourth) : nullptr;
+        return forward();
     }
 
     // Which eye this VIEW-INFO belongs to, resolved from its own camera.
@@ -281,7 +374,7 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
         if (!ReadViewInfoCamera(viewInfo, &sourceCamera) || sourceCamera == nullptr ||
             !ReadCameraBytes(sourceCamera, cameraBytes.data(), cameraBytes.size())) {
             gNoProvenance.fetch_add(1, std::memory_order_relaxed);
-            return original != nullptr ? original(owner, viewInfo, third, fourth) : nullptr;
+            return forward();
         }
         const stereo::Matrix34 m = stereo::ReadMatrix(cameraBytes);
         const float position[3] = {m[3], m[7], m[11]};
@@ -291,44 +384,39 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
             // defect this replaces, and an un-offset near pass is a smaller,
             // visible error than a confidently wrong one.
             gNoProvenance.fetch_add(1, std::memory_order_relaxed);
-            return original != nullptr ? original(owner, viewInfo, third, fourth) : nullptr;
+            return forward();
         }
         eye = record.eye;
         right = Vec3{record.right[0], record.right[1], record.right[2]};
     }
     if (eye != 0 && eye != 1) {
         gNoEye.fetch_add(1, std::memory_order_relaxed);
-        return original != nullptr ? original(owner, viewInfo, third, fourth) : nullptr;
+        return forward();
     }
-    {
+    if (offset) {
         const float length = std::sqrt(right.x * right.x + right.y * right.y + right.z * right.z);
         if (!std::isfinite(length) || length < 0.9f || length > 1.1f) {
             gRefused.fetch_add(1, std::memory_order_relaxed);
-            return original != nullptr ? original(owner, viewInfo, third, fourth) : nullptr;
+            if (!depth) { return forward(); }
+            offset = false;
         }
     }
 
-    // Already offset for this eye by an enclosing call on this stack: forward it
+    // Already edited for this eye by an enclosing call on this stack: forward it
     // untouched rather than offsetting the same matrix twice.
     if (tEditing == static_cast<void*>(viewInfo)) {
         gReentered.fetch_add(1, std::memory_order_relaxed);
-        return original != nullptr ? original(owner, viewInfo, third, fourth) : nullptr;
+        return forward();
     }
 
     // Already offset for this eye -- by an enclosing call on this stack, or by
     // another render-job thread racing us on the same shared buffer. Forward it
-    // untouched: the matrix it will render from is already correct.
-    if (RowAlreadyWritten(static_cast<const void*>(viewInfo), eye, nearVp + 12)) {
+    // untouched: the matrix it will render from is already correct, its depth
+    // included (the racing call made both edits).
+    if (offset && RowAlreadyWritten(static_cast<const void*>(viewInfo), eye, nearVp + 12)) {
         gAlreadyOffset.fetch_add(1, std::memory_order_relaxed);
-        return original != nullptr ? original(owner, viewInfo, third, fourth) : nullptr;
+        return forward();
     }
-
-    // Eye minus cyclops: half the IPD, left negative and right positive.
-    const float half = gZeroDelta.load(std::memory_order_acquire)
-                           ? 0.0f
-                           : gHalfIpd.load(std::memory_order_relaxed);
-    const float signed_ = stereo::EyeSign(eye) * half;
-    const Vec3 delta{right.x * signed_, right.y * signed_, right.z * signed_};
 
     // Snapshot, edit, call, restore. Nothing accumulates and no other consumer of
     // this view-info sees an edited matrix, which is also what makes the
@@ -336,27 +424,51 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
     // pixel-identical to no edit.
     float original_[16];
     std::memcpy(original_, nearVp, sizeof(original_));
+    DepthSaved depthSaved{};
+    bool edited = depth && RemapNearDepth(viewInfo, eye, depthSaved);
 
-    // Row-vector layout: row 3 is the translation row.
-    //   M[3][j] = M0[3][j] - d.x*M0[0][j] - d.y*M0[1][j] - d.z*M0[2][j]
-    for (int j = 0; j < 4; ++j) {
-        nearVp[12 + j] = original_[12 + j]
-                         - delta.x * original_[0 + j]
-                         - delta.y * original_[4 + j]
-                         - delta.z * original_[8 + j];
+    if (offset) {
+        // Eye minus cyclops: half the IPD, left negative and right positive.
+        const float half = gZeroDelta.load(std::memory_order_acquire)
+                               ? 0.0f
+                               : gHalfIpd.load(std::memory_order_relaxed);
+        const float signed_ = stereo::EyeSign(eye) * half;
+        const Vec3 delta{right.x * signed_, right.y * signed_, right.z * signed_};
+
+        // Row-vector layout: row 3 is the translation row, offset from the
+        // matrix as the depth edit left it.
+        //   M[3][j] = M0[3][j] - d.x*M0[0][j] - d.y*M0[1][j] - d.z*M0[2][j]
+        float m0[16];
+        std::memcpy(m0, nearVp, sizeof(m0));
+        for (int j = 0; j < 4; ++j) {
+            nearVp[12 + j] = m0[12 + j]
+                             - delta.x * m0[0 + j]
+                             - delta.y * m0[4 + j]
+                             - delta.z * m0[8 + j];
+        }
+        RememberWrittenRow(static_cast<const void*>(viewInfo), eye, nearVp + 12);
+        RecordLineage(static_cast<const void*>(viewInfo), original_ + 12, eye);
+        gLastDeltaMicrometres.store(static_cast<int>(signed_ * 1.0e6f), std::memory_order_relaxed);
+        gApplied.fetch_add(1, std::memory_order_relaxed);
+        edited = true;
     }
-    RememberWrittenRow(static_cast<const void*>(viewInfo), eye, nearVp + 12);
-    RecordLineage(static_cast<const void*>(viewInfo), original_ + 12, eye);
-    gLastDeltaMicrometres.store(static_cast<int>(signed_ * 1.0e6f), std::memory_order_relaxed);
-    gApplied.fetch_add(1, std::memory_order_relaxed);
+    if (!edited) {
+        return forward();
+    }
 
     void* result = nullptr;
     {
         const EditClaim claim(static_cast<void*>(viewInfo));
-        result = original != nullptr ? original(owner, viewInfo, third, fourth) : nullptr;
+        result = forward();
     }
 
     std::memcpy(nearVp, original_, sizeof(original_));
+    if (depthSaved.zero) {
+        std::memcpy(viewInfo + kViewProjectionZero, depthSaved.zeroVp, sizeof(depthSaved.zeroVp));
+    }
+    if (depthSaved.view) {
+        std::memcpy(viewInfo + kViewProjection, depthSaved.viewVp, sizeof(depthSaved.viewVp));
+    }
     return result;
 }
 
@@ -441,6 +553,36 @@ unsigned long long NearViewAlreadyOffsetCount() { return gAlreadyOffset.load(std
 unsigned long long NearViewNoProvenanceCount() { return gNoProvenance.load(std::memory_order_relaxed); }
 void SetNearViewEditSuppressed(bool suppressed) { tSuppressed = suppressed; }
 unsigned long long NearViewSuppressedCount() { return gSuppressed.load(std::memory_order_relaxed); }
+
+void SetNearViewWorldDepth(bool enabled)
+{
+    if (gWorldDepth.exchange(enabled, std::memory_order_acq_rel) != enabled) {
+        Log(std::string("result=0 detail=world_depth value=") + (enabled ? "1" : "0"));
+    }
+}
+
+bool NearViewWorldDepthActive()
+{
+    return gWorldDepth.load(std::memory_order_acquire) && gEnabled.load(std::memory_order_acquire);
+}
+
+std::string NearViewWorldDepthReport()
+{
+    std::ostringstream s;
+    s << "nearDepth={on=" << (gWorldDepth.load() ? 1 : 0) << " active=" << (NearViewWorldDepthActive() ? 1 : 0)
+      << " remapped=" << gDepthRemapped.load() << " fromView=" << gDepthFromView.load()
+      << " fromEye=" << gDepthFromEye.load() << " noWorld=" << gDepthNoWorld.load()
+      << " refused=" << gDepthRefused.load();
+    const std::uint64_t last = gLastWorldMap.load();
+    if (last != 0) {
+        float nearPlane = 0.0f, farPlane = 0.0f;
+        bodydepth::DepthPlanes(UnpackMap(last), nearPlane, farPlane);
+        s << " worldNearMm=" << static_cast<int>(std::lround(nearPlane * 1000.0f))
+          << " worldFarM=" << (std::isfinite(farPlane) ? static_cast<long>(std::lround(farPlane)) : -1L);
+    }
+    s << '}';
+    return s.str();
+}
 
 DWORD ArmNearViewLineage(unsigned int enabled)
 {

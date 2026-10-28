@@ -192,7 +192,7 @@ const Case kCases[] = {
     {"examine.pullback abc", "examine.pullback result=87 ", ExamineCameraReport, processed},   // refused
     {"examine.pullback 30", "examine.pullback result=0 ", ExamineCameraReport, processed},
     {"body.depth", "body.depth result=0 ", BodyDepthReports, processed},
-    {"body.depth 2", "body.depth result=87 ", BodyDepthReports, processed},
+    {"body.depth 3", "body.depth result=87 ", BodyDepthReports, processed},
     {"body.depth abc", "body.depth result=87 ", BodyDepthReports, processed},   // refused
     {"near.fxhide", "near.fxhide result=0 note=no_value_nothing_changed", nullptr, processed},
     {"dbg.report", "dbg.report result=0", DebugOverlayReport, processed},

@@ -8,6 +8,8 @@ from pathlib import Path
 from preydll import DEFAULT_MODULE,Image,fnv1a64 as fnv,native_rows
 ROOT=Path(__file__).resolve().parents[2]
 SLOT_RENDER=0x973400
+SET_VIEWPORT=0xf90390
+NEAREST_CHANGE=0xf43d70
 CHARACTER_VTABLE=0x1d22200
 
 def branches_to(image,target):
@@ -27,7 +29,8 @@ def witness(image,checks,prefix,table):
 def verify():
     image=Image(DEFAULT_MODULE);at=image.at
     entries=native_rows(ROOT/'include/preyvr/BodyDepthNative.h')
-    assert [(rva,name) for rva,_,_,name in entries]==[(SLOT_RENDER,'SlotRender')]
+    assert [(rva,name) for rva,_,_,name in entries]==[(SLOT_RENDER,'SlotRender'),(SET_VIEWPORT,'SetViewport'),
+                                                       (NEAREST_CHANGE,'NearestChange')]
     relocs=image.relocations();checks=[]
     for rva,size,expected,name in entries:
         b=at(rva,size)
@@ -134,9 +137,64 @@ def verify():
     assert image.rip_target(0xf43f52,8,4)==0x2b1c718 and image.rip_target(0xf903c7,8,4)==0x2b1c718
     assert abs(struct.unpack('<f',at(0x1c7f778,4))[0]-0.03)<1e-7
     checks.append('both read 0x2B1C718; the near projection near plane is 0.03 (0x1C7F778)')
+
+    # body.depth 1, the near pass at the world's depth: the slice's two writers, hooked.
+    witness(image,checks,'SetViewport 0xF90390: ',{
+        "the viewport (RDX) copied to the pass (RCX) at +0x40":(0xf90394,'0f1002'),
+        "the viewport's depth (+0x10)":(0xf903a1,'f20f104a10'),
+        "stored as the pass's depth (+0x50)":(0xf903a6,'f20f114950'),
+        'replaced with the slice when the flags (+0xAC, read into EAX) carry bit 0':(0xf903bc,'a801'),
+        'its max depth at +0x54':(0xf903cf,'f30f114154'),
+    })
+    assert at(SET_VIEWPORT+7,6)==bytes.fromhex('8b81ac000000'),'the flags are the pass +0xAC'
+    witness(image,checks,'the scene stage 0xF9DAE0: ',{
+        'the reverse-depth bit (bit 1)':(0xf9de22,'03ff'),
+        'with bit 0, the near slice':(0xf9de3c,'83cb01'),
+        "a near pass's flags":(0xf9de42,'899edc000000'),
+        'then its viewport set':(0xf9de48,'e84325ffff'),
+        'two more near passes':(0xf9de52,'899ea4010000'),
+        'and the third':(0xf9de65,'899e6c020000'),
+        'a pass without the bit':(0xf9de78,'89be34030000'),
+    })
+    callers=[a for a in branches_to(image,SET_VIEWPORT)]
+    assert callers==[0xf85d6f,0xf9de48,0xf9de5b,0xf9de6e,0xf9de85,0xf9ded4,0xfa4a7b],[hex(a) for a in callers]
+    checks.append('seven calls reach SetViewport; the scene stage sets bit 0 for the three near passes it sets')
+    witness(image,checks,'UpdateNearestChange 0xF43D70: ',{
+        'the renderer (RCX) in RBX':(0xf43d89,'488bd9'),
+        'entering on EDX bit 16':(0xf43d99,'0fbae210'),
+        "the renderer's camera saved at +0x5620":(0xf43ddc,'488d8b20560000'),
+        'the slice as the pending max depth (+0x94B4)':(0xf43f8f,'f30f1183b4940000'),
+        'leaving, the saved camera put back':(0xf43faf,'488d9320560000'),
+        "and its own max depth (+0x5820, CCamera zRangeMax 0x200)":(0xf43fbe,'8b8320580000'),
+        'the renderer no longer near':(0xf43fc4,'81a388480000fffffeff'),
+        'as the pending max depth':(0xf43fce,'8983b4940000'),
+        'either way marked dirty (+0x94B8)':(0xf43fd4,'c683b894000001'),
+    })
+    assert branches_to(image,NEAREST_CHANGE)==[0xf39eb8]
+    witness(image,checks,'FX_ObjectChange 0xF39E00: ',{
+        "the object's flags":(0xf39e93,'418b4940'),
+        "FOB_NEAREST (bit 23) shifted to bit 16":(0xf39e9d,'48c1e907'),
+        'masked':(0xf39ea1,'81e100000100'),
+        'and handed to UpdateNearestChange, its one caller':(0xf39eb8,'e8b39e0000'),
+    })
+    witness(image,checks,'the pending viewport applied (0xF12D90): ',{
+        'when dirty':(0xf12d94,'80b9b894000000'),
+        'with its max depth':(0xf12df4,'f30f1081b4940000'),
+    })
+    # The packer: view-info matrices to the per-view payload.
+    witness(image,checks,'the per-view packer 0xFB57A0: ',{
+        'the view-info (RDX) in RSI':(0xfb57cf,'488bf2'),
+        'the translation-free world VP (+0x20)':(0xfb5970,'f30f104620'),
+        'to payload +0x00':(0xfb59c8,'f30f1107'),
+        'the world VP (+0x60)':(0xfb5a1f,'f30f104660'),
+        'to payload +0x50':(0xfb5ae9,'f30f114750'),
+        'the near VP (+0xA0)':(0xfb5af3,'f30f1086a0000000'),
+        'to payload +0x90':(0xfb5b7b,'f30f118790000000'),
+    })
     return {'target':str(DEFAULT_MODULE),'sha256':image.sha256,'environment':'static','game_launched':False,'checks':checks,
-        'limits':'Proves native bytes and call routes. Not exercised: the hook in a running game, which passes reach the '
-                 "player's slot with which flags, or how the body looks and is lit in a headset."}
+        'limits':'Proves native bytes and call routes. Not exercised: the hooks in a running game, which passes reach the '
+                 "player's slot with which flags, which near passes the main view draws, or how the body looks, is lit "
+                 'and is hidden in a headset.'}
 
 if __name__=='__main__':
     report=json.dumps(verify(),indent=2)+'\n'

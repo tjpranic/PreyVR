@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include <string>
+
 // Gives the near/viewmodel pass a per-eye viewpoint, which it structurally
 // cannot have on its own.
 //
@@ -90,6 +92,22 @@ unsigned long long NearViewNoProvenanceCount();
 void SetNearViewEditSuppressed(bool suppressed);
 // Packer calls forwarded unedited because of it.
 unsigned long long NearViewSuppressedCount();
+
+// **body.depth 1: the near pass at the world's depth** (preyvr/BodyDepth.h). In
+// the same packs as the offset (an eye's, while the near stereo is on), the near
+// VP's depth column becomes the world's translation-free VP's (view-info +0x20),
+// kept per eye for the legacy pipeline's near camera, whose own matrices all
+// carry the near depth and are rewritten with it. A suppressed particle draw
+// keeps the depth edit and loses only the offset. BodyDepthHook widens the near
+// pass's depth slice while NearViewWorldDepthActive().
+void SetNearViewWorldDepth(bool enabled);
+// On, and the near stereo with it: VR is drawing.
+bool NearViewWorldDepthActive();
+// " nearDepth={on active remapped fromView fromEye noWorld refused worldNearMm worldFarM}":
+// packs given the world's depth, the world's read from the view-info itself or
+// kept for the eye, packs with no world depth yet for the eye, view-infos whose
+// matrices are not perspective-shaped, and the last world depth's two planes.
+std::string NearViewWorldDepthReport();
 
 // Records the distinct view-info pointers the near hook edits and the
 // translation row it FOUND on each before editing. A second pointer whose found

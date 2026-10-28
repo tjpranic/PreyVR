@@ -1,8 +1,9 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
-// The player's body drawn in the world instead of Prey's near pass. Steam SHA
-// 7d6e322f...11a7. Static contracts, checked by tools/re/verify_body_depth.py.
+// The player's body at the world's depth: its near pass given the world's depth,
+// or its slot drawn in the world (preyvr/BodyDepth.h). Steam SHA 7d6e322f...11a7.
+// Static contracts, checked by tools/re/verify_body_depth.py.
 namespace preyvr::bodydepth::native {
 // CEntityObject::Render, an entity slot's draw: RCX the slot, R8 the
 // SRendParams, stack +0x30 the SRenderingPassInfo (it hands that on to the
@@ -30,8 +31,35 @@ inline constexpr std::uint16_t SlotRenderNearest=0x2;
 // (RenderCHR tests it at 0x81D13A; nearfx::kObjectNearest is the same bit).
 inline constexpr std::size_t ParamsObjectFlags=0x80;
 inline constexpr std::uint32_t ObjectNearest=0x800000;
+
+// --- the near pass at the world's depth (body.depth 1) ---------------------------
+// A render pass's SetViewport (CSceneRenderPass): RCX the pass, RDX the viewport
+// (x, y, w, h, then min and max depth at +0x10). It stores that viewport at
+// +0x40, its depth at +0x50 (0xF903A6); a pass whose flags (+0xAC) carry
+// PassNearDepth gets [0, r_DrawNearZRange] there instead (0xF903C0), [0.9, 1]
+// with reverse depth (bit 1, 0xF903D4). The scene stage sets that bit on three of
+// its passes each frame before it calls this (0xF9DE3C). Hooked: a near pass is
+// given the depth range of its viewport, as the other passes are.
+inline constexpr std::uintptr_t SetViewport=0xF90390;
+inline constexpr std::size_t PassFlags=0xAC,PassViewportDepth=0x50,ViewportDepth=0x10;
+inline constexpr std::uint32_t PassNearDepth=0x1;
+// UpdateNearestChange: RCX the renderer, EDX the drawn object's FOB_NEAREST
+// shifted to NearestEntering. Its one caller is FX_ObjectChange (0xF39EB8), the
+// legacy pipeline's switch into and out of the near pass. Entering, it saves the
+// renderer's camera at +0x5620, draws with a near camera, marks the renderer
+// near (+0x4888, 0x10000) and makes the pending viewport's max depth
+// r_DrawNearZRange (+0x94B4, dirty +0x94B8, applied by 0xF12D90); leaving, it
+// puts back the saved camera and that camera's own max depth (+0x5820, CCamera
+// zRangeMax). Hooked: entering for a main-view eye, the max depth is the saved
+// camera's, as on leaving.
+inline constexpr std::uintptr_t NearestChange=0xF43D70;
+inline constexpr std::uint32_t NearestEntering=0x10000;
+inline constexpr std::size_t RendererNearestFlags=0x4888,RendererSavedCamera=0x5620;
+inline constexpr std::size_t RendererViewportMaxDepth=0x94B4,RendererViewportDirty=0x94B8;
 struct Contract {std::uintptr_t rva;std::size_t size;std::uint64_t hash;};
 inline constexpr Contract Contracts[]={
     {0x973400,5837,0x760EBD81A8B80FB9ull}, // SlotRender
+    {0xF90390,173,0x19FBDF2BDC14C7EBull}, // SetViewport
+    {0xF43D70,646,0x2E95227946B86A25ull}, // NearestChange
 };
 }
