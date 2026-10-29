@@ -215,9 +215,16 @@ struct SystemLayout {
 struct GlobalEnvironmentLayout {
     static constexpr std::uintptr_t baseRva = 0x224D980;
     static constexpr std::uintptr_t threeDEngine = 0x08;
+    static constexpr std::uintptr_t entitySystem = 0xB8;
     static constexpr std::uintptr_t console = 0xC0;
     static constexpr std::uintptr_t system = 0xE0;
     static constexpr std::uintptr_t renderer = 0x120;
+};
+
+// IEntitySystem. GetEntity(EntityId) at +0x70 is by far the most common slot
+// called on gEnv->pEntitySystem in the binary (1228 sites; the next is 134).
+struct EntitySystemLayout {
+    static constexpr std::uintptr_t vtableGetEntity = 0x70;
 };
 
 // CRenderView. SetCamera copies the camera BY VALUE into m_camera, so a camera

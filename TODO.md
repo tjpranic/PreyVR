@@ -16,8 +16,6 @@
 - Two-handed carrying (?)
 - Physical touch screen controls for computer monitors and keypads (?)
 - The wrench tends to hit around the hand area instead of the head of the wrench
-- Flashlight should be aimable
-    With either a hand or the head.
 - Adjustable wrench bounding box
     Add in an adjustable wrench bounding box lengthening system that only registers hits against enemies. Essentially, an additional bounding box would be added to the wrench, but it would be longer and only used to find collisions with enemies. This would preserve existing correct physical interaction between wrench/hands and objects, but allow for smoother feeling combat.
 - Immersive reloading
@@ -141,6 +139,8 @@
     > Prey's own animation cups the pistol's and the Disruptor's grip with the left hand, 9 cm from the right wrist. Squeezing the left grip beside or under the right controller now snaps the drawn hand into that cup; the right hand alone aims, and moving the left hand 30 cm away lets go. Steering from a line that short would be too twitchy. PreyVR-100, worn OK 2026-10-28.
 - Snap turning unsnaps the support hand
     > Each snap turn changed the tracking reference, which reset the hold. The hold now resets only on a recenter. PreyVR-100, worn OK 2026-10-28.
+- Flashlight should be aimable
+    > The flashlight hung off Prey's eye joint, which VR never moves, so it pointed level along the body. It and the psychoscope's light now sit on the headset's eye at Prey's mount (17 mm behind and 35 mm below the eye) and point where you look. Always on. PreyVR-102, worn OK 2026-10-29. See docs/FLASHLIGHT-HEAD-SCOPE-2026-10-29.md.
 
 ### Rendering
 - The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision). (Archived)

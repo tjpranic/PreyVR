@@ -23,6 +23,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <sstream>
@@ -231,6 +232,15 @@ std::atomic<unsigned int> gLastOffsetMillimetres{0};
 // The same offset as a vector, and when it was written (ViewPositionOffset).
 std::atomic<float> gLastOffset[3]{0.0f, 0.0f, 0.0f};
 std::atomic<std::uint64_t> gLastOffsetNs{0};
+// LastAppliedView: the rotation and the offset together, from one view.
+std::mutex gViewMutex;
+AppliedView gView{};
+
+void PublishView(const Quaternion& rotation, const Vec3& offset)
+{
+    std::lock_guard lock(gViewMutex);
+    gView = {rotation, offset, gView.sequence + 1};
+}
 std::atomic<unsigned long long> gObserved{0};
 std::atomic<unsigned long long> gApplied{0};
 // UseNativeViewYawOnce: set by a body turn, consumed by the next view.
@@ -394,6 +404,7 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     gApplied.fetch_add(1, std::memory_order_relaxed);
 
     if (!wantPosition) {
+        PublishView(out, {});
         return;
     }
     // A non-finite position would put the camera nowhere and is not recoverable by
@@ -402,6 +413,7 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     if (!std::isfinite(world.position.x) || !std::isfinite(world.position.y) ||
         !std::isfinite(world.position.z)) {
         gPositionRefused.fetch_add(1, std::memory_order_relaxed);
+        PublishView(out, {});
         return;
     }
     // Bound the offset too. The head cannot legitimately be 10 metres from the
@@ -413,9 +425,11 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     const float offsetSquared = dx * dx + dy * dy + dz * dz;
     if (offsetSquared > 100.0f) {
         gPositionRefused.fetch_add(1, std::memory_order_relaxed);
+        PublishView(out, {});
         return;
     }
     std::memcpy(viewParams + kViewPosition, &world.position, sizeof(world.position));
+    PublishView(out, {dx, dy, dz});
     // Publish only after BOTH rotation and position were accepted. Partial,
     // rotation-only and non-unit-scale research modes have no world contract.
     if (gPositionScale.load()==1.f && !stereo::Recentering(renderReference) &&
@@ -545,6 +559,12 @@ bool ViewPositionOffset(Vec3& out)
     out = {viewhook::gLastOffset[0].load(std::memory_order_relaxed), viewhook::gLastOffset[1].load(std::memory_order_relaxed),
            viewhook::gLastOffset[2].load(std::memory_order_relaxed)};
     return true;
+}
+
+AppliedView LastAppliedView()
+{
+    std::lock_guard lock(viewhook::gViewMutex);
+    return viewhook::gView;
 }
 
 DWORD SetViewHookApplying(unsigned int enabled)

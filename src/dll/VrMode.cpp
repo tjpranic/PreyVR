@@ -15,6 +15,7 @@
 #include "StarfieldStereo.h"
 #include "BodyDepthHook.h"
 #include "ExamineCamera.h"
+#include "HeadLamp.h"
 #include "DualSceneStereo.h"
 #include "DualOverlay.h"
 #include "NearFovOverride.h"
@@ -77,6 +78,7 @@ void StopFeatures() {
     SetTurnLaneEnabled(0); SetFireLaneEnabled(0); SetInteractionEnabled(0);
     SetTorsoLaneActive(0);
     StopExamineCamera();
+    StopHeadLamp();
     // Prey's keyboard/mouse prompts again, if VR start had set the controller's.
     SetControllerPrompts(0);
     // Leave the input drain alive to deliver the owned releases on the next frame.
@@ -228,6 +230,9 @@ void TickVrMode() {
         // Keypads and terminals examined from Screen Distance, not a hand's
         // width (ExamineCamera.h). Not fatal: without the hook Prey's camera.
         EnsureExamineCamera();
+        // The flashlight and the psychoscope's light on the headset's eye
+        // (HeadLamp.h). Not fatal: without the hook Prey places them.
+        EnsureHeadLamp();
         // A screen's cursor cast from the crosshair's ray (AimTakeover.h). Not
         // fatal: without it the screen keeps Prey's ray.
         EnsureWorldUiRay();
@@ -292,7 +297,7 @@ void TickVrMode() {
             // The same text dual.report and hud.layer answer with.
             Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
                 " } torso={"+TorsoLaneReport()+" } move={"+MoveLaneStatusReport()+StickRereadReport()+
-                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" "+BodyDepthReport()+" "+ExamineCameraReport()+" "+ScreenAimReport()+" focus={"+
+                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" "+BodyDepthReport()+" "+ExamineCameraReport()+" "+HeadLampReport()+" "+ScreenAimReport()+" focus={"+
                 FocusHoldReport()+" } hold={"+XrHoldReport()+" } prompts={"+ControllerPromptsReport()+" }");
         }
         const auto owner=AnimIkOwnerGeneration();

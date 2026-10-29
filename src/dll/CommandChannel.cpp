@@ -32,6 +32,7 @@
 #include "MarkerStereo.h"
 #include "StarfieldStereo.h"
 #include "ExamineCamera.h"
+#include "HeadLamp.h"
 #include "BodyDepthHook.h"
 #include "ReticleFollow.h"
 #include "SceneQuery.h"
@@ -605,6 +606,9 @@ constexpr Verb kVerbs[] = {
         // 0 Prey's own camera. Bare: report.
         const DWORD result = Valued(args) ? SetExaminePullbackCm(static_cast<unsigned>(Arg(args, 1, -1))) : 0;
         out << "examine.pullback result=" << result << " " << ExamineCameraReport();
+    }},
+    {"flashlight.report", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
+        out << "flashlight.report result=0 " << HeadLampReport();
     }},
     {"stars.depth", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
         // Bare `stars.depth` only reports. 1 = the stars at the sky's depth

@@ -102,7 +102,7 @@ constexpr std::array<std::uint8_t, 15> kGivePrologue{
 constexpr std::uintptr_t kItemManagerGetterRva = 0x16FDDA0, kItemManagerGlobalRva = 0x2C16840;
 constexpr std::uintptr_t kFreeRva = 0x1B772CC;
 constexpr std::uintptr_t kEntitySystemRva = 0x224DA38;
-constexpr std::size_t kArchetypeSlot = 0x1A0, kGetEntitySlot = 0x70;
+constexpr std::size_t kArchetypeSlot = 0x1A0;
 // Equip (ArmsLane.cpp): ArkPlayerWeaponComponent = player+0x14B8.
 constexpr std::uintptr_t kEquipRva = 0x1274820, kCanEquipRva = 0x1273EB0, kWeaponComponent = 0x14B8;
 constexpr std::uintptr_t kGetPlayerRva = engine::ArkPlayerLayout::getInstanceRva;
@@ -249,16 +249,7 @@ std::uintptr_t CallGetPlayer()
         return 0;
     }
 }
-std::uintptr_t CallGetEntity(std::uint32_t id)
-{
-    __try {
-        const auto system = *reinterpret_cast<const std::uintptr_t*>(gBase + kEntitySystemRva);
-        if (!system || !id) { return 0; }
-        return VCall<std::uintptr_t>(system, kGetEntitySlot, id);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return 0;
-    }
-}
+std::uintptr_t CallGetEntity(std::uint32_t id) { return EntityById(gBase, id); }
 std::uint32_t CallEntityId(std::uintptr_t entity)
 {
     __try {

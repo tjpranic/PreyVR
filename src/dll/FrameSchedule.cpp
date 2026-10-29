@@ -14,6 +14,7 @@
 #include "FrameCaptureWin32.h"
 #include "FrameProbe.h"
 #include "GrenadeLane.h"
+#include "HeadLamp.h"
 #include "HudBridge.h"
 #include "InputPost.h"
 #include "InteractionLane.h"
@@ -97,6 +98,9 @@ void BeforeEngineRender(void* system)
     if (system != nullptr) {
         CullPrepareBeforeRender(static_cast<const std::uint8_t*>(system) + engine::SystemLayout::viewCamera);
     }
+    // After this frame's view, before the render takes the lights: the ones Prey
+    // placed before the view was known, on the headset's eye (HeadLamp.h).
+    PlaceHeadLampsBeforeRender();
     // The frame probe's main-thread bracket around Prey's own render (FrameProbe.h).
     ProbeRecord(ProbeStep::renderEnter);
 }
@@ -104,6 +108,9 @@ void BeforeEngineRender(void* system)
 void AfterEngineRender()
 {
     ProbeRecord(ProbeStep::renderExit);
+    // The view this frame was rendered with is spent: a light the next frame's
+    // attachment pass meets before its view waits for that one (HeadLamp.h).
+    EndHeadLampFrame();
     // After the world render took the body's transform, before the next frame's
     // animation starts: the body follow's turn and room-scale's move (TorsoLane.h).
     ServiceBodyFollow();

@@ -124,6 +124,18 @@ DWORD ViewPositionOffsetMillimetres();
 // when the last was more than 200 ms ago.
 bool ViewPositionOffset(Vec3& out);
 
+// **The view last applied**, for what sits on the headset's eye in the world
+// (HeadLamp.h): its rotation (world), and how far the headset's eye sits from
+// Prey's own eye point (world axes, metres; zero while positional tracking is
+// off or the position was refused). `sequence` counts the views applied, 0
+// before the first. Main thread.
+struct AppliedView {
+    Quaternion rotation{};
+    Vec3 offset{};
+    unsigned long long sequence = 0;
+};
+AppliedView LastAppliedView();
+
 // The recenter yaw, shared with every lane that composes against the play space.
 //
 // CAM-003, "one recenter event, all lanes": the view and the aim must resolve the

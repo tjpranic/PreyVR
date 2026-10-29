@@ -109,7 +109,9 @@ hips stand in VR Options (Setup → **Lean Zone**, **Hips and Legs Back**).
   and the view with it.
 - **Write the camera joint** (`camera_jnt`, 98) or what hangs from it in the drawn pose. `#camera`,
   the flashlight and the psychoscope's light ride it; the view ignores the drawn pose (PreyVR-85),
-  so leaving it alone costs nothing.
+  so leaving it alone costs nothing. The two lights go on the headset's eye at their entity's
+  placement instead ([HeadLamp.h](../src/dll/HeadLamp.h),
+  [the flashlight](FLASHLIGHT-HEAD-SCOPE-2026-10-29.md)).
 - **Bump the reference generation for a turn or a move that keeps P** ([why](#the-four-yaws)).
 
 ## The four yaws

@@ -26,9 +26,11 @@ std::string ArmsReport();
 // MemoryCommands'.)
 bool ExecuteArmsCommand(const std::vector<std::string>& args, std::ostringstream& out);
 
-// The joint the character's attachment `name` is bound to (arms.att's list:
-// the attachment manager's array at character+0x38, the joint at +0x15C), or
-// -1. Reads only, guarded; any thread.
+// The character's attachment `name` (arms.att's list: the attachment manager's
+// array at character+0x38, each name at +0x10), or 0. Reads only, guarded; any
+// thread.
+std::uint64_t FindAttachment(std::uint64_t character, std::string_view name);
+// The joint that attachment is bound to (+0x15C), or -1.
 int AttachmentJoint(std::uint64_t character, std::string_view name);
 // Every attachment of `character` as " name@joint" items, for a log line
 // (ik.skel's header); " unread" when the list cannot be read.

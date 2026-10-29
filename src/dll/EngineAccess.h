@@ -1,7 +1,7 @@
 #pragma once
 
-// The two engine reads nearly every lane starts from: PreyDll.dll's base, and
-// CSystem's live view camera. Header-only so tests that compile a lane's .cpp
+// The engine reads nearly every lane starts from: PreyDll.dll's base, CSystem's
+// live view camera and an entity by id. Header-only so tests that compile a lane's .cpp
 // directly need nothing extra; a test that redefines GetModuleHandleW before
 // including the lane still stubs this.
 #include "preyvr/EngineMap.h"
@@ -49,6 +49,25 @@ inline const std::uint8_t* LiveViewCamera()
     }
     const auto* const system = *reinterpret_cast<const std::uint8_t* const*>(base + engine::SystemLayout::pointerRva);
     return system != nullptr ? system + engine::SystemLayout::viewCamera : nullptr;
+}
+
+// The entity with `id` (gEnv->pEntitySystem's GetEntity), or 0: no such entity,
+// no entity system yet, or a fault. `base` is PreyDll's.
+inline std::uintptr_t EntityById(std::uintptr_t base, std::uint32_t id)
+{
+    using engine::GlobalEnvironmentLayout;
+    using GetEntityFn = std::uintptr_t(__fastcall*)(std::uintptr_t system, std::uint32_t id);
+    __try {
+        const auto system = *reinterpret_cast<const std::uintptr_t*>(base + GlobalEnvironmentLayout::baseRva +
+                                                                     GlobalEnvironmentLayout::entitySystem);
+        if (system == 0 || id == 0) { return 0; }
+        const auto vtable = *reinterpret_cast<const std::uintptr_t*>(system);
+        const auto getEntity =
+            *reinterpret_cast<const GetEntityFn*>(vtable + engine::EntitySystemLayout::vtableGetEntity);
+        return getEntity(system, id);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return 0;
+    }
 }
 
 } // namespace preyvr::dll

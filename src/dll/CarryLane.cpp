@@ -76,7 +76,6 @@ constexpr std::uintptr_t kPhysicalWorldRva = 0x224D9C8;
 constexpr std::size_t kGetPhysVarsSlot = 0x78;
 constexpr std::uintptr_t kMinMass = 0x1C8, kMaxMass = 0x1CC, kArticulatedScale = 0x1D8;
 constexpr std::uintptr_t kGetPlayerRva = engine::ArkPlayerLayout::getInstanceRva;
-constexpr std::uintptr_t kEntitySystemRva = 0x224DA38;   // gEnv->pEntitySystem
 
 constexpr std::uintptr_t kCarryInInteraction = 0x28;
 constexpr std::uintptr_t kGrabberConstrained = 0x60;
@@ -90,7 +89,6 @@ constexpr std::size_t kGetIdSlot = 0x08, kGetClassSlot = 0x18, kGetArchetypeSlot
 constexpr std::size_t kWorldTmSlot = 0xE8, kWorldBoundsSlot = 0xF8, kLocalBoundsSlot = 0x100, kPhysicsSlot = 0x228;
 constexpr std::size_t kNameSlot = 0x10;   // IEntityClass / IEntityArchetype GetName
 constexpr std::size_t kPhysTypeSlot = phys::kTypeSlot;
-constexpr std::size_t kGetEntitySlot = 0x70;
 
 using UpdateFn = std::uint64_t(__fastcall*)(std::uintptr_t carry, float frameTime);
 using TargetFn = float*(__fastcall*)(std::uintptr_t carry, float* out, std::uintptr_t entity, const float* original);
@@ -246,16 +244,7 @@ std::uintptr_t CallGetPlayer()
         return 0;
     }
 }
-std::uintptr_t CallGetEntity(std::uint32_t id)
-{
-    __try {
-        const auto system = *reinterpret_cast<const std::uintptr_t*>(gBase + kEntitySystemRva);
-        if (!system || !id) { return 0; }
-        return VCall<std::uintptr_t>(system, kGetEntitySlot, id);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return 0;
-    }
-}
+std::uintptr_t CallGetEntity(std::uint32_t id) { return EntityById(gBase, id); }
 std::uint32_t CallEntityId(std::uintptr_t entity)
 {
     __try {

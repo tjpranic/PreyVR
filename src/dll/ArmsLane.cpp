@@ -158,18 +158,22 @@ void UpdateArmsLane(const GameplayPoseFrame& frame, bool valid)
     Log("result=" + std::to_string(result) + " detail=draw weapon=" + std::to_string(state.last));
 }
 
-int AttachmentJoint(std::uint64_t character, std::string_view name)
+std::uint64_t FindAttachment(std::uint64_t character, std::string_view name)
 {
     AttachmentList list{};
-    if (!ReadAttachments(character, list)) { return -1; }
+    if (!ReadAttachments(character, list)) { return 0; }
     for (unsigned i = 0; i < list.count; ++i) {
         std::uint64_t namePtr = 0;
-        int joint = -1;
-        if (Copy(list.items[i] + 0x10, &namePtr, 8) && SafeText(namePtr) == name && Copy(list.items[i] + 0x15C, &joint, 4)) {
-            return joint;
-        }
+        if (Copy(list.items[i] + 0x10, &namePtr, 8) && SafeText(namePtr) == name) { return list.items[i]; }
     }
-    return -1;
+    return 0;
+}
+
+int AttachmentJoint(std::uint64_t character, std::string_view name)
+{
+    const std::uint64_t attachment = FindAttachment(character, name);
+    int joint = -1;
+    return attachment != 0 && Copy(attachment + 0x15C, &joint, 4) ? joint : -1;
 }
 
 std::string AttachmentListText(std::uint64_t character)

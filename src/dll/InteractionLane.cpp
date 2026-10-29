@@ -49,13 +49,9 @@ constexpr std::uintptr_t kPerformRva = 0x1593980;
 constexpr std::array<std::uint8_t, 18> kPerformPrologue{
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x89, 0x54, 0x24, 0x10, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56};
 constexpr std::uintptr_t kGetPlayerRva = engine::ArkPlayerLayout::getInstanceRva;
-// gEnv (SSystemGlobalEnvironment, static at 0x224D980) + 0xB8 = IEntitySystem*.
-constexpr std::uintptr_t kEntitySystemRva = 0x224DA38;
-// Virtual slots. IEntitySystem::GetEntity: +0x70 is by far the most common
-// slot called on that pointer in the binary (1228 sites; the next is 134).
-// IEntity/IEntityClass slots follow the PDB-generated Chairloader headers and
-// are validated on every read: a name must be printable, bounds finite.
-constexpr std::size_t kGetEntitySlot = 0x70;
+// Virtual slots (the entity by id is EngineAccess.h's EntityById). IEntity and
+// IEntityClass slots follow the PDB-generated Chairloader headers and are
+// validated on every read: a name must be printable, bounds finite.
 constexpr std::size_t kEntityGetClassSlot = 0x18;
 constexpr std::size_t kEntityGetArchetypeSlot = 0x20;   // both overloads return [entity+0x30]
 constexpr std::size_t kArchetypeGetNameSlot = 0x10;
@@ -151,19 +147,7 @@ std::uintptr_t CallGetPlayer()
     }
 }
 
-std::uintptr_t CallGetEntity(std::uint32_t id)
-{
-    __try {
-        const auto system = *reinterpret_cast<const std::uintptr_t*>(gBase + kEntitySystemRva);
-        if (!system || !id) { return 0; }
-        const auto vtable = *reinterpret_cast<const std::uintptr_t*>(system);
-        const auto fn = *reinterpret_cast<std::uintptr_t(__fastcall* const*)(std::uintptr_t, std::uint32_t)>(
-            vtable + kGetEntitySlot);
-        return fn(system, id);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return 0;
-    }
-}
+std::uintptr_t CallGetEntity(std::uint32_t id) { return EntityById(gBase, id); }
 
 // Copies a printable C string; false for anything else.
 bool CopyName(const char* source, char* out, std::size_t size)

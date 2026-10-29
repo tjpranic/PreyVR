@@ -303,6 +303,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/MarkerStereo.cpp
         src/dll/StarfieldStereo.cpp
         src/dll/ExamineCamera.cpp
+        src/dll/HeadLamp.cpp
         src/dll/BodyDepthHook.cpp
         src/dll/DualSceneStereo.cpp
         src/dll/DualOverlay.cpp
@@ -533,6 +534,9 @@ if(PREYVR_BUILD_TESTS)
             DLL
             LIBS preyvr_core minhook)
         preyvr_add_test(examine_camera tests/ExamineCameraTests.cpp
+            DLL
+            LIBS preyvr_core minhook)
+        preyvr_add_test(head_lamp tests/HeadLampTests.cpp
             DLL
             LIBS preyvr_core minhook)
         preyvr_add_test(body_depth_hook tests/BodyDepthHookTests.cpp
