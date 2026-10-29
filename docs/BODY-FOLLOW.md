@@ -843,6 +843,10 @@ Collected from the sections above, with how each was established.
 - **What is still drawn over everything:** Prey's DrawNear particles (muzzle flashes, the Q-Beam,
   charge glows: NEAR-PARTICLES), other characters' near draws (`others`), and the aim lasers,
   which the mod draws with depth off (TODO).
+- **The drawn shoulder sits about 5 cm above Morgan's own.** The arms no longer go into the body: the
+  elbow is kept out of capsules on the drawn torso (PreyVR-104, worn OK 2026-10-29). But if the top of
+  the upper arm is seen to clip at the armpit, lowering the shoulder is the next step
+  ([ARM-TORSO-SCOPE-2026-10-29.md](ARM-TORSO-SCOPE-2026-10-29.md)).
 - **Hands within 3 cm of the eyes are cut**, as in the near pass. Distant flicker from the smaller
   near plane was not reported on PreyVR-92; if it is, Near Clip Distance trades it back.
 - **After the overhaul:** physical crouching into Prey's crouch stance; the holster and medkit

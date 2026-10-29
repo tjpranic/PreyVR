@@ -381,7 +381,50 @@ void TestDrawnLayers()
     Require(DrawnLayers(kAllLayers, false) == kAllLayers, "the debug overlay alone: every layer");
     Require(DrawnLayers(kBody, true) == (kBody | kRays | kHits), "a debug layer beside the lasers");
     Require(DrawnLayers(kAllLayers, true) == kAllLayers, "both on: every layer, once");
-    Require(DrawnLayers(0x3FFu, false) == kAllLayers, "no layer beyond the known ones");
+    Require(DrawnLayers(0x7FFu, false) == kAllLayers, "no layer beyond the known ones");
+}
+
+void TestArmFitLayer()
+{
+    OverlayFrame f{};
+    f.headValid = true;
+    auto& fit = f.armFit;
+    fit.valid = true;
+    fit.torso[armpose::kChest] = {{-.04f, 1.3f, -.05f}, {.04f, 1.3f, -.05f}, .12f};
+    // The right arm hangs past the chest, its elbow in it; the left is not solved.
+    auto& arm = fit.arms[0];
+    arm.valid = true;
+    arm.shoulder = {.19f, 1.47f, .09f};
+    arm.elbow = {.12f, 1.25f, -.05f};
+    arm.wrist = {.10f, 1.30f, -.30f};
+    arm.clearance = armpose::MeasureArm(arm.shoulder, arm.elbow, arm.wrist, fit.torso.data(), armpose::kTorsoParts,
+                                        armpose::ArmThickness{});
+    Require(arm.clearance.Worst() < 0, "the fixture's arm is in the chest");
+    Scene scene;
+    BuildOverlayScene(f, kRays | kBody | kPhysical, scene);
+    Require(scene.lines.empty() && scene.markers.empty(), "the arms against the torso are their own layer");
+    BuildOverlayScene(f, kArms, scene);
+    // A capsule is two rings of 24, four sides and two caps of two half circles of 12.
+    Require(scene.lines.size() == 100 + 2, "one capsule with a radius, and the arm's two segments");
+    Require(scene.markers.size() == armpose::kArmSamples + 1, "a ring per sample, and a dot on the deepest");
+    const Marker& deepest = scene.markers.back();
+    Require(deepest.filled && deepest.color.r == kDenied.r && deepest.color.g == kDenied.g, "the deepest is red");
+    Require(!scene.markers[0].filled && scene.markers[0].radius == armpose::ArmThickness{}.upper,
+            "each ring as thick as the arm there");
+    Require(ClearanceColor(-.001f).g == kDenied.g && ClearanceColor(.005f).g == kWarn.g && ClearanceColor(.02f).g == kActive.g,
+            "red inside, amber near, green clear");
+    BuildOverlayScene(f, kArms | kLabels, scene);
+    Require(scene.labels.size() == 1 && scene.labels[0].text.rfind("R ", 0) == 0 &&
+                scene.labels[0].text.find(" cm chest") != std::string::npos,
+            "the deepest sample is labelled with its arm, depth and torso part");
+    const std::string status = OverlayStatusText(f, kArms);
+    Require(status.find("\nArms vs torso  R ") != std::string::npos && status.find("  L -") != std::string::npos,
+            "the status panel gives each arm's deepest sample");
+    Require(OverlayStatusText(f, kRays).find("Arms") == std::string::npos, "only with the layer");
+    fit.valid = false;
+    BuildOverlayScene(f, kArms, scene);
+    Require(scene.lines.empty() && scene.markers.empty(), "no torso this frame: nothing drawn");
+    Require(OverlayStatusText(f, kArms).find("\nArms vs torso -") != std::string::npos, "and the panel says so");
 }
 
 void TestPhysicalLayer()
@@ -471,6 +514,7 @@ int main()
     TestSceneLayers();
     TestDrawnLayers();
     TestPhysicalLayer();
+    TestArmFitLayer();
     TestSlotColours();
     std::cout << "debug_draw: all tests passed\n";
     return 0;

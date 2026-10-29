@@ -386,6 +386,21 @@ void ArmSetting(const Args& args, std::ostringstream& out)
         << ArmReport();
 }
 
+// arm.capsule [<part> <fwd> <up> <half> <radius>]: one of the drawn torso's
+// capsules, mm (SetArmCapsule). Bare, it only reports; a part needs all four
+// values, and a value that does not parse refuses the line.
+void ArmCapsuleSetting(const Args& args, std::ostringstream& out)
+{
+    DWORD result = 0;
+    if (Valued(args)) {
+        int values[4]{};
+        bool parsed = args.size() >= 6;
+        for (std::size_t i = 2; i < args.size() && i < 6; ++i) { parsed = ParseInt(args[i], values[i - 2]) && parsed; }
+        result = parsed ? SetArmCapsule(args[1], values, 4) : ERROR_INVALID_PARAMETER;
+    }
+    out << "arm.capsule result=" << result << ArmReport();
+}
+
 // Who a verb is for (docs/TUNING-COMMANDS.md). Nothing reads it yet: it is what
 // an instrumentation gate -- a build that leaves research out -- will read.
 //  - player: what a player sets: the VR Options rows, the player-facing commands
@@ -498,6 +513,10 @@ constexpr Verb kVerbs[] = {
     {"arm.rom", Audience::tuning, 0, ArmSetting},
     {"arm.hold", Audience::tuning, 0, ArmSetting},
     {"arm.knee", Audience::tuning, 0, ArmSetting},
+    // The arms against the drawn torso (docs/ARM-TORSO-SCOPE-2026-10-29.md).
+    {"arm.limbs", Audience::tuning, 0, ArmSetting},
+    {"arm.capsule", Audience::tuning, 0, ArmCapsuleSetting},
+    {"arm.avoid", Audience::tuning, 0, ArmSetting},
     {"body.report", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
         // The shared torso the shoulders and body slots sit on and the body's
         // turns (TorsoLane.h), the body pin (AnimIkTakeover.h) and room-scale

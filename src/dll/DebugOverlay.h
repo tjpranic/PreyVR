@@ -1,5 +1,6 @@
 #pragma once
 
+#include "preyvr/DebugOverlayScene.h"
 #include "preyvr/RenderContract.h"
 #include "preyvr/SlotFeedback.h"
 #include "preyvr/TwoHandedAim.h"
@@ -104,6 +105,11 @@ struct SurfaceOverlayState {
     std::string status;
 };
 void DebugOverlaySurface(const GameplayPoseFrame& frame, const SurfaceOverlayState& state);
+// The arms against the drawn torso (AnimIkArms' SolveArms), from the IK pass
+// once per frame while DebugOverlayWantsArmFit(). OpenXR space, for the
+// tracking reference `reference`.
+bool DebugOverlayWantsArmFit();
+void DebugOverlayArmFit(const debugdraw::ArmFit& fit, std::uint64_t reference);
 // XR frame thread: the wrist layer's own decision this frame.
 void DebugOverlayWristDecision(bool gate, bool visible);
 // XR frame thread: the forearm hologram's card and its look test (WristLane);

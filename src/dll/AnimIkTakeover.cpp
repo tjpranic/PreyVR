@@ -470,9 +470,31 @@ DWORD SetArmSetting(const std::string& what, const int* v, unsigned n)
         SetBodyTorso(v[0], v[1]);   // one torso: TorsoLane owns the filter's settings
     } else if (what == "knee" && n >= 1 && v[0] >= 500 && v[0] <= 1000) {
         p.armKnee = v[0] / 1000.0f;
+    } else if (what == "limbs" && n >= 4 && std::all_of(v, v + 4, [](int x) { return x >= 10 && x <= 150; })) {
+        p.thickness = {mm(v[0]), mm(v[1]), mm(v[2]), mm(v[3])};
+    } else if (what == "avoid" && n >= 3 && v[0] >= 0 && v[0] <= 50 && v[1] >= 1 && v[1] <= 50 && v[2] >= 30 &&
+               v[2] <= 3600) {
+        p.avoidMargin = mm(v[0]);
+        p.avoidWall = mm(v[1]);
+        p.avoidRate = static_cast<float>(v[2]) * kRadiansPerDegree;
     } else {
         return 1;
     }
+    return 0;
+}
+
+DWORD SetArmCapsule(const std::string& part, const int* v, unsigned n)
+{
+    int k = -1;
+    for (int i = 0; i < armpose::kTorsoParts; ++i) {
+        if (part == armpose::TorsoPartName(i)) { k = i; }
+    }
+    if (k < 0 || n < 4 || std::abs(v[0]) > 300 || std::abs(v[1]) > 300 || v[2] < 0 || v[2] > 300 || v[3] < 0 ||
+        v[3] > 300) {
+        return 1;
+    }
+    std::lock_guard lock(gPoseSettingsMutex);
+    gPoseSettings.torsoShape.part[k] = {v[0] * 0.001f, v[1] * 0.001f, v[2] * 0.001f, v[3] * 0.001f};
     return 0;
 }
 

@@ -323,6 +323,16 @@ struct PoseSettings {
     float armKnee = 0.92f;      // exact reach up to this fraction of the stretched arm
     float poleTau = 0.06f;      // elbow pole smoothing, seconds
     armpose::WristLimits wrist{};
+    // The drawn torso as capsules on its spine and how thick the arm is
+    // (arm.capsule, arm.limbs; docs/ARM-TORSO-SCOPE-2026-10-29.md): the elbow
+    // is kept out of it, and the arm measured against it.
+    armpose::TorsoShape torsoShape{};
+    armpose::ArmThickness thickness{};
+    // Keeping the elbow out of the torso (arm.avoid): the clearance wanted and
+    // how steeply the chooser's cost rises inside it (m); how fast the drawn
+    // elbow may go round the body (radians a second).
+    float avoidMargin = 0.01f, avoidWall = 0.01f;
+    float avoidRate = 2.0f * 3.14159265f;
 };
 
 inline std::mutex gPoseSettingsMutex;
@@ -512,7 +522,25 @@ struct ArmStats {
     bool straight[2]{};
     float reachCm[2]{};         // the player's wrist from the shoulder, before reach shaping
     float torsoYawDeg = 0.0f, headYawDeg = 0.0f;
+    // The drawn arm against the drawn torso (armpose::MeasureArm), OpenXR.
+    bool torsoPlaced = false;
+    armpose::ArmClearance clearance[2]{};
+    int track[2]{-1, -1};       // how the drawn elbow was tracked (armpose::Track), -1 not kept out
 };
+
+// The arms against the torso since the last arm.report, per arm: frames
+// measured, frames with any sample inside, and the deepest any sample went.
+struct ArmFitTally {
+    unsigned long long frames[2]{}, inside[2]{};
+    float worst[2]{1e9f, 1e9f};
+    int worstSample[2]{}, worstPart[2]{-1, -1};
+    // How the drawn elbow was tracked (armpose::Track's order), frames.
+    unsigned long long track[2][4]{};
+};
+
+inline ArmFitTally gArmFitTally;   // under gArmMutex
+
+inline std::uint64_t gArmFitLogNs = 0;   // the last arm_fit log line, under gArmMutex
 
 inline std::mutex gArmMutex;           // the torso filter, pole smoothing and stats
 
@@ -528,6 +556,10 @@ inline armpose::TorsoYaw gTorsoYaw;
 inline std::uint64_t gTorsoNs = 0, gPoleNs[2]{};
 
 inline Vec3 gPole[2]{};
+
+// The elbow as drawn last frame (the chosen one, kept out of the torso): where
+// the next frame's tracking starts.
+inline Vec3 gDrawnPole[2]{};
 
 inline ArmStats gArmStats;
 
@@ -665,6 +697,10 @@ void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& locatio
 void SolveArms(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsigned count,
                const animik::Location& location, const HandRig& rig, const ArmPlan plan[2],
                const PoseSettings& pose);
+// The drawn torso's capsules (PoseSettings::torsoShape) on the spine as `absolute`
+// has it, OpenXR; false (none placed) without the body pin's joints.
+bool PlaceTorso(const XrMap& map, std::uint8_t* absolute, unsigned count, const HandRig& rig,
+                const armpose::TorsoShape& shape, armpose::Capsule torso[armpose::kTorsoParts]);
 // AnimIkReports.cpp
 void DumpWeaponFrames(const RigIdentity& owner);
 void DumpSkeletonPose(std::uint8_t* character, std::uint8_t* relative, const std::uint8_t* before,
@@ -672,5 +708,8 @@ void DumpSkeletonPose(std::uint8_t* character, std::uint8_t* relative, const std
                       const std::string& label);
 void CaptureMarks(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsigned count,
                   const animik::Location& location, const HandRig& rig, const FingerPlan& fingers);
+// " fit<side>=<deepest sample>/<torso part>:<cm> clearCm<side>=<upper>,<elbow>,<fore>,<wrist>",
+// each part's surface from the torso's (negative inside); " fit<side>=-" unmeasured.
+std::string ArmFitText(const armpose::ArmClearance& clearance, const char* side);
 
 } // namespace preyvr::dll::ik

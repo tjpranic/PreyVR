@@ -100,6 +100,9 @@ struct SurfaceRecord {
     std::uint64_t ns = 0, reference = 0;
 };
 LatestSnapshot<SurfaceRecord> gSurface;
+// The arms against the drawn torso (SolveArms), already in OpenXR space.
+struct ArmFitRecord { dd::ArmFit fit{}; std::uint64_t ns = 0, reference = 0; };
+LatestSnapshot<ArmFitRecord> gArmFit;
 struct WorldSweep { std::array<Vec3, 9> from{}, to{}; std::uint64_t ns = 0; };
 struct WorldContact { bool valid = false, acted = false; Vec3 point{}, normal{}; std::string result; std::uint64_t ns = 0; };
 std::vector<WorldSweep> gSweepHistory;
@@ -257,6 +260,11 @@ dd::OverlayFrame Gather(unsigned mask)
         f.physical.surfaceHands = std::move(surface.hands);
         f.physical.surfaceMarks = std::move(surface.marks);
         f.physical.surfaceStatus = std::move(surface.status);
+    }
+    ArmFitRecord arms{};
+    if ((mask & dd::kArms) && gameplay && gArmFit.TryRead(arms) && FreshSample(now, arms.ns, kRayAgeNs) &&
+        arms.reference == reference) {
+        f.armFit = arms.fit;
     }
     f.psiMode = PsiTargetMode();
     f.sceneQueryFault = SceneQueryFaulted();
@@ -841,6 +849,18 @@ void DebugOverlaySurface(const GameplayPoseFrame& frame, const SurfaceOverlaySta
     record.ns = MonotonicNanoseconds();
     record.reference = frame.referenceGeneration;
     gSurface.Publish(record);
+}
+
+bool DebugOverlayWantsArmFit() { return (gMask.load(std::memory_order_relaxed) & dd::kArms) != 0; }
+
+void DebugOverlayArmFit(const dd::ArmFit& fit, std::uint64_t reference)
+{
+    if (!DebugOverlayWantsArmFit()) { return; }
+    ArmFitRecord record{};
+    record.fit = fit;
+    record.ns = MonotonicNanoseconds();
+    record.reference = reference;
+    gArmFit.Publish(record);
 }
 
 void DebugOverlayHolsters(bool live, const std::array<Vec3, 2>& centres, Vec3 hand, bool gripPressed, bool armed,

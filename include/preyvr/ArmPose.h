@@ -145,10 +145,13 @@ struct WristLimits {
 // hand's twist, a hand that says nothing leaves the elbow hanging, and a hand
 // that would need an impossible wrist raises the elbow as a person's would.
 // Returns the pole that selects it (unit, from the circle's centre towards the
-// elbow).
+// elbow). With `obstacle` (the drawn torso, below) an elbow that would bring
+// the arm into it costs more, the steeper the deeper.
+struct ArmObstacle;
 Vec3 ChooseElbowPole(const Vec3& shoulder, const Vec3& wrist, float upper, float fore, float maxStretch,
                      const Vec3& handLength, const Vec3& handPalm, Side side, const Vec3& bodyPole,
-                     const WristLimits& limits, const Vec3* previousPole = nullptr);
+                     const WristLimits& limits, const Vec3* previousPole = nullptr,
+                     const ArmObstacle* obstacle = nullptr);
 
 struct ArmSolution {
     Vec3 elbow{};
@@ -166,5 +169,121 @@ Quaternion FromTo(const Vec3& from, const Vec3& to);
 
 // Exponential smoothing of a direction (unit), time constant `tau` seconds.
 Vec3 SmoothDirection(const Vec3& previous, const Vec3& current, float dtSeconds, float tau);
+
+// --- the arm against the drawn torso (docs/ARM-TORSO-SCOPE-2026-10-29.md) ----------
+//
+// **What the arm must not pass through.** With the hands at the chest the
+// circle of elbows that reach the wrist passes by the drawn torso, and
+// ChooseElbowPole knows nothing of it. The torso is a few capsules laid across
+// the body on its spine joints; the arm is sampled along both segments, each
+// sample a ball as thick as the arm is there. The elbow is kept out of it
+// (below), and the drawn arm measured against it (arm.capsule, arm.limbs,
+// dbg.draw 512); the defaults were fitted to the mesh by eye (PreyVR-103).
+
+// Every point within `radius` of the segment a-b; none without a radius.
+struct Capsule {
+    Vec3 a{}, b{};
+    float radius = 0.0f;
+};
+// How far `p` lies outside the capsule's surface, metres (negative inside).
+// A capsule without a radius is never near.
+float CapsuleDistance(const Capsule& capsule, const Vec3& p);
+
+// A capsule laid across the body on a spine joint, in the joint's frame
+// (metres): centred `forward` and `up` from the joint, its segment `halfWidth`
+// either way along the joint's right, `radius` round it. No radius: none.
+struct CapsuleSpec {
+    float forward = 0.0f, up = 0.0f, halfWidth = 0.0f, radius = 0.0f;
+};
+// On a joint at `joint` whose right, forward and up are the unit vectors given.
+Capsule PlaceCapsule(const Vec3& joint, const Vec3& right, const Vec3& forward, const Vec3& up, const CapsuleSpec& spec);
+
+// The drawn torso, one capsule on each spine joint: the chest on spine4, the
+// ribs on spine3, the waist on spine2, the hips on spine1.
+enum TorsoPart : int { kChest, kRibs, kWaist, kHips, kTorsoParts };
+const char* TorsoPartName(int part);
+// Defaults from Morgan's standing rig (PreyVR-84) and an adult's torso -- 33 cm
+// wide and 24 cm deep at the chest, 29 by 22 at the waist -- with no mesh to
+// measure; drawn over the body in the headset they matched it (PreyVR-103).
+struct TorsoShape {
+    CapsuleSpec part[kTorsoParts]{
+        {0.030f, -0.040f, 0.042f, 0.118f},
+        {0.015f, -0.045f, 0.041f, 0.116f},
+        {-0.015f, -0.025f, 0.038f, 0.111f},
+        {-0.015f, -0.040f, 0.050f, 0.117f},
+    };
+};
+
+// How thick the drawn arm is (radius, metres) at the upper arm, the elbow, the
+// forearm and the wrist.
+struct ArmThickness {
+    float upper = 0.050f, elbow = 0.045f, fore = 0.040f, wrist = 0.030f;
+};
+
+// Where the arm is measured: the upper arm 30, 55 and 80% of the way from the
+// shoulder, the elbow, the forearm 20, 45 and 70% of the way from the elbow,
+// and the wrist.
+enum ArmSample : int { kUpper30, kUpper55, kUpper80, kElbowAt, kFore20, kFore45, kFore70, kWristAt, kArmSamples };
+const char* ArmSampleName(int sample);
+
+struct ArmClearance {
+    bool valid = false;               // measured against at least one capsule
+    Vec3 point[kArmSamples]{};
+    float radius[kArmSamples]{};      // the arm's thickness there
+    float clear[kArmSamples]{};       // the arm's surface from the torso's, m (negative: inside)
+    int part[kArmSamples]{};          // the torso part nearest it
+    int deepest = 0;                  // the sample nearest the torso, or deepest in it
+    float Worst() const { return clear[deepest]; }
+};
+// The arm shoulder -> elbow -> wrist against `count` capsules.
+ArmClearance MeasureArm(const Vec3& shoulder, const Vec3& elbow, const Vec3& wrist, const Capsule* torso, int count,
+                        const ArmThickness& thickness);
+
+// --- keeping the elbow out of the torso ------------------------------------------
+//
+// **The elbow goes round the body, never through it.** The 2026-10-29 headset
+// run (PreyVR-103) had the left elbow 12-15 cm inside the drawn ribs with the
+// wrist in front of the body: the chooser had put it there. A torso term in
+// ChooseElbowPole prefers elbows outside the body, but alone it is not enough
+// (offline: 13% of frames still in): the pole's smoothing swings the elbow
+// through the body when the choice moves from one side of it to the other, and
+// snapping to the nearest clear elbow instead jumps across the body. So the
+// drawn elbow is tracked: from where it was drawn, it moves towards the chosen
+// one round the circle of elbows that reach the wrist, through clear elbows
+// only, and waits at the body while the chosen one is in it.
+
+// What the arm stays out of: the torso's capsules (`count`, none without), the
+// arm's thickness, the clearance wanted (m), and how steeply ChooseElbowPole's
+// cost rises inside it: ((margin - clearance) / wall)^2.
+struct ArmObstacle {
+    const Capsule* torso = nullptr;
+    int count = 0;
+    ArmThickness thickness{};
+    float margin = 0.01f;
+    float wall = 0.01f;
+};
+// The arm's least clearance with its elbow at `elbow` (m; negative inside):
+// every sample but the wrist, which no elbow moves. Far without a capsule.
+float ArmClear(const Vec3& shoulder, const Vec3& elbow, const Vec3& wrist, const ArmObstacle& obstacle);
+
+// How the tracked elbow moved this frame.
+enum class Track : int {
+    kFree,      // straight to the chosen elbow: nothing in the way (or no torso)
+    kAround,    // round the other way, the body between: at most the step
+    kParked,    // the chosen elbow is in the body: at the body's edge nearest it
+    kPushed,    // the body moved onto the drawn elbow: out to the nearest clear one
+};
+struct TrackedPole {
+    Vec3 pole{};
+    Track how = Track::kFree;
+};
+// The elbow to draw: from `drawn` (last frame's pole; none starts at `wanted`)
+// towards `wanted` round the circle of elbows that reach the wrist, through
+// elbows clear of the torso only -- clear meaning at least the margin, or where
+// none is, within 5 mm of the clearest. Going round the other way, or along
+// the body to its edge, it moves at most `maxStep` radians. With nothing in
+// the way it is `wanted` itself.
+TrackedPole TrackElbowPole(const Vec3& shoulder, const Vec3& wrist, float upper, float fore, float maxStretch,
+                           const Vec3& wanted, const Vec3* drawn, float maxStep, const ArmObstacle& obstacle);
 
 } // namespace preyvr::armpose

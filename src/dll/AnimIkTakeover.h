@@ -129,7 +129,17 @@ DWORD SetHandPoseStretchPercent(int percent);
 //   hold <sd> <tauMs>            temporal prior on the elbow (deg) and pole smoothing (45 60)
 //   torso <deadzoneDeg> <relax>  torso yaw deadzone and relax per second, permille (35 600)
 //   knee <permille>              exact reach up to this fraction of the stretched arm (920)
+//   limbs <upper> <elbow> <fore> <wrist>  the drawn arm's thickness (radius), 10-150 mm (50 45 40 30)
+//   avoid <marginMm> <wallMm> <degPerS>  the elbow kept out of the drawn torso: the clearance
+//                                wanted 0-50, the cost's wall 1-50, how fast the drawn elbow
+//                                goes round the body 30-3600 (10 10 360)
 DWORD SetArmSetting(const std::string& what, const int* values, unsigned count);
+// arm.capsule <part> <fwd> <up> <half> <radius>: one of the drawn torso's capsules
+// (chest, ribs, waist, hips on spine4..spine1; docs/ARM-TORSO-SCOPE-2026-10-29.md),
+// in its joint's frame, mm: forward and up -300..300, half width and radius
+// 0..300 (radius 0: none). The elbow is kept out of them (arm.avoid), and the
+// arm measured against them and drawn (dbg.draw 512). 1 when refused.
+DWORD SetArmCapsule(const std::string& part, const int* values, unsigned count);
 // arm.length alone, for the Arm Length option: shoulder to wrist, cm.
 DWORD SetArmLengthCm(int cm);
 int ArmLengthCm();

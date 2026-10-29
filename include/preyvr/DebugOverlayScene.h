@@ -1,5 +1,6 @@
 #pragma once
 
+#include "preyvr/ArmPose.h"
 #include "preyvr/DebugDraw.h"
 
 #include <array>
@@ -27,8 +28,9 @@ enum Layer : unsigned {
     kStatus = 1u << 6,    // the status panel below the view
     kHits = 1u << 7,      // scene queries along each ray (otherwise rays end at a fixed range)
     kPhysical = 1u << 8,  // the physical-contact sweep: weapon box, swept paths, last contact
+    kArms = 1u << 9,      // the arms against the drawn torso: its capsules, each arm's samples by clearance
 };
-inline constexpr unsigned kAllLayers = 0x1FFu;
+inline constexpr unsigned kAllLayers = 0x3FFu;
 // **The aim lasers** (VR Options "Aim lasers"): each hand's ray to what it
 // points at, ended on the scene -- what the game drew in every session from
 // 2026-10-06 to 10-13, a player's aid rather than a test's.
@@ -186,6 +188,25 @@ struct Physical {
     std::vector<SurfaceMark> surfaceMarks;   // and what held one back
     std::string surfaceStatus;
 };
+// The arms against the drawn torso (armpose::MeasureArm; arm.capsule, arm.limbs):
+// the torso's capsules, and each arm with its samples, each a ring as thick as
+// the arm is there: green clear of the torso, amber within kArmNear, red inside.
+// The sample nearest the torso is a dot as well.
+inline constexpr float kArmNear = .01f;
+inline constexpr Color kCapsule{235, 235, 235, 120};
+struct ArmFitArm {
+    bool valid = false;
+    Vec3 shoulder{}, elbow{}, wrist{};
+    armpose::ArmClearance clearance{};
+};
+struct ArmFit {
+    bool valid = false;                                      // the torso was placed this frame
+    std::array<armpose::Capsule, armpose::kTorsoParts> torso{};
+    std::array<ArmFitArm, 2> arms{};                         // 0 = right, 1 = left
+};
+// A sample's colour by its clearance.
+Color ClearanceColor(float clear);
+
 struct OverlayFrame {
     bool headValid = false;
     Pose head{};
@@ -198,6 +219,7 @@ struct OverlayFrame {
     Wrist wrist{};
     Foregrip foregrip{};
     Physical physical{};
+    ArmFit armFit{};
     unsigned psiMode = 0;                // 0 native, 1 head, 2 left controller
     bool sceneQueryFault = false;
     std::string extra;                   // free text appended to the status panel

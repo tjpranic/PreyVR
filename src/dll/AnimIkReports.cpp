@@ -266,6 +266,29 @@ void CaptureMarks(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsign
     }
 }
 
+std::string ArmFitText(const armpose::ArmClearance& c, const char* side)
+{
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
+    out << std::fixed;
+    out.precision(1);
+    out << " fit" << side << '=';
+    if (!c.valid) {
+        out << '-';
+        return out.str();
+    }
+    const auto least = [&c](int from, int to) {
+        float m = c.clear[from];
+        for (int i = from + 1; i <= to; ++i) { m = std::min(m, c.clear[i]); }
+        return m * 100.0f;
+    };
+    out << armpose::ArmSampleName(c.deepest) << '/' << armpose::TorsoPartName(c.part[c.deepest]) << ':'
+        << c.Worst() * 100.0f << " clearCm" << side << '=' << least(armpose::kUpper30, armpose::kUpper80) << ','
+        << c.clear[armpose::kElbowAt] * 100.0f << ',' << least(armpose::kFore20, armpose::kFore70) << ','
+        << c.clear[armpose::kWristAt] * 100.0f;
+    return out.str();
+}
+
 } // namespace ik
 
 std::string AnimIkWeaponAlignmentReport()
@@ -385,6 +408,7 @@ std::string ArmReport()
     BodyTorsoSettings(torsoDeadzone, torsoRelax);
     ArmStats st;
     float reachMax[2]{};
+    ArmFitTally tally;
     {
         std::lock_guard lock(gArmMutex);
         st = gArmStats;
@@ -392,6 +416,8 @@ std::string ArmReport()
             reachMax[s] = gReachMaxCm[s];
             gReachMaxCm[s] = 0.0f;
         }
+        tally = gArmFitTally;
+        gArmFitTally = {};
     }
     std::ostringstream out;
     out.imbue(std::locale::classic());
@@ -409,6 +435,39 @@ std::string ArmReport()
         << " holdDeg=" << p.wrist.holdSigmaDeg << " poleTauMs=" << p.poleTau * 1000
         << " torsoDeadzoneDeg=" << torsoDeadzone * kDegreesPerRadian << " torsoRelax=" << torsoRelax
         << " headYawDeg=" << st.headYawDeg << " torsoYawDeg=" << st.torsoYawDeg;
+    // The arms against the drawn torso: its capsules (forward, up, half width,
+    // radius on their spine joint, mm) and the arm's thickness.
+    out << " torsoPlaced=" << st.torsoPlaced << " capsuleMm=";
+    for (int k = 0; k < armpose::kTorsoParts; ++k) {
+        const armpose::CapsuleSpec& c = p.torsoShape.part[k];
+        out << (k ? ";" : "") << armpose::TorsoPartName(k) << ':' << std::lround(c.forward * 1000) << ','
+            << std::lround(c.up * 1000) << ',' << std::lround(c.halfWidth * 1000) << ',' << std::lround(c.radius * 1000);
+    }
+    const armpose::ArmThickness& th = p.thickness;
+    out << " limbsMm=" << std::lround(th.upper * 1000) << ',' << std::lround(th.elbow * 1000) << ','
+        << std::lround(th.fore * 1000) << ',' << std::lround(th.wrist * 1000);
+    // Keeping the elbow out of it, and how the drawn elbow went since the last
+    // report: straight to the chosen one, round the body, held at its edge,
+    // pushed out by it.
+    out << " avoidMm=" << std::lround(p.avoidMargin * 1000) << ','
+        << std::lround(p.avoidWall * 1000) << " avoidDegPerS=" << std::lround(p.avoidRate * kDegreesPerRadian);
+    for (int s = 0; s < 2; ++s) {
+        const auto& k = tally.track[s];
+        out << " track" << (s == 0 ? "R" : "L") << '=' << k[0] << ',' << k[1] << ',' << k[2] << ',' << k[3];
+    }
+    for (int s = 0; s < 2; ++s) {
+        const char* t = s == 0 ? "R" : "L";
+        out << ArmFitText(st.solved[s] ? st.clearance[s] : armpose::ArmClearance{}, t) << " fitFrames" << t << '='
+            << tally.frames[s] << " insidePct" << t << '='
+            << (tally.frames[s] ? 100.0 * static_cast<double>(tally.inside[s]) / static_cast<double>(tally.frames[s]) : 0.0)
+            << " worstCm" << t << '=';
+        if (tally.frames[s]) {
+            out << tally.worst[s] * 100.0f << " worstAt" << t << '=' << armpose::ArmSampleName(tally.worstSample[s]) << '/'
+                << armpose::TorsoPartName(tally.worstPart[s]);
+        } else {
+            out << '-';
+        }
+    }
     for (int s = 0; s < 2; ++s) {
         const char* t = s == 0 ? "R" : "L";
         out << " solved" << t << '=' << st.solved[s];

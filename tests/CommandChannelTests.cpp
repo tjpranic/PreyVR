@@ -129,6 +129,19 @@ const Case kCases[] = {
     {"pose.roll", "pose.roll result=0", HandPoseReport, processed},
     {"pose.stretch", "pose.stretch result=0", HandPoseReport, processed},
     {"arm.report", "arm.report result=0", ArmReport, processed},
+    // The arms against the drawn torso: a capsule needs its part and all four
+    // values; the arm's thickness all four.
+    {"arm.capsule", "arm.capsule result=0", ArmReport, processed},
+    {"arm.capsule chest 30 -40", "arm.capsule result=87", ArmReport, processed},
+    {"arm.capsule chest 30 -40 42 abc", "arm.capsule result=87", ArmReport, processed},
+    {"arm.capsule belly 0 0 40 100", "arm.capsule result=1", ArmReport, processed},   // no such part
+    {"arm.capsule hips 0 0 40 301", "arm.capsule result=1", ArmReport, processed},    // out of range
+    {"arm.capsule hips -15 -40 50 117", "arm.capsule result=0", ArmReport, processed},
+    {"arm.limbs 50 45 40", "arm.limbs result=1", ArmReport, processed},
+    {"arm.limbs 50 45 40 30", "arm.limbs result=0", ArmReport, processed},
+    {"arm.avoid 10 10", "arm.avoid result=1", ArmReport, processed},       // needs all three
+    {"arm.avoid 10 0 360", "arm.avoid result=1", ArmReport, processed},    // the wall is at least 1 mm
+    {"arm.avoid 10 10 360", "arm.avoid result=0", ArmReport, processed},
     {"body.report", "body.report result=0", BodyReports, processed},
     {"body.torso 1", "body.torso result=87", TorsoLaneReport, processed},   // needs 2
     // The body overhaul's research verbs and test switches are gone, as are the
@@ -671,6 +684,28 @@ void TestNearFovFollow()
             "and a value the setter refuses puts following back");
 }
 
+// arm.capsule and arm.limbs set what arm.report shows; a refused line leaves
+// it. Puts the defaults back.
+void TestArmCapsule()
+{
+    Require(Run("arm.report").find(" capsuleMm=chest:30,-40,42,118;ribs:15,-45,41,116;waist:-15,-25,38,111;"
+                                   "hips:-15,-40,50,117 limbsMm=50,45,40,30 avoidMm=10,10 avoidDegPerS=360") !=
+                std::string::npos,
+            "the defaults");
+    Run("arm.capsule ribs -20 10 0 90");
+    Run("arm.limbs 60 50 45 35");
+    std::string report = Run("arm.report");
+    Require(report.find(";ribs:-20,10,0,90;") != std::string::npos && report.find(" limbsMm=60,50,45,35") != std::string::npos,
+            "set, as the report gives them");
+    Run("arm.capsule ribs 0 0 400 90");
+    Require(Run("arm.report").find(";ribs:-20,10,0,90;") != std::string::npos, "a refused capsule leaves it");
+    Run("arm.capsule ribs 15 -45 41 116");
+    Run("arm.limbs 50 45 40 30");
+    report = Run("arm.report");
+    Require(report.find(";ribs:15,-45,41,116;") != std::string::npos && report.find(" limbsMm=50,45,40,30") != std::string::npos,
+            "the defaults are back");
+}
+
 // One torso (your 10-23 decision): body.torso and arm.torso set the one copy
 // TorsoLane owns, which the arms' fallback filter uses. Refuses what arm.torso
 // refuses. Puts the defaults (35 degrees, 600 per mille) back.
@@ -803,6 +838,7 @@ int main()
     TestCommandFile();
     TestTorsoOwner();
     TestEventLogSwitches();
+    TestArmCapsule();
     TestVerbsDocumented();
 
     Require(GetModuleHandleW(L"openxr_loader.dll") == nullptr, "no command loaded the OpenXR loader");

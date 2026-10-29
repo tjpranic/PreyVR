@@ -35,7 +35,9 @@
 - The Earth and Moon are very obviously rendered way too close
     Having them rendered at a more realisitic depth would be nice but challenging.
     Technically everything is working game wise, it would just be an improvement.
-- Arms can clip into the player model
+- Zero-G doesn't have rotate controls
+- Zero-G helmet overlay doesn't render properly
+    It doesn't follow the camera view
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -61,6 +63,7 @@
     It makes them hard to see. They need to be moved a little closer in.
 - Left hand laser doesn't hit at surface of objects unlike the right hand aim laser
     Only sometimes? This might be intentional? Will need to investigate.
+- Disable aim laser on loading screen
 
 ### VR Options Menu
 - Have bindings section let you change your bindings
@@ -141,6 +144,8 @@
     > Each snap turn changed the tracking reference, which reset the hold. The hold now resets only on a recenter. PreyVR-100, worn OK 2026-10-28.
 - Flashlight should be aimable
     > The flashlight hung off Prey's eye joint, which VR never moves, so it pointed level along the body. It and the psychoscope's light now sit on the headset's eye at Prey's mount (17 mm behind and 35 mm below the eye) and point where you look. Always on. PreyVR-102, worn OK 2026-10-29. See docs/FLASHLIGHT-HEAD-SCOPE-2026-10-29.md.
+- Arms can clip into the player model
+    > The elbow chooser didn't know the body was there: with the hands at the chest it could put the elbow 12–15 cm inside it (measured on PreyVR-103 against capsules fitted to the drawn torso). It now prefers elbows outside the body, and the drawn elbow goes round the body to them, never through it. PreyVR-104, worn OK 2026-10-29. See docs/ARM-TORSO-SCOPE-2026-10-29.md.
 
 ### Rendering
 - The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision). (Archived)

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace preyvr::armpose {
 namespace {
@@ -141,8 +142,9 @@ float WristRadialDeg(const Vec3& forearm, const Vec3& length, const Vec3& palm, 
 
 Vec3 ChooseElbowPole(const Vec3& shoulder, const Vec3& wrist, float upper, float fore, float maxStretch,
                      const Vec3& handLength, const Vec3& handPalm, Side side, const Vec3& bodyPole,
-                     const WristLimits& limits, const Vec3* previousPole)
+                     const WristLimits& limits, const Vec3* previousPole, const ArmObstacle* obstacle)
 {
+    if (obstacle != nullptr && (obstacle->torso == nullptr || obstacle->count <= 0)) { obstacle = nullptr; }
     const Vec3 axis = Unit(Sub(wrist, shoulder), Vec3{0, -1, 0});
     Vec3 body = Perp(bodyPole, axis);
     body = Length(body) > 1e-4f ? Unit(body, AnyPerp(axis)) : AnyPerp(axis);
@@ -168,9 +170,11 @@ Vec3 ChooseElbowPole(const Vec3& shoulder, const Vec3& wrist, float upper, float
         const float s = sigmaDeg / kDegreesPerRadian;
         return 2.0f * (1.0f - std::cos(a)) / (s * s);
     };
+    const auto elbowAt = [&](float phi) {
+        return Add(centre, Scale(Add(Scale(u, std::cos(phi)), Scale(v, std::sin(phi))), radius));
+    };
     const auto cost = [&](float phi) {
-        const Vec3 dir = Add(Scale(u, std::cos(phi)), Scale(v, std::sin(phi)));
-        const Vec3 forearm = Unit(Sub(wrist, Add(centre, Scale(dir, radius))), axis);
+        const Vec3 forearm = Unit(Sub(wrist, elbowAt(phi)), axis);
         const float flex = WristFlexionDeg(forearm, length, palm);
         const float rad = WristRadialDeg(forearm, length, palm, side);
         const float f = flex / limits.flexionSigmaDeg;
@@ -181,19 +185,43 @@ Vec3 ChooseElbowPole(const Vec3& shoulder, const Vec3& wrist, float upper, float
         if (hold) { c += swivel(phi - held, limits.holdSigmaDeg); }
         return c;
     };
+    // The torso's part of the cost: none clear of it by the margin.
+    const auto torso = [&](float phi) {
+        if (obstacle == nullptr) { return 0.0f; }
+        const float in = (obstacle->margin - ArmClear(shoulder, elbowAt(phi), wrist, *obstacle)) / obstacle->wall;
+        return in > 0.0f ? in * in : 0.0f;
+    };
     constexpr int kSteps = 72;
-    float best = 0.0f, bestCost = cost(0.0f);
-    for (int i = 1; i < kSteps; ++i) {
-        const float phi = 2.0f * kPi * static_cast<float>(i) / kSteps;
-        const float c = cost(phi);
-        if (c < bestCost) { bestCost = c; best = phi; }
+    const auto angle = [](int i) { return 2.0f * kPi * static_cast<float>(((i % kSteps) + kSteps) % kSteps) / kSteps; };
+    float base[kSteps];
+    int best = 0;
+    for (int i = 0; i < kSteps; ++i) {
+        base[i] = cost(angle(i));
+        if (base[i] < base[best]) { best = i; }
+    }
+    float bestCost = base[best];
+    if (obstacle != nullptr) {
+        // The torso's part is never negative, so in order of the rest of the
+        // cost only an elbow below the best total so far can still win: near
+        // nothing, one is measured against the torso.
+        int order[kSteps];
+        for (int i = 0; i < kSteps; ++i) { order[i] = i; }
+        std::sort(order, order + kSteps, [&base](int a, int b) { return base[a] < base[b]; });
+        bestCost = std::numeric_limits<float>::max();
+        for (const int i : order) {
+            if (base[i] >= bestCost) { break; }
+            const float c = base[i] + torso(angle(i));
+            if (c < bestCost) { bestCost = c; best = i; }
+        }
     }
     // Parabolic refinement between the neighbours.
     const float h = 2.0f * kPi / kSteps;
-    const float cm = cost(best - h), cp = cost(best + h);
+    const float cm = base[(best + kSteps - 1) % kSteps] + torso(angle(best - 1));
+    const float cp = base[(best + 1) % kSteps] + torso(angle(best + 1));
+    float phi = angle(best);
     const float den = cm - 2.0f * bestCost + cp;
-    if (den > 1e-9f) { best += 0.5f * h * (cm - cp) / den; }
-    return Unit(Add(Scale(u, std::cos(best)), Scale(v, std::sin(best))), body);
+    if (den > 1e-9f) { phi += 0.5f * h * (cm - cp) / den; }
+    return Unit(Add(Scale(u, std::cos(phi)), Scale(v, std::sin(phi))), body);
 }
 
 ArmSolution SolveElbow(const Vec3& shoulder, const Vec3& wrist, float upper, float fore,
@@ -241,6 +269,207 @@ Vec3 SmoothDirection(const Vec3& previous, const Vec3& current, float dtSeconds,
     if (!(Length(previous) > 0.5f) || !(tau > 0.0f)) { return Unit(current, previous); }
     const float a = 1.0f - std::exp(-std::clamp(dtSeconds, 0.0f, 0.25f) / tau);
     return Unit(Add(previous, Scale(Sub(current, previous), a)), current);
+}
+
+float CapsuleDistance(const Capsule& capsule, const Vec3& p)
+{
+    if (!(capsule.radius > 0.0f)) { return std::numeric_limits<float>::max(); }
+    const Vec3 ab = Sub(capsule.b, capsule.a);
+    const float span = Dot(ab, ab);
+    const float t = span > 1e-12f ? std::clamp(Dot(Sub(p, capsule.a), ab) / span, 0.0f, 1.0f) : 0.0f;
+    return Length(Sub(p, Add(capsule.a, Scale(ab, t)))) - capsule.radius;
+}
+
+Capsule PlaceCapsule(const Vec3& joint, const Vec3& right, const Vec3& forward, const Vec3& up, const CapsuleSpec& spec)
+{
+    const Vec3 centre = Add(joint, Add(Scale(forward, spec.forward), Scale(up, spec.up)));
+    const Vec3 half = Scale(right, spec.halfWidth);
+    return {Sub(centre, half), Add(centre, half), spec.radius};
+}
+
+const char* TorsoPartName(int part)
+{
+    constexpr const char* kNames[kTorsoParts] = {"chest", "ribs", "waist", "hips"};
+    return part >= 0 && part < kTorsoParts ? kNames[part] : "none";
+}
+
+const char* ArmSampleName(int sample)
+{
+    constexpr const char* kNames[kArmSamples] = {"upper30", "upper55", "upper80", "elbow",
+                                                 "fore20", "fore45", "fore70", "wrist"};
+    return sample >= 0 && sample < kArmSamples ? kNames[sample] : "none";
+}
+
+namespace {
+
+// Where the arm is measured (ArmSample's order) and how thick it is there.
+void ArmSamples(const Vec3& shoulder, const Vec3& elbow, const Vec3& wrist, const ArmThickness& thickness,
+                Vec3 points[kArmSamples], float radii[kArmSamples])
+{
+    const auto along = [](Vec3 from, Vec3 to, float f) { return Add(from, Scale(Sub(to, from), f)); };
+    const Vec3 p[kArmSamples] = {along(shoulder, elbow, 0.30f), along(shoulder, elbow, 0.55f),
+                                 along(shoulder, elbow, 0.80f), elbow,
+                                 along(elbow, wrist, 0.20f), along(elbow, wrist, 0.45f),
+                                 along(elbow, wrist, 0.70f), wrist};
+    const float r[kArmSamples] = {thickness.upper, thickness.upper, thickness.upper, thickness.elbow,
+                                  thickness.fore, thickness.fore, thickness.fore, thickness.wrist};
+    for (int i = 0; i < kArmSamples; ++i) {
+        points[i] = p[i];
+        radii[i] = r[i];
+    }
+}
+
+} // namespace
+
+ArmClearance MeasureArm(const Vec3& shoulder, const Vec3& elbow, const Vec3& wrist, const Capsule* torso, int count,
+                        const ArmThickness& thickness)
+{
+    ArmClearance out;
+    Vec3 points[kArmSamples];
+    float radii[kArmSamples];
+    ArmSamples(shoulder, elbow, wrist, thickness, points, radii);
+    for (int i = 0; i < kArmSamples; ++i) {
+        out.point[i] = points[i];
+        out.radius[i] = radii[i];
+        out.clear[i] = std::numeric_limits<float>::max();
+        out.part[i] = -1;
+        for (int k = 0; k < count && torso != nullptr; ++k) {
+            if (!(torso[k].radius > 0.0f)) { continue; }
+            const float d = CapsuleDistance(torso[k], points[i]) - radii[i];
+            if (d < out.clear[i]) { out.clear[i] = d; out.part[i] = k; }
+        }
+        if (out.part[i] >= 0) { out.valid = true; }
+        if (out.clear[i] < out.clear[out.deepest]) { out.deepest = i; }
+    }
+    return out;
+}
+
+float ArmClear(const Vec3& shoulder, const Vec3& elbow, const Vec3& wrist, const ArmObstacle& obstacle)
+{
+    Vec3 points[kArmSamples];
+    float radii[kArmSamples];
+    ArmSamples(shoulder, elbow, wrist, obstacle.thickness, points, radii);
+    float least = std::numeric_limits<float>::max();
+    for (int k = 0; k < obstacle.count && obstacle.torso != nullptr; ++k) {
+        const Capsule& c = obstacle.torso[k];
+        if (!(c.radius > 0.0f)) { continue; }
+        for (int i = 0; i < kWristAt; ++i) { least = std::min(least, CapsuleDistance(c, points[i]) - radii[i]); }
+    }
+    return least;
+}
+
+TrackedPole TrackElbowPole(const Vec3& shoulder, const Vec3& wrist, float upper, float fore, float maxStretch,
+                           const Vec3& wanted, const Vec3* drawn, float maxStep, const ArmObstacle& obstacle)
+{
+    TrackedPole out{wanted, Track::kFree};
+    if (obstacle.torso == nullptr || obstacle.count <= 0) { return out; }
+    const Vec3 axis = Unit(Sub(wrist, shoulder), Vec3{0, -1, 0});
+    // Angles round the circle are from the drawn elbow, or the wanted one.
+    Vec3 u = drawn != nullptr ? Perp(*drawn, axis) : Vec3{};
+    const bool held = drawn != nullptr && Length(u) > 0.2f;
+    if (!held) { u = Perp(wanted, axis); }
+    if (!(Length(u) > 1e-4f)) { return out; }
+    u = Unit(u, AnyPerp(axis));
+    const Vec3 v = Cross(axis, u);
+    const ArmSolution reference = SolveElbow(shoulder, wrist, upper, fore, u, maxStretch);
+    const Vec3 offset = Sub(reference.elbow, shoulder);
+    const Vec3 centre = Add(shoulder, Scale(axis, Dot(offset, axis)));
+    const float radius = Length(Perp(offset, axis));
+    if (radius < 1e-3f) { return out; }   // a straight arm has one elbow
+    const auto pole = [&](float phi) { return Add(Scale(u, std::cos(phi)), Scale(v, std::sin(phi))); };
+    const auto clearAt = [&](float phi) {
+        return ArmClear(shoulder, Add(centre, Scale(pole(phi), radius)), wrist, obstacle);
+    };
+    // The circle, coarsely, measured as it is needed: sample 0 is the drawn
+    // elbow (or the wanted one).
+    constexpr int kSteps = 36;
+    constexpr float kStep = 2.0f * kPi / kSteps;
+    constexpr float kSlack = 0.005f;
+    float table[kSteps];
+    bool measured[kSteps]{};
+    const auto sample = [&](int k) {
+        k = ((k % kSteps) + kSteps) % kSteps;
+        if (!measured[k]) {
+            table[k] = clearAt(static_cast<float>(k) * kStep);
+            measured[k] = true;
+        }
+        return table[k];
+    };
+    // Clear: by the margin, until it turns out nothing on the circle is.
+    float need = obstacle.margin;
+    const auto ok = [&](float phi) { return clearAt(phi) >= need; };
+    const auto sampleOk = [&](float phi) { return sample(static_cast<int>(std::lround(phi / kStep))) >= need; };
+    // The clear edge between a clear `lo` and a blocked `hi` (distances along
+    // `dir` from `from`), by halving.
+    const auto edge = [&](float from, int dir, float lo, float hi) {
+        for (int i = 0; i < 6; ++i) {
+            const float mid = 0.5f * (lo + hi);
+            if (ok(from + static_cast<float>(dir) * mid)) { lo = mid; } else { hi = mid; }
+        }
+        return lo;
+    };
+    // How far from `from` along `dir` (+1 or -1) the elbow can go, up to
+    // `length`, through clear elbows only: the coarse samples crossed, then the end.
+    const auto reach = [&](float from, int dir, float length) {
+        const float base = from / kStep;
+        float s = (dir > 0 ? std::floor(base) + 1.0f - base : base - (std::ceil(base) - 1.0f)) * kStep;
+        float clear = 0.0f;
+        for (; s < length; s += kStep) {
+            if (!sampleOk(from + static_cast<float>(dir) * s)) { return edge(from, dir, clear, s); }
+            clear = s;
+        }
+        return ok(from + static_cast<float>(dir) * length) ? length : edge(from, dir, clear, length);
+    };
+    const Vec3 pw = Perp(wanted, axis);
+    const float want = Length(pw) > 1e-4f ? std::atan2(Dot(pw, v), Dot(pw, u)) : 0.0f;
+    const float at = 0.0f;   // the drawn elbow (without one, `want` is 0 too)
+    const float d = Wrap(want - at);
+    const int toward = d >= 0.0f ? 1 : -1;
+    const float shortWay = std::fabs(d), longWay = 2.0f * kPi - shortWay;
+    // Clear by the margin all the way there: the wanted elbow, the circle
+    // measured only along the way.
+    if (sample(0) >= need && reach(at, toward, shortWay) >= shortWay - 1e-4f) { return out; }
+    // Something is in the way: all of the circle, and whether anything on it is clear.
+    float best = -std::numeric_limits<float>::max();
+    for (int k = 0; k < kSteps; ++k) { best = std::max(best, sample(k)); }
+    need = std::min(obstacle.margin, best - kSlack);
+    // The body moved onto the drawn elbow: out to the nearest clear one, either way.
+    if (sample(0) < need) {
+        out.how = Track::kPushed;
+        for (int j = 1; j <= kSteps / 2; ++j) {
+            for (int dir : {1, -1}) {
+                const float s = static_cast<float>(j) * kStep;
+                if (sampleOk(at + static_cast<float>(dir) * s)) {
+                    // The clear side of the edge, from the blocked side.
+                    float lo = s - kStep, hi = s;
+                    for (int i = 0; i < 6; ++i) {
+                        const float mid = 0.5f * (lo + hi);
+                        if (ok(at + static_cast<float>(dir) * mid)) { hi = mid; } else { lo = mid; }
+                    }
+                    out.pole = pole(at + static_cast<float>(dir) * hi);
+                    return out;
+                }
+            }
+        }
+        return out;   // nothing clear at all: `need` makes the clearest so, so not reached
+    }
+    // Towards the wanted elbow: straight there when nothing is in the way;
+    // else round the other way when that is clear; else along the body to its
+    // edge on this side.
+    const float clearRun = reach(at, toward, shortWay);
+    if (clearRun >= shortWay - 1e-4f) { return out; }
+    float move = 0.0f;
+    int dir = toward;
+    if (reach(at, -toward, longWay) >= longWay - 1e-4f) {
+        out.how = Track::kAround;
+        dir = -toward;
+        move = std::min(longWay, maxStep);
+    } else {
+        out.how = Track::kParked;
+        move = std::min(clearRun, maxStep);
+    }
+    out.pole = pole(at + static_cast<float>(dir) * move);
+    return out;
 }
 
 } // namespace preyvr::armpose

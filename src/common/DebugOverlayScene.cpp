@@ -395,7 +395,91 @@ void AddPhysical(Scene& scene, const Physical& p, unsigned mask)
     }
 }
 
+// A capsule's wireframe: a ring round its axis at each end, four lines along
+// it, and each end's half circles in two planes through the axis.
+void AddCapsule(Scene& scene, const armpose::Capsule& c, Color color)
+{
+    if (!(c.radius > 0) || !Finite(c.a) || !Finite(c.b)) { return; }
+    const Vec3 ab = Sub(c.b, c.a);
+    const float length = Length(ab);
+    const Vec3 u = length > 1e-5f ? Scale(ab, 1 / length) : Vec3{1, 0, 0};
+    // Across the axis: up where it can be (a capsule laid across the body), else back.
+    Vec3 v = Sub(Vec3{0, 1, 0}, Scale(u, u.y));
+    if (Length(v) < .1f) { v = Sub(Vec3{0, 0, 1}, Scale(u, u.z)); }
+    v = Scale(v, 1 / Length(v));
+    const Vec3 w = Cross(u, v);
+    const float r = c.radius;
+    // On the circle of radius r round `centre` in the plane of x and y.
+    const auto at = [r](Vec3 centre, Vec3 x, Vec3 y, float angle) {
+        return Add(centre, Add(Scale(x, r * std::cos(angle)), Scale(y, r * std::sin(angle))));
+    };
+    const auto line = [&](Vec3 p, Vec3 q) { scene.lines.push_back({p, q, color, .0015f, 1.2f}); };
+    constexpr int kRing = 24, kCap = 12;
+    for (const Vec3& end : {c.a, c.b}) {
+        for (int i = 0; i < kRing; ++i) { line(at(end, v, w, 2 * kPi * i / kRing), at(end, v, w, 2 * kPi * (i + 1) / kRing)); }
+    }
+    for (const Vec3& d : {v, w, Scale(v, -1), Scale(w, -1)}) { line(Add(c.a, Scale(d, r)), Add(c.b, Scale(d, r))); }
+    for (const Vec3& d : {v, w}) {
+        for (int i = 0; i < kCap; ++i) {
+            const float a0 = kPi * i / kCap, a1 = kPi * (i + 1) / kCap;
+            line(at(c.b, d, u, a0), at(c.b, d, u, a1));
+            line(at(c.a, d, Scale(u, -1), a0), at(c.a, d, Scale(u, -1), a1));
+        }
+    }
+}
+
+// The arms against the drawn torso: the capsules, and each arm as a thin line
+// with a ring at each sample as thick as the arm is there, coloured by its
+// clearance; the sample nearest the torso also a dot, labelled.
+void AddArmFit(Scene& scene, const ArmFit& fit, unsigned mask)
+{
+    if (!fit.valid) { return; }
+    for (const auto& capsule : fit.torso) { AddCapsule(scene, capsule, kCapsule); }
+    const char* names[2] = {"R", "L"};
+    for (int s = 0; s < 2; ++s) {
+        const ArmFitArm& arm = fit.arms[s];
+        const auto& c = arm.clearance;
+        if (!arm.valid || !c.valid || !Finite(arm.shoulder) || !Finite(arm.elbow) || !Finite(arm.wrist)) { continue; }
+        scene.lines.push_back({arm.shoulder, arm.elbow, WithAlpha(kIdle, 150), .0015f, 1.2f});
+        scene.lines.push_back({arm.elbow, arm.wrist, WithAlpha(kIdle, 150), .0015f, 1.2f});
+        for (int i = 0; i < armpose::kArmSamples; ++i) {
+            Marker ring{};
+            ring.centre = c.point[i];
+            ring.radius = c.radius[i];
+            ring.color = ClearanceColor(c.clear[i]);
+            ring.filled = false;
+            ring.minPixels = 4.0f;
+            ring.ringPixels = 2.0f;
+            scene.markers.push_back(ring);
+        }
+        Marker dot{};
+        dot.centre = c.point[c.deepest];
+        dot.radius = .008f;
+        dot.color = ClearanceColor(c.Worst());
+        dot.minPixels = 5.0f;
+        scene.markers.push_back(dot);
+        if (mask & kLabels) {
+            Label label{};
+            label.anchor = c.point[c.deepest];
+            label.color = dot.color;
+            label.offsetX = .9f;
+            label.offsetY = -.5f;
+            label.height = .011f;
+            label.minPixels = 15.0f;
+            label.maxPixels = 24.0f;
+            label.text = std::string(names[s]) + " " + armpose::ArmSampleName(c.deepest) + " " + Fixed(c.Worst() * 100, 1) +
+                         " cm " + armpose::TorsoPartName(c.part[c.deepest]);
+            scene.labels.push_back(label);
+        }
+    }
+}
+
 }  // namespace
+
+Color ClearanceColor(float clear)
+{
+    return clear < 0 ? kDenied : clear < kArmNear ? kWarn : kActive;
+}
 
 float SlotHandDistance(const Slot& slot)
 {
@@ -488,6 +572,7 @@ void BuildOverlayScene(const OverlayFrame& frame, unsigned mask, Scene& scene)
     if (mask & kWrist) { AddWrist(scene, frame.wrist, mask); }
     if (mask & kForegrip) { AddForegrip(scene, frame.foregrip, mask); }
     if (mask & kPhysical) { AddPhysical(scene, frame.physical, mask); }
+    if (mask & kArms) { AddArmFit(scene, frame.armFit, mask); }
     if ((mask & kStatus) && frame.headValid) {
         Label status{};
         // About 25 degrees below the gaze: out of the aiming area, a glance down to read.
@@ -543,6 +628,19 @@ std::string OverlayStatusText(const OverlayFrame& f, unsigned mask)
     if ((mask & kPhysical) && !f.physical.status.empty()) { text += "\nPhysical " + f.physical.status; }
     if ((mask & kPhysical) && !f.physical.contactStatus.empty()) { text += "\nContact " + f.physical.contactStatus; }
     if ((mask & kPhysical) && !f.physical.surfaceStatus.empty()) { text += "\nSurface " + f.physical.surfaceStatus; }
+    if (mask & kArms) {
+        text += "\nArms vs torso";
+        if (!f.armFit.valid) { text += " -"; }
+        const char* names[2] = {"R", "L"};
+        for (int s = 0; s < 2 && f.armFit.valid; ++s) {
+            const auto& c = f.armFit.arms[s].clearance;
+            text += std::string("  ") + names[s] + " ";
+            text += f.armFit.arms[s].valid && c.valid
+                ? std::string(armpose::ArmSampleName(c.deepest)) + " " + Fixed(c.Worst() * 100, 1) + " cm " +
+                      armpose::TorsoPartName(c.part[c.deepest])
+                : "-";
+        }
+    }
     if (!f.extra.empty()) { text += "\n" + f.extra; }
     return text;
 }

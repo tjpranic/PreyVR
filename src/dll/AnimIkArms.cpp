@@ -1,14 +1,24 @@
 #include "AnimIkTakeover.h"
 #include "AnimIkState.h"
+#include "DebugOverlay.h"
 
 // The VR arm (arm.*): the torso the shoulders face, the player's shoulders
 // placed before the native pass, and the arm rewritten from those shoulders
-// after it.
+// after it; and the drawn arm against the drawn torso, measured.
 
 namespace preyvr::dll {
 using namespace ik;
 
 namespace {
+
+// The spine joint each torso capsule rides (armpose::TorsoPart's order). On the
+// player's rig their local x runs up the spine, y forward and z to the left
+// (the ik.skel dumps standing, armed and crouched, PreyVR-84).
+constexpr int kTorsoJoint[armpose::kTorsoParts] = {bodyrig::kSpine4, bodyrig::kSpine3, bodyrig::kSpine2,
+                                                   bodyrig::kSpine1};
+
+// How often the arms against the torso are logged while the overlay draws them.
+constexpr std::uint64_t kArmFitLogNs = 1000000000ull;
 
 // A child of `parent` re-placed under the parent's new pose; its offset along
 // the bone (local X) scaled with the segment.
@@ -109,6 +119,9 @@ void SolveArms(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsigned 
     if (!AnchorPoint(frame, kIkAnchor, map.anchor)) { return; }
     const armpose::Body& body = pose.body;
     ArmStats stats{};
+    // The torso as it is drawn: the body pin has written the spine by now.
+    armpose::Capsule torso[armpose::kTorsoParts]{};
+    stats.torsoPlaced = PlaceTorso(map, absolute, count, rig, pose.torsoShape, torso);
     const std::uint64_t now = preyvr::timing::MonotonicNanoseconds();
     for (int s = 0; s < 2; ++s) {
         const ArmPlan& p = plan[s];
@@ -137,16 +150,31 @@ void SolveArms(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsigned 
                                                              pose.tubeLean);
         const Vec3 handLength = Rotate(state.gripPose.orientation, real.length);
         const Vec3 handPalm = Rotate(state.gripPose.orientation, real.palm);
+        // The elbow kept out of the drawn torso: the chooser prefers elbows
+        // outside it, and the drawn one goes round it, never through it.
+        const armpose::ArmObstacle obstacle{torso, stats.torsoPlaced ? armpose::kTorsoParts : 0, pose.thickness,
+                                            pose.avoidMargin, pose.avoidWall};
+        const bool avoid = stats.torsoPlaced;
         Vec3 pole{};
+        armpose::Track how = armpose::Track::kFree;
         {
             std::lock_guard lock(gArmMutex);
             const float dt = gPoleNs[s] != 0 ? static_cast<float>(now - gPoleNs[s]) * 1e-9f : 0.0f;
             const bool fresh = gPoleNs[s] != 0 && dt < 0.5f;
             gPoleNs[s] = now;
             pole = armpose::ChooseElbowPole(shoulder, wrist, body.upper, body.fore, body.armStretch, handLength,
-                                            handPalm, side, bodyPole, pose.wrist, fresh ? &gPole[s] : nullptr);
+                                            handPalm, side, bodyPole, pose.wrist, fresh ? &gPole[s] : nullptr,
+                                            avoid ? &obstacle : nullptr);
             pole = fresh ? armpose::SmoothDirection(gPole[s], pole, dt, pose.poleTau) : pole;
             gPole[s] = pole;
+            if (avoid) {
+                const armpose::TrackedPole tracked =
+                    armpose::TrackElbowPole(shoulder, wrist, body.upper, body.fore, body.armStretch, pole,
+                                            fresh ? &gDrawnPole[s] : nullptr, pose.avoidRate * dt, obstacle);
+                pole = tracked.pole;
+                how = tracked.how;
+            }
+            gDrawnPole[s] = pole;
         }
         const armpose::ArmSolution arm = armpose::SolveElbow(shoulder, wrist, body.upper, body.fore, pole,
                                                              body.armStretch);
@@ -217,16 +245,86 @@ void SolveArms(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsigned 
         stats.scale[s] = arm.scale;
         stats.straight[s] = arm.straight;
         stats.reachCm[s] = p.reach >= 0.0f ? p.reach * 100.0f : 0.0f;
+        if (stats.torsoPlaced) {
+            stats.clearance[s] = armpose::MeasureArm(shoulder, arm.elbow, wrist, torso, armpose::kTorsoParts,
+                                                     pose.thickness);
+        }
+        stats.track[s] = avoid ? static_cast<int>(how) : -1;
     }
-    std::lock_guard lock(gArmMutex);
-    for (int s = 0; s < 2; ++s) {
-        if (stats.solved[s] && std::isfinite(stats.reachCm[s])) {
-            gReachMaxCm[s] = std::max(gReachMaxCm[s], stats.reachCm[s]);
+    const bool drawn = DebugOverlayWantsArmFit();
+    std::string fitLine;
+    {
+        std::lock_guard lock(gArmMutex);
+        for (int s = 0; s < 2; ++s) {
+            if (stats.solved[s] && std::isfinite(stats.reachCm[s])) {
+                gReachMaxCm[s] = std::max(gReachMaxCm[s], stats.reachCm[s]);
+            }
+            const armpose::ArmClearance& c = stats.clearance[s];
+            if (!stats.solved[s] || !c.valid) { continue; }
+            ArmFitTally& t = gArmFitTally;
+            if (stats.track[s] >= 0 && stats.track[s] < 4) { ++t.track[s][stats.track[s]]; }
+            ++t.frames[s];
+            if (c.Worst() < 0.0f) { ++t.inside[s]; }
+            if (c.Worst() < t.worst[s]) {
+                t.worst[s] = c.Worst();
+                t.worstSample[s] = c.deepest;
+                t.worstPart[s] = c.part[c.deepest];
+            }
+        }
+        stats.torsoYawDeg = gArmStats.torsoYawDeg;
+        stats.headYawDeg = gArmStats.headYawDeg;
+        gArmStats = stats;
+        // While the overlay draws them, the arms against the torso once a second:
+        // a pose held in the headset, read back from the log.
+        if (drawn && stats.torsoPlaced && (gArmFitLogNs == 0 || now - gArmFitLogNs >= kArmFitLogNs)) {
+            gArmFitLogNs = now;
+            fitLine = "arm_fit" + ArmFitText(stats.solved[0] ? stats.clearance[0] : armpose::ArmClearance{}, "R") +
+                      ArmFitText(stats.solved[1] ? stats.clearance[1] : armpose::ArmClearance{}, "L");
         }
     }
-    stats.torsoYawDeg = gArmStats.torsoYawDeg;
-    stats.headYawDeg = gArmStats.headYawDeg;
-    gArmStats = stats;
+    if (!fitLine.empty()) { Log(fitLine); }
+    if (drawn) {
+        debugdraw::ArmFit fit{};
+        fit.valid = stats.torsoPlaced;
+        for (int k = 0; k < armpose::kTorsoParts; ++k) { fit.torso[static_cast<std::size_t>(k)] = torso[k]; }
+        for (int s = 0; s < 2; ++s) {
+            debugdraw::ArmFitArm& arm = fit.arms[static_cast<std::size_t>(s)];
+            arm.valid = stats.solved[s] && stats.clearance[s].valid;
+            arm.shoulder = stats.shoulder[s];
+            arm.elbow = stats.elbow[s];
+            arm.wrist = stats.clearance[s].point[armpose::kWristAt];
+            arm.clearance = stats.clearance[s];
+        }
+        DebugOverlayArmFit(fit, frame.referenceGeneration);
+    }
+}
+
+bool PlaceTorso(const XrMap& map, std::uint8_t* absolute, unsigned count, const HandRig& rig,
+                const armpose::TorsoShape& shape, armpose::Capsule torso[armpose::kTorsoParts])
+{
+    if (!rig.bodyReady) { return false; }
+    bool placed = false;
+    for (int k = 0; k < armpose::kTorsoParts; ++k) {
+        torso[k] = {};
+        QuatT j{};
+        if (!(shape.part[k].radius > 0.0f) || !ReadQuatT(absolute, count, rig.pinned[kTorsoJoint[k]], j)) { continue; }
+        const Quaternion q{j.q[0], j.q[1], j.q[2], j.q[3]};
+        const Vec3 t{j.t[0], j.t[1], j.t[2]};
+        const Vec3 at = map.ToXr(t);
+        // A joint axis in OpenXR: the model's unit, mapped, made unit again.
+        const auto axis = [&](Vec3 local) {
+            const Vec3 d = Sub(map.ToXr(Add(t, Rotate(q, local))), at);
+            const float l = Length(d);
+            return l > 1e-6f ? Scale(d, 1.0f / l) : d;
+        };
+        const armpose::Capsule c =
+            armpose::PlaceCapsule(at, axis(Vec3{0, 0, -1}), axis(Vec3{0, 1, 0}), axis(Vec3{1, 0, 0}), shape.part[k]);
+        if (Finite(c.a) && Finite(c.b)) {
+            torso[k] = c;
+            placed = true;
+        }
+    }
+    return placed;
 }
 
 } // namespace ik

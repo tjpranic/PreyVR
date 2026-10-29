@@ -2,9 +2,11 @@
 #include "TestGeometry.h"
 #include "TestSupport.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 
 using namespace preyvr;
 using namespace preyvr::armpose;
@@ -253,6 +255,199 @@ void TestFromTo()
     Require(s.x > s.y && s.y > 0.1f && std::fabs(Length(s) - 1) < 1e-5f, "smoothing moves part of the way");
 }
 
+void TestCapsuleDistance()
+{
+    const Capsule c{{-0.05f, 0, 0}, {0.05f, 0, 0}, 0.1f};
+    Require(std::fabs(CapsuleDistance(c, {0, 0, 0}) + 0.1f) < 1e-6f, "on its segment: a radius deep");
+    Require(std::fabs(CapsuleDistance(c, {0.02f, 0.3f, 0}) - 0.2f) < 1e-6f, "beside the segment: from the axis");
+    Require(std::fabs(CapsuleDistance(c, {0.35f, 0, 0}) - 0.2f) < 1e-6f, "past an end: from that end's ball");
+    Require(std::fabs(CapsuleDistance(Capsule{{1, 1, 1}, {1, 1, 1}, 0.1f}, {1, 1.3f, 1}) - 0.2f) < 1e-6f,
+            "no length: a ball");
+    Require(CapsuleDistance(Capsule{c.a, c.b, 0.0f}, {0, 0, 0}) > 1e30f, "no radius: never near");
+}
+
+void TestPlaceCapsule()
+{
+    // A joint turned so its right is -Z, forward +X and up +Y.
+    const Capsule c = PlaceCapsule({1, 2, 3}, {0, 0, -1}, {1, 0, 0}, {0, 1, 0}, CapsuleSpec{0.03f, -0.04f, 0.05f, 0.12f});
+    Require(NearVec(c.a, {1.03f, 1.96f, 3.05f}, 1e-5f) && NearVec(c.b, {1.03f, 1.96f, 2.95f}, 1e-5f),
+            "centred forward and up from the joint, laid along its right");
+    Require(c.radius == 0.12f, "with its radius");
+    // The defaults on Morgan's standing chest (spine4, model x right, y forward, z up):
+    // the shoulder the arm hangs from stays outside it.
+    const TorsoShape shape{};
+    const Capsule chest = PlaceCapsule({0, -0.0789f, 1.4231f}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}, shape.part[kChest]);
+    Require(CapsuleDistance(chest, {0.189f, -0.091f, 1.470f}) > 0.05f, "the drawn shoulder is clear of the chest");
+    Require(std::string(TorsoPartName(kHips)) == "hips" && std::string(TorsoPartName(9)) == "none", "parts by name");
+}
+
+void TestMeasureArm()
+{
+    // An arm hanging straight down from (0.2, 0, 0) past a capsule at the origin.
+    const Capsule torso[2] = {{{-0.05f, -0.30f, 0}, {0.05f, -0.30f, 0}, 0.12f}, {{0, 0, 0}, {0, 0, 0}, 0.0f}};
+    const ArmThickness thick{};
+    const Vec3 shoulder{0.2f, 0, 0}, elbow{0.2f, -0.30f, 0}, wrist{0.2f, -0.58f, 0};
+    ArmClearance a = MeasureArm(shoulder, elbow, wrist, torso, 2, thick);
+    Require(a.valid && a.deepest == kElbowAt, "the elbow is the nearest the capsule");
+    Require(std::fabs(a.clear[kElbowAt] - (0.15f - 0.12f - thick.elbow)) < 1e-5f, "its surface from the capsule's");
+    Require(a.part[kElbowAt] == 0 && a.part[kWristAt] == 0, "measured against the capsule with a radius");
+    Require(NearVec(a.point[kUpper30], {0.2f, -0.09f, 0}, 1e-5f) && NearVec(a.point[kFore70], {0.2f, -0.496f, 0}, 1e-5f),
+            "sampled along the upper arm from the shoulder and the forearm from the elbow");
+    Require(a.radius[kUpper55] == thick.upper && a.radius[kFore20] == thick.fore && a.radius[kWristAt] == thick.wrist,
+            "each as thick as its part");
+    // The elbow pushed in.
+    a = MeasureArm(shoulder, Vec3{0.1f, -0.30f, 0}, wrist, torso, 2, thick);
+    Require(a.deepest == kElbowAt && a.Worst() < -0.1f, "an elbow in the torso is the deepest sample");
+    Require(!MeasureArm(shoulder, elbow, wrist, torso + 1, 1, thick).valid, "no capsule with a radius: not measured");
+    Require(std::string(ArmSampleName(kFore45)) == "fore45", "samples by name");
+}
+
+// The default capsules on Morgan's standing spine, in OpenXR from the centre
+// eye (x right, y up, z back; the ik.skel stand dump, PreyVR-84).
+struct StandingTorso {
+    Capsule part[kTorsoParts]{};
+    StandingTorso()
+    {
+        const Vec3 joints[kTorsoParts] = {{0, -0.277f, 0.0789f}, {0, -0.391f, 0.0644f}, {0, -0.534f, 0.0398f},
+                                          {0, -0.660f, -0.0056f}};
+        const TorsoShape shape{};
+        for (int k = 0; k < kTorsoParts; ++k) { part[k] = PlaceCapsule(joints[k], {1, 0, 0}, {0, 0, -1}, {0, 1, 0}, shape.part[k]); }
+    }
+};
+
+void TestArmClear()
+{
+    const Capsule ball{{0, -0.3f, 0}, {0, -0.3f, 0}, 0.1f};
+    ArmObstacle o{&ball, 1, ArmThickness{}, 0.01f, 0.01f};
+    // A forearm ending in the ball: only the wrist is in it, and no elbow moves the wrist.
+    const Vec3 s{0.45f, 0.0f, 0}, e{0.45f, -0.3f, 0}, w{0.05f, -0.3f, 0};
+    Require(MeasureArm(s, e, w, &ball, 1, o.thickness).Worst() < 0.0f, "the wrist is in the ball");
+    const float least = ArmClear(s, e, w, o);
+    Require(least > 0.0f && least < 0.1f, "the arm's clearance leaves the wrist out");
+    o.count = 0;
+    Require(ArmClear(s, e, w, o) > 1e30f, "no capsule: far");
+}
+
+// The torso term moves an elbow the chooser put in the body out of it. The
+// hand pose is from an offline sweep (arm 60 cm, hand forward and down, palm
+// turned in): without the torso the elbow lands 5 cm from the midline at the
+// belly.
+void TestChooserAvoidsTorso()
+{
+    const StandingTorso torso;
+    const Body body = WithArmLength(Body{}, 0.60f);
+    const Vec3 s = ShoulderFromHead(Pose{}, 0.0f, 1, body);
+    const Vec3 w{0.1408f, -0.3914f, -0.2277f}, length{0.0405f, -0.4513f, -0.8915f}, palm{-0.7596f, -0.5935f, 0.2660f};
+    const ArmObstacle o{torso.part, kTorsoParts, ArmThickness{}, 0.01f, 0.01f};
+    const Vec3 bodyPole = BodyPole(TorsoFromYaw(0.0f), 1);
+    const WristLimits limits{};
+    const Vec3 plain = ChooseElbowPole(s, w, body.upper, body.fore, body.armStretch, length, palm, 1, bodyPole, limits);
+    const Vec3 kept = ChooseElbowPole(s, w, body.upper, body.fore, body.armStretch, length, palm, 1, bodyPole, limits,
+                                      nullptr, &o);
+    const auto clear = [&](Vec3 pole) {
+        return ArmClear(s, SolveElbow(s, w, body.upper, body.fore, pole, body.armStretch).elbow, w, o);
+    };
+    Require(clear(plain) < -0.05f, "without the torso the elbow is in the body");
+    Require(clear(kept) >= 0.0f, "with it, out of it");
+    const ArmObstacle none{torso.part, 0, ArmThickness{}, 0.01f, 0.01f};
+    Require(NearVec(ChooseElbowPole(s, w, body.upper, body.fore, body.armStretch, length, palm, 1, bodyPole, limits,
+                                    nullptr, &none), plain, 1e-6f),
+            "no capsule: the chooser as it was");
+}
+
+// One ball across the circle of elbows: the shoulder at the origin, the wrist
+// 30 cm ahead, both segments 30 cm, so the elbows are on a circle of radius
+// 26 cm round -Z; the ball sits on the one towards +X.
+void TestTrackElbowPole()
+{
+    const Vec3 s{0, 0, 0}, w{0, 0, -0.3f};
+    const float upper = 0.3f, fore = 0.3f, stretch = 1.1f;
+    const Capsule ball{{0.26f, 0, -0.15f}, {0.26f, 0, -0.15f}, 0.08f};
+    const ArmObstacle o{&ball, 1, ArmThickness{0.01f, 0.01f, 0.01f, 0.01f}, 0.01f, 0.01f};
+    const auto at = [](float deg) { return Vec3{std::cos(deg * kDeg), std::sin(deg * kDeg), 0}; };   // 0 = +X, towards the ball
+    const auto angleOf = [](Vec3 pole) { return std::atan2(pole.y, pole.x) / kDeg; };
+    const auto clear = [&](Vec3 pole) { return ArmClear(s, SolveElbow(s, w, upper, fore, pole, stretch).elbow, w, o); };
+    Require(clear(at(0)) < 0.0f && clear(at(90)) > 0.05f, "the fixture: the elbow towards +X is in the ball");
+
+    TrackedPole t = TrackElbowPole(s, w, upper, fore, stretch, at(120), nullptr, 0.1f,
+                                   ArmObstacle{&ball, 0, o.thickness, o.margin, o.wall});
+    Require(t.how == Track::kFree && NearVec(t.pole, at(120), 1e-6f), "no torso: the wanted elbow");
+    const Vec3 drawn = at(90);
+    t = TrackElbowPole(s, w, upper, fore, stretch, at(120), &drawn, 0.1f, o);
+    Require(t.how == Track::kFree && NearVec(t.pole, at(120), 1e-6f), "nothing in the way: the wanted elbow, however far");
+
+    // Wanted in the ball: along the circle to its edge, at most a step at a time.
+    t = TrackElbowPole(s, w, upper, fore, stretch, at(0), &drawn, 0.2f, o);
+    Require(t.how == Track::kParked && std::fabs(angleOf(t.pole) - (90.0f - 0.2f / kDeg)) < 0.05f,
+            "the wanted elbow in the body: towards it by one step");
+    t = TrackElbowPole(s, w, upper, fore, stretch, at(0), &drawn, 3.0f, o);
+    Require(t.how == Track::kParked && clear(t.pole) >= o.margin && clear(t.pole) < o.margin + 0.01f &&
+                angleOf(t.pole) > 0.0f,
+            "with room to go: at the ball's edge on this side, clear by the margin");
+
+    // The body moved onto the drawn elbow: out to the nearest clear one.
+    const Vec3 inside = at(10);
+    t = TrackElbowPole(s, w, upper, fore, stretch, at(10), &inside, 0.0f, o);
+    Require(t.how == Track::kPushed && clear(t.pole) >= o.margin && angleOf(t.pole) > 10.0f,
+            "pushed out of the body, on the near side, however small the step");
+
+    // Wanted on the far side of the ball: round the other way, a step at a time.
+    const Vec3 above = at(60);
+    t = TrackElbowPole(s, w, upper, fore, stretch, at(-60), &above, 0.2f, o);
+    Require(t.how == Track::kAround && std::fabs(angleOf(t.pole) - (60.0f + 0.2f / kDeg)) < 0.05f,
+            "never through the body: round the other way");
+}
+
+// Sixty seconds of the hands wandering at the chest, with the wrist turning
+// through more than it can: frame by frame as the DLL runs it (the chooser with
+// the last pole, its 60 ms smoothing, then the tracking). The drawn arm is never
+// in the torso, and the elbow moves no further in a frame than it does without
+// the torso (offline, 2026-10-29: 5.1 cm against 5.6).
+void TestTrackingKeepsTheArmOut()
+{
+    const StandingTorso torso;
+    const Body body = WithArmLength(Body{}, 0.60f);
+    const Vec3 s = ShoulderFromHead(Pose{}, 0.0f, 1, body);
+    const ArmObstacle o{torso.part, kTorsoParts, ArmThickness{}, 0.01f, 0.01f};
+    const Vec3 bodyPole = BodyPole(TorsoFromYaw(0.0f), 1);
+    const WristLimits limits{};
+    const float dt = 1.0f / 90.0f;
+    const auto turn = [](Vec3 v, Vec3 axis, float a) {
+        return Rotate(Quaternion{axis.x * std::sin(a / 2), axis.y * std::sin(a / 2), axis.z * std::sin(a / 2), std::cos(a / 2)}, v);
+    };
+    Vec3 pole{}, drawn{}, last{};
+    bool have = false;
+    int inside = 0;
+    float most = 0.0f;
+    for (int i = 0; i < 90 * 60; ++i) {
+        const float t = static_cast<float>(i) * dt;
+        const Vec3 w{0.11f + 0.06f * std::sin(0.9f * t) + 0.02f * std::sin(2.3f * t + 1),
+                     -0.40f + 0.09f * std::sin(0.7f * t + 0.5f) + 0.02f * std::sin(3.1f * t),
+                     -0.17f + 0.07f * std::sin(1.1f * t + 2) + 0.02f * std::sin(2.7f * t + 0.3f)};
+        Vec3 length{0, 0, -1}, palm{-1, 0, 0};
+        const float yaw = 0.6f * std::sin(0.5f * t), pitch = 0.7f * std::sin(0.37f * t + 1), roll = 0.8f * std::sin(0.29f * t + 2);
+        length = turn(length, {0, 1, 0}, yaw);
+        palm = turn(palm, {0, 1, 0}, yaw);
+        const Vec3 side = Cross(length, Vec3{0, 1, 0});
+        const Vec3 across = Scale(side, 1.0f / Length(side));
+        length = turn(length, across, pitch);
+        palm = turn(palm, across, pitch);
+        palm = turn(palm, length, roll);
+        Vec3 chosen = ChooseElbowPole(s, w, body.upper, body.fore, body.armStretch, length, palm, 1, bodyPole, limits,
+                                      have ? &pole : nullptr, &o);
+        pole = have ? SmoothDirection(pole, chosen, dt, 0.06f) : chosen;
+        drawn = TrackElbowPole(s, w, body.upper, body.fore, body.armStretch, pole, have ? &drawn : nullptr,
+                               2.0f * kPi * dt, o).pole;
+        const Vec3 e = SolveElbow(s, w, body.upper, body.fore, drawn, body.armStretch).elbow;
+        if (ArmClear(s, e, w, o) < 0.0f) { ++inside; }
+        if (have) { most = std::max(most, Dist(e, last)); }
+        last = e;
+        have = true;
+    }
+    Require(inside == 0, "the drawn arm is never in the torso");
+    Require(most < 0.056f, "and no elbow jumps further than the chooser's own");
+}
+
 } // namespace
 
 int main()
@@ -268,6 +463,13 @@ int main()
     TestWristAngles();
     TestElbowFollowsHand();
     TestFromTo();
+    TestCapsuleDistance();
+    TestPlaceCapsule();
+    TestMeasureArm();
+    TestArmClear();
+    TestChooserAvoidsTorso();
+    TestTrackElbowPole();
+    TestTrackingKeepsTheArmOut();
     std::cout << "arm_pose: all tests passed\n";
     return 0;
 }
