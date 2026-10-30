@@ -2,10 +2,6 @@
 
 ## TODO
 
-### Bugs
-- Temporal AA seems to have a strange astigmatism; one eye is sharper than the other
-    Looks like dpeth/texturing issues?
-
 ### Rendering
 - DLSS (?)
 - Upscaling (?)
@@ -66,6 +62,8 @@
     Only sometimes? This might be intentional? Will need to investigate.
 - Disable aim laser on loading screen
 - Will need to adjust UI element depths
+- 2D marker (objective, repair etc.) position jitter a lot
+    They need some smoothing
 
 ### VR Options Menu
 - Have bindings section let you change your bindings
@@ -159,6 +157,8 @@
 - The player body renders over the top of everything
     > Prey drew the body, arms and weapon in its near pass, which is always in front of the world. PreyVR-91/92 drew the body in the world instead, which left the stun gun's charge sparks showing through the gun and its charge meter frozen. Since PreyVR-101 the body stays in the near pass and that pass gets the world's depth (`body.depth 1`; the old way is `body.depth 2`), so the weapon's effects, its display and the PDA stay with it. Setup's Near Clip Distance (3 cm) stops the view cutting into the body when you look down. Worn OK 2026-10-25 and 2026-10-28. See docs/BODY-FOLLOW.md, "How the body is drawn".
 - Temporal anti-aliasing
+- Temporal AA seems to have a strange astigmatism; one eye is sharper than the other
+    Looks like an environmental reflection texturing issue
 
 ---
 

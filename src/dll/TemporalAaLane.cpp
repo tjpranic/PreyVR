@@ -24,6 +24,7 @@ namespace tn = taa::native;
 using Microsoft::WRL::ComPtr;
 static_assert(tn::TextureDevice == kCTextureDevice);
 static_assert(tn::HistorySlots == 2);
+constexpr std::size_t kPrevViewsSize = tn::PrevViewSlots * tn::PrevViewSize;
 
 void Log(const std::string& line)
 {
@@ -104,7 +105,7 @@ using Count = std::atomic<unsigned long long>;
 std::atomic<bool> gEnabled{true};
 std::atomic<bool> gActive{false};
 Count gFrames{0}, gStarts{0}, gCopiesIn{0}, gCopiesOut{0}, gFreshStarts{0};
-Count gResolveMissed{0}, gCounterOff{0}, gIdleMode{0};
+Count gResolveMissed{0}, gCounterOff{0}, gIdleMode{0}, gViewsIn{0};
 Count gRefusedGate{0}, gRefusedStage{0}, gRefusedTextures{0}, gRefusedDevice{0};
 std::atomic<const char*> gLastStart{"none"};
 std::atomic<std::uint32_t> gCounterFirst{0}, gCounterSecond{0};
@@ -117,8 +118,11 @@ struct Eye {
     std::uint32_t counter = 0, counterIn = 0;
     // `saved` holds this eye's last resolve output.
     bool fresh = false;
-    bool havePrevViewProj = false, havePrevCamera = false;
+    bool havePrevViewProj = false, havePrevCamera = false, havePrevViews = false;
     std::uint8_t prevViewProj[tn::ViewProjSize]{};
+    // The renderer's previous views (all viewports) as this eye's submission left
+    // them: moving objects' motion vectors are taken against them.
+    std::uint8_t prevViews[kPrevViewsSize]{};
     ComPtr<ID3D11Texture2D> saved;
 };
 std::array<Eye, 2> gEye;
@@ -218,7 +222,7 @@ void Start(std::uintptr_t base, const char* reason)
     const auto counters = taa::StartCounters(counter);
     gEye[0].counter = counters.first;
     gEye[1].counter = counters.second;
-    for (auto& eye : gEye) { eye.fresh = eye.havePrevViewProj = eye.havePrevCamera = false; }
+    for (auto& eye : gEye) { eye.fresh = eye.havePrevViewProj = eye.havePrevCamera = eye.havePrevViews = false; }
     gLastStart.store(reason, std::memory_order_relaxed);
     const auto starts = gStarts.fetch_add(1, std::memory_order_relaxed) + 1;
     if (starts <= 20 || starts % 100 == 0) {
@@ -303,6 +307,10 @@ void TaaLaneEyeBegin(void* renderer, void* view, int eye, const void* eyeCamera)
     if (e.havePrevViewProj) {
         SafeCopy(static_cast<std::uint8_t*>(renderer) + tn::RendererPrevViewProj, e.prevViewProj, tn::ViewProjSize);
     }
+    if (e.havePrevViews) {
+        SafeCopy(static_cast<std::uint8_t*>(renderer) + tn::RendererPrevViews, e.prevViews, kPrevViewsSize);
+        Bump(gViewsIn);
+    }
     // The resolve's stamp says whether it uses history: this eye's, or none yet
     // (it starts from this frame).
     const std::uint32_t stamp = e.fresh ? taa::FreshStamp(e.counter) : taa::StaleStamp(e.counter);
@@ -335,6 +343,8 @@ void TaaLaneEyeEnd(void* renderer, int eye, const void* eyeCamera)
     }
     e.havePrevViewProj =
         SafeCopy(e.prevViewProj, static_cast<const std::uint8_t*>(renderer) + tn::RendererPrevViewProj, tn::ViewProjSize);
+    e.havePrevViews =
+        SafeCopy(e.prevViews, static_cast<const std::uint8_t*>(renderer) + tn::RendererPrevViews, kPrevViewsSize);
     e.havePrevCamera = SafeCopy(gPrevCamera[eye], eyeCamera, tn::CameraSize);
 }
 
@@ -374,7 +384,7 @@ std::string TaaLaneReport()
     s << "taaLane={enabled=" << (gEnabled.load() ? 1 : 0) << " active=" << (gActive.load() ? 1 : 0)
       << " gate=" << GateName() << " frames=" << gFrames.load() << " starts=" << gStarts.load()
       << " lastStart=" << gLastStart.load() << " copiesIn=" << gCopiesIn.load() << " copiesOut=" << gCopiesOut.load()
-      << " freshStarts=" << gFreshStarts.load() << " resolveMissed=" << gResolveMissed.load()
+      << " viewsIn=" << gViewsIn.load() << " freshStarts=" << gFreshStarts.load() << " resolveMissed=" << gResolveMissed.load()
       << " counterOff=" << gCounterOff.load() << " idleMode=" << gIdleMode.load() << " refused=gate:"
       << gRefusedGate.load() << ",stage:" << gRefusedStage.load() << ",textures:" << gRefusedTextures.load()
       << ",device:" << gRefusedDevice.load() << " counters=" << gCounterFirst.load() << ',' << gCounterSecond.load()

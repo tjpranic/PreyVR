@@ -6,7 +6,8 @@
 // blended. Each simulated submission does what the bytes say Prey's does
 // (R-136): the resolve picks its history and ring slots from the counter, writes
 // its output and stamp, and post-processing copies the view-projection to
-// "previous" and advances the counter.
+// "previous", stores this run's view as its viewport's previous view (what
+// moving objects' motion vectors are taken against) and advances the counter.
 #include "../src/dll/TemporalAaLane.cpp"
 #include "DllTestSupport.h"
 #include "TestSupport.h"
@@ -57,6 +58,9 @@ std::uintptr_t Stage(std::size_t offset) { return Address(stage.data()) + offset
 std::uintptr_t Renderer(std::size_t offset) { return Address(renderer.data()) + offset; }
 std::uint32_t Counter() { return Get<std::uint32_t>(image + tn::FrameCounter); }
 void Mode(int mode) { Put<int>(image + tn::ModeEffective, mode); }
+// The viewport Prey draws the eyes in; any of the 8.
+constexpr int kViewport = 2;
+std::uintptr_t PrevView() { return Renderer(tn::RendererPrevViews + kViewport * tn::PrevViewSize); }
 
 // CRenderView::SetPreviousFrameCamera: the camera copied to the view's +0x13E0.
 unsigned previousCameraCalls = 0;
@@ -151,6 +155,7 @@ struct Seen {
     double ring = -1;         // the previous camera it reprojected with
     int viewPrevious = -1;    // the view's previous camera, for motion vectors
     float prevViewProj = -1;  // the renderer's previous view-projection
+    float prevView = -1;      // the viewport's previous view, for moving objects' motion vectors
     std::uint32_t counter = 0;
 };
 
@@ -161,6 +166,7 @@ Seen Engine(int eye, int frame, bool temporal)
     seen.counter = c;
     seen.viewPrevious = Get<int>(Address(view.data()) + tn::ViewPreviousCamera);
     seen.prevViewProj = Get<float>(Renderer(tn::RendererPrevViewProj));
+    seen.prevView = Get<float>(PrevView());
     Put<float>(Renderer(tn::RendererViewProj), Tag(eye, frame));
     if (temporal) {
         const std::uintptr_t stamp = Stage(tn::StageLastResolve);
@@ -171,6 +177,7 @@ Seen Engine(int eye, int frame, bool temporal)
         Fill(taa::HistoryOut(c), Tag(eye, frame));
         Put<std::uint32_t>(stamp, c);
     }
+    Put<float>(PrevView(), Tag(eye, frame));
     std::memcpy(renderer.data() + tn::RendererPrevViewProj, renderer.data() + tn::RendererViewProj, tn::ViewProjSize);
     Put<std::uint32_t>(image + tn::FrameCounter, taa::Advance(c));
     return seen;
@@ -219,6 +226,7 @@ void CheckOwn(const std::array<Seen, 2>& seen, int frame, const char* what)
         Check(seen[eye].ring == Tag(eye, frame - 1), "its own previous camera in the ring");
         Check(seen[eye].viewPrevious == CameraTag(eye, frame - 1), "its own previous camera on the view");
         Check(seen[eye].prevViewProj == Tag(eye, frame - 1), "its own previous view-projection");
+        Check(seen[eye].prevView == Tag(eye, frame - 1), "its own previous view for moving objects");
     }
     Check(seen[1].counter == taa::Advance(seen[0].counter, taa::kEyeLead), "the second eye two counts ahead");
 }
@@ -239,6 +247,7 @@ void TestLane()
     MakeDevice();
     Put<ID3D11Device*>(Renderer(preyvr::engine::RendererLayout::device), device.Get());
     Put<std::uint32_t>(image + tn::FrameCounter, 100);
+    Put<int>(Renderer(tn::RendererViewport), kViewport);
     Put<std::uintptr_t>(image + tn::Pipeline, Address(pipeline.data()));
     Put<std::uintptr_t>(Address(pipeline.data()) + tn::PipelineAaStage, Address(stage.data()));
     for (unsigned i = 0; i < 2; ++i) { deviceTexture[i][0] = Address(history[i].Get()); }
@@ -261,6 +270,8 @@ void TestLane()
           "off: the first eye blends the second's last frame, the second the first's");
     Check(seen[1].counter == seen[0].counter + 1 && previousCameraCalls == 0 && Reports("active=0"),
           "off: the counter moves once per eye and nothing is touched");
+    Check(seen[0].prevView == Tag(1, frame - 2) && seen[1].prevView == Tag(0, frame - 1),
+          "off: each eye's moving objects take the other eye's view as their previous one");
 
     // Other bytes: refused, nothing touched.
     readiness = ERROR_BAD_EXE_FORMAT;
@@ -283,8 +294,8 @@ void TestLane()
     Mode(4);
     seen = Frame(frame++, true);
     CheckStart(seen, frame - 1, "the first TSAA frame starts both eyes afresh");
-    Check(Logged("preyvr_taa_lane result=0 detail=gate_ok rows=7") && Logged("start reason=enable"),
-          "the gate opens on the seven bodies; the start is the enable");
+    Check(Logged("preyvr_taa_lane result=0 detail=gate_ok rows=10") && Logged("start reason=enable"),
+          "the gate opens on the ten bodies; the start is the enable");
     std::array<std::set<unsigned>, 2> jitter;
     for (int n = 0; n < 6; ++n) {
         seen = Frame(frame++, true);
@@ -295,9 +306,9 @@ void TestLane()
     }
     Check(jitter[0].size() == 4 && jitter[1].size() == 4, "each eye walks the whole 4-sample jitter pattern");
     Check(Reports("active=1") && Reports("gate=ok") && Reports("frames=7") && Reports("copiesIn=12") &&
-              Reports("copiesOut=14") && Reports("freshStarts=2") && Reports("resolveMissed=0") &&
+              Reports("copiesOut=14") && Reports("viewsIn=12") && Reports("freshStarts=2") && Reports("resolveMissed=0") &&
               Reports("counterOff=0") && Reports("history=64x32") && Reports("format=10"),
-          "the report: frames, copies in and out, the history's size and format");
+          "the report: frames, copies and views in, the history's size and format");
 
     // A frame the renderer counted between: both eyes start afresh.
     seen = Frame(frame++, true, false, 1);
@@ -355,5 +366,6 @@ void TestLane()
 int main()
 {
     lane_test::TestLane();
-    std::cout << "temporal_aa_lane: each eye its own history, previous camera, view-projection and jitter\n";
+    std::cout << "temporal_aa_lane: each eye its own history, previous camera, view-projection, previous view and "
+                 "jitter\n";
 }

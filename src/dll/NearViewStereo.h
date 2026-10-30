@@ -83,6 +83,12 @@ unsigned long long NearViewAlreadyOffsetCount();
 // error than a confidently wrong eye. Climbing means the eye records are not
 // reaching the render thread, not that the offset is wrong.
 unsigned long long NearViewNoProvenanceCount();
+// Offset packs whose previous near projection (view-info +0x260) moved with the
+// near VP, so first-person motion vectors are this eye's (preyvr/NearMotion.h),
+// and those left alone because it was not perspective-shaped. Shifted should
+// keep pace with applied; refused should stay 0.
+unsigned long long NearViewPreviousShiftedCount();
+unsigned long long NearViewPreviousRefusedCount();
 
 // **One draw without the edit**, on the calling thread only: while set, the
 // packer forwards the near VP unedited. For DrawNear particle sprites in a

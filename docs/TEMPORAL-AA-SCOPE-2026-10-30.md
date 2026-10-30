@@ -127,6 +127,92 @@ phase 1, so sharpening is left as Prey's.
 
 **Headset, 2026-10-30: "Tested and confirmed working."**
 
+## Known issue: the eyes disagree on moving objects (reported 2026-10-30, fixed in PreyVR-113, worn OK)
+
+**The report.** With Temporal on, one eye looks sharper than the other (the right), only on some objects:
+- the pistol, whose surface shows artefacts "as if the render buffer isn't being cleared";
+- airlocks, whose textures look sharper in the right eye.
+
+SMAA doesn't do it. A first guess, screen-space reflections, was ruled out by the wearer: with Prey's SSR and
+SSDO both off, it was still there. Then: "I can see through the pistol slightly, like the depth of it is being
+blended instead of tested."
+
+That is TAA history showing through: the resolve fetched the pixel's history from the wrong place, and the
+colour clip let it pass.
+
+**The cause, found statically: moving objects' motion vectors are computed against the other eye.**
+
+The resolve (`PostAA_PS` in `postaa.cfx`, `Engine/Shaders.pak`) reprojects each pixel from depth with
+`matReprojection` (from the stage's ring, per eye since the lane), *unless* `$VelocityObjects` has a motion
+vector there (`vObj.x != 0`), which it then uses instead. Static scenery takes the first path and is right in
+both eyes. Objects that move, animate or are first-person take the second.
+
+| Piece | Where | What it does |
+|---|---|---|
+| Who writes a motion vector | `CMotionBlur::SetupObject` `0xED8550` | Keeps each object's world matrix in a ring of 3 by frame ID; sets `FOB_HAS_PREVMATRIX` (`0x40000000`) if it moved past `r_MotionBlurThreshold` (`0x182B1C248`), **or always** for `FOB_MOTION_BLUR \| FOB_NEAREST` (`0xC00000`: animated characters and first-person objects) |
+| The z-pass shader | `commonzpass.cfi`, `vertexlib.cfi` `Matrix_Inst_General_Prev` | Previous position = `CV_PrevViewProj[Nearest]Matr × PI_MotionBlurData × pos`; current = `CV_ViewProj[Nearest]Matr × instance × pos`; the difference is written to `$VelocityObjects` |
+| `CV_PrevViewProjMatr`, `CV_PrevViewProjNearestMatr` | Packer `0xFB57A0`: view-info `+0x220` → payload `+0x110`, `+0x260` → `+0x150` | **Projections only**: the builder `0xFB2AC0` stores the world projection at `+0x220` and the near projection (`0xFB1530`) at `+0x260`, both jittered |
+| `PI_MotionBlurData` | Instance setup `0xF001D0`: `0xFD4150` (the previous world matrix from the ring) then `0xFD4570` | **Previous world × the renderer's previous view**, with the view's translation dropped for `FOB_NEAREST` (bit 23) |
+| The renderer's previous view | `renderer + 0xAB0 + 0x40 × viewport` (`0xFE5560`), viewport ID at `+0x8060` (set by `RT_SetViewport` `0xF7EA90`, 0..7) | Written **only by the post-processing driver** `0xF85230`: `0xFE7440(renderer, 0xFE49E0())`, this submission's view (`renderer + 0xF0`), right before the `+0xCF0 → +0xD30` copy the lane already handles |
+
+So each submission's moving objects take their previous position from the *previous submission's* view, which
+is the other eye's:
+- **left eye:** the right eye's view from the previous frame. Moving objects are off by the eye separation.
+- **right eye:** the left eye's view from this frame. Off by the eye separation, and missing a frame of head
+  motion.
+
+**First-person objects (the pistol, hands) have a second error.** Their previous view has its translation
+dropped, so only its rotation counts. But the mod moves the *current* near view-projection by half the IPD per eye
+(`NearViewStereo`, view-info `+0xA0`), and nothing moves the previous one (`+0x260`). Every pistol pixel's
+motion vector points about half its stereo disparity away (around 100 px at 40 cm) even when nothing moves. TAA
+then pulls in what's there: the background or another part of the gun, frame after frame.
+
+**Why only some objects.** Only `FOB_MOTION_BLUR`/`FOB_NEAREST` objects, and those that moved, write motion
+vectors. Which eye looks worse isn't settled statically; both are wrong.
+
+**The fix, built 2026-10-30 as PreyVR-113, worn OK 2026-10-30 ("Tested and confirmed fixed."):**
+1. **Lane** (`TemporalAaLane.cpp`): the renderer's previous views are kept per eye, as `+0xD30` already is. All
+   8 slots from `renderer + 0xAB0` (`0x200` bytes) are saved after each eye and given back before it; only the
+   post driver writes them. The gate now checks ten bodies, adding the slot's writer `0xFE7440`, its reader
+   `0xFE5560` and `RT_SetViewport` `0xF7EA90`.
+2. **Near stereo** (`NearViewStereo.cpp`, `preyvr/NearMotion.h`): the previous near projection (view-info
+   `+0x260`) is moved by the same eye displacement as the near VP, and put back after the pack, as the near VP
+   is.
+   - The near VP is the translation-free view times that projection. So moving the near VP by `d` in the world
+     is moving the projection by `d` in view space, and both are the same change to row 3:
+     `-(d.x·row0 + d.y·row1 + d.z·row2)` of the *unedited* near VP.
+   - It is only done when `+0x260` is projection-shaped (column 3 `(0, 0, ±1, 0)`).
+   - Motion uses only x, y and w, so the depth edit isn't repeated there.
+
+**Tests:**
+- `temporal_aa_lane`: the fake post driver writes this run's view to its viewport's slot. Each eye now sees
+  its own; with the lane off, each sees the other's. Mutation-checked: dropping the restore fails it.
+- `near_motion` (pure): a pistol that has not moved against the head has no motion in either eye, whichever way
+  the head turned since. Without the shift its motion is the eye's parallax. Mutation-checked.
+- `verify_temporal_aa.py`: 64 checks, the chain above included.
+
+**Headset checklist (PreyVR-113):**
+- **What to look at:** the pistol held still and moved, the airlocks, an animated NPC, in each eye. Expect no
+  see-through or "uncleared" smear; the eyes should match.
+- **Status line:**
+  - `taaLane` `viewsIn` close to `copiesIn`;
+  - `nearPrevShifted` keeping pace with `nearApplied`;
+  - `nearPrevRefused=0`.
+- **If the pistol is better but airlocks are not, or the reverse:** the two parts can be told apart. Part 2 only
+  touches first-person objects.
+
+**Also noted (not the cause): SSR under the lane.** SSR `0xF9F940` reads its previous view-projection from its
+own ring of 4 by the counter (`+0x2064`, read `(c-1) & 3`). But it samples `$HDRTargetPrev` (`0x182B3F818`),
+which the HDR stage `0xFB00C0` refreshes once per submission after SSR. The lane therefore pairs this eye's
+camera with the other eye's image. The wearer's SSR-off test didn't change what they saw, so this is minor.
+The fix would be a per-eye copy of `$HDRTargetPrev`.
+
+**Ruled out:**
+- **TSAA mip bias** (`r_AntialiasingTSAAMipBias`, `0xF7D710`): global.
+- **`0xFD8400` (`PostEffectsGame`)**: 64x64 targets by `c & 1`.
+- **`0xFD0260`**: noise seed.
+- **`0xFCDFA0`**: one-time history clear.
+
 ## Phase 1 results (headset, 2026-10-30, PreyVR-106, run `player-20261030-150105`)
 
 **Worn OK: "It looks good, I like it."** `taa.vr 1` at 04:02:31, about 2.5 minutes of play:
@@ -264,12 +350,15 @@ which takes the stage from `+0x288`. `0xFB1670` reads the render view from the s
 
 - **Hands and weapon.** They move with the controllers, not the camera. If the near pass writes no velocity,
   TAA will smear them during fast hand motion. Neighbourhood clamping limits it; the headset decides.
+  *2026-10-30:* it always writes velocity (`FOB_NEAREST`), but against the wrong previous view and without the
+  eye offset. See [the known issue](#known-issue-the-eyes-disagree-on-moving-objects-reported-2026-10-30-fixed-in-preyvr-113-worn-ok).
 - **Softness.** TAA trades crawl for some blur; the sharpening cvar exists.
 - **78 fps against 120 Hz.** Fewer frames means larger motion between them and more rejection or ghosting.
 - **Mode 5 (FXAA) passes through the resolve's setup** (`flags & 0x3C`). Whether its shader reads history isn't
   established; R-107 records it as non-temporal, from a wearer test.
-- **Other counter users** (`0xF9F940`, `0xFD0260`, `0xFD8400`, `0xFCDFA0`) see per-eye counters too. That should
-  help any of them that keep history, but they're unexamined.
+- **Other counter users** (`0xF9F940`, `0xFD0260`, `0xFD8400`, `0xFCDFA0`) see per-eye counters too. Examined
+  2026-10-30, after the wearer's report: SSR (`0xF9F940`) is, mildly. See
+  [the known issue](#known-issue-the-eyes-disagree-on-moving-objects-reported-2026-10-30-fixed-in-preyvr-113-worn-ok).
 
 ## Appendix: the ring with eyes two apart
 

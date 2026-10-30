@@ -9,6 +9,7 @@
 #include "Logger.h"
 #include "preyvr/BodyDepth.h"
 #include "preyvr/EngineMap.h"
+#include "preyvr/NearMotion.h"
 #include "preyvr/StereoCamera.h"
 
 #include <MinHook.h>
@@ -53,6 +54,12 @@ constexpr std::array<std::uint8_t, 22> kPackerPrologue{
 
 // Translation-free view x near projection, per the H-011 investigation.
 constexpr std::size_t kNearViewProjection = 0xA0;
+// The near projection alone, which the packer sends as CV_PrevViewProjNearestMatr
+// (+0x260 to payload +0x150, 0xFB5E23): first-person motion vectors' previous
+// positions go through it (preyvr/NearMotion.h). Both view-info builders store
+// here the projection +0xA0 is built from (0xFB2AC0 at 0xFB3DA7, 0xFB4280 at
+// 0xFB4EDA; tools/re/verify_temporal_aa.py).
+constexpr std::size_t kPreviousNearProjection = 0x260;
 // The world's view-projections the packer reads before it: translation-free
 // (packed to the per-view payload +0x00, CV_ViewProjZeroMatr) and with the
 // camera's translation (payload +0x50). The near VP goes to payload +0x90
@@ -215,6 +222,7 @@ std::atomic<float> gHalfIpd{0.032f};
 std::atomic<unsigned long long> gApplied{0};
 std::atomic<unsigned long long> gRefused{0};
 std::atomic<unsigned long long> gNoEye{0};
+std::atomic<unsigned long long> gPreviousShifted{0}, gPreviousRefused{0};
 std::atomic<int> gLastDeltaMicrometres{0};
 
 // A projection-shaped matrix has a finite, non-trivial magnitude. Several callers
@@ -424,6 +432,9 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
     // pixel-identical to no edit.
     float original_[16];
     std::memcpy(original_, nearVp, sizeof(original_));
+    float* const previousNear = reinterpret_cast<float*>(viewInfo + kPreviousNearProjection);
+    float previousOriginal[16];
+    bool previousShifted = false;
     DepthSaved depthSaved{};
     bool edited = depth && RemapNearDepth(viewInfo, eye, depthSaved);
 
@@ -440,11 +451,17 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
         //   M[3][j] = M0[3][j] - d.x*M0[0][j] - d.y*M0[1][j] - d.z*M0[2][j]
         float m0[16];
         std::memcpy(m0, nearVp, sizeof(m0));
-        for (int j = 0; j < 4; ++j) {
-            nearVp[12 + j] = m0[12 + j]
-                             - delta.x * m0[0 + j]
-                             - delta.y * m0[4 + j]
-                             - delta.z * m0[8 + j];
+        nearmotion::ShiftTranslationRow(nearVp + 12, m0, delta.x, delta.y, delta.z);
+        // The previous near projection by the same displacement, so first-person
+        // motion vectors are this eye's (preyvr/NearMotion.h): against the
+        // unedited near VP, whose rows are the view's axes times it.
+        if (nearmotion::LooksPerspective(previousNear)) {
+            std::memcpy(previousOriginal, previousNear, sizeof(previousOriginal));
+            nearmotion::ShiftTranslationRow(previousNear + 12, original_, delta.x, delta.y, delta.z);
+            previousShifted = true;
+            gPreviousShifted.fetch_add(1, std::memory_order_relaxed);
+        } else {
+            gPreviousRefused.fetch_add(1, std::memory_order_relaxed);
         }
         RememberWrittenRow(static_cast<const void*>(viewInfo), eye, nearVp + 12);
         RecordLineage(static_cast<const void*>(viewInfo), original_ + 12, eye);
@@ -463,6 +480,9 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
     }
 
     std::memcpy(nearVp, original_, sizeof(original_));
+    if (previousShifted) {
+        std::memcpy(previousNear, previousOriginal, sizeof(previousOriginal));
+    }
     if (depthSaved.zero) {
         std::memcpy(viewInfo + kViewProjectionZero, depthSaved.zeroVp, sizeof(depthSaved.zeroVp));
     }
@@ -511,6 +531,8 @@ DWORD SetNearViewStereo(unsigned int enabled)
         gApplied.store(0, std::memory_order_relaxed);
         gRefused.store(0, std::memory_order_relaxed);
         gNoEye.store(0, std::memory_order_relaxed);
+        gPreviousShifted.store(0, std::memory_order_relaxed);
+        gPreviousRefused.store(0, std::memory_order_relaxed);
     }
     gEnabled.store(on, std::memory_order_release);
     Log(std::string("result=0 detail=enabled value=") + (on ? "1" : "0"));
@@ -551,6 +573,8 @@ unsigned long long NearViewNoEyeCount() { return gNoEye.load(std::memory_order_r
 unsigned long long NearViewReenteredCount() { return gReentered.load(std::memory_order_relaxed); }
 unsigned long long NearViewAlreadyOffsetCount() { return gAlreadyOffset.load(std::memory_order_relaxed); }
 unsigned long long NearViewNoProvenanceCount() { return gNoProvenance.load(std::memory_order_relaxed); }
+unsigned long long NearViewPreviousShiftedCount() { return gPreviousShifted.load(std::memory_order_relaxed); }
+unsigned long long NearViewPreviousRefusedCount() { return gPreviousRefused.load(std::memory_order_relaxed); }
 void SetNearViewEditSuppressed(bool suppressed) { tSuppressed = suppressed; }
 unsigned long long NearViewSuppressedCount() { return gSuppressed.load(std::memory_order_relaxed); }
 

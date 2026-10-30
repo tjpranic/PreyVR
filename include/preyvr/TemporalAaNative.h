@@ -28,6 +28,13 @@ inline constexpr std::size_t StageLastResolve=0x20;
 // (0xF8559F); the sub-pixel jitter (+0xD70, R-129).
 inline constexpr std::size_t RendererViewProj=0xCF0,RendererPrevViewProj=0xD30,ViewProjSize=0x40;
 inline constexpr std::size_t RendererJitter=0xD70;
+// The renderer's previous view per viewport: 8 slots of 0x40 from +0xAB0, the
+// viewport's chosen by +0x8060 (0..7, RT_SetViewport 0xF7EA90). Only the post
+// driver writes one (0xFE7440, with this run's view from 0xFE49E0, at 0xF85593).
+// Each moving object's motion matrix is its previous world matrix times this
+// slot (0xFE5560 into 0xFD4570, from the instance setup 0xF001D0), the slot's
+// translation dropped for first-person (FOB_NEAREST) objects.
+inline constexpr std::size_t RendererPrevViews=0xAB0,RendererViewport=0x8060,PrevViewSlots=8,PrevViewSize=0x40;
 // CRenderView::SetPreviousFrameCamera(view, const CCamera&) (R-064, view vtable
 // slot 9): add rcx,0x13E0, then CCamera::operator= (0x111C70). The view's
 // previous camera, which 0xFB1670 hands every pass that needs motion, is that
@@ -43,5 +50,8 @@ inline constexpr Contract Contracts[]={
     {0xFB2A00,39,0x87C233554BCEC41Full}, // PipelineAaExecute
     {0xFB1670,615,0x382F015AC71C59F5ull}, // ViewInfo
     {0xEE82D0,12,0x409958AE6F013FD7ull}, // SetPreviousFrameCamera
+    {0xFE7440,187,0xC1676179A7124364ull}, // PrevViewStore
+    {0xFE5560,21,0x17A206F5BF784CB6ull}, // PrevViewSlot
+    {0xF7EA90,138,0x73EFC2342254ECF9ull}, // SetViewport
 };
 }

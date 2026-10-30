@@ -14,7 +14,9 @@
 // - its last resolve output, copied out after its submission and back into the
 //   slot its next resolve reads;
 // - its previous camera (CRenderView::SetPreviousFrameCamera) and the
-//   renderer's previous view-projection.
+//   renderer's previous view-projection;
+// - the renderer's previous views, which moving and first-person objects'
+//   motion vectors are taken against (the known issue in the scope doc).
 //
 // It acts only in a both-eyes frame, while a temporal AA mode is set
 // (r_AntialiasingMode 2-5). Gated on the bodies in preyvr/TemporalAaNative.h.
@@ -38,7 +40,8 @@ void TaaLaneFrameEnd(void* view, bool complete);
 DWORD SetTaaLane(unsigned enabled);
 bool TaaLaneEnabled();
 
-// "taaLane={...}": taa.vr, taa.report and the status line. Any thread.
+// "taaLane={...}": taa.vr, taa.report and the status line. Any thread. viewsIn
+// counts eyes given their own previous views back.
 std::string TaaLaneReport();
 
 } // namespace preyvr::dll

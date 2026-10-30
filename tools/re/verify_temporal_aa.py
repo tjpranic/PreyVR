@@ -1,7 +1,10 @@
 """Read-only Steam temporal-AA contracts (docs/TEMPORAL-AA-SCOPE-2026-10-30.md): what a per-eye temporal history
 would have to separate. One history pair ($PrevBackBuffer0/1), one previous-camera ring inside the AA stage, and the
 jitter sample are all chosen from one global counter that the post-processing driver advances once per run; the
-resolve's camera comes from the render view's current (+0x11A0) and previous (+0x13E0) cameras. Never attaches."""
+resolve's camera comes from the render view's current (+0x11A0) and previous (+0x13E0) cameras. Moving and
+first-person objects' motion vectors are taken against the renderer's previous view per viewport (+0xAB0), which
+only the same driver writes, and first-person ones through the near projection alone (view-info +0x260), which
+NearViewStereo must move with each eye. Never attaches."""
 import struct,sys
 from pathlib import Path
 from preydll import DEFAULT_MODULE,Image,fnv1a64 as fnv,native_rows
@@ -25,6 +28,20 @@ PATTERN=0x2b1c758                     # r_AntialiasingTAAPattern
 CREATE_RT=0x100ae50
 POST_DRIVER,RESOLVE,SPATIAL,DISPATCH,VIEW_INFO=0xf85230,0xf99fe0,0xf99500,0xf9c790,0xfb1670
 SET_PREVIOUS_CAMERA,RENDER_VIEW_VTABLE=0xee82d0,0x1dcae00
+PREV_VIEW_STORE,PREV_VIEW_SLOT,SET_VIEWPORT=0xfe7440,0xfe5560,0xf7ea90
+CURRENT_VIEW,PREV_WORLD,MOTION_MATRIX,MOTION_RING=0xfe49e0,0xfd4150,0xfd4570,0x2b321d0
+MOTION_THRESHOLD=0x2b1c248            # r_MotionBlurThreshold
+NEAR_PROJECTION=0xfb1530
+
+def branches_to(image,target):
+    """Every call or jmp rel32 in .text whose target is `target`."""
+    text=image.section('.text');data=image.at(text.rva,text.raw_size);found=[]
+    for opcode in (b'\xe8',b'\xe9'):
+        i=data.find(opcode)
+        while i!=-1:
+            if i+5<=len(data) and text.rva+i+5+struct.unpack_from('<i',data,i+1)[0]==target:found.append(text.rva+i)
+            i=data.find(opcode,i+1)
+    return found
 
 def verify():
     image=Image(DEFAULT_MODULE);at=image.at;checks=[]
@@ -138,11 +155,52 @@ def verify():
     assert image.vtable_target(RENDER_VIEW_VTABLE+0x48)==SET_PREVIOUS_CAMERA
     checks.append('CRenderView vtable 0x1DCAE00 +0x48 (slot 9) is SetPreviousFrameCamera (R-064)')
 
+    # Motion vectors (the scope's known issue). Which objects write one: CMotionBlur::SetupObject sets
+    # FOB_HAS_PREVMATRIX when the object moved past r_MotionBlurThreshold, or always for FOB_MOTION_BLUR|FOB_NEAREST.
+    witness('motion 0xED8550',{'its flags; the threshold; always for FOB_MOTION_BLUR|FOB_NEAREST (0xC00000)':
+                               (0xed8758,'498b4340f30f1015e43ac40148a90000c000')})
+    assert image.rip_target(0xed875c,8,4)==MOTION_THRESHOLD
+    # The instance setup builds PI_MotionBlurData: the previous world matrix (0xFD4150, from the ring of 3), then
+    # times the renderer's previous view for this viewport (0xFE5560 into 0xFD4570).
+    for call,target in ((0xf003aa,PREV_WORLD),(0xf003bd,PREV_VIEW_SLOT),(0xf003cf,MOTION_MATRIX)):
+        assert image.call_target(call)==target,hex(call)
+    witness('previous world 0xFD4150',{'only with FOB_HAS_PREVMATRIX (bit 30)':(0xfd418c,'480fbae01e0f83d50000'),
+                                       'from the ring at 0x2B321D0':(0xfd41c1,'4c8d1d08e0b501')})
+    assert image.rip_target(0xfd41c1,7,3)==MOTION_RING
+    witness('motion matrix 0xFD4570',{
+        "the view's translation row: +0x30":(0xfd45aa,'f3410f107830'),
+        "the view's translation row: +0x34, +0x38":(0xfd4630,'f3450f106834f3450f107038'),
+        'dropped for FOB_NEAREST (bit 23)':(0xfd46a2,'8b4140480fbae017730b0f57ff450f57ed450f57f6')})
+    checks.append('PI_MotionBlurData: previous world x the renderer previous view, translation dropped when nearest')
+    # The renderer's previous view per viewport: +0xAB0 + 0x40 x viewport (+0x8060, 0..7).
+    witness('previous view slot 0xFE5560',{'+0xAB0 + 0x40 x [+0x8060]':
+                                           (PREV_VIEW_SLOT,'4863816080000048c1e0064805b00a00004803c1c3')})
+    witness('previous view store 0xFE7440',{'the same slot, written':
+                                            (PREV_VIEW_STORE,'4c6381608000008b0249c1e00641898408b00a0000')})
+    witness('SetViewport 0xF7EA90',{'the viewport id clamped to 7: 8 slots':(0xf7eb09,'b8070000003bd00f4cc2898160800000c3')})
+    # Written only by the post driver, each run, with this run's view: one per submission, so in a both-eyes frame
+    # each eye's moving objects take the other eye's view unless it is kept per eye.
+    assert branches_to(image,PREV_VIEW_STORE)==[0xf85593],[hex(b) for b in branches_to(image,PREV_VIEW_STORE)]
+    assert image.call_target(0xf85584)==CURRENT_VIEW
+    witness('post driver 0xF85230',{"this run's view to its viewport's slot, then the view-projection copy":
+                                    (0xf85584,'e857f40500488b0d5093bb01488bd0e8a81e0600')})
+    checks.append('0xFE7440 has one caller, the post driver at 0xF85593')
+    # The z-pass's previous view-projections are projections alone: the packer sends view-info +0x220 and +0x260 as
+    # CV_PrevViewProjMatr (+0x110) and CV_PrevViewProjNearestMatr (+0x150); both builders store the world projection
+    # at +0x220 and at +0x260 the near projection 0xFB1530 makes, which +0xA0 (the near VP) is built from.
+    witness('the per-view packer 0xFB57A0',{'+0x220':(0xfb5d13,'f30f108620020000'),'to +0x110':(0xfb5d9b,'f30f118710010000'),
+                                            '+0x260':(0xfb5e23,'f30f108660020000'),'to +0x150':(0xfb5eab,'f30f118750010000')})
+    assert image.call_target(0xfb2d75)==NEAR_PROJECTION and image.call_target(0xfb437b)==NEAR_PROJECTION
+    witness('view-info builders',{'0xFB2AC0: the near projection to +0x260':(0xfb3da7,'f30f118360020000'),
+                                  '0xFB4280: the near projection to +0x260':(0xfb4eda,'f30f119660020000')})
+    checks.append("first-person motion: the near projection alone (+0x260), so NearViewStereo moves it with each eye")
+
     # TemporalAaNative.h: the bodies the probe's gate checks, and the constants it reads through.
     entries=native_rows(HEADER)
     assert [(rva,name) for rva,_,_,name in entries]==[(POST_DRIVER,'PostDriver'),(RESOLVE,'TemporalResolve'),
         (0xfe3760,'AaModeFlags'),(0xecec10,'AaModeClamp'),(0xfb2a00,'PipelineAaExecute'),(VIEW_INFO,'ViewInfo'),
-        (SET_PREVIOUS_CAMERA,'SetPreviousFrameCamera')],entries
+        (SET_PREVIOUS_CAMERA,'SetPreviousFrameCamera'),(PREV_VIEW_STORE,'PrevViewStore'),(PREV_VIEW_SLOT,'PrevViewSlot'),
+        (SET_VIEWPORT,'SetViewport')],entries
     relocs=image.relocations()
     for rva,size,expected,name in entries:
         b=at(rva,size)
@@ -161,7 +219,8 @@ def verify():
                        'PipelineAaStage':0x288,'PipelineView':0x2e0,'StageLastResolve':0x20,
                        'RendererViewProj':0xcf0,'RendererPrevViewProj':0xd30,'ViewProjSize':0x40,
                        'RendererJitter':0xd70,'SetPreviousFrameCamera':SET_PREVIOUS_CAMERA,
-                       'ViewPreviousCamera':0x13e0,'CameraSize':0x240}.items():
+                       'ViewPreviousCamera':0x13e0,'CameraSize':0x240,'RendererPrevViews':0xab0,
+                       'RendererViewport':0x8060,'PrevViewSlots':8,'PrevViewSize':0x40}.items():
         assert header_constant(name)==value,name
     assert HISTORY[1]==HISTORY[0]+8
     checks.append("TemporalAaNative.h's constants are the ones witnessed above")

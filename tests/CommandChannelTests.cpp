@@ -512,7 +512,7 @@ std::vector<std::string> ReportSkeleton(unsigned long long processedCount, unsig
     names({"observerFrames", "xrSession", "xrFrames", "fovAgreed", "fovDiverged", "projectionPolicy", "cameraEdit",
            "lastEye", "viewObserved", "viewApplied", "viewPoseFallback", "posApplied", "posRefused", "posOffsetMm",
            "nearApplied", "nearRefused", "nearNoEye", "nearReentered", "nearAlreadyOffset", "nearNoProvenance",
-           "eyeLookupMiss", "nearDeltaUm"});
+           "eyeLookupMiss", "nearDeltaUm", "nearPrevShifted", "nearPrevRefused"});
     s.push_back(" " + NearParticleStereoReport());
     names({"ikMode", "ikHooked", "ikOwner", "ikEquipGen", "ikPoseSeq", "ikNoOwner", "ikBusy", "ikCalls",
            "ikMatched", "ikRig", "ikJoints", "ikGate", "ikCvar", "ikTargetR", "ikWeightR", "ikLimbEndR",
