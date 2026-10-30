@@ -306,6 +306,8 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/HeadLamp.cpp
         src/dll/BodyDepthHook.cpp
         src/dll/DualSceneStereo.cpp
+        src/dll/TemporalAaProbe.cpp
+        src/dll/TemporalAaLane.cpp
         src/dll/DualOverlay.cpp
         src/dll/VideoOverlay.cpp
         src/dll/WeaponAttachment.cpp
@@ -539,6 +541,13 @@ if(PREYVR_BUILD_TESTS)
         preyvr_add_test(head_lamp tests/HeadLampTests.cpp
             DLL
             LIBS preyvr_core minhook)
+        preyvr_add_test(temporal_aa_probe tests/TemporalAaProbeTests.cpp
+            DLL
+            LIBS preyvr_core d3d11)
+        preyvr_add_test(temporal_aa tests/TemporalAaTests.cpp)
+        preyvr_add_test(temporal_aa_lane tests/TemporalAaLaneTests.cpp
+            DLL
+            LIBS preyvr_core d3d11)
         preyvr_add_test(body_depth_hook tests/BodyDepthHookTests.cpp
             DLL
             LIBS preyvr_core minhook)

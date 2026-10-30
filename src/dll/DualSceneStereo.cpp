@@ -9,6 +9,8 @@
 #include "XrSessionHost.h"
 #include "FrameObserverHook.h"
 #include "FrameProbe.h"
+#include "TemporalAaProbe.h"
+#include "TemporalAaLane.h"
 #include "Logger.h"
 #include "MinHookInit.h"
 #include "preyvr/EngineMap.h"
@@ -461,10 +463,12 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
         const auto start = topLevel ? QpcMicros() : 0;
         if (topLevel) {
             gStep.store(static_cast<int>(Step::single), std::memory_order_release);
+            TaaProbeBefore(renderer, view, TaaSubmission::single);
         }
         original(renderer, view, flags, threadInfo, renderFunc);
         if (topLevel) {
             gSingleMicros.fetch_add(QpcMicros() - start, std::memory_order_relaxed);
+            TaaProbeAfter(renderer, view, TaaSubmission::single);
             gSingles.fetch_add(1, std::memory_order_relaxed);
             gStep.store(static_cast<int>(Step::idle), std::memory_order_release);
             if (gCaptureArmed.exchange(false, std::memory_order_acq_rel)) {
@@ -499,7 +503,9 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
             // both-eyes contract finds no held first eye and is refused, which
             // costs one frame rather than the mode.
             gHeadsetBuildMisses.fetch_add(1, std::memory_order_relaxed);
+            TaaProbeBefore(renderer, view, TaaSubmission::single);
             original(renderer, view, flags, threadInfo, renderFunc);
+            TaaProbeAfter(renderer, view, TaaSubmission::single);
             gStep.store(static_cast<int>(Step::idle), std::memory_order_release);
             --tDepth;
             return;
@@ -514,7 +520,9 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
                 restoreCentre();
             }
             Refuse(built ? "render_thread_slot_unknown" : "eye_camera_unavailable");
+            TaaProbeBefore(renderer, view, TaaSubmission::single);
             original(renderer, view, flags, threadInfo, renderFunc);
+            TaaProbeAfter(renderer, view, TaaSubmission::single);
             gStep.store(static_cast<int>(Step::idle), std::memory_order_release);
             --tDepth;
             return;
@@ -522,15 +530,29 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
         firstInfo = infos[0];
         secondInfo = infos[1];
     }
+    // Per-eye temporal AA (TemporalAaLane.h), on headset frames: each eye its own
+    // history, previous camera and post-processing counter.
+    const bool temporal = mode == 3 && perEye;
+    if (temporal) {
+        TaaLaneFrameBegin(renderer, view, ObservedFrameCount());
+    }
 
     // First submission, teardown deferred.
     gStep.store(static_cast<int>(Step::first), std::memory_order_release);
     tDeferredMain = tDeferredShadow = tDeferredClear = 0;
     tDeferTeardown = true;
+    if (temporal) {
+        TaaLaneEyeBegin(renderer, view, 0, eyes[0]);
+    }
+    TaaProbeBefore(renderer, view, TaaSubmission::first);
     const auto t0 = QpcMicros();
     original(renderer, view, flags, firstInfo, renderFunc);
     const auto t1 = QpcMicros();
     tDeferTeardown = false;
+    TaaProbeAfter(renderer, view, TaaSubmission::first);
+    if (temporal) {
+        TaaLaneEyeEnd(renderer, 0, eyes[0]);
+    }
     gDeferredMain.fetch_add(tDeferredMain, std::memory_order_relaxed);
     gDeferredShadow.fetch_add(tDeferredShadow, std::memory_order_relaxed);
     gDeferredClear.fetch_add(tDeferredClear, std::memory_order_relaxed);
@@ -546,6 +568,9 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
     // anything else means a teardown escaped the gates and the view may already
     // be cleared, so a second submission would draw nothing or worse.
     if (tDeferredMain == 0 && tDeferredClear == 0 && tDeferredShadow == 0) {
+        if (temporal) {
+            TaaLaneFrameEnd(view, false);
+        }
         if (perEye) {
             restoreCentre();
         }
@@ -557,6 +582,9 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
         Refuse("teardown_escaped_gate");
         // Finish whatever was held back so the view is not left in Reading.
         CompleteDeferredTeardown(view, tDeferredMain, tDeferredShadow, tDeferredClear);
+        if (temporal) {
+            TaaLaneFrameEnd(view, false);
+        }
         if (perEye) {
             restoreCentre();
         }
@@ -567,6 +595,9 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
     if (perEye && !PrepareEye(renderer, view, threadInfo, eyes[1], infos[1])) {
         Refuse("render_thread_slot_unknown");
         CompleteDeferredTeardown(view, tDeferredMain, tDeferredShadow, tDeferredClear);
+        if (temporal) {
+            TaaLaneFrameEnd(view, false);
+        }
         restoreCentre();
         gStep.store(static_cast<int>(Step::idle), std::memory_order_release);
         --tDepth;
@@ -575,12 +606,23 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
 
     // Second submission performs the one real teardown.
     gStep.store(static_cast<int>(Step::second), std::memory_order_release);
+    if (temporal) {
+        TaaLaneEyeBegin(renderer, view, 1, eyes[1]);
+    }
+    TaaProbeBefore(renderer, view, TaaSubmission::second);
     original(renderer, view, flags, secondInfo, renderFunc);
     const auto t2 = QpcMicros();
+    TaaProbeAfter(renderer, view, TaaSubmission::second);
+    if (temporal) {
+        TaaLaneEyeEnd(renderer, 1, eyes[1]);
+    }
     if (perEye) {
         // Anything the renderer draws after the scene this frame -- the HUD,
         // auxiliary geometry -- gets the frame's own camera back.
         restoreCentre();
+    }
+    if (temporal) {
+        TaaLaneFrameEnd(view, true);
     }
     if (held) {
         // From here to RT_EndFrame the game draws its overlays; each draw into

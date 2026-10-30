@@ -46,6 +46,10 @@ void ApplySavedVrOptions();
 // defaults, then snapped to the saved ones. ApplySavedVrOptions applies them
 // again; the same values refit the menu from the same anchor, unchanged.
 void ApplySavedPanelOptions();
+// **The saved anti-aliasing choice, before VR start's renderer settings**, which
+// apply the AA mode it picks (VrMode.cpp). VR start calls it right after
+// ApplySavedPanelOptions; ApplySavedVrOptions applies it again, unchanged.
+void ApplySavedRendererOptions();
 void ServiceVrOptions(); // worker: settings application and disk I/O
 options::Values VrOptionsValues();
 bool VrOptionsSaveFailed();

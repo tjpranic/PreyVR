@@ -7,7 +7,8 @@ IK change, collision spheres on the elbows, or something else would fix it. Inve
 
 **Headset, 2026-10-29 (PreyVR-104): confirmed working by the wearer.** Run `player-20261029-203533`
 recorded no clearance figures: the overlay was off and `arm.report` was not run. After it, `arm.avoid`
-lost its on/off switch (below). Step 2 is not needed unless the armpit is seen to clip.
+lost its on/off switch (below). Step 2 is not needed unless the armpit is seen to clip. The wearer's
+`arm.report` on 2026-10-30 agrees ([below](#headset-2026-10-30-preyvr-104-armreport)).
 
 ## Why the arm goes into the body
 
@@ -229,7 +230,8 @@ parts take their short way, so the cost is about the chooser's alone.
 - `arm.avoid <margin> <wall> <degPerS>` (default `10 10 360`). PreyVR-104 also had an on/off switch in
   front of them for the headset A/B; it was removed once worn OK, so the elbow is always kept out.
 - `arm.report` adds `avoidMm`, `avoidDegPerS`, and per arm `trackR/L` (free, round, parked, pushed frames
-  since the last report). Its `insidePctR/L` is the measure that should fall.
+  since the last report). Its `insidePctR/L` counts the wrist too, which follows the controller and which
+  no elbow moves, so it is not the measure of step 1 (see the PreyVR-104 report below).
 
 ### In the headset
 
@@ -239,6 +241,33 @@ What PreyVR-104 was checked for:
 2. Watch the elbows as the hands move near the body: no pops, and no elbow stuck out at an odd angle.
 3. `dbg.draw 608` shows it: the rings should stay green or amber.
 4. `arm.report` at the end: `insidePctR/L` (it was 9.0 and 12.8% on PreyVR-103) and `trackR/L`.
+
+### Headset, 2026-10-30 (PreyVR-104), `arm.report`
+
+Run `player-20261030-131538`, the overlay off, two reports (399 and 3032 frames per arm):
+
+| | PreyVR-103 | PreyVR-104, 1st | PreyVR-104, 2nd |
+|---|---|---|---|
+| Frames with some sample inside, right / left | 9.0% / 12.8% | 16.3% / 14.3% | 6.2% / 15.6% |
+| Deepest, right | −10.9 cm `upper80/ribs` | −2.4 cm `wrist/chest` | −4.9 cm `wrist/chest` |
+| Deepest, left | −15.6 cm `elbow/ribs` | −1.2 cm `wrist/chest` | −6.2 cm `upper55/chest` |
+| Free / round / parked / pushed, right | — | 346 / 0 / 29 / 24 | 2593 / 0 / 255 / 184 |
+| Free / round / parked / pushed, left | — | 399 / 0 / 0 / 0 | 1683 / 0 / 628 / 721 |
+
+- **The deep clipping at the elbow is gone.** The deepest readings are under half of PreyVR-103's, and
+  three of the four are the wrist.
+- **The hand counts.** The wrist sample is where the controller puts it: a hand held within about 3 cm of
+  Morgan's chest reads inside, whatever the elbow does. The tracking keeps the rest of the arm clear by
+  the margin. Only where no elbow on the circle (36 samples) is 5 mm clear does it settle for the clearest
+  one, and only then can the rest of the arm read inside. The report does not count those frames apart
+  from the hand's.
+- **The left upper arm's −6.2 cm is one frame in 34 s,** so by that rule a pose where the clearest elbow
+  still had the arm at least 5.7 cm in. That can be the forearm through the body at any swivel, or the arm
+  straight across it. No `arm_fit` lines say which (the overlay was off).
+- **The share inside did not fall,** because it counts the hand and depends on how long the hands were at
+  the chest.
+- The left arm was parked or pushed in 45% of the second report's frames and the right in 15%. The offline
+  60 s at the chest had 66%.
 
 ## Open
 

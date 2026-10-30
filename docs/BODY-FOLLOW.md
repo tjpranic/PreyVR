@@ -293,7 +293,7 @@ and Prey's view equalled `m_rotation`.
 | The old cull lag ([ENGINE-INSTABILITY.md](ENGINE-INSTABILITY.md#cull-camera-crash-and-the-world-flashing)) | No lag in 20 runs |
 | The stick turn lane (MoveLane) | Posts on change, always posts the zero |
 | The hands' frame | Previous camera minus the head yaw: independent of R |
-| Motion blur, temporal AA | `r_MotionBlur 0`, `r_AntialiasingMode 1`, both read back |
+| Motion blur, temporal AA | `r_MotionBlur 0`, `r_AntialiasingMode 1` (4 with `taa.vr 1`), both read back |
 | View effects (`0x117B4D0`) | Time-based, independent of turning |
 | The helmet's copy | The error was in `#camera`; the helmet only sways with the body |
 | The weapon | The flash showed with it holstered |

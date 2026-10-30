@@ -149,6 +149,8 @@ DWORD QueueVerifiedRendererSetting(const char* command) {
     const char* name=nullptr;int expected=0;
     if(command && std::strcmp(command,"r_MotionBlur 0")==0) name="r_MotionBlur";
     else if(command && std::strcmp(command,"r_AntialiasingMode 1")==0) {name="r_AntialiasingMode";expected=1;}
+    // TSAA, with the per-eye temporal history (TemporalAaLane.h).
+    else if(command && std::strcmp(command,"r_AntialiasingMode 4")==0) {name="r_AntialiasingMode";expected=4;}
     // The focus hold's pair (FocusHold.h): an int cvar, read back the same way.
     else if(command && std::strcmp(command,"g_pauseOnLoseFocus 0")==0) name="g_pauseOnLoseFocus";
     else if(command && std::strcmp(command,"g_pauseOnLoseFocus 1")==0) {name="g_pauseOnLoseFocus";expected=1;}

@@ -27,6 +27,8 @@
 #include "Logger.h"
 #include "NearViewStereo.h"
 #include "DualSceneStereo.h"
+#include "TemporalAaProbe.h"
+#include "TemporalAaLane.h"
 #include "DualOverlay.h"
 #include "NearParticleStereo.h"
 #include "MarkerStereo.h"
@@ -687,6 +689,16 @@ constexpr Verb kVerbs[] = {
     }},
     {"dual.report", Audience::research, 0, [](const Args&, std::ostringstream& out) {
         out << "dual.report result=0" << DualSceneReport() << DualOverlayReport();
+    }},
+    {"taa.report", Audience::research, 0, [](const Args&, std::ostringstream& out) {
+        // The temporal-AA probe (TemporalAaProbe.h) and the per-eye lane; both on the status line.
+        out << "taa.report result=0 " << TaaProbeReport() << ' ' << TaaLaneReport();
+    }},
+    {"taa.vr", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
+        // Anti-aliasing for this session (VR Options saves it): 1 temporal, the per-eye TSAA lane
+        // (TemporalAaLane.h); 0 SMAA 1X. VrMode switches the AA mode to match. Bare: report.
+        out << "taa.vr result=" << (Valued(args) ? SetTemporalAntialiasing(ArgU(args, 1, 1)) : 0) << ' '
+            << TaaLaneReport();
     }},
     {"frame.probe", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
         // The stall flight recorder for the render freeze (FrameProbe.h).

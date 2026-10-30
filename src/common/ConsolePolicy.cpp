@@ -62,7 +62,7 @@ namespace {
 // None reaches outside the game, all are reversible by setting them back, and
 // unlike the resolution entries none of them touches the swapchain, so there is
 // no latched-size hazard to guard.
-constexpr std::array<std::string_view, 44> kAllowlist{
+constexpr std::array<std::string_view, 51> kAllowlist{
     // **Added 2026-10-18 for the menus' prompts**
     // (docs/CONTROLLER-PROMPTS-2026-10-18.md). Registered with default 0, no
     // flags, and the help text "If this is set then we won't switch to keyboard
@@ -101,6 +101,20 @@ constexpr std::array<std::string_view, 44> kAllowlist{
     "i_offset_right",
     "i_offset_up",
     "r_AntialiasingMode",
+    // --- temporal AA tuning -----------------------------------------------
+    //
+    // Added 2026-10-30 with the per-eye temporal history (TemporalAaLane.h,
+    // docs/TEMPORAL-AA-SCOPE-2026-10-30.md). A wearer reported distant edges
+    // crawling under SMAA 1X; TSAA is the fix, and these are the engine's own
+    // controls for its jitter pattern, sharpening and history weighting, which
+    // a headset session has to be able to tune. Renderer quality only.
+    "r_AntialiasingTAAFalloffHiFreq",
+    "r_AntialiasingTAAFalloffLowFreq",
+    "r_AntialiasingTAAPattern",
+    "r_AntialiasingTAASharpening",
+    "r_AntialiasingTSAAMipBias",
+    "r_AntialiasingTSAASmoothness",
+    "r_AntialiasingTSAASubpixelDetection",
     // --- resolution -------------------------------------------------------
     //
     // Added 2026-09-08, deliberately and not for convenience. The allowlist is

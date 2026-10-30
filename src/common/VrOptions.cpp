@@ -17,6 +17,7 @@ constexpr const wchar_t* hudNames[]={L"IN THE WORLD",L"FLOATING PANEL"};
 constexpr const wchar_t* reticleNames[]={L"ON THE HUD",L"IN THE WORLD"};
 constexpr const wchar_t* carryHoldNames[]={L"PRESS TO TOGGLE",L"HOLD TO CARRY"};
 constexpr const wchar_t* grenadeNames[]={L"GAME THROW",L"HAND THROW"};
+constexpr const wchar_t* antialiasingNames[]={L"SMAA",L"TEMPORAL"};
 using U=Unit;
 constexpr Spec specs[]={
  {"turn",L"TURNING",L"Smooth turning or fixed angular steps.",45,0,90,15,U::degrees,{},turnChoices,L"SMOOTH"},
@@ -88,7 +89,9 @@ constexpr Spec specs[]={
  // The view takes the same 1-10, default 3 (preyvr/NearClip.h; near_clip pins it).
  {"near_clip",L"NEAR CLIP DISTANCE",L"How close to your eyes things are still drawn. Lower it if you can see through your own body when you look down; raise it if distant surfaces flicker. Prey's own is 10 cm.",3,1,10,1,U::cm},
  // The examination camera takes the same 0-100, default 30 (preyvr/ExaminePullback.h; examine_pullback pins it).
- {"screen_pullback",L"SCREEN DISTANCE",L"How far your view stays back from keypads, terminals and other screens you use. Prey brings a screen close enough to fill your whole view, which in the headset is a hand's width from your eyes. Never further back than you were standing.",30,0,100,5,U::cm,{},{},L"PREY'S OWN"}
+ {"screen_pullback",L"SCREEN DISTANCE",L"How far your view stays back from keypads, terminals and other screens you use. Prey brings a screen close enough to fill your whole view, which in the headset is a hand's width from your eyes. Never further back than you were standing.",30,0,100,5,U::cm,{},{},L"PREY'S OWN"},
+ // Temporal is TSAA with each eye's own history (TemporalAaLane.h); SMAA is SMAA 1X.
+ {"antialiasing",L"ANTI-ALIASING",L"Temporal smooths the jagged, crawling edges of distant objects by blending each eye's recent frames, at some cost in frame rate. SMAA smooths each frame on its own: faster, but distant edges shimmer as you move.",1,0,1,1,U::none,antialiasingNames}
 };
 static_assert(std::size(specs)==Count,"one Spec per Setting, in order");
 // Each default, name and choice belongs to its setting's range, one name per value.
@@ -112,7 +115,7 @@ constexpr int equipment[]={Holsters,ClearHolsterSlots,Wrist,WristSize,WristOnHud
     WristTilt};
 constexpr int feedback[]={Haptics,HapticStrength};
 constexpr int abilities[]={PsiTarget,Medkit,BeltHints};
-constexpr int setup[]={CalibratePosture,RecenterView,LeanZone,HipsBack,NearClip,DebugOverlay};
+constexpr int setup[]={CalibratePosture,RecenterView,LeanZone,HipsBack,NearClip,Antialiasing,DebugOverlay};
 // Features still being proven, together with the settings that tune them.
 constexpr int experimental[]={CarryHand,GrenadeDeploy,LongReach,MuzzleAim,
     InventoryLayer,InventoryStereo,InventoryDepth};

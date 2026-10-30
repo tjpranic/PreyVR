@@ -54,6 +54,7 @@ struct Case {
 
 // Tails of more than one report, or of a report and the channel's text after it.
 std::string DualReports() { return DualSceneReport() + DualOverlayReport(); }
+std::string TaaReports() { return TaaProbeReport() + " " + TaaLaneReport(); }
 std::string WorldReticleReports() { return ReticleWorldReport() + " scene:" + SceneQueryReport(); }
 std::string VrOptionsReports() { return VrOptionsReport() + PsychoscopeReport() + BodyEquipmentReport(); }
 std::string BodyReports() { return TorsoLaneReport() + BodyPinReport() + RoomScaleReport(); }
@@ -249,6 +250,8 @@ const Case kCases[] = {
     {"dual.overlay", "dual.overlay result=0", DualOverlayReport, processed},
     {"frame.probe", "frame.probe result=0", FrameProbeReport, processed},
     {"frame.probe 2", "frame.probe result=1", FrameProbeReport, processed},
+    {"taa.report", "taa.report result=0 ", TaaReports, processed},
+    {"taa.vr", "taa.vr result=0 ", TaaLaneReport, processed},   // bare: report; a value queues the AA mode
     {"cull.prepare", "cull.prepare result=0", CullPrepareReport, processed},
     // The two use-after-free watches were removed when the bugs were closed
     // pending recurrence (2026-10-27), and the frame probe left the cull verbs.

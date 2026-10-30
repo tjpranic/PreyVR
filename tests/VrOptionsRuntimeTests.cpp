@@ -97,6 +97,7 @@ PREYVR_STUB(SetGrenadeDeploy,GrenadeDeployEnabled,GrenadeDeploy,unsigned)
 PREYVR_STUB(SetAnimIkLongReachEnabled,AnimIkLongReachEnabled,LongReach,unsigned)
 PREYVR_STUB(SetInventoryDepthPercent,InventoryDepthPercent,InventoryDepth,unsigned)
 PREYVR_STUB(SetUiPointerHand,UiPointerHand,PointerHand,unsigned)
+PREYVR_STUB(SetTemporalAntialiasing,TemporalAntialiasingEnabled,Antialiasing,unsigned)
 #undef PREYVR_STUB
 DWORD TextPanelDistanceCm(){return TextPanelDistanceCmValue();}
 DWORD SetHudLayerEnabled(unsigned v){applied[options::HudLayer]=v!=0;return 0;}
@@ -249,7 +250,8 @@ int main(){
    {options::LongReach,0},{options::InventoryLayer,1},{options::InventoryStereo,1},{options::InventoryDepth,50},
    {options::UiCurve,50},{options::DebugOverlay,1},{options::FingerCurl,0},{options::AimLasers,0},
    {options::ControllerPrompts,0},{options::ArmLength,51},{options::SurfaceStop,0},{options::HeavyMass,40},
-   {options::LeanZone,40},{options::HipsBack,12},{options::NearClip,6},{options::ScreenPullback,45}};
+   {options::LeanZone,40},{options::HipsBack,12},{options::NearClip,6},{options::ScreenPullback,45},
+   {options::Antialiasing,0}};
   VrOptionsUiResult result;
   for(const auto& [id,v]:chosen){options::Change change;change.setting=static_cast<int>(id);change.value=v;
    result.changes.push_back(change);}
@@ -358,6 +360,11 @@ int main(){
         "the saved panel settings apply before the rest of VR start");
   Check(HapticStrength()==70&&GrenadeHandEnabled()==1&&AimLasersEnabled()==1&&applied[options::UiScale]==130,
         "and nothing else, nor a panel setting never chosen in the menu");
+  // Then the anti-aliasing choice, before VR start's renderer settings apply its mode.
+  applied[options::Antialiasing]=1;
+  ApplySavedRendererOptions();
+  Check(TemporalAntialiasingEnabled()==0&&HapticStrength()==70&&UiCurveDegrees()==50,
+        "the saved anti-aliasing applies before the renderer settings, and nothing else");
   ApplySavedVrOptions();
   Check(HapticStrength()==35&&UiCurveDegrees()==50&&GrenadeHandEnabled()==0&&menuDistance==150,
         "saved choices win over VR start's defaults and earlier commands");

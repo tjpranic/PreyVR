@@ -18,6 +18,8 @@
 #include "HeadLamp.h"
 #include "DualSceneStereo.h"
 #include "DualOverlay.h"
+#include "TemporalAaProbe.h"
+#include "TemporalAaLane.h"
 #include "NearFovOverride.h"
 #include "InputPost.h"
 #include "InputPath.h"
@@ -43,6 +45,7 @@
 #include "preyvr/DebugOverlayScene.h"
 #include "preyvr/LatestSnapshot.h"
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <sstream>
 
@@ -63,7 +66,15 @@ unsigned long long firstFrame=0;
 bool nearFollow=true;
 unsigned followedNearFov=0;
 unsigned long long nextInputProbe=0;
-const char* settings[]={"r_MotionBlur 0","r_AntialiasingMode 1"};
+// Read back before VR starts. The AA mode follows the per-eye temporal AA lane
+// (TemporalAaLane.h): TSAA with it, SMAA 1X without.
+constexpr unsigned kRendererSettings=2;
+const char* RendererSetting(unsigned i) {
+    return i==0 ? "r_MotionBlur 0" : TaaLaneEnabled() ? "r_AntialiasingMode 4" : "r_AntialiasingMode 1";
+}
+constexpr unsigned kAntialiasingSetting=1;
+// The AA mode has to follow an anti-aliasing change made while VR runs.
+std::atomic<bool> antialiasingPending{false};
 void Log(const std::string& s) { lifecycle::Log("preyvr_vr " + s); }
 void StopFeatures() {
     SetHudLayerEnabled(0);
@@ -107,6 +118,8 @@ void EnableVrMode() {
     // panel's own settings apply now, so its first frame is already the saved one.
     LoadVrOptions();
     ApplySavedPanelOptions();
+    // The saved anti-aliasing choice before the renderer settings, which apply its mode.
+    ApplySavedRendererOptions();
     phase=Phase::preparing;deadline=GetTickCount64()+120000;nextInputProbe=0;
     Log("state=waiting_for_renderer controls=F11_enable,F12_recenter");
 }
@@ -172,11 +185,12 @@ void TickVrMode() {
             if(VerifiedRendererSettingResult()!=0) { Fail("renderer_settings"); return; }
             consolePending=false; ++setting;
         }
-        if(setting<std::size(settings)) {
+        if(setting<kRendererSettings) {
             consoleCount=VerifiedRendererSettingCount();
-            const auto result=QueueVerifiedRendererSetting(settings[setting]);
+            const auto result=QueueVerifiedRendererSetting(RendererSetting(setting));
             if(result==4) return;
             if(result!=0) { Fail("queue_renderer_settings"); return; }
+            if(setting==kAntialiasingSetting) antialiasingPending=false;
             consolePending=true; return;
         }
         phase=Phase::tracking; deadline=GetTickCount64()+120000;
@@ -297,7 +311,7 @@ void TickVrMode() {
             // The same text dual.report and hud.layer answer with.
             Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
                 " } torso={"+TorsoLaneReport()+" } move={"+MoveLaneStatusReport()+StickRereadReport()+
-                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" "+BodyDepthReport()+" "+ExamineCameraReport()+" "+HeadLampReport()+" "+ScreenAimReport()+" focus={"+
+                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" "+BodyDepthReport()+" "+ExamineCameraReport()+" "+HeadLampReport()+" "+ScreenAimReport()+" "+TaaProbeReport()+" "+TaaLaneReport()+" focus={"+
                 FocusHoldReport()+" } hold={"+XrHoldReport()+" } prompts={"+ControllerPromptsReport()+" }");
         }
         const auto owner=AnimIkOwnerGeneration();
@@ -308,8 +322,24 @@ void TickVrMode() {
             calibratedReference=reference;
         }
         FollowNearFov();
+        if(antialiasingPending.load()) {
+            const auto result=QueueVerifiedRendererSetting(RendererSetting(kAntialiasingSetting));
+            if(result!=4) {
+                antialiasingPending=false;
+                Log(std::string("antialiasing=")+(TaaLaneEnabled()?"temporal":"smaa")+" result="+std::to_string(result));
+            }
+        }
     }
 }
+unsigned long SetTemporalAntialiasing(unsigned enabled) {
+    if(enabled>1) return ERROR_INVALID_PARAMETER;
+    if(TaaLaneEnabled()!=(enabled!=0)) {
+        SetTaaLane(enabled);
+        antialiasingPending=true;
+    }
+    return ERROR_SUCCESS;
+}
+unsigned TemporalAntialiasingEnabled() { return TaaLaneEnabled() ? 1u : 0u; }
 // **The near pass must project exactly like the world.** The arms and the held
 // weapon are drawn by the near (viewmodel) pass at r_DrawNearFoV, the world at
 // the camera's own frustum, and the image is declared to the runtime with the

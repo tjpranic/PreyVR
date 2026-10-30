@@ -151,6 +151,7 @@
 - The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision). (Archived)
 - The player body renders over the top of everything
     > Prey drew the body, arms and weapon in its near pass, which is always in front of the world. PreyVR-91/92 drew the body in the world instead, which left the stun gun's charge sparks showing through the gun and its charge meter frozen. Since PreyVR-101 the body stays in the near pass and that pass gets the world's depth (`body.depth 1`; the old way is `body.depth 2`), so the weapon's effects, its display and the PDA stay with it. Setup's Near Clip Distance (3 cm) stops the view cutting into the body when you look down. Worn OK 2026-10-25 and 2026-10-28. See docs/BODY-FOLLOW.md, "How the body is drawn".
+- Temporal anti-aliasing
 
 ---
 

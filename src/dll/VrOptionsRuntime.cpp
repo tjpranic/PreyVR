@@ -28,6 +28,7 @@
 #include "InteractionLane.h"
 #include "RoomScaleLane.h"
 #include "WristLane.h"
+#include "VrMode.h"
 #include "preyvr/DebugOverlayScene.h"
 #include "preyvr/MonotonicClock.h"
 #include "Logger.h"
@@ -226,6 +227,7 @@ constexpr Wiring wiring[]={
  {options::HipsBack,Set<SetBodyHipsBackCm>,Get<BodyHipsBackCm>},
  {options::NearClip,Set<SetViewNearClipCm>,Get<ViewNearClipCm>},
  {options::ScreenPullback,Set<SetExaminePullbackCm>,Get<ExaminePullbackCm>},
+ {options::Antialiasing,Set<SetTemporalAntialiasing>,Get<TemporalAntialiasingEnabled>},
 };
 constexpr bool InSettingOrder(){
  for(unsigned i=0;i<std::size(wiring);++i)if(wiring[i].id!=i)return false;
@@ -287,6 +289,8 @@ constexpr options::Setting kPanelSettings[]={options::UiScale,options::UiMargin,
  options::UiGuide,options::UiDistance,options::UiOffsetRight,options::UiOffsetUp,options::UiText,
  options::PointerHand};
 void ApplySavedPanelOptions(){ApplySaved(kPanelSettings,"panel_applied");}
+constexpr options::Setting kRendererSettings[]={options::Antialiasing};
+void ApplySavedRendererOptions(){ApplySaved(kRendererSettings,"renderer_applied");}
 void ServiceVrOptions(){
  if(!ready.load())return;
  std::optional<ViewRequest> view;
