@@ -24,6 +24,10 @@ void SetSurfaceHeavyMass(unsigned v){applied[options::HeavyMass]=v;}unsigned Sur
 void SetRoomScaleLeanZoneCm(unsigned v){applied[options::LeanZone]=v;}unsigned RoomScaleLeanZoneCm(){return applied[options::LeanZone];}
 void SetBodyHipsBackCm(unsigned v){applied[options::HipsBack]=v;}unsigned BodyHipsBackCm(){return applied[options::HipsBack];}
 void SetViewNearClipCm(unsigned v){applied[options::NearClip]=v;}unsigned ViewNearClipCm(){return applied[options::NearClip];}
+void SetHelmetShown(unsigned v){applied[options::Helmet]=v;}unsigned HelmetShown(){return applied[options::Helmet];}
+void SetHelmetHeightMm(int v){applied[options::HelmetHeight]=v;}int HelmetHeightMm(){return applied[options::HelmetHeight];}
+void SetHelmetForwardMm(int v){applied[options::HelmetForward]=v;}int HelmetForwardMm(){return applied[options::HelmetForward];}
+void SetHelmetSizePercent(unsigned v){applied[options::HelmetSize]=v;}unsigned HelmetSizePercent(){return applied[options::HelmetSize];}
 DWORD SetExaminePullbackCm(unsigned v){applied[options::ScreenPullback]=v;return 0;}unsigned ExaminePullbackCm(){return applied[options::ScreenPullback];}
 void SetSwingSpeed(unsigned v){applied[options::SwingSpeed]=v;}unsigned SwingSpeed(){return applied[options::SwingSpeed];}
 void SetHeavySwingSpeed(unsigned v){applied[options::HeavySwingSpeed]=v;}unsigned HeavySwingSpeed(){return applied[options::HeavySwingSpeed];}
@@ -98,6 +102,8 @@ PREYVR_STUB(SetAnimIkLongReachEnabled,AnimIkLongReachEnabled,LongReach,unsigned)
 PREYVR_STUB(SetInventoryDepthPercent,InventoryDepthPercent,InventoryDepth,unsigned)
 PREYVR_STUB(SetUiPointerHand,UiPointerHand,PointerHand,unsigned)
 PREYVR_STUB(SetTemporalAntialiasing,TemporalAntialiasingEnabled,Antialiasing,unsigned)
+PREYVR_STUB(SetZeroGRollDegrees,ZeroGRollDegrees,ZeroGRoll,unsigned)
+PREYVR_STUB(SetZeroGPitchDegrees,ZeroGPitchDegrees,ZeroGPitch,unsigned)
 #undef PREYVR_STUB
 DWORD TextPanelDistanceCm(){return TextPanelDistanceCmValue();}
 DWORD SetHudLayerEnabled(unsigned v){applied[options::HudLayer]=v!=0;return 0;}
@@ -251,7 +257,9 @@ int main(){
    {options::UiCurve,50},{options::DebugOverlay,1},{options::FingerCurl,0},{options::AimLasers,0},
    {options::ControllerPrompts,0},{options::ArmLength,51},{options::SurfaceStop,0},{options::HeavyMass,40},
    {options::LeanZone,40},{options::HipsBack,12},{options::NearClip,6},{options::ScreenPullback,45},
-   {options::Antialiasing,0}};
+   {options::Antialiasing,0},{options::Helmet,0},
+   {options::HelmetHeight,-25},{options::HelmetForward,-40},{options::HelmetSize,130},{options::ZeroGRoll,45},
+   {options::ZeroGPitch,30}};
   VrOptionsUiResult result;
   for(const auto& [id,v]:chosen){options::Change change;change.setting=static_cast<int>(id);change.value=v;
    result.changes.push_back(change);}

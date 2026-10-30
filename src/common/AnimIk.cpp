@@ -49,6 +49,12 @@ Vec3 ModelToWorld(const Location& location, const Vec3& model)
 Pose ControllerWorldFromHead(float yawRadians, const Vec3& eyeWorld,
                              const Pose& openXrHead, const Pose& openXrController)
 {
+    return ControllerWorldFromHead(stereo::YawQuaternion(yawRadians), eyeWorld, openXrHead, openXrController);
+}
+
+Pose ControllerWorldFromHead(const Quaternion& basis, const Vec3& eyeWorld,
+                             const Pose& openXrHead, const Pose& openXrController)
+{
     // The difference is taken in OpenXR space and converted once, inside
     // EyePoseInWorld, so the axis change happens in exactly one place.
     Pose relative;
@@ -57,7 +63,8 @@ Pose ControllerWorldFromHead(float yawRadians, const Vec3& eyeWorld,
                              openXrController.position.y - openXrHead.position.y,
                              openXrController.position.z - openXrHead.position.z};
     stereo::ReferenceFrame reference{};
-    reference.yawRadians = yawRadians;
+    reference.tilted = true;
+    reference.basis = basis;
     reference.worldPosition = eyeWorld;
     return stereo::EyePoseInWorld(reference, relative);
 }

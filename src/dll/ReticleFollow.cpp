@@ -493,7 +493,7 @@ void PublishReticleTarget(const GameplayPoseFrame& frame, const aim::Sample& sam
     const Vec3 world{sample.origin.x + sample.direction.x * distance, sample.origin.y + sample.direction.y * distance,
                      sample.origin.z + sample.direction.z * distance};
     ReticleTarget target{};
-    target.point = stereo::EngineToTracking(world, anchor, frame.yaw, frame.tracking.head);
+    target.point = stereo::EngineToTracking(world, anchor, PlaySpaceRotation(frame), frame.tracking.head);
     target.distance = distance;
     target.hit = hit;
     target.ns = MonotonicNanoseconds();

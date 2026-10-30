@@ -80,6 +80,8 @@ void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking);
 // Held frames are correct, not degraded: the body has not turned.
 unsigned long long AimHeadYawHeldCount();
 unsigned long long AimHeadYawUnavailableCount();
+// Frames built on zero-G's tilted view (GameplayFrame.h PlaySpaceRotation).
+unsigned long long AimTiltedFrameCount();
 int AimCameraYawMilliDegrees();
 int AimHeadYawMilliDegrees();
 int AimPlaySpaceYawMilliDegrees();

@@ -32,6 +32,13 @@ std::optional<float> EngineYawOf(const Quaternion& engineRotation);
 // Nothing when `current` has no yaw or `delta` is not finite.
 std::optional<Quaternion> LevelledTurn(const Quaternion& current, float delta);
 
+// Zero-G: `current` turned by `delta` about its own up axis (engine Z), so its
+// pitch and roll stay. Nothing for an unusable rotation or a non-finite delta.
+std::optional<Quaternion> LocalTurn(const Quaternion& current, float delta);
+// How far `to` is turned from `from` about `from`'s own up axis: the twist
+// about Z of from^-1 * to. Nothing for unusable rotations.
+std::optional<float> LocalYawBetween(const Quaternion& from, const Quaternion& to);
+
 // How far to turn so the reference yaw equals the torso yaw, the short way.
 // Not applied at or below `minimum` (radians), or for non-finite input.
 struct Step {
@@ -67,6 +74,29 @@ public:
 
 private:
     float left_ = 0.0f;
+    bool valid_ = false;
+    std::uint64_t untilNs_ = 0;
+};
+
+// NativeTurnWatch for zero-G, where the game turns the player about any axis
+// (its stick's yaw and pitch, its roll, a landing): the whole rotation moved
+// more than `epsilon` radians since this lane last left it.
+class NativeRotationWatch {
+public:
+    bool Update(const Quaternion& rotation, std::uint64_t nowNs, float epsilon, std::uint64_t holdNs);
+    void Left(const Quaternion& rotation)
+    {
+        left_ = rotation;
+        valid_ = true;
+    }
+    void Reset()
+    {
+        valid_ = false;
+        untilNs_ = 0;
+    }
+
+private:
+    Quaternion left_{};
     bool valid_ = false;
     std::uint64_t untilNs_ = 0;
 };

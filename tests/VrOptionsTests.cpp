@@ -185,6 +185,15 @@ void LayoutChecks(){
        !Valid(HeavySwingSpeed,250)&&Display(HeavySwingSpeed,700)==L"700 CM/S",
        "heavy swings from 7 m/s by default, 3 to 15 m/s");
  Check(MenuEntries(0)[0]==Turn&&Has(MenuEntries(0),BackwardSpeed),"comfort: turning first, then walking");
+ Check(MenuEntries(0).size()>=2&&MenuEntries(0).end()[-2]==ZeroGRoll&&MenuEntries(0).end()[-1]==ZeroGPitch,
+       "comfort: zero-G's roll and pitch last");
+ for(const int z:{ZeroGRoll,ZeroGPitch})
+  Check(Defaults()[z]==0&&KindOf(static_cast<unsigned>(z))==Kind::choice&&Display(static_cast<unsigned>(z),0)==L"SMOOTH"&&
+        Display(static_cast<unsigned>(z),45)==L"45 DEGREES"&&Valid(static_cast<unsigned>(z),90)&&
+        !Valid(static_cast<unsigned>(z),10),
+        "zero-G roll and pitch: smooth by default, or Turning's steps");
+ Check(std::string(Describe(ZeroGRoll).key)=="zerog_roll"&&std::string(Describe(ZeroGPitch).key)=="zerog_pitch",
+       "zero-G roll and pitch: saved by their keys");
  for(const int e:{UiDistance,UiOffsetRight,UiOffsetUp,UiText,PointerHand,HudLayer,ReticleWorld,ReticleSize,ReticleFallback,MarkerSize})
   Check(Has(MenuEntries(2),e),"menu placement, the HUD, the reticle and the markers on the interface tab");
  {const auto page=MenuEntries(2);const auto text=std::find(page.begin(),page.end(),static_cast<int>(UiText));
@@ -220,6 +229,23 @@ void LayoutChecks(){
  {Values parsed{};Present marked{};
   Check(Parse("version=1\nantialiasing=0\n",parsed,&marked)&&parsed[Antialiasing]==0&&marked[Antialiasing],
         "SMAA persists");}
+ Check(Defaults()[Helmet]==1&&KindOf(Helmet)==Kind::choice&&Display(Helmet,1)==L"SHOWN"&&Display(Helmet,0)==L"HIDDEN"&&
+       !Valid(Helmet,2)&&std::string(Describe(Helmet).key)=="helmet"&&Has(MenuEntries(2),Helmet),
+       "space helmet: shown on the head by default, or hidden, on the interface tab");
+ {const auto page=MenuEntries(2);const auto shown=std::find(page.begin(),page.end(),static_cast<int>(Helmet));
+  Check(shown!=page.end()&&page.end()-shown>=4&&shown[1]==HelmetHeight&&shown[2]==HelmetForward&&shown[3]==HelmetSize,
+        "the helmet's height, forward / back and size sit under it");}
+ Check(Defaults()[HelmetHeight]==0&&Valid(HelmetHeight,-100)&&Valid(HelmetHeight,100)&&!Valid(HelmetHeight,105)&&
+       Display(HelmetHeight,0)==L"PREY'S OWN"&&Display(HelmetHeight,-20)==L"20 MM DOWN"&&Display(HelmetHeight,15)==L"15 MM UP"&&
+       std::string(Describe(HelmetHeight).key)=="helmet_height",
+       "helmet height: Prey's own by default, 10 cm up or down in 5 mm steps");
+ Check(Defaults()[HelmetForward]==0&&Valid(HelmetForward,-100)&&!Valid(HelmetForward,-105)&&
+       Display(HelmetForward,-35)==L"35 MM BACK"&&Display(HelmetForward,10)==L"10 MM FORWARD"&&
+       std::string(Describe(HelmetForward).key)=="helmet_forward",
+       "helmet forward / back: 10 cm either way");
+ Check(Defaults()[HelmetSize]==100&&Valid(HelmetSize,50)&&Valid(HelmetSize,200)&&!Valid(HelmetSize,45)&&
+       Display(HelmetSize,120)==L"120%"&&std::string(Describe(HelmetSize).key)=="helmet_size",
+       "helmet size: Prey's by default, half to double");
  Check(Defaults()[NearClip]==3&&Valid(NearClip,1)&&Valid(NearClip,10)&&!Valid(NearClip,0)&&!Valid(NearClip,11)&&
        KindOf(NearClip)==Kind::range&&Display(NearClip,3)==L"3 CM"&&Display(NearClip,10)==L"10 CM"&&
        std::string(Describe(NearClip).key)=="near_clip",

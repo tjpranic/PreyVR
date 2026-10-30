@@ -110,9 +110,29 @@ Vec3 PositionOf(const Matrix34& matrix);
 struct ReferenceFrame {
     Vec3 worldPosition{};
     float yawRadians = 0.0f; // about engine Z (up)
+    // In zero-G the body need not be level: the play space turned by `basis`,
+    // the body's whole rotation with the room's yaw taken out, instead of
+    // `yawRadians` alone (docs/ZERO-G-SCOPE-2026-10-30.md).
+    bool tilted = false;
+    Quaternion basis{};
 };
 
 Quaternion YawQuaternion(float radians);
+
+// A play-space basis split into its heading about engine Z and what is left,
+// the tilt: basis = tilt * YawQuaternion(yaw). A level basis has no tilt, so a
+// lane that only knows the yaw is right whenever the body is level; in zero-G
+// it needs the tilt too (docs/ZERO-G-SCOPE-2026-10-30.md).
+struct SplitBasis {
+    float yaw = 0.0f;
+    Quaternion tilt{};
+};
+SplitBasis SplitHeading(const Quaternion& basis);
+// The basis back: tilt * YawQuaternion(yaw).
+Quaternion PlaySpaceBasis(float yaw, const Quaternion& tilt);
+// How far apart two rotations are, radians (0..pi). Between two yaws, their
+// wrapped difference.
+float RotationAngle(const Quaternion& a, const Quaternion& b);
 
 // **An engine-world point in tracking (OpenXR) space**, by the mapping one
 // gameplay frame defines: the engine point `anchor` is where the tracked `head`
@@ -129,6 +149,14 @@ Vec3 EngineDirToTracking(const Vec3& direction, float yawRadians);
 // The tracking origin as a pose in the engine world, in engine axes: what maps
 // ToEngineSpace(p) for a tracking point p to TrackingToEngine(p).
 Pose TrackingOriginInWorld(float yawRadians, const Vec3& anchor, const Pose& head);
+// The same five on a full play-space basis (PlaySpaceBasis): in zero-G the
+// body, and with it the play space, need not be level. The yaw forms are these
+// on YawQuaternion(yaw), operation for operation.
+Vec3 EngineToTracking(const Vec3& world, const Vec3& anchor, const Quaternion& basis, const Pose& head);
+Vec3 TrackingToEngine(const Vec3& tracking, const Vec3& anchor, const Quaternion& basis, const Pose& head);
+Vec3 TrackingDirToEngine(const Vec3& direction, const Quaternion& basis);
+Vec3 EngineDirToTracking(const Vec3& direction, const Quaternion& basis);
+Pose TrackingOriginInWorld(const Quaternion& basis, const Vec3& anchor, const Pose& head);
 
 // The head-tracking reference generation (HeadTrackingHook) is odd while a
 // recenter is under way, and a sample taken against another generation than the

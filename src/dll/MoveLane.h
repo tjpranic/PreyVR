@@ -146,10 +146,14 @@ unsigned long long MoveLaneRecenterCount();
 //
 // The lanes post a stick only when it changes, so the engine must keep what was
 // posted. These are what they delivered and it should hold, in thousandths:
-// 0 move X, 1 move Y, 2 yaw (the turn lane's xi_thumbrx); 0 when nothing is held.
+// 0 move X, 1 move Y, 2 yaw (the turn lane's xi_thumbrx), 3 zero-G pitch
+// (xi_thumbry); 0 when nothing is held.
 // StickReread hands them to Prey's re-read, and the lanes read the engine back
 // every frame and post again what something else overwrote.
 int MoveLaneHeldMilli(unsigned axis);
+// Whether the lane holds zero-G's left or right lean button (a bumper) down,
+// for StickReread: Prey re-reads them with the sticks. Never in Prey's wheel.
+bool MoveLaneLeanHeld(bool right);
 // The move stick went from released to pushed within `windowNs` of `now` and is
 // still pushed: a walk's first frames, before the body has been asked to move.
 bool MoveLaneStickStarted(std::uint64_t now, std::uint64_t windowNs);
@@ -168,6 +172,12 @@ std::string MoveLaneStatusReport();
 namespace preyvr::dll {
 DWORD SetSnapTurnDegrees(unsigned degrees);
 unsigned SnapTurnDegrees();
+// Zero-G Roll and Zero-G Pitch (docs/ZERO-G-SCOPE-2026-10-30.md): 0 smooth, as
+// Prey turns them, or 15-90 degrees a step.
+DWORD SetZeroGRollDegrees(unsigned degrees);
+unsigned ZeroGRollDegrees();
+DWORD SetZeroGPitchDegrees(unsigned degrees);
+unsigned ZeroGPitchDegrees();
 DWORD SetHeadRelativeMovement(unsigned enabled);
 bool HeadRelativeMovementEnabled();
 DWORD SetMovementAxisScales(unsigned strafePercent,unsigned backwardPercent);

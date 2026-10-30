@@ -23,6 +23,7 @@ struct WeaponBox {
     std::uint64_t rig=0,sequence=0,reference=0,epoch=0,publishedNs=0;
     std::uint64_t stamp=0;    // the tracking sample's display time, ns
     float yaw=0;    // the play-space yaw the sample was mapped with
+    Quaternion basis{};   // and its whole rotation (zero-G's may be tilted)
     bool wrench=false;
     // The same points in tracking reference space (engine axes), the map that put
     // them in the world, and the right grip there: a pose's motion without the

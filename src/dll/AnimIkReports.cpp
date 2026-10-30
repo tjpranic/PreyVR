@@ -155,7 +155,7 @@ void CaptureMarks(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsign
     const PoseSettings settings = ReadPoseSettings();
     HandMarks marks{};
     const auto toXr = [&](const Vec3& model) {
-        return stereo::EngineToTracking(animik::ModelToWorld(location, model), anchor, frame.yaw, frame.tracking.head);
+        return stereo::EngineToTracking(animik::ModelToWorld(location, model), anchor, PlaySpaceRotation(frame), frame.tracking.head);
     };
     for (int s = 0; s < 2; ++s) {
         if (!rig.valid[s]) { continue; }

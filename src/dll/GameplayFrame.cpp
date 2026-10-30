@@ -2,6 +2,7 @@
 #include "AimTakeover.h"
 #include "EngineAccess.h"
 #include "HeadTrackingHook.h"
+#include "TorsoLane.h"
 #include "XrInput.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/LatestSnapshot.h"
@@ -32,6 +33,8 @@ std::atomic<int> gTrackedHeadMilli[3]{0,0,0};
 std::atomic<float> gLastHeadYaw{0.0f};
 std::atomic<bool> gHaveHeadYaw{false};
 std::atomic<unsigned long long> gHeadYawHeld{0}, gHeadYawUnavailable{0};
+// Frames built on zero-G's tilted view.
+std::atomic<unsigned long long> gTiltedFrames{0};
 
 // The yaw the engine's own view camera is facing. Read live rather than cached,
 // because the whole point is to follow the player's facing as it changes.
@@ -120,6 +123,21 @@ FrameBuild BuildGameplayFrame(std::uintptr_t player, GameplayPoseFrame& frame, b
         frame.headYawUsable = false;
         gHeadYawUnavailable.fetch_add(1, std::memory_order_relaxed);
     }
+    // **Zero-G**: the view was composed on the tilted body (HeadTrackingHook.cpp),
+    // so the camera's yaw less the head's is not the play space's heading any
+    // more. The frame takes the view's own basis, split into its heading and
+    // the tilt (GameplayFrame.h PlaySpaceRotation); it needs no head yaw.
+    frame.tilt = Quaternion{};
+    if (PlayerInZeroG()) {
+        const AppliedView view = LastAppliedView();
+        if (view.tilted && view.sequence != 0) {
+            const stereo::SplitBasis split = stereo::SplitHeading(view.basis);
+            frame.yaw = split.yaw;
+            frame.tilt = split.tilt;
+            frame.headYawUsable = true;
+            gTiltedFrames.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
     gCamYawMilli.store(static_cast<int>(frame.cameraYaw * 57295.78f), std::memory_order_relaxed);
     gPlaySpaceYawMilli.store(static_cast<int>(frame.yaw * 57295.78f), std::memory_order_relaxed);
     // The anchor the hand is placed against, and the tracked head it is measured
@@ -170,6 +188,7 @@ bool TryGetGameplayPoseFrame(GameplayPoseFrame& out, bool requireTracking)
 }
 
 unsigned long long AimHeadYawHeldCount() { return gHeadYawHeld.load(std::memory_order_relaxed); }
+unsigned long long AimTiltedFrameCount() { return gTiltedFrames.load(std::memory_order_relaxed); }
 unsigned long long AimHeadYawUnavailableCount() { return gHeadYawUnavailable.load(std::memory_order_relaxed); }
 int AimCameraYawMilliDegrees() { return gCamYawMilli.load(std::memory_order_relaxed); }
 int AimHeadYawMilliDegrees() { return gHeadYawMilli.load(std::memory_order_relaxed); }

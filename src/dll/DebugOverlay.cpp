@@ -121,7 +121,7 @@ dd::TessellateStats gLastStats;
 
 Vec3 EngineToXr(const GameplayPoseFrame& f, Vec3 anchor, Vec3 world)
 {
-    return stereo::EngineToTracking(world, anchor, f.yaw, f.tracking.head);
+    return stereo::EngineToTracking(world, anchor, PlaySpaceRotation(f), f.tracking.head);
 }
 
 // The scene hit along a world ray, when the layer asks for hits.
@@ -611,7 +611,7 @@ void DebugOverlayAim(const GameplayPoseFrame& frame, const aim::Sample& sample)
     ray.valid = true;
     // weaponGeneration is the equipped rig's owner for this frame, 0 with none.
     ray.role = frame.weaponGeneration ? dd::RayRole::Weapon : dd::RayRole::Pointer;
-    ray.direction = stereo::EngineDirToTracking(sample.direction, frame.yaw);
+    ray.direction = stereo::EngineDirToTracking(sample.direction, PlaySpaceRotation(frame));
     if (sample.muzzleOrigin && frame.cameraCentreValid) {
         // aim.shot: the sample starts at the muzzle, a real world point. Drawn
         // with the anchor the hands are placed with, it lands on the drawn barrel.
@@ -672,7 +672,7 @@ void DebugOverlayGameFrame(const GameplayPoseFrame& frame, bool tracking)
         ray.valid = true;
         ray.role = dd::RayRole::Use;
         ray.origin = EngineToXr(frame, frame.cameraCentre, use.hand);
-        ray.direction = stereo::EngineDirToTracking(use.direction, frame.yaw);
+        ray.direction = stereo::EngineDirToTracking(use.direction, PlaySpaceRotation(frame));
         ray.selected = use.target;
         ray.onLine = use.onLine;
         ray.held = use.held;
@@ -704,7 +704,7 @@ void DebugOverlayGameFrame(const GameplayPoseFrame& frame, bool tracking)
     const Vec3 originWorld = aimWorld.position;
     const bool psi = PsiTargetMode() == 2;
     float distance = 0;
-    const bool hit = Finite(originWorld) && Hit(frame, originWorld, stereo::TrackingDirToEngine(forward, frame.yaw), mask, distance);
+    const bool hit = Finite(originWorld) && Hit(frame, originWorld, stereo::TrackingDirToEngine(forward, PlaySpaceRotation(frame)), mask, distance);
     if (!hit) { distance = psi ? static_cast<float>(ReticleConvergenceMillimetres()) * .001f : kPointerRange; }
     RayRecord record{};
     auto& ray = record.ray;
@@ -787,7 +787,7 @@ void DebugOverlayPhysical(const GameplayPoseFrame& frame, const PhysicalOverlayS
         p.contact = true;
         p.acted = gContactHistory.acted;
         p.point = toXr(gContactHistory.point);
-        p.normal = stereo::EngineDirToTracking(gContactHistory.normal, frame.yaw);
+        p.normal = stereo::EngineDirToTracking(gContactHistory.normal, PlaySpaceRotation(frame));
         p.contactAge = static_cast<float>(now - gContactHistory.ns) * 1e-9f;
         p.result = gContactHistory.result;
     }
@@ -823,8 +823,8 @@ void DebugOverlayContact(const GameplayPoseFrame& frame, const ContactOverlaySta
     record.marks.reserve(state.count);
     for (unsigned i = 0; i < state.count && i < state.marks.size(); ++i) {
         const auto& m = state.marks[i];
-        record.marks.push_back({toXr(m.point), stereo::EngineDirToTracking(m.normal, frame.yaw), m.dist, m.sweep, m.articulated,
-                                stereo::EngineDirToTracking(m.push, frame.yaw), m.pushed});
+        record.marks.push_back({toXr(m.point), stereo::EngineDirToTracking(m.normal, PlaySpaceRotation(frame)), m.dist, m.sweep, m.articulated,
+                                stereo::EngineDirToTracking(m.push, PlaySpaceRotation(frame)), m.pushed});
     }
     record.gate = state.gate;
     record.status = state.status;
@@ -843,7 +843,7 @@ void DebugOverlaySurface(const GameplayPoseFrame& frame, const SurfaceOverlaySta
         if (hand.active) { record.hands.push_back({toXr(hand.real), toXr(hand.drawn), hand.held}); }
     }
     for (unsigned i = 0; i < state.count && i < state.marks.size(); ++i) {
-        record.marks.push_back({toXr(state.marks[i].point), stereo::EngineDirToTracking(state.marks[i].normal, frame.yaw)});
+        record.marks.push_back({toXr(state.marks[i].point), stereo::EngineDirToTracking(state.marks[i].normal, PlaySpaceRotation(frame))});
     }
     record.status = state.status;
     record.ns = MonotonicNanoseconds();

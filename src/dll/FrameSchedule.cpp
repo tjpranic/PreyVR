@@ -15,6 +15,7 @@
 #include "FrameProbe.h"
 #include "GrenadeLane.h"
 #include "HeadLamp.h"
+#include "Helmet.h"
 #include "HudBridge.h"
 #include "InputPost.h"
 #include "InteractionLane.h"
@@ -101,6 +102,8 @@ void BeforeEngineRender(void* system)
     // After this frame's view, before the render takes the lights: the ones Prey
     // placed before the view was known, on the headset's eye (HeadLamp.h).
     PlaceHeadLampsBeforeRender();
+    // The zero-G helmet on this frame's view, or hidden for the render (Helmet.h).
+    PlaceHelmetBeforeRender();
     // The frame probe's main-thread bracket around Prey's own render (FrameProbe.h).
     ProbeRecord(ProbeStep::renderEnter);
 }
@@ -111,6 +114,8 @@ void AfterEngineRender()
     // The view this frame was rendered with is spent: a light the next frame's
     // attachment pass meets before its view waits for that one (HeadLamp.h).
     EndHeadLampFrame();
+    // Prey's hide bits back on the helmet; this view is spent for it too (Helmet.h).
+    EndHelmetFrame();
     // After the world render took the body's transform, before the next frame's
     // animation starts: the body follow's turn and room-scale's move (TorsoLane.h).
     ServiceBodyFollow();

@@ -136,6 +136,7 @@ struct Pending {
     std::uint64_t ns = 0;
     carry::Motion motion{};
     float yaw = 0;
+    Quaternion basis{};   // the play space's whole rotation (zero-G's may be tilted)
     bool yawValid = false;
     unsigned attempts = 0;
 };
@@ -531,9 +532,9 @@ void Requeue(Pending p)
 
 void ExecuteRelease(std::uintptr_t carry, const Pending& p, std::uint32_t id)
 {
-    const auto yaw = p.yawValid ? p.yaw : 0.0f;
-    const Vec3 hand = p.motion.valid && p.yawValid ? stereo::TrackingDirToEngine(p.motion.velocity, yaw) : Vec3{};
-    const Vec3 spin = p.motion.valid && p.yawValid ? stereo::TrackingDirToEngine(p.motion.angular, yaw) : Vec3{};
+    const Quaternion basis = p.yawValid ? p.basis : Quaternion{};
+    const Vec3 hand = p.motion.valid && p.yawValid ? stereo::TrackingDirToEngine(p.motion.velocity, basis) : Vec3{};
+    const Vec3 spin = p.motion.valid && p.yawValid ? stereo::TrackingDirToEngine(p.motion.angular, basis) : Vec3{};
     const Vec3 player = PlayerVelocity();
     const carry::Release r = carry::ComputeRelease(hand, spin, player, gGrab.kind, Get(gThrow));
     StopOverride o{};
@@ -966,6 +967,7 @@ void RequestCarryRelease()
     GameplayPoseFrame f{};
     if (TryGetGameplayPoseFrame(f, false) && std::isfinite(f.yaw)) {
         p.yaw = f.yaw;
+        p.basis = PlaySpaceRotation(f);
         p.yawValid = true;
     }
     std::lock_guard lock(gPendingMutex);

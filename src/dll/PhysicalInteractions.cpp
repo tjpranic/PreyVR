@@ -33,7 +33,7 @@ void PublishPhysicalWeapon(const GameplayPoseFrame& frame,const RigIdentity& rig
        !IsPoseUsable(frame.tracking.hands[1].gripPose,frame.tracking.hands[1].gripValidity,100000000)||
        frame.tracking.displayTime<=0||!std::isfinite(location.s)||location.s<=0||location.s>2)return;
     Geometry g{};g.rig=rig;g.wrench=shape.wrench;g.correction=SurfaceOffset(frame,Hand::right);
-    auto& s=g.sample;s.worldFromReference=stereo::TrackingOriginInWorld(frame.yaw,frame.cameraCentre,frame.tracking.head);
+    auto& s=g.sample;s.worldFromReference=stereo::TrackingOriginInWorld(PlaySpaceRotation(frame),frame.cameraCentre,frame.tracking.head);
     const auto referenceFromWorld=Inverse(s.worldFromReference);
     const Pose model=Compose(wrist,shape.weaponInWrist);
     const Pose world{Multiply(location.q,model.orientation),animik::ModelToWorld(location,model.position)};
@@ -59,7 +59,7 @@ bool TryGetWeaponBox(WeaponBox& out){
     if(!geometry.TryRead(g))return false;
     for(unsigned i=0;i<g.sample.points.size();++i)out.points[i]=Transform(g.sample.worldFromReference,g.sample.points[i]);
     const auto q=g.sample.worldFromReference.orientation;
-    out.yaw=2*std::atan2(q.z,q.w);
+    out.yaw=2*std::atan2(q.z,q.w);out.basis=q;
     out.rig=g.sample.owner;out.sequence=g.sample.sequence;out.reference=g.sample.reference;out.epoch=g.sample.epoch;
     out.publishedNs=g.published;out.stamp=g.sample.stamp;out.wrench=g.wrench;
     out.local=g.sample.points;out.worldFromReference=g.sample.worldFromReference;out.grip=g.sample.grip.position;

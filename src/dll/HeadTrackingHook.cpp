@@ -8,6 +8,7 @@
 #include "AtomicMax.h"
 
 #include "Logger.h"
+#include "TorsoLane.h"
 #include "preyvr/CameraEdit.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/StereoCamera.h"
@@ -236,13 +237,18 @@ std::atomic<std::uint64_t> gLastOffsetNs{0};
 std::mutex gViewMutex;
 AppliedView gView{};
 
-void PublishView(const Quaternion& rotation, const Vec3& offset)
+void PublishView(const Quaternion& rotation, const Vec3& offset, const Pose& prey,
+                 const stereo::ReferenceFrame& reference)
 {
+    const Quaternion basis =
+        reference.tilted ? Normalize(reference.basis) : stereo::YawQuaternion(reference.yawRadians);
     std::lock_guard lock(gViewMutex);
-    gView = {rotation, offset, gView.sequence + 1};
+    gView = {rotation, offset, gView.sequence + 1, prey, basis, reference.tilted};
 }
 std::atomic<unsigned long long> gObserved{0};
 std::atomic<unsigned long long> gApplied{0};
+// Views composed on zero-G's tilted body.
+std::atomic<unsigned long long> gZeroGViews{0};
 // UseNativeViewYawOnce: set by a body turn, consumed by the next view.
 std::atomic<bool> gNativeViewYaw{false};
 // Near Clip Distance (VR Options' near_clip), cm (preyvr/NearClip.h).
@@ -259,8 +265,8 @@ float ReadFloat(const std::uint8_t* base, std::size_t offset)
     return value;
 }
 
-// The yaw of the camera's own rotation, unless Prey's focus camera has the view.
-std::optional<float> NativeViewYaw(const std::uint8_t* camera)
+// The camera's own rotation (m_rotation), unless Prey's focus camera has the view.
+std::optional<Quaternion> NativeViewRotation(const std::uint8_t* camera)
 {
     int focus = 1;
     Quaternion rotation{};
@@ -271,7 +277,15 @@ std::optional<float> NativeViewYaw(const std::uint8_t* camera)
     const float lengthSquared = rotation.x * rotation.x + rotation.y * rotation.y + rotation.z * rotation.z +
                                 rotation.w * rotation.w;
     if (!std::isfinite(lengthSquared) || lengthSquared < 0.5f || lengthSquared > 2.0f) { return std::nullopt; }
-    return stereo::CameraYawOf(stereo::MatrixFromPose(Pose{rotation, Vec3{}}));
+    return Normalize(rotation);
+}
+
+// Its yaw.
+std::optional<float> NativeViewYaw(const std::uint8_t* camera)
+{
+    const auto rotation = NativeViewRotation(camera);
+    if (!rotation) { return std::nullopt; }
+    return stereo::CameraYawOf(stereo::MatrixFromPose(Pose{*rotation, Vec3{}}));
 }
 
 // After Prey's UpdateView: the view's near plane is Near Clip Distance while VR
@@ -335,6 +349,8 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     // roll come from the head and nowhere else.
     Quaternion gameRotation{};
     std::memcpy(&gameRotation, viewParams + kViewRotation, sizeof(gameRotation));
+    Pose prey{gameRotation, {}};
+    std::memcpy(&prey.position, viewParams + kViewPosition, sizeof(prey.position));
     const stereo::Matrix34 gameMatrix =
         stereo::MatrixFromPose(Pose{gameRotation, Vec3{}});
     // A read refused for contention reuses this thread's last reference of the
@@ -385,6 +401,19 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
 
     stereo::ReferenceFrame reference{};
     reference.yawRadians = playSpaceYaw;
+    // **Zero-G: the body need not be level**, and Prey turns it about its own
+    // axes (docs/ZERO-G-SCOPE-2026-10-30.md). There the play space is turned by
+    // the body's whole rotation, m_rotation, with the room's yaw taken out --
+    // not by its yaw alone -- so a roll or a pitch tilts the world around you.
+    // Prey's strafe roll and `#camera` stay out, as its yaw-only view leaves
+    // them out. Not while Prey's focus camera has the view.
+    if (camera != nullptr && PlayerInZeroG()) {
+        if (const auto body = NativeViewRotation(static_cast<const std::uint8_t*>(camera))) {
+            reference.tilted = true;
+            reference.basis = Normalize(Multiply(*body, stereo::YawQuaternion(-room.yaw)));
+            gZeroGViews.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
     if (wantPosition) {
         // The game's own eye point is the origin the head offset is applied about,
         // so walking, collision, crouching and scripted movement all stay the
@@ -404,7 +433,7 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     gApplied.fetch_add(1, std::memory_order_relaxed);
 
     if (!wantPosition) {
-        PublishView(out, {});
+        PublishView(out, {}, prey, reference);
         return;
     }
     // A non-finite position would put the camera nowhere and is not recoverable by
@@ -413,7 +442,7 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     if (!std::isfinite(world.position.x) || !std::isfinite(world.position.y) ||
         !std::isfinite(world.position.z)) {
         gPositionRefused.fetch_add(1, std::memory_order_relaxed);
-        PublishView(out, {});
+        PublishView(out, {}, prey, reference);
         return;
     }
     // Bound the offset too. The head cannot legitimately be 10 metres from the
@@ -425,11 +454,11 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     const float offsetSquared = dx * dx + dy * dy + dz * dz;
     if (offsetSquared > 100.0f) {
         gPositionRefused.fetch_add(1, std::memory_order_relaxed);
-        PublishView(out, {});
+        PublishView(out, {}, prey, reference);
         return;
     }
     std::memcpy(viewParams + kViewPosition, &world.position, sizeof(world.position));
-    PublishView(out, {dx, dy, dz});
+    PublishView(out, {dx, dy, dz}, prey, reference);
     // Publish only after BOTH rotation and position were accepted. Partial,
     // rotation-only and non-unit-scale research modes have no world contract.
     if (gPositionScale.load()==1.f && !stereo::Recentering(renderReference) &&
@@ -475,6 +504,7 @@ bool Install()
 
 unsigned long long ViewHookObservedCount() { return viewhook::gObserved.load(std::memory_order_relaxed); }
 unsigned long long ViewHookAppliedCount() { return viewhook::gApplied.load(std::memory_order_relaxed); }
+unsigned long long ViewHookZeroGCount() { return viewhook::gZeroGViews.load(std::memory_order_relaxed); }
 void UseNativeViewYawOnce() { viewhook::gNativeViewYaw.store(true, std::memory_order_release); }
 DWORD SetViewHookObserving(unsigned int enabled)
 {

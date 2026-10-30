@@ -22,7 +22,14 @@ namespace preyvr::stick::native {
 // IInput LookupSymbol(gamepad 3, CUIManager+0x3C, key)->value (+0x1C). The
 // mod's posts carry no symbol, so with motion controllers it found 0.
 inline constexpr std::uintptr_t ActionTable=0x2C16838;   // qword: the action names' struct
-inline constexpr std::size_t MoveXAction=0x2F0,MoveYAction=0x2F8,YawAction=0x308;
+inline constexpr std::size_t MoveXAction=0x2F0,MoveYAction=0x2F8,YawAction=0x308,PitchAction=0x310;
+// The re-read also reads the lean buttons (leanleft +0xA00, leanright +0xA08),
+// zero-G's roll and, both held, its brake, through ButtonRead (0x158E540,
+// called only there: context, manager, action, map, flags). It returns false
+// when the manager reports the action filtered (slot +0x1A8), otherwise
+// whether the physical pad's button is down; the re-read stores the two at
+// ArkPlayerInput +0xB5 / +0xB6 and recomputes the lean axis (0x15910B0).
+inline constexpr std::size_t LeanLeftAction=0xA00,LeanRightAction=0xA08;
 inline constexpr std::uintptr_t InputVtable=0x1E580E0,ListenerVtable=0x1E580F8;
 inline constexpr std::size_t ListenerSlot=0x8,PlayerInput=0x8E0;
 inline constexpr std::size_t InputYaw=0x4C,InputMoveX=0x5C,InputMoveY=0x60,InputGate=0x94,InputYawBlock=0xB4;
@@ -40,7 +47,7 @@ inline constexpr int EventFilter=2,EventMap=3;
 inline constexpr std::size_t EventFirst=0x08,EventSecond=0x10;
 struct Contract {std::uintptr_t rva;std::size_t size;std::uint64_t hash;};
 inline constexpr std::uintptr_t AxisRead=0x158EB90,AxisReread=0x158E780,ActionMapEvent=0x1590390,
-    ActionFiltered=0x3CDFE0,YawHandler=0x158FE50,PlayerSingleton=0x157C990;
+    ActionFiltered=0x3CDFE0,YawHandler=0x158FE50,PlayerSingleton=0x157C990,ButtonRead=0x158E540;
 inline constexpr Contract Contracts[]={
     {0x158EB90,156,0x839FF8F2B903A36Dull}, // AxisRead
     {0x158E780,1029,0xA020E7C8A9E8C647ull}, // AxisReread
@@ -48,5 +55,6 @@ inline constexpr Contract Contracts[]={
     {0x3CDFE0,168,0x81C105DC760EE087ull}, // ActionFiltered
     {0x158FE50,39,0x39D47CA81721D5CAull}, // YawHandler
     {0x157C990,48,0xB0D3EB821FBC9AB5ull}, // PlayerSingleton
+    {0x158E540,137,0xC59788C75FBD048Eull}, // ButtonRead
 };
 }

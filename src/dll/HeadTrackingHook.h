@@ -65,6 +65,9 @@ bool TryReadHeadPose(Pose& out, unsigned long long& ageMicroseconds);
 // Frames the view hook saw, and frames it actually rewrote.
 unsigned long long ViewHookObservedCount();
 unsigned long long ViewHookAppliedCount();
+// Views composed on zero-G's tilted body (the play space turned by the body's
+// whole rotation, TorsoLane.h PlayerInZeroG).
+unsigned long long ViewHookZeroGCount();
 
 // Installs the hook in observe-only mode. Nothing is written; the counters and
 // the readings above start moving.
@@ -125,14 +128,23 @@ DWORD ViewPositionOffsetMillimetres();
 bool ViewPositionOffset(Vec3& out);
 
 // **The view last applied**, for what sits on the headset's eye in the world
-// (HeadLamp.h): its rotation (world), and how far the headset's eye sits from
-// Prey's own eye point (world axes, metres; zero while positional tracking is
-// off or the position was refused). `sequence` counts the views applied, 0
-// before the first. Main thread.
+// (HeadLamp.h, Helmet.h): its rotation (world), and how far the headset's eye
+// sits from Prey's own eye point (world axes, metres; zero while positional
+// tracking is off or the position was refused). `sequence` counts the views
+// applied, 0 before the first. `prey` is the view as Prey composed it, before
+// it was replaced: its rotation is the world's, but in first person its
+// position is relative to the player entity (CView::Update, 0x3D91C0, adds the
+// entity's world position after UpdateView), so it is no world point. Main
+// thread.
 struct AppliedView {
     Quaternion rotation{};
     Vec3 offset{};
     unsigned long long sequence = 0;
+    Pose prey{};
+    // The play space's rotation into the world the view was composed on: the
+    // yaw's alone, or zero-G's tilted body (`tilted`).
+    Quaternion basis{};
+    bool tilted = false;
 };
 AppliedView LastAppliedView();
 

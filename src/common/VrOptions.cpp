@@ -18,6 +18,7 @@ constexpr const wchar_t* reticleNames[]={L"ON THE HUD",L"IN THE WORLD"};
 constexpr const wchar_t* carryHoldNames[]={L"PRESS TO TOGGLE",L"HOLD TO CARRY"};
 constexpr const wchar_t* grenadeNames[]={L"GAME THROW",L"HAND THROW"};
 constexpr const wchar_t* antialiasingNames[]={L"SMAA",L"TEMPORAL"};
+constexpr const wchar_t* helmetNames[]={L"HIDDEN",L"SHOWN"};
 using U=Unit;
 constexpr Spec specs[]={
  {"turn",L"TURNING",L"Smooth turning or fixed angular steps.",45,0,90,15,U::degrees,{},turnChoices,L"SMOOTH"},
@@ -91,7 +92,17 @@ constexpr Spec specs[]={
  // The examination camera takes the same 0-100, default 30 (preyvr/ExaminePullback.h; examine_pullback pins it).
  {"screen_pullback",L"SCREEN DISTANCE",L"How far your view stays back from keypads, terminals and other screens you use. Prey brings a screen close enough to fill your whole view, which in the headset is a hand's width from your eyes. Never further back than you were standing.",30,0,100,5,U::cm,{},{},L"PREY'S OWN"},
  // Temporal is TSAA with each eye's own history (TemporalAaLane.h); SMAA is SMAA 1X.
- {"antialiasing",L"ANTI-ALIASING",L"Temporal smooths the jagged, crawling edges of distant objects by blending each eye's recent frames, at some cost in frame rate. SMAA smooths each frame on its own: faster, but distant edges shimmer as you move.",1,0,1,1,U::none,antialiasingNames}
+ {"antialiasing",L"ANTI-ALIASING",L"Temporal smooths the jagged, crawling edges of distant objects by blending each eye's recent frames, at some cost in frame rate. SMAA smooths each frame on its own: faster, but distant edges shimmer as you move.",1,0,1,1,U::none,antialiasingNames},
+ // Shown sits it on your head (Helmet.h); Hidden takes it out of the render alone.
+ {"helmet",L"SPACE HELMET",L"The helmet Morgan wears in zero gravity and outside the station. Shown: it sits on your head and moves with it. Hidden: it is not drawn.",1,0,1,1,U::none,helmetNames},
+ // The helmet lane takes the same -100..100 mm and 50-200% (Helmet.h): moved along your eyes' own axes, sized
+ // around its centre.
+ {"helmet_height",L"HELMET HEIGHT",L"Raises or lowers the helmet around your eyes. Lower it if you can see out of its bottom edge.",0,-100,100,5,U::mmUpDown,{},{},L"PREY'S OWN"},
+ {"helmet_forward",L"HELMET FORWARD / BACK",L"Moves the helmet forward or back around your eyes. Back brings its edges further round you.",0,-100,100,5,U::mmForwardBack,{},{},L"PREY'S OWN"},
+ {"helmet_size",L"HELMET SIZE",L"Scales the helmet around its centre. Larger looks further away; it covers more or less of your view only once it has been moved.",100,50,200,5,U::percent},
+ // The move lane takes the same 0 or 15-90 as Turning (MoveLane.h).
+ {"zerog_roll",L"ZERO-G ROLL",L"In zero gravity the bumpers roll you left and right, and both together brake. Smooth rolls while held, as the game does; or one fixed step a press.",0,0,90,15,U::degrees,{},turnChoices,L"SMOOTH"},
+ {"zerog_pitch",L"ZERO-G PITCH",L"In zero gravity the right stick up and down tips you forward and back. Smooth tips while held, as the game does; or one fixed step a push.",0,0,90,15,U::degrees,{},turnChoices,L"SMOOTH"}
 };
 static_assert(std::size(specs)==Count,"one Spec per Setting, in order");
 // Each default, name and choice belongs to its setting's range, one name per value.
@@ -106,11 +117,12 @@ constexpr bool Consistent(){
 static_assert(Consistent(),"every Spec describes its own range");
 
 // The panel's tabs. Each setting appears once, each button once.
-constexpr int comfort[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,StrafeSpeed,BackwardSpeed};
+constexpr int comfort[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,StrafeSpeed,BackwardSpeed,ZeroGRoll,
+    ZeroGPitch};
 constexpr int hands[]={AimLasers,TwoHand,GripToggle,SupportSnap,Psychoscope,ArmsFree,FingerCurl,ArmLength,CarryHold,GrenadeHand,
     CarryThrowStrength,GrenadeThrowStrength,SurfaceStop,HeavyMass,PhysicalContact,PushStrength,FreeSwing,SwingSpeed,HeavySwingSpeed};
 constexpr int interface_[]={UiScale,UiMargin,UiCurve,UiGuide,UiDistance,UiOffsetRight,UiOffsetUp,UiText,ScreenPullback,
-    PointerHand,ControllerPrompts,HudLayer,ReticleWorld,ReticleSize,ReticleFallback,MarkerSize};
+    PointerHand,ControllerPrompts,HudLayer,ReticleWorld,ReticleSize,ReticleFallback,MarkerSize,Helmet,HelmetHeight,HelmetForward,HelmetSize};
 constexpr int equipment[]={Holsters,ClearHolsterSlots,Wrist,WristSize,WristOnHud,WristTick,WristAlong,WristHover,
     WristTilt};
 constexpr int feedback[]={Haptics,HapticStrength};
@@ -166,6 +178,8 @@ std::wstring Display(unsigned id,int v){
  case U::degrees:return number+L" DEGREES";
  case U::degreesRightLeft:return std::to_wstring(std::abs(v))+(v>0?L" DEGREES RIGHT":L" DEGREES LEFT");
  case U::degreesUpDown:return std::to_wstring(std::abs(v))+(v>0?L" DEGREES UP":L" DEGREES DOWN");
+ case U::mmUpDown:return std::to_wstring(std::abs(v))+(v>0?L" MM UP":L" MM DOWN");
+ case U::mmForwardBack:return std::to_wstring(std::abs(v))+(v>0?L" MM FORWARD":L" MM BACK");
  case U::cmPerSecond:return number+L" CM/S";
  case U::kg:return number+L" KG";
  case U::none:break;

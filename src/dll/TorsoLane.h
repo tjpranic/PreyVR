@@ -1,5 +1,7 @@
 #pragma once
 
+#include "preyvr/ZeroGControls.h"
+
 #include <windows.h>
 
 #include <string>
@@ -45,6 +47,15 @@ void BodyTorsoSettings(float& deadzoneRadians, float& relax);
 // follow's turn the entry decided, then room-scale's move (RoomScaleLane.h),
 // before the next frame's animation starts.
 void ServiceBodyFollow();
+// Zero-G (docs/ZERO-G-SCOPE-2026-10-30.md): the player's movement state is
+// Prey's zero-G one, as of this frame's ArkPlayer::Update. The body's turns
+// above are then about its own up axis, keeping its pitch and roll, and
+// room-scale stands.
+bool PlayerInZeroG();
+// A snap step of zero-G roll or pitch, signed degrees about the body's own axis
+// (preyvr/ZeroGControls.h), made at the next ArkPlayer::Update entry. Refused
+// outside zero-G; a later one replaces one not yet made.
+DWORD QueueZeroGStep(zerog::Axis axis, int degrees);
 // The torso yaw (tracking space, armpose::YawOf convention), when the lane
 // estimated one within the last 100 ms.
 bool BodyTorsoYaw(float& yaw);

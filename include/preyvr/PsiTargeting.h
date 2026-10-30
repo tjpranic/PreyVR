@@ -9,18 +9,26 @@ namespace preyvr::psi {
 enum class Mode : unsigned { Native, Head, LeftController };
 struct Ray { Vec3 origin{},direction{}; };
 static_assert(sizeof(Ray)==24);
-inline std::optional<Ray> BuildRay(Mode mode,float yaw,Vec3 cameraCentre,
+// `basis` is the play space's rotation into the world (stereo::PlaySpaceBasis):
+// the yaw's alone, or in zero-G the tilted body's.
+inline std::optional<Ray> BuildRay(Mode mode,Quaternion basis,Vec3 cameraCentre,
                                  Pose head,Pose hand,PoseValidity validity) {
-    if((mode!=Mode::Head&&mode!=Mode::LeftController)||!std::isfinite(yaw)||!std::isfinite(cameraCentre.x)||
+    const float n=basis.x*basis.x+basis.y*basis.y+basis.z*basis.z+basis.w*basis.w;
+    if((mode!=Mode::Head&&mode!=Mode::LeftController)||!std::isfinite(n)||n<.5f||n>2.f||!std::isfinite(cameraCentre.x)||
        !std::isfinite(cameraCentre.y)||!std::isfinite(cameraCentre.z))return {};
-    stereo::ReferenceFrame ref{};ref.yawRadians=yaw;
+    stereo::ReferenceFrame ref{};ref.tilted=true;ref.basis=basis;
     const auto source=mode==Mode::Head?head:hand;
     auto ray=controller::AimFromController(ref,source,validity,100000000);
     if(!ray)return {};
     const auto origin=mode==Mode::Head?cameraCentre:
-        animik::ControllerWorldFromHead(yaw,cameraCentre,head,hand).position;
+        animik::ControllerWorldFromHead(basis,cameraCentre,head,hand).position;
     if(!std::isfinite(origin.x)||!std::isfinite(origin.y)||!std::isfinite(origin.z))return {};
     return Ray{origin,ray->direction};
+}
+inline std::optional<Ray> BuildRay(Mode mode,float yaw,Vec3 cameraCentre,
+                                 Pose head,Pose hand,PoseValidity validity) {
+    if(!std::isfinite(yaw))return {};
+    return BuildRay(mode,stereo::YawQuaternion(yaw),cameraCentre,head,hand,validity);
 }
 struct Sample {
     Ray ray{};

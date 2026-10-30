@@ -75,7 +75,7 @@ bool MakeContext(std::uintptr_t component,psi::Context& ctx){
        !IsPoseUsable(f.tracking.head,f.tracking.headValidity,100000000)||
        !stereo::ReferenceCurrent(f.referenceGeneration,HeadTrackingReferenceGeneration()))return false;
     const auto& left=f.tracking.hands[0];
-    auto ray=psi::BuildRay(static_cast<psi::Mode>(m),f.yaw,f.cameraCentre,
+    auto ray=psi::BuildRay(static_cast<psi::Mode>(m),PlaySpaceRotation(f),f.cameraCentre,
         f.tracking.head,left.aimPose,m==1?f.tracking.headValidity:left.aimValidity);
     if(!ray)return false;
     // From the drawn hand: held back by a wall (SurfaceStopLane.h), it casts from there.

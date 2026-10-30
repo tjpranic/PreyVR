@@ -2,6 +2,31 @@
 
 Only confirmed or explicitly provisional build-specific locations belong here. Prefer a signature plus validation recipe over an RVA alone.
 
+### Zero-G rotation and the helmet — 2026-10-30
+
+No R-number. Static only (Ghidra over the supported Steam hash); nothing built or worn yet.
+`tools/re/verify_zero_g.py` checks every row. Why and the routes in
+[the zero-G scope](ZERO-G-SCOPE-2026-10-30.md).
+
+| RVA / field | Purpose and constraint |
+| --- | --- |
+| ArkPlayer `+0x58` (int) | The movement FSM's state; **9 is zero-G** (its state object at FSM `+0x310` = ArkPlayer `+0x368`). Read by the FSM rotation `0x159E1D0`, the stick turn rate (`0x158F69C`) and the helmet update (`0x1327543`). The stance `+0x1838 == 9` is the same condition for `onEnterZeroG`/`onExitZeroG` (`0x15849D0`). |
+| action table (`0x2C16838`) `+0xA00` / `+0xA08` | `leanleft` / `leanright` (initializer `0x1709BFA`). ArkPlayerInput binds them to `0x1590250` / `0x1590290` (`0x158DB7A`, `0x158DBF3`). Gamepad: `xi_shoulderl/r` in the `player` map. |
+| `0x1590250` / `0x1590290` | Press (activation 1) sets ArkPlayerInput `+0xB5` / `+0xB6`, release (2) clears it; both then call `0x15910B0`. |
+| `0x15910B0` | Lean axis = (`+0xB6` ? 1 : 0) + (`+0xB5` ? −1 : 0) to input `+0x80` and `+0x7C` (ArkPlayer `+0x960` / `+0x95C`); both held sets `+0xB1` (ArkPlayer `+0x991`), zero-G's brake. The cinematic gate `+0x94` clears both flags. |
+| `0x158E540` (137 bytes) ButtonRead | `(context, manager, action, map, flags)`: false when the manager reports the action filtered (`+0x1A8`), else the physical pad's button. Called only by the re-read (`0x158E819`, `0x158E844`, `0x158EB23`, `0x158EB53`). StickReread detours it so a zero-G lean button the move lane holds stays down (`StickRereadNative.h`). |
+| `0x158EB13`-`0x158EB64` | The stick re-read (`0x158E780`, [stick re-read](#stick-re-read--2026-10-24)) also re-reads `leanleft`/`leanright` from the physical pad and stores `+0xB5`/`+0xB6`, then calls `0x15910B0`. A posted lean is dropped on every re-read. |
+| `0x148A250` | ArkPlayerCamera's update: rotates `m_rotation` (camera `+0x150` = ArkPlayer `+0x13F0`) through `0x159E1D0(FSM, &m_rotation, angles)` (`0x148A38F`, `0x148A3CB`), the angles from `0x157CBF0` (input rates). |
+| `0x126AF50` | The zero-G rotation (FSM case 9, `0x159E24F`): `m_rotation = m_rotation × Euler(angles) × roll`, so pitch, yaw and roll turn about the body's own axes. Roll rate integrates the lean axis (`0x126AFF4`, ArkPlayer `+0x960`) with state `+0xB8` accel, `+0xB4` max, `+0xBC` decel into `+0xE4`; zero while braking (`+0xF0`). |
+| `0x126FCC0` | The zero-G state update: braking from `+0x991`, `ZeroGTransitionOut`, then the entity's position and rotation set from the view rotation (player vtable `+0x1A8`). |
+| `0x1327070` (helmet, ArkPlayer `+0x1468`) | Eases its copy (`+0x08`) toward the live view camera (`gEnv->pSystem` `+0x388`), clamps the difference, and writes it as the `helmet` attachment's relative default (vtable `+0x58`) on character slots 0 and 5 (`0x1327D0E`, `0x1327D87`). Creak sounds from the zero-G state at `+0x368`. |
+| bone attachment vtable `0x1D212B8` | `+0x58` `0x828DC0` SetAttRelativeDefault: QuatT to `+0xF8` (q) / `+0x108` (t); `+0x68` `0x822C80` returns the model-relative transform at `+0x130`; `+0x48` `0x828D70` writes `+0x114`. |
+| `0x821FD0` | `CAttachmentManager::DrawAttachments(manager, SRendParams*, Matrix34* parent, pass)`. For each bone attachment not hidden in the pass (`+0x08` & `0x10000` main / `0x20000` shadow) it builds the parent matrix × the model transform (rotation `+0x130`, translation `+0x140`, no scale) and calls its object's (`+0x20`) RenderAttachment (vtable `+0x18`). Called by CCharInstance::Render (`0x81BCB0`, at `0x81C707`). |
+| `0x334DF0` (202 bytes) | The character attachment's RenderAttachment (vtable `0x1CB1328` `+0x18`; `+0x08` returns type 2): the character at object `+0x08`, its Render (vtable `+0xC0`) with an identity QuatTS offset at `RSP+0x3C` (scale 1.0 at `+0x58`). |
+| `0x81BCB0` (2676 bytes) CCharInstance::Render | `(this, SRendParams*, const QuatTS* offset, pass, …)`: render matrix × the offset, its rotation scaled by the offset's s (R14 = R8 at `0x81BCD3`, s read at `0x81BF8B`). Then the character's own draw and its attachments (`0x821FD0`). The helmet lane detours it to scale the helmet's character alone. |
+| `0x3D91C0` CView::Update | Calls the player's UpdateView (game object `+0x80`), then adds the camera shake. While slot 0 draws as first person (slot flags `+0x2C8` & 2), it gives that slot a camera-space position (`+0x2A0`) and adds the entity's `GetWorldPos` (`+0x140` = `0x904D10`, the world matrix's translation) to the view's position. **So the position `UpdateView` (`0x148B820`) writes is relative to the player entity**: the entity's rotation × `#camera`'s offset. PreyVR-108's helmet took it as a world point and was drawn 1.2 km away. |
+| `0x1326690` / `0x1326850` | Helmet deploy / retract: unhide (`+0x88`) slot 0's `helmet`, `+0xA8` slot 5's; play `Breather1P_Close` / `Breather1P_Open` on the attachment's own character. |
+
 ### Fullscreen video — 2026-10-25
 
 No R-number. Worn OK in PreyVR-93 (2026-10-25, run `player-20261025-192638`): the neuromod install

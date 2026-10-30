@@ -18,6 +18,10 @@
 //    Y and yaw instead of the idle pad's zero -- not when the action is
 //    filtered, and not when the pad itself is pushed. `move.reread 0` keeps the
 //    pad's value, and the counting, for A/B.
+//  * Zero-G's pitch (the right stick's Y) goes through AxisRead too, and its
+//    lean buttons -- roll, and both together the brake -- through ButtonRead
+//    (0x158E540), which likewise finds a bumper the lane holds down
+//    (docs/ZERO-G-SCOPE-2026-10-30.md).
 //  * The listener (0x1590390) is watched, to name the event that re-read and
 //    whether it would have stopped the player.
 //

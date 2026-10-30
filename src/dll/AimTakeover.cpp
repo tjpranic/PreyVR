@@ -168,6 +168,9 @@ void OverrideAimRay(const GameplayPoseFrame& frame, bool haveTracking)
     const Vec3 engineOrigin = frame.reticleOrigin;
     stereo::ReferenceFrame reference{};
     reference.yawRadians = frame.yaw;
+    // The hands' own basis (HandWorld.h): in zero-G the tilted body's.
+    reference.tilted = true;
+    reference.basis = PlaySpaceRotation(frame);
     reference.worldPosition = engineOrigin;
 
     auto ray = controller::AimFromController(

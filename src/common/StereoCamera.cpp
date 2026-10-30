@@ -92,10 +92,36 @@ Quaternion YawQuaternion(float radians)
     return {0.0f, 0.0f, std::sin(half), std::cos(half)};
 }
 
+SplitBasis SplitHeading(const Quaternion& basis)
+{
+    const Quaternion q = Normalize(basis);
+    // The twist about Z of a swing-twist split. With no twist part at all (a
+    // half turn about a level axis) the heading is taken as 0.
+    const float yaw = std::fabs(q.z) < 1e-9f && std::fabs(q.w) < 1e-9f ? 0.0f : 2.0f * std::atan2(q.z, q.w);
+    return {yaw, Normalize(Multiply(q, YawQuaternion(-yaw)))};
+}
+
+Quaternion PlaySpaceBasis(float yaw, const Quaternion& tilt)
+{
+    return Normalize(Multiply(tilt, YawQuaternion(yaw)));
+}
+
+float RotationAngle(const Quaternion& a, const Quaternion& b)
+{
+    const Quaternion p = Normalize(a), q = Normalize(b);
+    const float dot = std::fabs(p.x * q.x + p.y * q.y + p.z * q.z + p.w * q.w);
+    return 2.0f * std::acos(std::fmin(1.0f, dot));
+}
+
 Vec3 EngineToTracking(const Vec3& world, const Vec3& anchor, float yawRadians, const Pose& head)
 {
+    return EngineToTracking(world, anchor, YawQuaternion(yawRadians), head);
+}
+
+Vec3 EngineToTracking(const Vec3& world, const Vec3& anchor, const Quaternion& basis, const Pose& head)
+{
     const Vec3 offset{world.x - anchor.x, world.y - anchor.y, world.z - anchor.z};
-    const Vec3 play = Rotate(Conjugate(YawQuaternion(yawRadians)), offset);
+    const Vec3 play = Rotate(Conjugate(basis), offset);
     const Vec3 local = Rotate(Conjugate(kOpenXrToEngine), play);
     return {head.position.x + local.x, head.position.y + local.y, head.position.z + local.z};
 }
@@ -104,24 +130,43 @@ Vec3 EngineToTracking(const Vec3& world, const Vec3& anchor, float yawRadians, c
 // copy these replaced, so the results are bit-identical.
 Vec3 TrackingToEngine(const Vec3& tracking, const Vec3& anchor, float yawRadians, const Pose& head)
 {
+    return TrackingToEngine(tracking, anchor, YawQuaternion(yawRadians), head);
+}
+
+Vec3 TrackingToEngine(const Vec3& tracking, const Vec3& anchor, const Quaternion& basis, const Pose& head)
+{
     const Vec3 engine = Rotate(kOpenXrToEngine, Sub(tracking, head.position));
-    return Add(anchor, Rotate(YawQuaternion(yawRadians), engine));
+    return Add(anchor, Rotate(basis, engine));
 }
 
 Vec3 TrackingDirToEngine(const Vec3& direction, float yawRadians)
 {
-    return Rotate(YawQuaternion(yawRadians), Rotate(kOpenXrToEngine, direction));
+    return TrackingDirToEngine(direction, YawQuaternion(yawRadians));
+}
+
+Vec3 TrackingDirToEngine(const Vec3& direction, const Quaternion& basis)
+{
+    return Rotate(basis, Rotate(kOpenXrToEngine, direction));
 }
 
 Vec3 EngineDirToTracking(const Vec3& direction, float yawRadians)
 {
-    return Rotate(Conjugate(kOpenXrToEngine), Rotate(Conjugate(YawQuaternion(yawRadians)), direction));
+    return EngineDirToTracking(direction, YawQuaternion(yawRadians));
+}
+
+Vec3 EngineDirToTracking(const Vec3& direction, const Quaternion& basis)
+{
+    return Rotate(Conjugate(kOpenXrToEngine), Rotate(Conjugate(basis), direction));
 }
 
 Pose TrackingOriginInWorld(float yawRadians, const Vec3& anchor, const Pose& head)
 {
-    const Quaternion yaw = YawQuaternion(yawRadians);
-    return Pose{yaw, Sub(anchor, Rotate(yaw, ToEngineSpace(head.position)))};
+    return TrackingOriginInWorld(YawQuaternion(yawRadians), anchor, head);
+}
+
+Pose TrackingOriginInWorld(const Quaternion& basis, const Vec3& anchor, const Pose& head)
+{
+    return Pose{basis, Sub(anchor, Rotate(basis, ToEngineSpace(head.position)))};
 }
 
 namespace {
@@ -159,7 +204,8 @@ float CameraYawOf(const Matrix34& matrix)
 
 Pose EyePoseInWorld(const ReferenceFrame& reference, const Pose& openXrEyePose)
 {
-    const Pose base{YawQuaternion(reference.yawRadians), reference.worldPosition};
+    const Pose base{reference.tilted ? Normalize(reference.basis) : YawQuaternion(reference.yawRadians),
+                    reference.worldPosition};
     return Compose(base, ToEngineSpace(openXrEyePose));
 }
 

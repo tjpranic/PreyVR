@@ -5,10 +5,12 @@
 // hook (AimTakeover.cpp) builds it (GameplayFrame.cpp) and publishes it, then
 // hands it to the gameplay schedule (FrameSchedule.h), which runs the lanes on it.
 #include "XrInput.h"
+#include "preyvr/StereoCamera.h"
 #include "preyvr/SurfaceStop.h"
 #include "preyvr/TwoHandedAim.h"
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 
 namespace preyvr::dll {
@@ -39,6 +41,11 @@ struct GameplayPoseFrame {
     // head-relative offset by. See AimTakeover.h (the body yaw) for why it is
     // not simply cameraYaw - referenceYaw.
     float yaw = 0.0f;
+    // **What the yaw leaves out in zero-G**, where the body need not be level:
+    // the play space's rotation into the world is tilt * Rz(yaw)
+    // (PlaySpaceRotation). Identity whenever the body is level, so a lane that
+    // uses the yaw alone is right everywhere else (docs/ZERO-G-SCOPE-2026-10-30.md).
+    Quaternion tilt{};
     float cameraYaw = 0.0f;
     float headYaw = 0.0f;
     bool headYawUsable = false;
@@ -55,6 +62,17 @@ struct GameplayPoseFrame {
     // controller puts it each hand is drawn, held back by fixed scenery.
     std::array<surface::Correction, 2> surface{};
 };
+
+// The play space's whole rotation into the world: tilt * Rz(yaw).
+inline Quaternion PlaySpaceRotation(const GameplayPoseFrame& frame)
+{
+    return stereo::PlaySpaceBasis(frame.yaw, frame.tilt);
+}
+// A body not level (zero-G): tilt is not the identity.
+inline bool Tilted(const GameplayPoseFrame& frame)
+{
+    return std::fabs(frame.tilt.x) > 1e-6f || std::fabs(frame.tilt.y) > 1e-6f;
+}
 
 // The world offset a hand is drawn at this frame (SurfaceStopLane.h): added to a
 // controller position, it is where the drawn hand is.

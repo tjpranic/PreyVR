@@ -66,7 +66,7 @@ void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking)
         FreshSample(now,geometry.publishedNs);
     if(region) {
         input.region=geometry.region;
-        input.visualPrimaryOffset=Rotate(stereo::YawQuaternion(frame.yaw),geometry.primaryOffsetPlay);
+        input.visualPrimaryOffset=Rotate(PlaySpaceRotation(frame),geometry.primaryOffsetPlay);
     }
     gTwoHandRegionReady.store(region);
     // Each gate as a bit, for aim.twohand: which one released a held foregrip.

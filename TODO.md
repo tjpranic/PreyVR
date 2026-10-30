@@ -2,6 +2,10 @@
 
 ## TODO
 
+### Bugs
+- Temporal AA seems to have a strange astigmatism; one eye is sharper than the other
+    Looks like dpeth/texturing issues?
+
 ### Rendering
 - DLSS (?)
 - Upscaling (?)
@@ -35,9 +39,6 @@
 - The Earth and Moon are very obviously rendered way too close
     Having them rendered at a more realisitic depth would be nice but challenging.
     Technically everything is working game wise, it would just be an improvement.
-- Zero-G doesn't have rotate controls
-- Zero-G helmet overlay doesn't render properly
-    It doesn't follow the camera view
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -64,6 +65,7 @@
 - Left hand laser doesn't hit at surface of objects unlike the right hand aim laser
     Only sometimes? This might be intentional? Will need to investigate.
 - Disable aim laser on loading screen
+- Will need to adjust UI element depths
 
 ### VR Options Menu
 - Have bindings section let you change your bindings
@@ -126,6 +128,11 @@
     The lasers also render over the top of everything.
 
 ### UX/Immersion
+- Zero-G doesn't have rotate controls
+    > Prey rolls with its lean buttons (both together brake) and pitches the whole body with the right stick; the mod sent neither, and the view, the body's turns and the hands all assumed a level body. The bumpers now roll and brake and the right stick pitches, Smooth or in steps (Comfort's Zero-G Roll and Zero-G Pitch, smooth by default); the view, the body's turns, the hands, aim, lasers, throws and IK follow the tilted body. PreyVR-111 and PreyVR-112, worn OK 2026-10-30. Left for later: heavy carry while tilted, and moving where you look. See docs/ZERO-G-SCOPE-2026-10-30.md.
+- Zero-G helmet overlay doesn't render properly
+    It doesn't follow the camera view
+    > The helmet hung off Prey's eye joint, which VR never moves, so it stayed level and faced the body. It now sits on the headset's eye and moves with your head (Prey's sway left out). Interface's Space Helmet hides it, and Helmet Height, Forward / Back and Size place it (worn at 50 mm down, 30 mm back, 120%). PreyVR-110, worn OK 2026-10-30. See docs/ZERO-G-SCOPE-2026-10-30.md.
 - Shot from muzzle laser shows skewed (Archived)
     The game naturally skews the aim laser when it comes from the muzzle. It should be straightened.
 - Weapons and hands don't stop against surfaces (Archived)

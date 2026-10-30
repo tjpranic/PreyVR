@@ -488,22 +488,26 @@ int main()
         tall.Grip(true);
         frame = tall.Idle();
         Check(frame.page == 2 && frame.scrollMaxY > 0, "with larger text the interface page outgrows the panel");
-        // The interface page ends with the reticle: its fallback distance is the last row.
-        const auto last = Find(frame, Kind::range, options::ReticleFallback);
+        // The interface page's last row, a range.
+        const int lastRow = options::MenuEntries(2).back();
+        const auto& lastSpec = options::Describe(static_cast<unsigned>(lastRow));
+        const auto last = Find(frame, Kind::range, lastRow);
         const auto back = Find(frame, Kind::close);
         Check(last && back && last->y1 > back->y0, "its last row starts out of sight, under the footer");
         const float top = last->y0;
         VrOptionsUiInput scroll;
         scroll.dt = 1.0f / 90.0f;
         scroll.scroll = -1.0f;
-        for (int n = 0; n < 300; ++n) { frame = tall.Frame(scroll); }
+        for (int n = 0; n < 600; ++n) { frame = tall.Frame(scroll); }
         Check(frame.scrollY > 0 && frame.scrollY == frame.scrollMaxY, "the left stick scrolls to the end, and stops there");
-        const auto lowered = Find(frame, Kind::range, options::ReticleFallback);
+        const auto lowered = Find(frame, Kind::range, lastRow);
         Check(lowered && lowered->y0 < top && lowered->y1 < Find(frame, Kind::close)->y0, "the last row comes into view");
         frame = tall.Click(*lowered, 0.98f);
-        Check(tall.Took(frame, options::ReticleFallback) >= 190000, "a row reached by scrolling works: about 196 m");
+        const auto took = tall.Took(frame, lastRow);
+        Check(took && *took >= lastSpec.min + (lastSpec.max - lastSpec.min) * 9 / 10,
+              "a row reached by scrolling works: near its top value");
         scroll.scroll = 1.0f;
-        for (int n = 0; n < 300; ++n) { frame = tall.Frame(scroll); }
+        for (int n = 0; n < 600; ++n) { frame = tall.Frame(scroll); }
         Check(frame.scrollY == 0, "and back up to the top");
     }
 

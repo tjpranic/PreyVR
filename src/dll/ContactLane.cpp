@@ -489,9 +489,10 @@ struct ProxyNow {
     Box box{};
     std::uint64_t key = 0, sequence = 0, stamp = 0, reference = 0;
     float yaw = 0;
+    Quaternion basis{};   // the play space's whole rotation (zero-G's may be tilted)
 };
 using Proxies = std::array<ProxyNow, kProxies>;
-struct Last { Box box{}; std::uint64_t key = 0, sequence = 0, reference = 0, stamp = 0; float yaw = 0; bool valid = false; };
+struct Last { Box box{}; std::uint64_t key = 0, sequence = 0, reference = 0, stamp = 0; float yaw = 0; Quaternion basis{}; bool valid = false; };
 std::array<Last, kProxies> last{};
 contact::Tracker tracker;
 std::uint64_t seenSettings = 0, logSecondNs = 0;
@@ -803,6 +804,7 @@ void HandProxy(const GameplayPoseFrame& f, Hand hand, ProxyNow& out)
     out.stamp = static_cast<std::uint64_t>(f.tracking.displayTime);
     out.reference = f.referenceGeneration;
     out.yaw = f.yaw;
+    out.basis = PlaySpaceRotation(f);
     out.active = true;
 }
 // The left hand is not free while it carries, holds the foregrip, works the
@@ -839,6 +841,7 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
             weapon.stamp = sample.stamp;
             weapon.reference = sample.reference;
             weapon.yaw = sample.yaw;
+            weapon.basis = sample.basis;
         }
         // A drawn weapon is the right hand's box, whatever its own state.
         if (std::strcmp(weapon.why, "no_weapon") != 0) { proxy[kRightHand].why = "weapon"; }
@@ -892,7 +895,7 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
         auto& was = last[p];
         if (!current.active) { was = {}; continue; }
         if (was.valid && was.key == current.key && was.reference == current.reference && current.sequence > was.sequence &&
-            YawDistance(current.yaw, was.yaw) < .05f && Length(Sub(current.box.centre, was.box.centre)) < .3f) {
+            stereo::RotationAngle(current.basis, was.basis) < .05f && Length(Sub(current.box.centre, was.box.centre)) < .3f) {
             before[p] = was.box;
             previous[p] = &before[p];
             dt[p] = lane::TrustedDt(current.stamp, was.stamp);
@@ -915,7 +918,7 @@ void UpdateImpl(const GameplayPoseFrame& frame, bool allowed)
         count += written;
         total.entities += stats.entities;
         total.other += stats.other;
-        was = {current.box, current.key, current.sequence, current.reference, current.stamp, current.yaw, true};
+        was = {current.box, current.key, current.sequence, current.reference, current.stamp, current.yaw, current.basis, true};
     }
     const auto us = watch.Micros();
     ++queries;

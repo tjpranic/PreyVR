@@ -579,11 +579,13 @@ struct XrMap {
     animik::Location location{};
     Vec3 ToXr(const Vec3& model) const
     {
-        return stereo::EngineToTracking(animik::ModelToWorld(location, model), anchor, frame->yaw, frame->tracking.head);
+        return stereo::EngineToTracking(animik::ModelToWorld(location, model), anchor, PlaySpaceRotation(*frame),
+                                        frame->tracking.head);
     }
     Vec3 ToModel(const Vec3& xr) const
     {
-        return animik::WorldToModel(location, stereo::TrackingToEngine(xr, anchor, frame->yaw, frame->tracking.head));
+        return animik::WorldToModel(location,
+                                    stereo::TrackingToEngine(xr, anchor, PlaySpaceRotation(*frame), frame->tracking.head));
     }
 };
 

@@ -13,6 +13,7 @@
 #include "preyvr/LatestSnapshot.h"
 #include "preyvr/MonotonicClock.h"
 #include "preyvr/MotionController.h"
+#include "preyvr/ZeroGControls.h"
 
 #include <algorithm>
 #include <array>
@@ -83,6 +84,12 @@ constexpr float kMinimumStep = 0.01f * kRadiansPerDegree;
 constexpr float kFollowRate = 360.0f * kRadiansPerDegree;   // per second
 constexpr float kNativeTurnEpsilon = 0.02f * kRadiansPerDegree;
 constexpr std::uint64_t kNativeTurnHoldNs = 150000000ull;
+// Zero-G (docs/ZERO-G-SCOPE-2026-10-30.md): the movement FSM's state, ArkPlayer
+// +0x58, is 9. Prey then turns m_rotation about the body's own axes
+// (0x126AF50), so this lane turns the body about its own up axis there and
+// never levels it, and watches the whole rotation for the game's turns.
+constexpr std::size_t kMovementState = 0x58;
+constexpr int kZeroGState = 9;
 
 std::mutex gInstallMutex;
 std::atomic<bool> gInstalled{false}, gActive{false}, gResetTorso{false};
@@ -103,6 +110,16 @@ armpose::TorsoYaw gTorso;
 std::uint64_t gTorsoNs = 0;
 unsigned long long gTorsoEpoch = ~0ull;
 bodyturn::NativeTurnWatch gWatch;
+bodyturn::NativeRotationWatch gRotationWatch;
+std::atomic<bool> gZeroG{false};
+// A snap step of zero-G roll or pitch the move lane queued, made at the next entry.
+struct ZeroGStep {
+    zerog::Axis axis = zerog::Axis::roll;
+    int degrees = 0;
+};
+std::mutex gStepMutex;
+std::optional<ZeroGStep> gStep;
+std::atomic<unsigned long long> gZeroGSteps{0}, gZeroGStepsRefused{0}, gZeroGChanges{0};
 // What the frame's start decided for after its render (ServiceBodyFollow): the
 // follow's turn and room-scale's move.
 struct PendingFollow {
@@ -210,6 +227,9 @@ bool NativeTurning(void* player, std::uint64_t now)
 {
     Quaternion rotation{};
     if (gGet.load(std::memory_order_acquire) == nullptr || !CallGet(player, &rotation)) { return true; }
+    if (gZeroG.load(std::memory_order_acquire)) {
+        return gRotationWatch.Update(rotation, now, kNativeTurnEpsilon, kNativeTurnHoldNs);
+    }
     const auto yaw = bodyturn::EngineYawOf(rotation);
     return gWatch.Update(yaw ? *yaw : NAN, now, kNativeTurnEpsilon, kNativeTurnHoldNs);
 }
@@ -233,13 +253,16 @@ bool TurnToTorso(void* player, float torso, float maxStep, std::atomic<unsigned 
             Fault("get_view_rotation");
             return std::nullopt;
         }
+        // In zero-G about the body's own up axis, keeping its pitch and roll.
+        const bool zeroG = gZeroG.load(std::memory_order_acquire);
         const auto beforeYaw = bodyturn::EngineYawOf(before);
-        const auto target = bodyturn::LevelledTurn(before, step.delta);
-        if (!beforeYaw || !target) { return std::nullopt; }
+        const auto target = zeroG ? bodyturn::LocalTurn(before, step.delta) : bodyturn::LevelledTurn(before, step.delta);
+        if ((!zeroG && !beforeYaw) || !target) { return std::nullopt; }
         // How far the body lags the view: the setter takes the body all the
-        // way to the view, and this frame's head was posed for the lag.
+        // way to the view, and this frame's head was posed for the lag. In
+        // zero-G the view is the body's own rotation: there is no lag to make up.
         Quaternion entity{};
-        if (CallEntityRotation(player, &entity)) {
+        if (!zeroG && CallEntityRotation(player, &entity)) {
             if (const auto entityYaw = bodyturn::EngineYawOf(entity)) { lag = controller::WrapAngle(*beforeYaw - *entityYaw); }
         }
         if (!CallSet(player, &*target)) {
@@ -251,9 +274,15 @@ bool TurnToTorso(void* player, float torso, float maxStep, std::atomic<unsigned 
             Fault("get_view_rotation");
             return std::nullopt;
         }
-        const auto afterYaw = bodyturn::EngineYawOf(after);
-        applied = afterYaw ? controller::WrapAngle(*afterYaw - *beforeYaw) : step.delta;
-        if (afterYaw) { gWatch.Left(*afterYaw); }   // this turn is not the game's
+        if (zeroG) {
+            const auto turned = bodyturn::LocalYawBetween(before, after);
+            applied = turned ? *turned : step.delta;
+            gRotationWatch.Left(after);   // this turn is not the game's
+        } else {
+            const auto afterYaw = bodyturn::EngineYawOf(after);
+            applied = afterYaw ? controller::WrapAngle(*afterYaw - *beforeYaw) : step.delta;
+            if (afterYaw) { gWatch.Left(*afterYaw); }   // this turn is not the game's
+        }
         const auto readback = static_cast<unsigned long long>(std::abs(Mdeg(controller::WrapAngle(applied - step.delta))));
         if (readback > gReadbackMaxMdeg.load(std::memory_order_relaxed)) { gReadbackMaxMdeg.store(readback); }
         return applied;
@@ -328,13 +357,61 @@ void Tick(void* player)
     }
 }
 
+// Zero-G or not, as of this entry; a change starts both turn watches afresh.
+void NoteZeroG(void* player)
+{
+    std::uintptr_t vtable = 0;
+    int state = -1;
+    if (!ReadAt(player, 0, vtable) || vtable != gVtable.load(std::memory_order_relaxed)) { return; }
+    const bool zeroG = ReadAt(player, kMovementState, state) && state == kZeroGState;
+    if (zeroG == gZeroG.exchange(zeroG, std::memory_order_acq_rel)) { return; }
+    gWatch.Reset();
+    gRotationWatch.Reset();
+    gZeroGChanges.fetch_add(1, std::memory_order_relaxed);
+    Log(std::string("result=0 detail=zero_g value=") + (zeroG ? "1" : "0"));
+}
+
+// A queued snap step of zero-G roll or pitch: the body turned by it about its
+// own axis, through the setter, and the view with it. Dropped outside zero-G.
+void ApplyZeroGStep(void* player)
+{
+    std::optional<ZeroGStep> step;
+    {
+        std::lock_guard lock(gStepMutex);
+        step.swap(gStep);
+    }
+    if (!step) { return; }
+    if (!gActive.load(std::memory_order_acquire) || !gZeroG.load(std::memory_order_acquire) ||
+        gSet.load(std::memory_order_acquire) == nullptr || gTurnFault.load(std::memory_order_acquire) ||
+        !InGameplay(player)) {
+        gZeroGStepsRefused.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    Quaternion before{};
+    if (!CallGet(player, &before)) {
+        Fault("get_view_rotation");
+        return;
+    }
+    const Quaternion target =
+        Normalize(Multiply(Normalize(before), zerog::LocalStep(step->axis, static_cast<float>(step->degrees))));
+    if (!CallSet(player, &target)) {
+        Fault("set_view_rotation");
+        return;
+    }
+    Quaternion after{};
+    if (CallGet(player, &after)) { gRotationWatch.Left(after); }   // not the game's turn
+    gZeroGSteps.fetch_add(1, std::memory_order_relaxed);
+}
+
 void __fastcall PlayerUpdateDetour(void* player, void* context, int slot)
 {
     // A snap queued by last frame's render hook lands first, so the body turns
     // with it in this same frame, and the view and the IK after it see one
     // reference (HeadTrackingHook.h QueueSnapTurn).
     ApplyQueuedSnapTurn(false);
+    NoteZeroG(player);
     Tick(player);
+    ApplyZeroGStep(player);
     const PlayerUpdateFn original = gOriginal.load(std::memory_order_acquire);
     if (original != nullptr) { original(player, context, slot); }
 }
@@ -423,7 +500,20 @@ void ServiceBodyFollow()
     // The turn first: it changes G and R together and leaves the play space,
     // and so the head's offset, alone.
     FollowTurn(pending.player, pending.torso, pending.dt, MonotonicNanoseconds());
-    ServiceRoomScale(pending.player, pending.torso, pending.dt, InGameplay(pending.player));
+    // Not in zero-G: its moves are along a level body (RoomScaleLane.h).
+    ServiceRoomScale(pending.player, pending.torso, pending.dt,
+                     InGameplay(pending.player) && !gZeroG.load(std::memory_order_acquire));
+}
+
+bool PlayerInZeroG() { return gZeroG.load(std::memory_order_acquire); }
+
+DWORD QueueZeroGStep(zerog::Axis axis, int degrees)
+{
+    if (degrees == 0 || degrees < -180 || degrees > 180) { return ERROR_INVALID_PARAMETER; }
+    if (!gZeroG.load(std::memory_order_acquire)) { return ERROR_INVALID_STATE; }
+    std::lock_guard lock(gStepMutex);
+    gStep = ZeroGStep{axis, degrees};
+    return 0;
 }
 
 bool BodyTorsoYaw(float& yaw)
@@ -448,7 +538,9 @@ std::string TorsoLaneReport()
         << " snapBodyTurn=" << (gSet.load() != nullptr && !gTurnFault.load()) << " turnFault=" << gTurnFault.load()
         << " snapTurns=" << gSnapTurns.load() << " lastSnapTurnMdeg=" << gLastSnapTurnMdeg.load()
         << " snapWaits=" << gSnapWaits.load() << " followTurns=" << gFollowTurns.load()
-        << " followPaused=" << gFollowPaused.load() << " readbackMaxMdeg=" << gReadbackMaxMdeg.load();
+        << " followPaused=" << gFollowPaused.load() << " readbackMaxMdeg=" << gReadbackMaxMdeg.load()
+        << " zeroG=" << gZeroG.load() << " zeroGChanges=" << gZeroGChanges.load() << " zeroGSteps=" << gZeroGSteps.load()
+        << " zeroGStepsRefused=" << gZeroGStepsRefused.load();
     return out.str();
 }
 

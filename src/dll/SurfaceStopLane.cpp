@@ -216,6 +216,7 @@ struct HandLane {
     std::uint64_t key = 0, reference = 0, epoch = 0;
     long long time = 0;
     float yaw = 0, dt = 0;
+    Quaternion basis{};   // the play space's whole rotation (zero-G's may be tilted)
     bool held = false;
     std::uint64_t heldFrames = 0;
     float heldMaxCm = 0;
@@ -254,7 +255,7 @@ bool AddWeapon(const GameplayPoseFrame& f, const WeaponBox& box, surface::Probes
     const Pose grip = stereo::ToEngineSpace(right.gripPose);
     // The play-space -> world map the hands are placed with (HandWorld.h,
     // on the camera centre).
-    const Pose world = stereo::TrackingOriginInWorld(f.yaw, f.cameraCentre, f.tracking.head);
+    const Pose world = stereo::TrackingOriginInWorld(PlaySpaceRotation(f), f.cameraCentre, f.tracking.head);
     const Vec3 drawnWith = Rotate(Conjugate(box.worldFromReference.orientation), box.correction);
     const Pose fromGrip = physical::Inverse(box.gripPose);
     std::array<Vec3, 9> now{};
@@ -320,7 +321,8 @@ void Follow(const GameplayPoseFrame& f, HandLane& lane, const HandNow& now, floa
     const long long time = f.tracking.displayTime;
     const float gap = time >= lane.time ? static_cast<float>(time - lane.time) * 1e-9f : -1.0f;
     if (lane.key != now.key || lane.reference != f.referenceGeneration || lane.epoch != f.tracking.epoch ||
-        YawDistance(f.yaw, lane.yaw) > kMaxTurn || Length(Sub(now.probes.point[0], lane.state.grip)) > kMaxGripJump ||
+        stereo::RotationAngle(PlaySpaceRotation(f), lane.basis) > kMaxTurn ||
+        Length(Sub(now.probes.point[0], lane.state.grip)) > kMaxGripJump ||
         gap < 0 || gap > kMaxGap) {
         Forget(lane);
         return;
@@ -451,6 +453,7 @@ void UpdateImpl(GameplayPoseFrame& frame, bool allowed)
         lane.epoch = frame.tracking.epoch;
         lane.time = frame.tracking.displayTime;
         lane.yaw = frame.yaw;
+        lane.basis = PlaySpaceRotation(frame);
         if (dt > 0) { lane.dt = dt; }
         frame.surface[h] = r.correction;
         frame.surface[h].press = PressOf(objects, current.probes, r);

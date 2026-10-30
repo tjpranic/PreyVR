@@ -433,8 +433,8 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
         if(contactReady)PublishPhysicalWeapon(frame,owner,location,Pose{rotation,goal},contactGeometry);
         if(primaryOut) { primaryOut->goal=goal; primaryOut->written=true; }
         const Vec3 actual=animik::ModelToWorld(location,goal);
-        // In play space, the frame's yaw taken out (SupportGripGeometry).
-        supportGeometry.primaryOffsetPlay=Rotate(stereo::YawQuaternion(-frame.yaw),
+        // In play space, the frame's basis taken out (SupportGripGeometry).
+        supportGeometry.primaryOffsetPlay=Rotate(Conjugate(PlaySpaceRotation(frame)),
             Vec3{actual.x-traceControllerWorld.x,actual.y-traceControllerWorld.y,actual.z-traceControllerWorld.z});
         supportGeometry.publishedNs=preyvr::timing::MonotonicNanoseconds();
         // **The region is in the NATIVE barrel frame; the solver reads it in the

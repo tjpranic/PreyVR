@@ -62,7 +62,7 @@ inline bool HandWorld(const GameplayPoseFrame& frame, Hand hand, ControllerPose 
     Vec3 at{};
     if (!AnchorPoint(frame, anchor, at)) { return false; }
     const auto& controller = frame.tracking.hands[static_cast<unsigned>(hand)];
-    out = animik::ControllerWorldFromHead(frame.yaw, at, frame.tracking.head,
+    out = animik::ControllerWorldFromHead(PlaySpaceRotation(frame), at, frame.tracking.head,
                                           pose == ControllerPose::aim ? controller.aimPose : controller.gripPose);
     if (placement == Placement::drawn) { out.position = Add(out.position, SurfaceOffset(frame, hand)); }
     return true;

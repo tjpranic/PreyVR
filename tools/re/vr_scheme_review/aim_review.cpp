@@ -38,6 +38,9 @@ bool TryGetTrackingFrame(TrackingFrame& out) {
 unsigned long long HeadTrackingReferenceGeneration() { return 2; }
 unsigned long long HeadTrackingRecenterEpoch() { return 1; }
 float HeadTrackingReferenceYaw() { return 0; }
+// Level play: no zero-G, so the frame's tilt stays the identity.
+bool PlayerInZeroG() { return false; }
+AppliedView LastAppliedView() { return {}; }
 std::uint64_t WeaponEquipGeneration() { return 7; }
 bool TryGetMuzzleFromGrip(const Pose&, std::uint64_t, Vec3& out) {
     if (!calibrated) return false;

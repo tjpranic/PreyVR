@@ -21,13 +21,16 @@ namespace sn = stick::native;
 static_assert(contract::Gated(sn::Contracts, sn::AxisRead) && contract::Gated(sn::Contracts, sn::AxisReread) &&
               contract::Gated(sn::Contracts, sn::ActionMapEvent) &&
               contract::Gated(sn::Contracts, sn::ActionFiltered) && contract::Gated(sn::Contracts, sn::YawHandler) &&
-              contract::Gated(sn::Contracts, sn::PlayerSingleton));
+              contract::Gated(sn::Contracts, sn::PlayerSingleton) && contract::Gated(sn::Contracts, sn::ButtonRead));
 
 void Log(const std::string& line) { lifecycle::Log("preyvr_stick " + line); }
 
 using AxisReadFn = float(__fastcall*)(void* context, const void* action, const char* map);
 using ListenerFn = void(__fastcall*)(void* listener, const void* event);
 using FilteredFn = bool(__fastcall*)(void* manager, const void* action);
+// The low byte is the button's state; the rest is passed through.
+using ButtonReadFn = std::uint64_t(__fastcall*)(void* context, void* manager, const void* action, const void* map,
+                                                int flags);
 using PlayerFn = std::uintptr_t(__fastcall*)();
 using Counter = std::atomic<unsigned long long>;
 
@@ -35,6 +38,7 @@ std::mutex gInstallMutex;
 std::atomic<bool> gInstalled{false};
 std::atomic<AxisReadFn> gAxisRead{nullptr};
 std::atomic<ListenerFn> gListener{nullptr};
+std::atomic<ButtonReadFn> gButtonRead{nullptr};
 std::atomic<std::uintptr_t> gBase{0};
 std::atomic<bool> gFix{true};
 // ReadStickAxes' own gate: 0 unchecked, 1 matched, 2 refused.
@@ -48,6 +52,8 @@ std::atomic<int> gReadGate{0};
 // re-read never makes.
 Counter gMapEvents{0}, gFilterEvents{0}, gWouldStop{0}, gKept{0}, gFiltered{0}, gPadPushed{0}, gUnasked{0},
     gUnattributed{0};
+// Zero-G's lean buttons the lanes held, kept through a re-read.
+Counter gLeansKept{0};
 // The stops are logged, this many a session; past that they are counted.
 constexpr unsigned long long kLogBudget = 60;
 Counter gLogged{0}, gUnlogged{0};
@@ -57,13 +63,14 @@ struct EventRead {
     int type = 0;
     std::uint64_t first = 0, second = 0;
     bool read = false;
-    unsigned wouldStop = 0;   // axis bits: 1 move X, 2 move Y, 4 yaw
+    unsigned wouldStop = 0;   // axis bits: 1 move X, 2 move Y, 4 yaw, 8 zero-G pitch
     unsigned kept = 0;
-    int held[3] = {};
+    int held[4] = {};
 };
 thread_local EventRead* tEvent = nullptr;
 
-// Which stick axis the re-read asks for: 0 move X, 1 move Y, 2 yaw; -1 another.
+// Which stick axis the re-read asks for: 0 move X, 1 move Y, 2 yaw, 3 pitch
+// (posted only in zero-G); -1 another.
 int AxisOf(std::uintptr_t base, const void* action)
 {
     std::uintptr_t table = 0;
@@ -72,7 +79,17 @@ int AxisOf(std::uintptr_t base, const void* action)
     if (at == table + sn::MoveXAction) { return 0; }
     if (at == table + sn::MoveYAction) { return 1; }
     if (at == table + sn::YawAction) { return 2; }
+    if (at == table + sn::PitchAction) { return 3; }
     return -1;
+}
+
+// Which lean button the re-read asks for: 0 left, 1 right; -1 another.
+int LeanOf(std::uintptr_t base, const void* action)
+{
+    std::uintptr_t table = 0;
+    if (!SafeRead(base + sn::ActionTable, table) || table == 0) { return -1; }
+    const auto at = reinterpret_cast<std::uintptr_t>(action);
+    return at == table + sn::LeanLeftAction ? 0 : at == table + sn::LeanRightAction ? 1 : -1;
 }
 
 // ActionFiltered for `action`, asked of the manager the read itself uses
@@ -129,6 +146,38 @@ float __fastcall AxisReadDetour(void* context, const void* action, const char* m
     return keep ? locomotion::RereadValue(native, held, false) : native;
 }
 
+// ActionFiltered for `action`, asked of `manager` itself, as ButtonRead does.
+bool AskFilteredOf(std::uintptr_t base, void* manager, const void* action, bool& filtered)
+{
+    __try {
+        const auto vtable = *static_cast<const std::uintptr_t*>(manager);
+        if (vtable != base + sn::ManagerVtable) { return false; }
+        const auto fn = *reinterpret_cast<const FilteredFn*>(vtable + sn::FilteredSlot);
+        filtered = fn(manager, action);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+// **Zero-G's lean buttons** (docs/ZERO-G-SCOPE-2026-10-30.md): the re-read
+// reads them from the idle pad too, and a held roll -- or a brake -- would stop
+// at every interaction prompt. A lean button the lane holds is down here, unless
+// the action is filtered or the pad itself is pressed.
+std::uint64_t __fastcall ButtonReadDetour(void* context, void* manager, const void* action, const void* map, int flags)
+{
+    const ButtonReadFn original = gButtonRead.load(std::memory_order_acquire);
+    const std::uint64_t native = original != nullptr ? original(context, manager, action, map, flags) : 0;
+    if ((native & 0xFF) != 0 || !gFix.load(std::memory_order_relaxed)) { return native; }
+    const std::uintptr_t base = gBase.load(std::memory_order_relaxed);
+    const int lean = LeanOf(base, action);
+    if (lean < 0 || !MoveLaneLeanHeld(lean == 1)) { return native; }
+    bool filtered = false;
+    if (!AskFilteredOf(base, manager, action, filtered) || filtered) { return native; }
+    gLeansKept.fetch_add(1, std::memory_order_relaxed);
+    return (native & ~0xFFull) | 1u;
+}
+
 // The event's type and its two words; zeros when it cannot be read.
 void ReadEvent(const void* event, EventRead& out)
 {
@@ -161,7 +210,7 @@ void LogStop(const EventRead& event)
     } else {
         line << " event=" << event.type;
     }
-    line << " heldMilli=" << event.held[0] << ',' << event.held[1] << ',' << event.held[2]
+    line << " heldMilli=" << event.held[0] << ',' << event.held[1] << ',' << event.held[2] << ',' << event.held[3]
          << " kept=" << (event.kept != 0 ? 1 : 0);
     Log(line.str());
 }
@@ -248,15 +297,18 @@ DWORD InstallStickReread()
     }
     void* axisRead = nullptr;
     void* listener = nullptr;
-    // Both or neither: the listener only names what the read does.
+    void* buttonRead = nullptr;
+    // All or none: the listener only names what the reads do.
     const hook::Spec hooks[] = {
         {reinterpret_cast<void*>(base + sn::AxisRead), reinterpret_cast<void*>(&AxisReadDetour), &axisRead},
         {reinterpret_cast<void*>(base + sn::ActionMapEvent), reinterpret_cast<void*>(&ListenerDetour), &listener},
+        {reinterpret_cast<void*>(base + sn::ButtonRead), reinterpret_cast<void*>(&ButtonReadDetour), &buttonRead},
     };
     const hook::Result installed = hook::InstallAll(hooks, [&] {
         gBase.store(base, std::memory_order_release);
         gAxisRead.store(reinterpret_cast<AxisReadFn>(axisRead), std::memory_order_release);
         gListener.store(reinterpret_cast<ListenerFn>(listener), std::memory_order_release);
+        gButtonRead.store(reinterpret_cast<ButtonReadFn>(buttonRead), std::memory_order_release);
     });
     if (!installed) {
         Log(std::string("result=failed detail=") + hook::StepName(installed.step) +
@@ -264,7 +316,7 @@ DWORD InstallStickReread()
         return ERROR_GEN_FAILURE;
     }
     gInstalled.store(true, std::memory_order_release);
-    Log(std::string("result=0 detail=hooks_installed axis_read=0x158EB90 listener=0x1590390 fix=") +
+    Log(std::string("result=0 detail=hooks_installed axis_read=0x158EB90 listener=0x1590390 button_read=0x158E540 fix=") +
         (gFix.load() ? "1" : "0"));
     return 0;
 }
@@ -299,7 +351,8 @@ std::string StickRereadReport()
         << " mapEvents=" << gMapEvents.load() << " filterEvents=" << gFilterEvents.load()
         << " wouldStop=" << gWouldStop.load() << " kept=" << gKept.load() << " filtered=" << gFiltered.load()
         << " padPushed=" << gPadPushed.load() << " unasked=" << gUnasked.load()
-        << " unattributed=" << gUnattributed.load() << " unlogged=" << gUnlogged.load() << " }";
+        << " unattributed=" << gUnattributed.load() << " unlogged=" << gUnlogged.load()
+        << " leansKept=" << gLeansKept.load() << " }";
     return out.str();
 }
 

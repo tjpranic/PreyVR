@@ -152,6 +152,7 @@ struct TriggerRelease {
     std::uint64_t ns = 0, pressNs = 0;
     carry::Motion motion{};
     float yaw = 0;
+    Quaternion basis{};   // the play space's whole rotation (zero-G's may be tilted)
     bool yawValid = false;
 };
 std::mutex gTriggerMutex;
@@ -500,9 +501,9 @@ void Steer(Scope& s, Vec3& position, Vec3& direction)
     }
     // The release's velocity, in the world, from the hand's motion at the trigger.
     const auto& m = s.release.motion;
-    const float yaw = s.release.yawValid ? s.release.yaw : s.frame.yaw;
-    s.handWorld = m.valid ? stereo::TrackingDirToEngine(m.velocity, yaw) : Vec3{};
-    s.spinWorld = m.valid ? stereo::TrackingDirToEngine(m.angular, yaw) : Vec3{};
+    const Quaternion basis = s.release.yawValid ? s.release.basis : PlaySpaceRotation(s.frame);
+    s.handWorld = m.valid ? stereo::TrackingDirToEngine(m.velocity, basis) : Vec3{};
+    s.spinWorld = m.valid ? stereo::TrackingDirToEngine(m.angular, basis) : Vec3{};
     s.player = PlayerVelocity();
     grenade::ReleaseInput in{};
     in.handVelocity = s.handWorld;
@@ -892,6 +893,7 @@ void NoteGrenadeTrigger(bool pressed)
     GameplayPoseFrame f{};
     if (TryGetGameplayPoseFrame(f, false) && std::isfinite(f.yaw)) {
         r.yaw = f.yaw;
+        r.basis = PlaySpaceRotation(f);
         r.yawValid = true;
     }
     gTrigger = r;

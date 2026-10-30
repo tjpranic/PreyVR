@@ -16,6 +16,7 @@
 #include "InputPost.h"
 #include "HeadTrackingHook.h"
 #include "StickReread.h"
+#include "TorsoLane.h"
 #include "UiMode.h"
 #include "Logger.h"
 #include "MinHookInit.h"
@@ -27,6 +28,8 @@
 #include "preyvr/ComfortControls.h"
 #include "preyvr/StereoCamera.h"
 #include "preyvr/LatestSnapshot.h"
+#include "preyvr/ZeroGControls.h"
+#include "preyvr/MonotonicClock.h"
 
 #include <MinHook.h>
 
@@ -177,6 +180,13 @@ float gLastTurnSent = 0.0f;
 bool gTurnPrimed = false;
 std::atomic<bool> gTurnNeutralize{false};
 
+// Zero-G's roll and pitch (docs/ZERO-G-SCOPE-2026-10-30.md): 0 smooth, as Prey
+// turns them, or the degrees of one step. Pitch is posted as Prey's look stick Y.
+std::atomic<unsigned> gZeroGRollDegrees{0}, gZeroGPitchDegrees{0};
+float gLastPitchSent = 0.0f;
+bool gPitchPrimed = false;
+std::atomic<unsigned long long> gPitchPosted{0}, gPitchRefused{0}, gRollSteps{0}, gPitchSteps{0};
+
 std::atomic<bool> gFireEnabled{false};
 std::atomic<unsigned long long> gFirePressed{0}, gFireReleased{0}, gFireRefused{0};
 bool gFireHeld = false;
@@ -194,9 +204,9 @@ std::atomic<unsigned long long> gRecenters{0};
 // --- the stick the engine keeps (docs/MOVE-STOP-2026-10-24.md) ---------------
 //
 // What the lanes delivered and the engine should hold, in thousandths: move X,
-// move Y, yaw. Written by the frame thread, read by StickReread's hook wherever
-// Prey re-reads the sticks.
-std::atomic<int> gHeldMilli[3]{};
+// move Y, yaw, and zero-G's pitch. Written by the frame thread, read by
+// StickReread's hook wherever Prey re-reads the sticks.
+std::atomic<int> gHeldMilli[4]{};
 std::atomic<std::uint64_t> gStickPushedNs{0};
 std::atomic<unsigned> gSampleHoldMs{100};
 locomotion::SampleHold gMoveSamples;   // frame thread
@@ -622,6 +632,43 @@ void UpdateTurnAndFireLanes()
     }
     if (!turnHold) { ReassertHeld(2, 2); }
 
+    // **Zero-G pitch**: the right stick's Y pitches the whole body there, as
+    // Prey's own look stick does. Smooth posts it as Prey's xi_thumbry, with the
+    // turn's deadzone and speed; Zero-G Pitch's degrees make each push one step,
+    // turned by the torso lane. Never outside zero-G, where the head pitches.
+    const bool zeroG = PlayerInZeroG();
+    const unsigned pitchDegrees = gZeroGPitchDegrees.load(std::memory_order_relaxed);
+    const bool pitchOn = zeroG && turnOn && haveInput && !releaseTurn && !turnHold;
+    static zerog::PitchLatch pitchLatch;
+    if (const int step = pitchLatch.Update(play.turn.x, play.turn.y, pitchOn && pitchDegrees != 0)) {
+        if (QueueZeroGStep(zerog::Axis::pitch, step * static_cast<int>(pitchDegrees)) == 0) {
+            gPitchSteps.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
+    if (!turnHold && (pitchOn || (gPitchPrimed && gLastPitchSent != 0))) {
+        const float dead = gTurnDeadzoneHundredths.load(std::memory_order_relaxed) / 100.0f;
+        const float scale = gTurnScalePercent.load(std::memory_order_relaxed) / 100.0f;
+        float value = pitchOn && pitchDegrees == 0 ? play.turn.y : 0.0f;
+        if (!std::isfinite(value)) { value = 0.0f; }
+        const float magnitude = std::fabs(value);
+        value = (magnitude <= dead || dead >= 1.0f)
+                    ? 0.0f
+                    : ((value > 0.0f) ? 1.0f : -1.0f) * ((magnitude - dead) / (1.0f - dead));
+        value *= scale;
+        // As the turn's: only on change, and always the return to zero.
+        if (!gPitchPrimed || (value == 0 && gLastPitchSent != 0) || std::fabs(value - gLastPitchSent) > 0.002f) {
+            const int milli = static_cast<int>(value * 1000.0f);
+            if (PostRawInputImmediate(input::kThumbRY, locomotion::kStateChanged, milli) == 0) {
+                gLastPitchSent = value;
+                gPitchPrimed = true;
+                gHeldMilli[3].store(milli, std::memory_order_relaxed);
+                gPitchPosted.fetch_add(1, std::memory_order_relaxed);
+            } else {
+                gPitchRefused.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+    }
+
     static bool awaitTriggerRelease=false;
     // A head through a wall is blacked out (RoomScaleLane.h): no shots from the
     // far side, and a held trigger waits for release after it comes back.
@@ -752,6 +799,22 @@ void UpdateTurnAndFireLanes()
         RequestUseTargetSuppression(useOut.suppressTarget);
         NoteUseButton(useOut.down, static_cast<unsigned>(useOut.owner), useOut.pressed, useOut.released,
                       (useOut.noTarget ? 1u : 0u) | (useOut.gaveUp ? 2u : 0u) | (useOut.busy ? 4u : 0u));
+        // **Zero-G roll and brake**: outside Prey's wheel the bumpers are Prey's
+        // lean buttons there -- roll left and right, both together the brake.
+        // Zero-G Roll's degrees make a bumper alone one step, turned by the
+        // torso lane; both together stay Prey's brake (preyvr/ZeroGControls.h).
+        static zerog::Bumpers bumpers;
+        static std::uint64_t bumperNs = 0;
+        const std::uint64_t bumperNow = MonotonicNanoseconds();
+        const float bumperDt = bumperNs != 0 && bumperNow > bumperNs ? static_cast<float>(bumperNow - bumperNs) * 1e-9f : 0.0f;
+        bumperNs = bumperNow;
+        const bool rollOn = zeroG && !wheelOpen && actionsOn && !releaseActions && !menuFrame && haveInput;
+        const unsigned rollDegrees = gZeroGRollDegrees.load(std::memory_order_relaxed);
+        const zerog::BumperOutput roll = bumpers.Update(rollOn && play.wheelSuitRepair, rollOn && play.wheelFood,
+                                                        rollDegrees != 0, bumperDt);
+        if (roll.step != 0 && QueueZeroGStep(zerog::Axis::roll, roll.step * static_cast<int>(rollDegrees)) == 0) {
+            gRollSteps.fetch_add(1, std::memory_order_relaxed);
+        }
         // The rest are Prey's own buttons, mirrored: Prey decides what a tap
         // or a hold of each means.
         const bool sources[kActionCount] = {
@@ -768,17 +831,18 @@ void UpdateTurnAndFireLanes()
             play.quickSlotDown,
             play.torch,                               // torch     <- D-pad up
             psi && PsiTargetMode() == 0,              // psi power <- left trigger, Original targeting
-            play.wheelSuitRepair,                     // Prey's LB <- Frame left bumper, in the wheel
-            play.wheelFood,                           // Prey's RB <- Frame right bumper, in the wheel
+            wheelOpen || !zeroG ? play.wheelSuitRepair : roll.left,   // Prey's LB <- Frame left bumper: the wheel, zero-G roll
+            wheelOpen || !zeroG ? play.wheelFood : roll.right,        // Prey's RB <- Frame right bumper: the wheel, zero-G roll
         };
         // A button down in a menu, or as one closes, waits for its release; the
-        // wheel's bumpers likewise, pressed outside the wheel or as it closes.
+        // wheel's bumpers likewise, pressed outside the wheel (and zero-G) or as
+        // it closes.
         static input::ReleaseGate gates[kActionCount];
         for (int slot = 0; slot < kActionCount; ++slot) {
             const bool wheelSlot = slot == kActionWheelLeft || slot == kActionWheelRight;
             // Slot 0's grip arbitration lives in the use button above.
             const bool source = slot == kActionInteract ? sources[slot] :
-                gates[slot].Update(sources[slot], menuFrame || (wheelSlot && !wheelOpen));
+                gates[slot].Update(sources[slot], menuFrame || (wheelSlot && !wheelOpen && !zeroG));
             ActionBinding& binding = gActions[slot];
             const bool wanted = actionsOn && !releaseActions && source;
             if (wanted == binding.held) { continue; }
@@ -920,7 +984,14 @@ int MoveLaneAxisMilli(unsigned int axis) { return axis < 2 ? gAxisMilli[axis].lo
 int MoveLaneCinematicGate() { return gCinematic.load(std::memory_order_relaxed); }
 unsigned long long MoveLaneRecenterCount() { return gRecenters.load(std::memory_order_relaxed); }
 
-int MoveLaneHeldMilli(unsigned axis) { return axis < 3 ? gHeldMilli[axis].load(std::memory_order_relaxed) : 0; }
+int MoveLaneHeldMilli(unsigned axis) { return axis < 4 ? gHeldMilli[axis].load(std::memory_order_relaxed) : 0; }
+
+bool MoveLaneLeanHeld(bool right)
+{
+    // Only zero-G's: in Prey's wheel the same buttons are its LB and RB, which
+    // the player map's re-read must not take for a lean.
+    return PlayerInZeroG() && gActions[right ? kActionWheelRight : kActionWheelLeft].held;
+}
 
 bool MoveLaneStickStarted(std::uint64_t now, std::uint64_t windowNs)
 {
@@ -952,7 +1023,10 @@ std::string MoveLaneStatusReport()
         << " menuFlickers=" << gMenuFlickers.load() << " menuTook=" << gMenuTook.load()
         << " reasserted=" << gReasserted[0].load() << ',' << gReasserted[1].load() << ',' << gReasserted[2].load()
         << " reassertRefused=" << gReassertRefused[0].load() << ',' << gReassertRefused[1].load() << ','
-        << gReassertRefused[2].load() << " native=" << gNative.load() << " }";
+        << gReassertRefused[2].load() << " native=" << gNative.load() << " zeroGRoll=" << gZeroGRollDegrees.load()
+        << " zeroGPitch=" << gZeroGPitchDegrees.load() << " rollSteps=" << gRollSteps.load()
+        << " pitchSteps=" << gPitchSteps.load() << " pitchPosted=" << gPitchPosted.load()
+        << " pitchRefused=" << gPitchRefused.load() << " pitchHeldMilli=" << gHeldMilli[3].load() << " }";
     return out.str();
 }
 
@@ -961,6 +1035,16 @@ DWORD SetSnapTurnDegrees(unsigned degrees) {
     gSnapDegrees=degrees;gTurnNeutralize=true;return 0;
 }
 unsigned SnapTurnDegrees() {return gSnapDegrees.load();}
+DWORD SetZeroGRollDegrees(unsigned degrees) {
+    if(degrees!=0 && (degrees<15 || degrees>90)) return 1;
+    gZeroGRollDegrees=degrees;return 0;
+}
+unsigned ZeroGRollDegrees() {return gZeroGRollDegrees.load();}
+DWORD SetZeroGPitchDegrees(unsigned degrees) {
+    if(degrees!=0 && (degrees<15 || degrees>90)) return 1;
+    gZeroGPitchDegrees=degrees;gTurnNeutralize=true;return 0;
+}
+unsigned ZeroGPitchDegrees() {return gZeroGPitchDegrees.load();}
 DWORD SetHeadRelativeMovement(unsigned enabled) {
     if(enabled>1) return 1;
     gHeadRelative=enabled!=0;gMoveNeutralize=true;return 0;

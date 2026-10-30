@@ -12,6 +12,7 @@
 #include "BodyEquipment.h"
 #include "ControllerPrompts.h"
 #include "HeadTrackingHook.h"
+#include "Helmet.h"
 #include "ExamineCamera.h"
 #include "UiMode.h"
 #include "MoveLane.h"
@@ -228,6 +229,12 @@ constexpr Wiring wiring[]={
  {options::NearClip,Set<SetViewNearClipCm>,Get<ViewNearClipCm>},
  {options::ScreenPullback,Set<SetExaminePullbackCm>,Get<ExaminePullbackCm>},
  {options::Antialiasing,Set<SetTemporalAntialiasing>,Get<TemporalAntialiasingEnabled>},
+ {options::Helmet,Set<SetHelmetShown>,Get<HelmetShown>},
+ {options::HelmetHeight,Set<SetHelmetHeightMm>,Get<HelmetHeightMm>},
+ {options::HelmetForward,Set<SetHelmetForwardMm>,Get<HelmetForwardMm>},
+ {options::HelmetSize,Set<SetHelmetSizePercent>,Get<HelmetSizePercent>},
+ {options::ZeroGRoll,Set<SetZeroGRollDegrees>,Get<ZeroGRollDegrees>},
+ {options::ZeroGPitch,Set<SetZeroGPitchDegrees>,Get<ZeroGPitchDegrees>},
 };
 constexpr bool InSettingOrder(){
  for(unsigned i=0;i<std::size(wiring);++i)if(wiring[i].id!=i)return false;

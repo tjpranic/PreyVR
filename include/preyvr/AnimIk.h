@@ -131,6 +131,10 @@ Vec3 ModelToWorld(const Location& location, const Vec3& model);
 // pre-eye anchor with the tracking/reference frame that produced it.
 Pose ControllerWorldFromHead(float yawRadians, const Vec3& eyeWorld,
                              const Pose& openXrHead, const Pose& openXrController);
+// The same on a full play-space basis (stereo::PlaySpaceBasis): in zero-G the
+// body, and with it the play space, need not be level.
+Pose ControllerWorldFromHead(const Quaternion& basis, const Vec3& eyeWorld,
+                             const Pose& openXrHead, const Pose& openXrController);
 
 // Keeps the goal within the limb's authored reach. Prey's two-bone leaf
 // stretches the forearm up to 1.25x rather than refuse an unreachable goal

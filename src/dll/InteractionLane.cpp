@@ -552,7 +552,7 @@ void UpdateInteractionLane(const GameplayPoseFrame& frame, bool tracking)
     const auto& left = frame.tracking.hands[static_cast<unsigned>(Hand::left)];
     UsePointer pointer{};
     if (gLeftHand.load() && tracking && frame.cameraCentreValid && frame.headYawUsable && !stereo::Recentering(frame.referenceGeneration)) {
-        auto ray = psi::BuildRay(psi::Mode::LeftController, frame.yaw, frame.cameraCentre, frame.tracking.head,
+        auto ray = psi::BuildRay(psi::Mode::LeftController, PlaySpaceRotation(frame), frame.cameraCentre, frame.tracking.head,
                                  left.aimPose, left.aimValidity);
         // From where the hand is drawn: a hand held back by glass or a wall
         // (SurfaceStopLane.h) does not reach what is behind it.
@@ -604,7 +604,7 @@ void UpdateInteractionLane(const GameplayPoseFrame& frame, bool tracking)
             // Engine world -> the app's OpenXR space (the inverse of what the
             // controller pose went through), then OpenXR yaw/pitch: -Z forward,
             // +Y up, yaw positive to the left.
-            const Vec3 x = stereo::EngineDirToTracking(d, frame.yaw);
+            const Vec3 x = stereo::EngineDirToTracking(d, PlaySpaceRotation(frame));
             const float h = std::sqrt(x.x * x.x + x.z * x.z);
             f.yawDeg = std::atan2(-x.x, -x.z) * kDegreesPerRadian;
             f.pitchDeg = std::atan2(x.y, h) * kDegreesPerRadian;

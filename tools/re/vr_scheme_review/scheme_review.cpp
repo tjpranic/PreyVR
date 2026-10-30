@@ -13,6 +13,10 @@ preyvr::dll::TrackingFrame tracked;
 bool focused = true;
 bool gameplay = true;     // no menu, and VR Options does not own the controllers
 bool wheelOpen = false;   // Prey's weapon wheel (its focusmode map)
+bool zeroG = false;       // the player's movement state is Prey's zero-G one
+// Snap steps the torso lane was asked for: axis (0 pitch, 1 roll), signed degrees.
+struct Step { int axis; int degrees; };
+std::vector<Step> steps;
 int rejectedKey = 0;
 int failures = 0;
 // ArkPlayerInput as the handlers leave it: a posted axis is stored, unless a
@@ -77,6 +81,12 @@ void RequestCarryRelease() {}
 void RequestDrawWeapon() {}
 void RequestUseTargetSuppression(bool) {}
 bool PreyWheelOpen() { return wheelOpen; }
+bool PlayerInZeroG() { return zeroG; }
+DWORD QueueZeroGStep(zerog::Axis axis, int degrees) {
+    if (!zeroG) { return 1; }
+    steps.push_back({axis == zerog::Axis::pitch ? 0 : 1, degrees});
+    return 0;
+}
 }
 
 void Check(bool ok, const char* name) {
@@ -88,6 +98,8 @@ void Reset() {
     focused = true;
     gameplay = true;
     wheelOpen = false;
+    zeroG = false;
+    steps.clear();
     rejectedKey = 0;
     tracked = {};
     posted.clear();
@@ -107,8 +119,10 @@ void Reset() {
     SetHeadRelativeMovement(0);
     gStick = preyvr::locomotion::StickAxis{};
     gStickPolicyHundredths = 15;
-    gLastTurnSent = gLastFireSent = 0;
-    gTurnPrimed = gFirePrimed = gFireHeld = false;
+    gLastTurnSent = gLastFireSent = gLastPitchSent = 0;
+    gTurnPrimed = gFirePrimed = gFireHeld = gPitchPrimed = false;
+    SetZeroGRollDegrees(0);
+    SetZeroGPitchDegrees(0);
     gMoveNeutralize = gTurnNeutralize = gFireNeutralize = false;
     gMoveMayBeHeld = false;
 }
@@ -215,6 +229,55 @@ int main() {
     tracked.play.wheelFood = false; posted.clear(); Tick();
     Check(ZeroFor(input::kShoulderR), "and is let go");
     SetInteractionEnabled(0); Tick();
+
+    // **Zero-G roll and brake** (docs/ZERO-G-SCOPE-2026-10-30.md): outside the
+    // wheel the bumpers are Prey's lean buttons there, smooth by default.
+    Reset(); SetInteractionEnabled(1); zeroG = true; Tick(); Tick();
+    posted.clear(); tracked.play.wheelSuitRepair = true; Tick();
+    Check(Sent(input::kShoulderL, 1000) && MoveLaneLeanHeld(false) && !MoveLaneLeanHeld(true),
+          "zero-G: the left bumper is Prey's left lean, a smooth roll, and the re-read is told it is held");
+    tracked.play.wheelFood = true; posted.clear(); Tick();
+    Check(Sent(input::kShoulderR, 1000) && MoveLaneLeanHeld(true), "both bumpers are both lean buttons: Prey's brake");
+    tracked.play.wheelSuitRepair = tracked.play.wheelFood = false; posted.clear(); Tick();
+    Check(ZeroFor(input::kShoulderL) && ZeroFor(input::kShoulderR), "and are let go");
+    tracked.play.wheelFood = true; Tick(); posted.clear();
+    zeroG = false; Tick();
+    Check(ZeroFor(input::kShoulderR) && !MoveLaneLeanHeld(true), "leaving zero-G lets a held roll go");
+    tracked.play.wheelFood = false; Tick();
+    // Snap: a bumper alone is a step once it has waited for the other; both are the brake.
+    SetZeroGRollDegrees(30); zeroG = true; Tick(); posted.clear();
+    tracked.play.wheelFood = true; Tick();
+    Check(steps.empty() && !Sent(input::kShoulderR, 1000), "snap: a bumper alone first waits for the other");
+    tracked.play.wheelFood = false; Tick();
+    Check(steps.size() == 1 && steps[0].axis == 1 && steps[0].degrees == 30 && !Sent(input::kShoulderR, 1000),
+          "a tap is one 30-degree roll to the right, made by the mod, not Prey's lean");
+    steps.clear(); posted.clear();
+    tracked.play.wheelSuitRepair = true; Tick();
+    tracked.play.wheelFood = true; Tick();
+    Check(steps.empty() && Sent(input::kShoulderL, 1000) && Sent(input::kShoulderR, 1000),
+          "both within the window: Prey's brake, and no roll");
+    tracked.play.wheelSuitRepair = tracked.play.wheelFood = false; posted.clear(); Tick();
+    Check(ZeroFor(input::kShoulderL) && ZeroFor(input::kShoulderR), "the brake let go");
+    SetInteractionEnabled(0); Tick();
+
+    // **Zero-G pitch**: the right stick's Y, smooth as Prey's look stick, or a step.
+    const int pitchMilli = static_cast<int>((0.8f - 0.15f) / 0.85f * 1000.0f);
+    Reset(); zeroG = true; Tick(); posted.clear();
+    tracked.play.turn = {0.0f, 0.8f}; Tick();
+    Check(Sent(input::kThumbRY, pitchMilli) && MoveLaneHeldMilli(3) == pitchMilli,
+          "zero-G: stick up posts Prey's look Y past the turn's deadzone, and the re-read keeps it");
+    posted.clear(); zeroG = false; Tick();
+    Check(ZeroFor(input::kThumbRY) && MoveLaneHeldMilli(3) == 0, "leaving zero-G returns the pitch to zero");
+    posted.clear(); Tick();
+    Check(!Sent(input::kThumbRY, pitchMilli), "outside zero-G the stick's Y pitches nothing: the head does");
+    tracked.play.turn = {}; Tick();
+    SetZeroGPitchDegrees(45); zeroG = true; Tick(); Tick(); posted.clear();   // the latch arms on a centred stick
+    tracked.play.turn = {0.1f, -0.9f}; Tick(); Tick();
+    Check(steps.size() == 1 && steps[0].axis == 0 && steps[0].degrees == -45 && !Sent(input::kThumbRY, -1000),
+          "snap: a push down is one 45-degree pitch down, once a push");
+    tracked.play.turn = {0.9f, 0.1f}; Tick();
+    Check(steps.size() == 1, "a sideways push is the turn's, not a pitch");
+    tracked.play.turn = {}; Tick();
 
     // **The stick the engine keeps** (docs/MOVE-STOP-2026-10-24.md).
     // Held(): move (0.8, 0.6) at full deflection, turn 0.8 past a 0.15 deadzone.

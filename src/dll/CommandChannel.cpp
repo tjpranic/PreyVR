@@ -35,6 +35,7 @@
 #include "StarfieldStereo.h"
 #include "ExamineCamera.h"
 #include "HeadLamp.h"
+#include "Helmet.h"
 #include "BodyDepthHook.h"
 #include "ReticleFollow.h"
 #include "SceneQuery.h"
@@ -162,6 +163,7 @@ void WriteReport(std::ostringstream& out)
         << " lastEye=" << LastBuiltEye()
         << " viewObserved=" << ViewHookObservedCount()
         << " viewApplied=" << ViewHookAppliedCount()
+        << " viewZeroG=" << ViewHookZeroGCount()
         << " viewPoseFallback=" << HeadTrackingPoseReadFallbacks()
         << " posApplied=" << ViewPositionAppliedCount()
         << " posRefused=" << ViewPositionRefusedCount()
@@ -240,6 +242,7 @@ void WriteReport(std::ostringstream& out)
         << " headMm=" << AimTrackedHeadMillimetres(0) << "," << AimTrackedHeadMillimetres(1)
         << "," << AimTrackedHeadMillimetres(2)
         << " yawHeld=" << AimHeadYawHeldCount()
+        << " tiltedFrames=" << AimTiltedFrameCount()
         << " yawUnavailable=" << AimHeadYawUnavailableCount()
         << " weaponMountMm=" << WeaponMountPositionMillimetres(0)
         << "," << WeaponMountPositionMillimetres(1)
@@ -630,6 +633,9 @@ constexpr Verb kVerbs[] = {
     }},
     {"flashlight.report", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
         out << "flashlight.report result=0 " << HeadLampReport();
+    }},
+    {"helmet.report", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
+        out << "helmet.report result=0 " << HelmetReport();
     }},
     {"stars.depth", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
         // Bare `stars.depth` only reports. 1 = the stars at the sky's depth

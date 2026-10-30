@@ -10,7 +10,7 @@ BASE=0x180000000
 def verify():
     image=Image(DEFAULT_MODULE);at=image.at
     rows=native_rows(ROOT/'include/preyvr/StickRereadNative.h')
-    assert len(rows)==6
+    assert len(rows)==7
     relocs=image.relocations()
     checks=[]
     for rva,size,expected,name in rows:
@@ -97,6 +97,19 @@ def verify():
     calls=[p for p in range(0x158e780,0x158e780+1029) if at(p,1)==b'\xe8' and image.call_target(p)==0x158eb90]
     assert calls==[0x158e981,0x158e9f2,0x158ea7d,0x158eabe],calls
     checks.append('the re-read calls AxisRead exactly four times')
+    # The lean buttons, zero-G's roll and brake: read again through ButtonRead, its only caller the re-read.
+    calls=[p for p in range(0x158e780,0x158e780+1029) if at(p,1)==b'\xe8' and image.call_target(p)==0x158e540]
+    assert calls==[0x158e819,0x158e844,0x158eb23,0x158eb53],calls
+    for name,rva,code in (('re-read: leanleft (+0xA00) through ButtonRead',0x158eb13,'4981c0000a0000'),
+                          ('re-read: stored at ArkPlayerInput +0xB5',0x158eb37,'8881b5000000'),
+                          ('re-read: leanright (+0xA08)',0x158eb48,'4981c0080a0000'),
+                          ('re-read: stored at +0xB6',0x158eb5b,'8881b6000000'),
+                          ('ButtonRead: ActionFiltered(manager RDX, action R8) first',0x158e540,
+                           '48895c2408574883ec20488b02488bca498bd0498bf9498bd8ff90a8010000')):
+        assert at(rva,len(bytes.fromhex(code)))==bytes.fromhex(code),name
+        checks.append(name)
+    assert image.call_target(0x158eb64)==0x15910b0
+    checks.append('the re-read calls ButtonRead four times, and recomputes the lean axis (0x15910B0) after both leans')
     return {'target':str(DEFAULT_MODULE),'sha256':image.sha256,'environment':'static','game_launched':False,'checks':checks,
         'limits':'Proves native bytes, layouts and call routes within the re-read, and that the re-read is the only '
                  "caller of AxisRead inside its body (a whole-module caller scan is Ghidra's: four calls, 2026-10-24). "
