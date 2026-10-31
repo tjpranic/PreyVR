@@ -2,7 +2,6 @@
 #include "AimTakeover.h"
 #include "EngineAccess.h"
 #include "HeadTrackingHook.h"
-#include "TorsoLane.h"
 #include "XrInput.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/LatestSnapshot.h"
@@ -26,10 +25,9 @@ std::atomic<unsigned int> gNativeMagnitude{0};
 std::atomic<int> gCamYawMilli{0}, gHeadYawMilli{0}, gPlaySpaceYawMilli{0};
 std::atomic<int> gNativeEyeMilli[3]{0,0,0};
 std::atomic<int> gTrackedHeadMilli[3]{0,0,0};
-// The last head yaw that was defined. Near-vertical, the head's yaw is genuinely
-// undefined but the BODY's has not changed, so holding this keeps the frame
-// correct -- and camera yaw still carries body turning, so the player can look
-// at the ceiling and keep walking in a circle without the hands drifting.
+// The last head yaw that was defined, held near-vertical, where the head's yaw is
+// genuinely undefined. Only a frame with no view to read goes by it (see
+// BuildGameplayFrame): the camera yaw it is taken from goes on following the head.
 std::atomic<float> gLastHeadYaw{0.0f};
 std::atomic<bool> gHaveHeadYaw{false};
 std::atomic<unsigned long long> gHeadYawHeld{0}, gHeadYawUnavailable{0};
@@ -87,6 +85,7 @@ FrameBuild BuildGameplayFrame(std::uintptr_t player, GameplayPoseFrame& frame, b
     frame.recenterEpoch = HeadTrackingRecenterEpoch();
     frame.referenceYaw = HeadTrackingReferenceYaw();
     frame.cameraYaw = GameCameraYaw();
+    // Worked back from the camera, for a frame with no view to read (below).
     // Camera yaw is body + (head - reference) because this mod writes head
     // tracking into that camera. Subtracting the head's own yaw leaves the
     // body, which is what a head-relative offset must be rotated by; using the
@@ -108,13 +107,13 @@ FrameBuild BuildGameplayFrame(std::uintptr_t player, GameplayPoseFrame& frame, b
         // Looking near-vertical. **Never fall through to the camera yaw
         // here**: that is precisely the defect this lane exists to fix, and
         // silently restoring it would make the hands swing again whenever a
-        // player looked up. Hold the last defined head yaw instead -- the
-        // body has not turned just because the head tilted, and body turning
-        // still arrives through the camera yaw.
-        const float held = gLastHeadYaw.load(std::memory_order_acquire);
-        frame.headYaw = held;
+        // player looked up. Hold the last defined head yaw instead, the lesser
+        // wrong: the camera yaw goes on following the head, so this is off by
+        // how far the head's heading has moved since. A view corrects it below.
+        const float last = gLastHeadYaw.load(std::memory_order_acquire);
+        frame.headYaw = last;
         frame.headYawUsable = true;
-        frame.yaw = frame.cameraYaw - held;
+        frame.yaw = frame.cameraYaw - last;
         gHeadYawHeld.fetch_add(1, std::memory_order_relaxed);
     } else {
         // No head yaw has ever been defined. Reject rather than invent:
@@ -123,20 +122,24 @@ FrameBuild BuildGameplayFrame(std::uintptr_t player, GameplayPoseFrame& frame, b
         frame.headYawUsable = false;
         gHeadYawUnavailable.fetch_add(1, std::memory_order_relaxed);
     }
-    // **Zero-G**: the view was composed on the tilted body (HeadTrackingHook.cpp),
-    // so the camera's yaw less the head's is not the play space's heading any
-    // more. The frame takes the view's own basis, split into its heading and
-    // the tilt (GameplayFrame.h PlaySpaceRotation); it needs no head yaw.
+    // **The play space this frame's view was composed on**, read rather than
+    // worked back: the view hook has it, and it needs no head yaw. The camera's
+    // yaw less the head's is the same number only while the head's forward has
+    // a heading. Bent over looking straight down it has hardly any: a degree of
+    // head movement swings the camera's yaw by tens of them, the hold above
+    // does not follow, and the hands, the aim and the chest turned about the
+    // head (docs/BODY-FOLLOW.md, the four yaws). In zero-G the view is composed
+    // on the tilted body (HeadTrackingHook.cpp), so that difference is no
+    // heading at all. The basis splits into the heading and the tilt
+    // (GameplayFrame.h PlaySpaceRotation), which is the identity on a level body.
     frame.tilt = Quaternion{};
-    if (PlayerInZeroG()) {
-        const AppliedView view = LastAppliedView();
-        if (view.tilted && view.sequence != 0) {
-            const stereo::SplitBasis split = stereo::SplitHeading(view.basis);
-            frame.yaw = split.yaw;
-            frame.tilt = split.tilt;
-            frame.headYawUsable = true;
-            gTiltedFrames.fetch_add(1, std::memory_order_relaxed);
-        }
+    const AppliedView view = LastAppliedView();
+    if (FreshSample(MonotonicNanoseconds(), view.publishedNs)) {
+        const stereo::SplitBasis split = stereo::SplitHeading(view.basis);
+        frame.yaw = split.yaw;
+        frame.tilt = split.tilt;
+        frame.headYawUsable = true;
+        if (view.tilted) { gTiltedFrames.fetch_add(1, std::memory_order_relaxed); }
     }
     gCamYawMilli.store(static_cast<int>(frame.cameraYaw * 57295.78f), std::memory_order_relaxed);
     gPlaySpaceYawMilli.store(static_cast<int>(frame.yaw * 57295.78f), std::memory_order_relaxed);

@@ -40,7 +40,7 @@
 - Can't grab when two-handing weapons
     Grabs are only allowed with the left hand, will need to rethink how this works
 - Remove Q-Beam equip animation (?)
-- Body IK seems to cause the body to twist a bit when leaning down
+- Hacking minigame doesn't display, it just shows a black screen
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -147,6 +147,8 @@
     > The flashlight hung off Prey's eye joint, which VR never moves, so it pointed level along the body. It and the psychoscope's light now sit on the headset's eye at Prey's mount (17 mm behind and 35 mm below the eye) and point where you look. Always on. PreyVR-102, worn OK 2026-10-29. See docs/FLASHLIGHT-HEAD-SCOPE-2026-10-29.md.
 - Arms can clip into the player model
     > The elbow chooser didn't know the body was there: with the hands at the chest it could put the elbow 12–15 cm inside it (measured on PreyVR-103 against capsules fitted to the drawn torso). It now prefers elbows outside the body, and the drawn elbow goes round the body to them, never through it. PreyVR-104, worn OK 2026-10-29. See docs/ARM-TORSO-SCOPE-2026-10-29.md.
+- Body IK seems to cause the body to twist a bit when leaning down
+    > Not the IK, and not the zero-G work. Within 5° of straight down the play space's yaw went wrong, off by how far the head's heading had moved, which turned the chest, hands and aim about the head until the head came back out of that range. Bending over is what gets a head that far down. The yaw is now read from the view instead of worked back from the camera. PreyVR-118, worn OK 2026-10-31. See docs/BODY-FOLLOW.md, the four yaws.
 
 ### Rendering
 - The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision). (Archived)

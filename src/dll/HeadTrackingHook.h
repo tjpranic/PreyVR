@@ -145,6 +145,9 @@ struct AppliedView {
     // yaw's alone, or zero-G's tilted body (`tilted`).
     Quaternion basis{};
     bool tilted = false;
+    // When it was applied (MonotonicNanoseconds), 0 before the first: a view
+    // that stopped coming says nothing of the play space now.
+    std::uint64_t publishedNs = 0;
 };
 AppliedView LastAppliedView();
 

@@ -38,8 +38,9 @@ struct GameplayPoseFrame {
     Vec3 cameraCentre{};
     bool cameraCentreValid = false;
     // The play-space -> engine-world yaw, the one every lane must rotate a
-    // head-relative offset by. See AimTakeover.h (the body yaw) for why it is
-    // not simply cameraYaw - referenceYaw.
+    // head-relative offset by: the one this frame's view was composed on. See
+    // AimTakeover.h (the body yaw) for why it is not simply
+    // cameraYaw - referenceYaw.
     float yaw = 0.0f;
     // **What the yaw leaves out in zero-G**, where the body need not be level:
     // the play space's rotation into the world is tilt * Rz(yaw)

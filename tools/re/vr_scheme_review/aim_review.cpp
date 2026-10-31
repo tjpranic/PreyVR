@@ -12,6 +12,8 @@ HMODULE WINAPI ReviewModule(LPCWSTR);
 #include <iostream>
 
 preyvr::dll::TrackingFrame tracked;
+// The view the hook last applied; none until a test publishes one.
+preyvr::dll::AppliedView appliedView;
 preyvr::Vec3 drawnOrigin, drawnDirection;
 bool focused = true, calibrated = false, examiningScreen = false;
 const preyvr::Vec3 eye{10, 20, 30}, muzzle{10.3f, 20.5f, 29.8f};
@@ -38,9 +40,7 @@ bool TryGetTrackingFrame(TrackingFrame& out) {
 unsigned long long HeadTrackingReferenceGeneration() { return 2; }
 unsigned long long HeadTrackingRecenterEpoch() { return 1; }
 float HeadTrackingReferenceYaw() { return 0; }
-// Level play: no zero-G, so the frame's tilt stays the identity.
-bool PlayerInZeroG() { return false; }
-AppliedView LastAppliedView() { return {}; }
+AppliedView LastAppliedView() { return appliedView; }
 std::uint64_t WeaponEquipGeneration() { return 7; }
 bool TryGetMuzzleFromGrip(const Pose&, std::uint64_t, Vec3& out) {
     if (!calibrated) return false;
@@ -213,6 +213,81 @@ int main() {
     Check(TryGetAimSample(afterScreen) && !afterScreen.cameraAnchored && !Same(afterScreen.origin, atScreen),
           "after the screen: the ray aim.origin asks for");
     gWorldUiReturn = 0;
+
+    // Bent over looking straight down: the head's forward wanders a degree and a
+    // half either side, within the near-vertical cone, where it has hardly any
+    // heading. The camera is composed as the view hook does; the play space has
+    // not moved, and the controller is still, so nothing may swing. A tilt about
+    // the head's own up moves its forward sideways, a real head's small unrest.
+    const auto lookDown = [&](float pitchDegrees, float sideDegrees, const AppliedView& view) {
+        const float pitch = -pitchDegrees * 0.0174532925199433f, side = sideDegrees * 0.0174532925199433f;
+        tracked.head.orientation = Normalize(Multiply(Quaternion{std::sin(pitch / 2), 0, 0, std::cos(pitch / 2)},
+                                                      Quaternion{0, std::sin(side / 2), 0, std::cos(side / 2)}));
+        stereo::ReferenceFrame composed{};
+        composed.yawRadians = bodyYaw;
+        composed.worldPosition = eye;
+        stereo::WriteMatrix(camera, stereo::MatrixFromPose(stereo::EyePoseInWorld(composed, tracked.head)));
+        appliedView = view;
+        ++tracked.sequence;
+        tracked.publishedNs = MonotonicNanoseconds();
+        UpdateCachedRayWithTakeover(player.data());
+        UpdateAimReticleForRender();
+        aim::Sample bent{};
+        TryGetAimSample(bent);
+        return bent.direction;
+    };
+    const auto freshView = [&](const Quaternion& basis) {
+        AppliedView view{};
+        view.basis = basis;
+        view.publishedNs = MonotonicNanoseconds();
+        return view;
+    };
+    const Quaternion levelBasis = stereo::YawQuaternion(bodyYaw);
+    const unsigned long long heldBefore = AimHeadYawHeldCount();
+    lookDown(80.0f, 0.0f, freshView(levelBasis));   // a head yaw to hold
+    int bentCameraMin = AimCameraYawMilliDegrees(), bentCameraMax = bentCameraMin;
+    bool steady = true;
+    for (int side = -15; side <= 15; side += 5) {
+        const Vec3 direction = lookDown(88.0f, side * 0.1f, freshView(levelBasis));
+        bentCameraMin = std::min(bentCameraMin, AimCameraYawMilliDegrees());
+        bentCameraMax = std::max(bentCameraMax, AimCameraYawMilliDegrees());
+        steady = steady && Same(direction, heldDirection) && std::fabs(drawnContext.playYaw - bodyYaw) < 1e-5f;
+    }
+    Check(AimHeadYawHeldCount() - heldBefore == 7, "looking straight down: every frame is in the cone");
+    Check(bentCameraMax - bentCameraMin > 60000, "positive control: the camera's yaw swung (" +
+          std::to_string(bentCameraMax - bentCameraMin) + " mdeg)");
+    Check(steady, "looking straight down: the aim stays on the view's yaw");
+    // Positive control: the same head with no view, on the hold and the camera.
+    float bentWorst = 0.0f;
+    lookDown(80.0f, 0.0f, AppliedView{});
+    for (int side = -15; side <= 15; side += 5) {
+        bentWorst = std::max(bentWorst, Length(Sub(lookDown(88.0f, side * 0.1f, AppliedView{}), heldDirection)));
+    }
+    Check(bentWorst > 0.2f, "positive control: without a view the hold swings the aim");
+    // A view that stopped coming says nothing: the body has turned on without it.
+    tracked.head.orientation = {};
+    stereo::WriteMatrix(camera, stereo::MatrixFromPose({stereo::YawQuaternion(bodyYaw + 0.3f), eye}));
+    appliedView = freshView(levelBasis);
+    appliedView.publishedNs -= 2 * kMaxPoseAgeNs;
+    ++tracked.sequence;
+    tracked.publishedNs = MonotonicNanoseconds();
+    UpdateCachedRayWithTakeover(player.data());
+    UpdateAimReticleForRender();
+    Check(std::fabs(drawnContext.playYaw - (bodyYaw + 0.3f)) < 1e-5f, "a stale view is not read: the camera's yaw stands");
+    // Zero-G's tilted view: the heading, the tilt it leaves out, and it counts.
+    const unsigned long long tiltedBefore = AimTiltedFrameCount();
+    AppliedView tiltedView = freshView(Normalize(Multiply(Quaternion{std::sin(0.2f), 0, 0, std::cos(0.2f)}, levelBasis)));
+    tiltedView.tilted = true;
+    lookDown(30.0f, 0.0f, tiltedView);
+    GameplayPoseFrame tiltedFrame{};
+    Check(TryGetGameplayPoseFrame(tiltedFrame) && Tilted(tiltedFrame) && AimTiltedFrameCount() == tiltedBefore + 1 &&
+              stereo::RotationAngle(PlaySpaceRotation(tiltedFrame), tiltedView.basis) < 2e-3f,
+          "a tilted view: the frame turns by all of it");
+    lookDown(30.0f, 0.0f, freshView(levelBasis));
+    GameplayPoseFrame levelFrame{};
+    Check(TryGetGameplayPoseFrame(levelFrame) && !Tilted(levelFrame) && AimTiltedFrameCount() == tiltedBefore + 1,
+          "a level view has no tilt and does not count as one");
+    appliedView = {};
 
     focused = false;
     UpdateCachedRayWithTakeover(player.data());

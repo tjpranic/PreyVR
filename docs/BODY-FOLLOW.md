@@ -157,6 +157,19 @@ hands and the panels, does not move**. The rules that follow from it:
 | Heavy carry | native target (G) plus a P-based shift | The shift's neutral offset turns with `P + R` (= G), the frame the native target turns in |
 | Holster and medkit slots | the shared torso | They follow the torso while the hand is outside them, so a turn cannot drag a reached slot away |
 
+**P is read, not worked back** (2026-10-31, PreyVR-118). The gameplay frame takes P from the basis
+the view hook composed the eye on (`AppliedView::basis`), as zero-G already did. It used to be
+`camera yaw − head yaw`, the same number only while the head's forward has a heading. Within 5° of
+vertical `RecenterYawFromHeadPose` gives none, and the last head yaw was held while the camera's
+went on following the head, so P was off by how far the head's heading had moved since: near
+straight down, a degree or two of head movement is tens of degrees of heading. Everything that
+goes by P went with it. The chest did because the pin measures its twist through P (`in.twist`, up
+to its 45° limit), and the hands and the aim turned about the head. That was the body twisting for
+a moment, bending over to look down: a neck alone rarely gets within 5° of vertical, and the error
+ended on the frame the head left that range. Run through `SolvePin` on the measured rig, a bend to
+89° with the head wandering ±1.5° turned the chest 22.6° and moved a still hand 21 cm; on P itself,
+0.3° and nothing. The subtraction stands only on a frame with no view from the last 200 ms.
+
 ## How the body is turned: the engine's own setter
 
 No code writes G directly. **ArkPlayer vtable slot 52** (`+0x1A0`, `0x1584CC0`) has the
@@ -822,6 +835,7 @@ Collected from the sections above, with how each was established.
 | 10-25 | PreyVR-91 | The body drawn in the world, not Prey's near pass (`body.depth`) | A hand behind an object is hidden; looking down, the view cut into the body (the 10 cm near plane) |
 | 10-25 | PreyVR-92 | Setup → Near Clip Distance (1–10 cm, default 3): the view's near plane | "Tested and verified working." |
 | 10-28 | PreyVR-101 | The near pass at the world's depth (`body.depth 1`, the new default; PreyVR-91's way kept as 2): the stun gun's sparks and charge meter had broken with the body drawn in the world | "Tested and verified working"; also fixed the PDA drawn over the hand |
+| 10-31 | PreyVR-118 | P read from the view instead of camera yaw − head yaw: the chest, hands and aim no longer turn about the head, bending to look straight down | "Tested and confirmed working." Run `player-20261031-121500`: the old yaw was up to 13.7° off at 85° of pitch (a temporary `yaw_gap` log, sampled at most once a second, since removed); snap turning played in that run, smooth turning not shown |
 
 ## Open
 

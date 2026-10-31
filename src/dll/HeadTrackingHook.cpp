@@ -243,7 +243,7 @@ void PublishView(const Quaternion& rotation, const Vec3& offset, const Pose& pre
     const Quaternion basis =
         reference.tilted ? Normalize(reference.basis) : stereo::YawQuaternion(reference.yawRadians);
     std::lock_guard lock(gViewMutex);
-    gView = {rotation, offset, gView.sequence + 1, prey, basis, reference.tilted};
+    gView = {rotation, offset, gView.sequence + 1, prey, basis, reference.tilted, MonotonicNanoseconds()};
 }
 std::atomic<unsigned long long> gObserved{0};
 std::atomic<unsigned long long> gApplied{0};

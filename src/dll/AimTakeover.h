@@ -77,12 +77,14 @@ void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking);
 // Subtracting the head's own yaw cancels it: `playSpace = camera - head`.
 // This is the composition the old hand lane called BodyYaw(), quoting the
 // fleet playbook -- parenting the shoulders to the HMD is the obvious
-// implementation and it is wrong. Near-vertical the last defined head yaw is
-// held; with none ever defined the frame is refused, never composed from the
-// camera yaw.
+// implementation and it is wrong. A frame takes that yaw from the view composed
+// on it (LastAppliedView); the subtraction stands only on a frame with no view.
+// There, near-vertical, the last defined head yaw is held; with none ever
+// defined the frame is refused, never composed from the camera yaw.
 // Frames that held the last defined head yaw because the wearer was looking
 // near-vertical, and frames refused because no head yaw has ever been defined.
-// Held frames are correct, not degraded: the body has not turned.
+// A held frame with a view is correct, not degraded: it goes by the view's yaw.
+// Without one it is off by how far the head's heading has moved since the hold.
 unsigned long long AimHeadYawHeldCount();
 unsigned long long AimHeadYawUnavailableCount();
 // Frames built on zero-G's tilted view (GameplayFrame.h PlaySpaceRotation).
