@@ -25,7 +25,7 @@ original top-level target; internal Scaleform filter targets stay native. The
 original render targets are restored before returning. There is no second
 `CSystem::Render`, extra Flash advance, or external thread making engine UI calls.
 
-Raw source texture evidence is in `evidence/vr-interface-2026-09-09/hud-raw/` and
+Raw source texture evidence is in `data/evidence/vr-interface-2026-09-09/hud-raw/` and
 `hud-alpha-check.json`: 2560×1440 RGBA, 60,817 nonzero-alpha pixels versus
 3,625,583 zero-alpha pixels. The image contains HUD graphics, with no scene.
 Some glow pixels intentionally carry additive colour with zero alpha; a strict

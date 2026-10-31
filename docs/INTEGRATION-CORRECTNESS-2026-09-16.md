@@ -73,7 +73,7 @@ commands and their actual image/sidecar files instead.
 
 ## Limits and reproducibility
 
-Evidence is in [the evidence directory](evidence/integration-contract-20260916/).
+Evidence is in [the evidence directory](../data/evidence/integration-contract-20260916/).
 The manifest and trace summary distinguish the native-tested DLL
 `65BEAFB45BD76963A98BD9356AF3AD24E389B7C0DBB4C4D48201C4A64EB3697F`
 from the final build hash. After the native run, review added rejection when

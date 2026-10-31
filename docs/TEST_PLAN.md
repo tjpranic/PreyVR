@@ -1,6 +1,6 @@
 # Test plan
 
-Each completed row requires a log or capture manifest in `captures/` and a link from `RESEARCH_LOG.md`.
+Each completed row requires a log or capture manifest in `data/captures/` and a link from `RESEARCH_LOG.md`.
 
 | Stage | Proof | Required evidence | Status |
 | --- | --- | --- | --- |
@@ -13,7 +13,7 @@ Each completed row requires a log or capture manifest in `captures/` and a link 
 | S0 | A known world subset has distinct per-eye geometry. | Paired eye dumps plus IPD/residual proof. | Planned |
 | S1 | Engine view/culling follows position and rotation. | Translation/peek test with no missing peripheral geometry. | Planned |
 | A0a | The engine aim ray can move independently of the head/world camera. | Reversible synthetic reticle test: fixed camera, changed cached world ray, full byte restoration. | Passed 2026-07-31; see the detached-aim capture. |
-| A0b | A native firearm, melee, or interaction endpoint follows the detached ray. | Two one-shot wrench queries using the stack-local ray copy: unchanged baseline, then bounded 10-degree yaw; record both result vectors. | Passed 2026-08-01: same wall collider and depth, with a `0.127165`-unit lateral contact displacement following the written ray. See [`../captures/traces/2026-08-01-prey-wrench-a0b.md`](../captures/traces/2026-08-01-prey-wrench-a0b.md). |
+| A0b | A native firearm, melee, or interaction endpoint follows the detached ray. | Two one-shot wrench queries using the stack-local ray copy: unchanged baseline, then bounded 10-degree yaw; record both result vectors. | Passed 2026-08-01: same wall collider and depth, with a `0.127165`-unit lateral contact displacement following the written ray. See [`../data/captures/traces/2026-08-01-prey-wrench-a0b.md`](../data/captures/traces/2026-08-01-prey-wrench-a0b.md). |
 | V0 | The rendered arms/weapon can move independently of camera and gameplay aim. | Reversible visual-only pose offset with an unchanged shot endpoint. | Planned |
 | I0 | Controller pose drives native gameplay aim and actions. | Controller/aim trace plus hitscan, projectile, melee, and use-ray validation. | Partial/reproduced: native melee and use targeting are live-steerable from transient detached rays; keypad `0xFDE0` changed to usable entity `0x1117` in the no-button interaction capture. Projectile proof and controller-pose injection remain. |
 | V1 | Controller pose drives the visual weapon and remains aligned with gameplay aim. | Muzzle/controller residuals across representative weapons and animations. | Planned |

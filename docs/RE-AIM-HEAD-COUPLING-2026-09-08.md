@@ -31,7 +31,7 @@ The ordinary 28 CTests and all four integration replays pass. The analyzer
 reprojects 13 synthetic records with maximum residual **0.0000262 milli**.
 Its positive control detects a changed direction with unchanged raw pose;
 flipping quaternion sign produces no false rotation. Receipts:
-`docs/evidence/aim-head-coupling-static-2026-09-08.json`.
+`data/evidence/aim-head-coupling-static-2026-09-08.json`.
 
 The rebuilt diagnostic DLL is
 `build/h021-integration-audit/Release/PreyVR.dll`, 774144 bytes, SHA256

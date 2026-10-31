@@ -20,7 +20,7 @@ Status, 2026-10-20 (Steam `PreyDll.dll` `7d6e322f...05311a7`):
   evidence folder). Tests `wrench_draw_native`, `wrench_draw` and `wrench_sound` (the lanes
   against fake engine objects); full suite 89/89.
 
-Evidence: [`evidence/wrench-draw-2026-10-20/`](evidence/wrench-draw-2026-10-20/). It holds the
+Evidence: [`data/evidence/wrench-draw-2026-10-20/`](../data/evidence/wrench-draw-2026-10-20/). It holds the
 Ghidra headless scripts (`gd.py` d/x/v modes, `gdis.py`, `gscan.py`, `vt.py`), the string scan
 `strs.py`, the decompiles they produced, and `verify_wrench_draw.json`.
 
@@ -192,7 +192,7 @@ went with the draw.
 ## The equip sound (investigated 2026-10-20, static)
 
 The sound belongs to the skipped fragment; OnEquip plays no audio of its own. Decompiles
-are in [`audio_decompile.c`](evidence/wrench-draw-2026-10-20/audio_decompile.c).
+are in [`audio_decompile.c`](../data/evidence/wrench-draw-2026-10-20/audio_decompile.c).
 
 **Two ways the fragment can sound.**
 - **Mannequin's `PlaySound` procedural clip** (CryEngine's audio clip). Its params,

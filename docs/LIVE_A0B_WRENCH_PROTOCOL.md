@@ -1,6 +1,6 @@
 # Live A0b wrench protocol
 
-**Status:** Completed successfully on 2026-08-01. The same wall collider remained at effectively identical depth while the +10-degree stack-local direction moved the returned contact `0.127165` world units. See [`../captures/traces/2026-08-01-prey-wrench-a0b.md`](../captures/traces/2026-08-01-prey-wrench-a0b.md).
+**Status:** Completed successfully on 2026-08-01. The same wall collider remained at effectively identical depth while the +10-degree stack-local direction moved the returned contact `0.127165` world units. See [`../data/captures/traces/2026-08-01-prey-wrench-a0b.md`](../data/captures/traces/2026-08-01-prey-wrench-a0b.md).
 
 This is the next bounded runtime experiment. Its only question is whether changing the direction used by one native wrench query changes the returned collision contacts without changing the camera.
 

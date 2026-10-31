@@ -9,7 +9,7 @@ records the earlier baseline; paused-world rendering remains open.
 ## Already available
 
 - Inventory identity and native rendering callback: prior in-game receipt
-  `evidence/vr-interface-2026-09-09/flash-bindings-inventory.json` observes
+  `data/evidence/vr-interface-2026-09-09/flash-bindings-inventory.json` observes
   DaniellePDA player `0x28e5fc56430`, render proxy `player+8`, callback RVA
   `0xE8C5E0`, 23 callbacks on the render thread. It also records internal filter
   targets, which must remain separate from the final destination.
@@ -66,7 +66,7 @@ capture its alpha and the remaining scene separately, and observe world draw /
 camera updates with inventory closed and open. Keep the previous crash as an
 independent unresolved stability issue.
 
-Static Steam decompiles: `evidence/inventory-hologram-2026-09-11/native-static.json`.
+Static Steam decompiles: `data/evidence/inventory-hologram-2026-09-11/native-static.json`.
 Target SHA256: 7d6e322f61b28331095a400f0ba5f09bd9a39c57bf993602285dd6acb05311a7.
 The project graph was queried but returned unrelated target-symbol matches;
 current source, prior callback receipts and hashed Steam bytes were used instead.

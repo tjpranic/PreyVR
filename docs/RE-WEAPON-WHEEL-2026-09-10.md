@@ -10,7 +10,7 @@ are unchanged. No new native function, hook or object offset is introduced.
 
 The native key identity is target proof: Steam CMouse::Init RVA 0x9D45C0 calls
 MapSymbol with 0x102 and literal mouse3. The existing decompile receipt is
-`evidence/ui-pointer-2026-09-10/native-input-mode-proof.json`.
+`data/evidence/ui-pointer-2026-09-10/native-input-mode-proof.json`.
 Bethesda's PC manual documents middle-mouse as Favorites Wheel:
 https://assets.ctfassets.net/rporu91m20dc/53M5yrNdu8aowEssaesGcm/390ff006505cb92ae1105c9530f950f9/PREY_pc_minimanual-EN-04digital.pdf
 This establishes the default shortcut, not acceptance by a customized live action map.
@@ -31,5 +31,5 @@ The user confirmed stereo was fixed and the in-game popup menu was curved.
 Candidate 09 DLL SHA256: 546a76766c9054f2c896bc2ee683e9306404f6a606d1015d4904eef69206766f.
 The session subsequently crashed at Steam PreyDll RVA 0x27EC40 on
 JobSystem_Worker_4(Regular), reading 0x23C. Cause unproven. Logs and dump are under
-`evidence/ui-pointer-2026-09-10/crash-headset09/`. Candidate 10 preserves the early
+`data/evidence/ui-pointer-2026-09-10/crash-headset09/`. Candidate 10 preserves the early
 rendered-eye dequeue fix; it is not a crash fix or a stable-release claim.

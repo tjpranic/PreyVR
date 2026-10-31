@@ -223,10 +223,10 @@ that rebuilds overlap running draw jobs.
 
 **Evidence.**
 - The run is `player-20261024-145830`, with its `error.dmp`.
-- [evidence/crash-2026-10-24](evidence/crash-2026-10-24/) holds the logs, both
+- [data/evidence/crash-2026-10-24](../data/evidence/crash-2026-10-24/) holds the logs, both
   thread listings and the cdb scripts.
 - Replay:
-  `cdb -z <run>\error.dmp -i "<Prey Release dir>;<PreyVR-70 dir>;C:\Windows\System32" -cf docs/evidence/crash-2026-10-24/crash2.cdb`.
+  `cdb -z <run>\error.dmp -i "<Prey Release dir>;<PreyVR-70 dir>;C:\Windows\System32" -cf data/evidence/crash-2026-10-24/crash2.cdb`.
 
 ## Quit crash
 

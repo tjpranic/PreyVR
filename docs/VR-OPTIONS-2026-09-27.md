@@ -85,8 +85,8 @@ existing five-argument action ABI; disassembly proves this handler only consumes
 `vr.options` reports dispatched/refused/fault counts; a returned callback is
 not proof that the game accepted the request.
 
-Raw [static extracts](evidence/vr-options-2026-09-27/psychoscope-static.txt) and
-[binary verification](evidence/vr-options-2026-09-27/psychoscope-verify.json)
+Raw [static extracts](../data/evidence/vr-options-2026-09-27/psychoscope-static.txt) and
+[binary verification](../data/evidence/vr-options-2026-09-27/psychoscope-verify.json)
 support this contract. Reproduce without a game:
 
 ```powershell

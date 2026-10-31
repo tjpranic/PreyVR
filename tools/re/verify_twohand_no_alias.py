@@ -57,6 +57,6 @@ def check(root):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--evidence', type=Path, default=Path(__file__).resolve().parents[2] / 'docs/evidence/twohand-no-alias-2026-10-04')
+    parser.add_argument('--evidence', type=Path, default=Path(__file__).resolve().parents[2] / 'data/evidence/twohand-no-alias-2026-10-04')
     args = parser.parse_args()
     print(json.dumps(check(args.evidence), indent=2))

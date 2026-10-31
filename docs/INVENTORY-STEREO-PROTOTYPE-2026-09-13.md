@@ -83,7 +83,7 @@ the panel normally. A planar front-facing test is the initial validation case.
 Release build and **39/39 tests pass**, including added homogeneous divide,
 depth-sign, tilted-transform, zero-depth and refusal checks. Native arithmetic
 emulation passes. These do not establish Display replay safety or visible
-stereo. Evidence is in `evidence/inventory-stereo-2026-09-13/`.
+stereo. Evidence is in `data/evidence/inventory-stereo-2026-09-13/`.
 
 After other fleet games close, launch the development DLL with process-scoped
 xr-sim/xr-tape using `tools/Invoke-PreyVRLaunch.ps1`. No machine runtime switch

@@ -68,6 +68,6 @@ use matching transforms. Native depth needs an explicit conversion and comfort
 scale, and the world-behind-paused-inventory work remains separate.
 
 Evidence and reproducible analysis are in
-`evidence/inventory-hologram-2026-09-11/`: live-depth-01.json, live-depth-02.json,
+`data/evidence/inventory-hologram-2026-09-11/`: live-depth-01.json, live-depth-02.json,
 probe_depth.py (final four-second version), analyze_depth.py, depth-analysis.json.
 No mod source, package or launch settings were changed for this investigation.

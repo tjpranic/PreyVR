@@ -19,7 +19,7 @@ from preydll import DEFAULT_MODULE, Image
 
 ROOT = Path(__file__).resolve().parents[2]
 HUD_SOURCE = ROOT / "src" / "ui" / "hud" / "HudBridge.cpp"
-BINDINGS = ROOT / "docs" / "evidence" / "bindings-20261017" / "gamepad-bindings.txt"
+BINDINGS = ROOT / "data" / "evidence" / "bindings-20261017" / "gamepad-bindings.txt"
 
 NO_WORLD_FLAG_RVA = 0x224DC2B
 ELEMENT_NAME_RVA = 0x1E63F28

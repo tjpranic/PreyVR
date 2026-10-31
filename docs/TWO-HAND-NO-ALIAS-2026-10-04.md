@@ -51,7 +51,7 @@ control claims or prove a regression. Simulator error counters remain zero.
 ## Reproduce and inspect
 
 Raw reports, simulator states, logs and captures are under
-`docs/evidence/twohand-no-alias-2026-10-04/`. Offline comparison:
+`data/evidence/twohand-no-alias-2026-10-04/`. Offline comparison:
 
 ```powershell
 & 'C:/Users/meise/AppData/Local/Programs/Python/Python312/python.exe' -E -B tools/re/verify_twohand_no_alias.py

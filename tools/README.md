@@ -1,6 +1,6 @@
 # Tools
 
-Place small, reproducible helpers here: log parsers, capture-index generators, byte-signature validators, and Ghidra-export normalizers. Keep generated output in `captures/` or `docs/`, not alongside the tool.
+Place small, reproducible helpers here: log parsers, capture-index generators, byte-signature validators, and Ghidra-export normalizers. Keep generated output in `data/captures/` or `docs/`, not alongside the tool.
 
 ## DXGI method probe
 

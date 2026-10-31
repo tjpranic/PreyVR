@@ -8,7 +8,7 @@ rotation captured between a controller and the animated wrist.
 Scope: source edits, read-only native analysis, compiled offline tests. No game
 launch, injection, native query call, runtime configuration change or headset
 acceptance was performed. Base revision: `5efd7c8`; exact source snapshots and
-output hashes are in `evidence/build-takeover-2026-09-09/build-manifest.json`.
+output hashes are in `data/evidence/build-takeover-2026-09-09/build-manifest.json`.
 
 ## Correction shipped in the local build
 
@@ -65,7 +65,7 @@ to `[RBX+0x95B4]`. The captured function's returns follow this latch.
 Renderer vtable `0x1DD2E08 + 0x8C8` holds `base+0xF7D710`.
 The complete 2112-byte frame-begin span matches Ghidra and disk, as do both
 compiled code gates. The consumer's strict FOV range is retained in the H-011
-native captures, including `captures/re/h011/f43d70-update-nearest.c`.
+native captures, including `data/captures/re/h011/f43d70-update-nearest.c`.
 
 Static ordering and the harness do not establish every downstream rendering
 consumer, actual callback cadence through a level load, visual projection

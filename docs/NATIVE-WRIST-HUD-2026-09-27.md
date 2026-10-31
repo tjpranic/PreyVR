@@ -59,7 +59,7 @@ game. The class references and named display-list placements agree:
 Sprite IDs are asset-version-specific corroboration, **not native object pointers
 or stable integration identifiers**. Use verified paths and movie generation.
 The complete metadata is in
-[widget-map.json](evidence/native-hud-2026-09-27/widget-map.json).
+[widget-map.json](../data/evidence/native-hud-2026-09-27/widget-map.json).
 
 The UI function names resolve to ActionScript controller objects (`health`,
 `psiM`, `armor`), which in turn retain references to these display objects. They

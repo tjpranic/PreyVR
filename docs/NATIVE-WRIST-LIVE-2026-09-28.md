@@ -44,7 +44,7 @@ while ordinary HUD capture continues, then resume with a wrist quad submitted.
 
 The trace is bounded at 10,000 frames and explicitly **truncated**. Its recorded
 end-frame results and exact capture matches are summarized in
-[summary.json](evidence/native-wrist-live-2026-09-28/summary.json).
+[summary.json](../data/evidence/native-wrist-live-2026-09-28/summary.json).
 Do not treat its footer as coverage of the entire session or teardown.
 
 ## Visual limitation and next discriminator
@@ -70,5 +70,5 @@ two-hand suppression, feature-disabled behavior, frame cost and headset comfort
 remain untested. The 50/50 prior offline suite is separate evidence.
 
 Raw captures, command replies, mod log, runtime identity and matching trace
-records are in [the evidence folder](evidence/native-wrist-live-2026-09-28/).
+records are in [the evidence folder](../data/evidence/native-wrist-live-2026-09-28/).
 The full bounded trace remains in `build/native-wrist-live-20260928/`.

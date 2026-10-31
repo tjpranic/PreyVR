@@ -78,8 +78,8 @@ Built DLL: `build/integration/Release/PreyVR.dll`, **967,168 bytes**.
 SHA-256: `F4B4A693518A5B7B5652D7EA7DDDE75AE2C986CAEFD9B3A0CC37F75713A7A422`.
 This is a local integration build, not a published player package.
 
-Saved check outputs: [final build](evidence/integration-consolidation-20260927/build.txt)
-and [CTest](evidence/integration-consolidation-20260927/ctest.txt).
+Saved check outputs: [final build](../data/evidence/integration-consolidation-20260927/build.txt)
+and [CTest](../data/evidence/integration-consolidation-20260927/ctest.txt).
 
 ## Remaining acceptance and next work
 

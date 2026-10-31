@@ -14,7 +14,7 @@ passed its tests but lacked those optimizations. It is retained separately as
 The earlier arithmetic receipt and evidence files remain unchanged.
 
 Final Release tests: **39/39 passed**. Logs are in
-`docs/evidence/inventory-stereo-2026-09-13/release-validation/`.
+`data/evidence/inventory-stereo-2026-09-13/release-validation/`.
 Native arithmetic emulation also passed, as detailed in the
 [prototype report](INVENTORY-STEREO-PROTOTYPE-2026-09-13.md).
 

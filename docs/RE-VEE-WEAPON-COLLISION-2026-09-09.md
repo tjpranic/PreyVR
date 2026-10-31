@@ -4,7 +4,7 @@ Inspected upstream commit `88d62d85b2adcdd810815390ccdf6ec154c8a734`, dated
 2026-09-08T20:46:51Z, from
 [Vee.ViewmodelTweaks](https://github.com/vittorioromeo/Vee.ViewmodelTweaks).
 The exact source, README, notes and MIT license are preserved under
-`docs/evidence/vee-viewmodel-review-2026-09-09/upstream/`; hashes and immutable
+`data/evidence/vee-viewmodel-review-2026-09-09/upstream/`; hashes and immutable
 download URLs are in `upstream-identity.json`.
 
 This is SOURCE evidence about upstream code, not runtime/headset acceptance or

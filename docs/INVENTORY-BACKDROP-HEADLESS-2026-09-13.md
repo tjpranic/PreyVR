@@ -56,7 +56,7 @@ the movie's exact alpha or a claim that the entire inventory is transparent.
 ## Evidence and restoration
 
 PNG pairs, sidecars, command replies, native log, matching trace excerpt and
-pixel metrics are under `docs/evidence/inventory-backdrop-2026-09-13/`.
+pixel metrics are under `data/evidence/inventory-backdrop-2026-09-13/`.
 The complete raw tape remains in the dedicated run directory under
 `build/backdrop-test-20260913/runs/run-20260913-090216/tape/`.
 

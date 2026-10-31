@@ -63,7 +63,7 @@ python -E -B tools/re/verify_physical_interactions.py
 
 The verifier checks SHA-256, all body hashes, corruption controls, absence of relocations within hashed bodies, concrete slots and key instructions. The source tests exercise motion rejection, translation/rotation swings, geometry composition, sweep ordering, bounded impulses, mocked production dispatch, delayed duplicate events on another thread, native admission refusal and the options adapter. Mock success is not native execution evidence.
 
-The Release DLL builds, and **54/54 offline CTest checks passed**. See [test output](evidence/physical-melee-2026-09-30/ctest.txt), [native byte verification](evidence/physical-melee-2026-09-30/verification.json), and the [inspected Physical options raster](evidence/physical-melee-2026-09-30/physical-options.png).
+The Release DLL builds, and **54/54 offline CTest checks passed**. See [test output](../data/evidence/physical-melee-2026-09-30/ctest.txt), [native byte verification](../data/evidence/physical-melee-2026-09-30/verification.json), and the [inspected Physical options raster](../data/evidence/physical-melee-2026-09-30/physical-options.png).
 
 ## Brief acceptance pass for CosmicTangerine
 
@@ -75,7 +75,7 @@ The Release DLL builds, and **54/54 offline CTest checks passed**. See [test out
 
 Read-only diagnostic command: `physical`. It reports options, `poses`, `sweeps`, `contactsFound`, `strikes`, `substituted`, `suppressed`, `nudges`, `admissionRefused`, `refused`, `fault` and `error`. A strike counter means an admitted native attack/hit call, not confirmed health damage; `nudges` means accepted/queued, not observed object motion. Also read `aim.scene` if scene-query faults are suspected, since the query adapter is shared.
 
-Build/test evidence and the inspected Physical page raster live under `docs/evidence/physical-melee-2026-09-30/`. Fleet receipt submission and graph refresh remain pending until the branch artifacts reach the fleet-registered canonical checkout; this integration worktree is not registered. No release package is created by this batch.
+Build/test evidence and the inspected Physical page raster live under `data/evidence/physical-melee-2026-09-30/`. Fleet receipt submission and graph refresh remain pending until the branch artifacts reach the fleet-registered canonical checkout; this integration worktree is not registered. No release package is created by this batch.
 
 ## Logging (2026-10-18, package PreyVR-21)
 

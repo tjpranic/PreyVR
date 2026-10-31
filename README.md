@@ -21,8 +21,9 @@ See [options](docs/VR-OPTIONS-2026-09-27.md) and
 
 | Path | Purpose |
 | --- | --- |
-| `docs/` | Evidence, decisions, RE notes, build identity, and test plans. |
-| `captures/` | Local RenderDoc captures, eye dumps, screenshots, and traces. Large/generated evidence is ignored by Git. |
+| `docs/` | Decisions, RE notes, build identity, and test plans. |
+| `data/evidence/` | Frozen evidence behind the docs: logs, static extracts, and verifier output. |
+| `data/captures/` | Local RenderDoc captures, eye dumps, screenshots, and traces. Large/generated evidence is ignored by Git. |
 | `src/`, `tests/` | The mod, grouped by feature, and its deterministic tests. |
 | `config/` | Versioned default/configuration schemas; machine-local settings stay ignored. |
 | `tools/` | One-off utilities and capture/research helpers. |

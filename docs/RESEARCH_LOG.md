@@ -37,7 +37,7 @@
 - **Evidence:** Ghidra now labels the paired functions `BeginRendererScene` and `EndRendererScene` with evidence comments. The exact-build prologues and EndScene dispatch bytes are enforced by the headless build doctor.
 - **Evidence:** Inside `EndRendererScene`, `PreyDll.dll+0xF7E48A` loads `renderer+0xAE88` and calls COM vtable slot 8. The live pointer exactly matched Present's `RCX`, identifying the field as `IDXGISwapChain*`. The DXGI-failure branch at `PreyDll.dll+0xF7E4DA` loads `renderer+0xAF28` and calls vtable slot 39, identifying the field as `ID3D11Device*` through `GetDeviceRemovedReason`. ReGenny found mirror fields at `+0xAFA8` and `+0xAF98`.
 - **Interpretation:** `EndRendererScene` is the first durable engine frame-boundary candidate and exposes the real game-owned swapchain and device needed by `XR_KHR_D3D11_enable`. It is not yet approved for a shipping detour: thread ownership, re-entrancy, immediate-context acquisition, and clean passthrough still require bounded validation.
-- **Capture:** [`../captures/traces/2026-07-31-prey-endscene-present-cadence.md`](../captures/traces/2026-07-31-prey-endscene-present-cadence.md)
+- **Capture:** [`../data/captures/traces/2026-07-31-prey-endscene-present-cadence.md`](../data/captures/traces/2026-07-31-prey-endscene-present-cadence.md)
 - **Next question:** Acquire the immediate context through the live device and prove a no-op EndScene observation can initialize and shut down cleanly before adding OpenXR state.
 
 ## 2026-07-31 — PDB bridge and native camera/aim split
@@ -50,7 +50,7 @@
 - **Evidence:** The PDB-mapped Steam functions `CArkWeapon::GetReticleInfoForFiring` (`0x1694890`), `GetReticlePosition` (`0x1694A20`), and `FindIronsightsTarget` (`0x16930A0`) all consume the same cached ray for the local player. `GetReticleInfoForFiring` constructs a point along the ray and performs a physics query returning `{IEntity*, Vec3 position}`. This closes the main feasibility question left by the earlier prototype: Prey already has a camera-independent aim representation reaching native weapon logic.
 - **Interpretation:** We do not need to invent a parallel aiming simulation. The likely implementation is HMD pose through the native `SViewParams` camera callback and controller aim through the reticle/ray producer, followed later by a separate viewmodel transform. The live shot-impact proof and safe callback ABI/lifecycle prototype remain mandatory.
 - **Regression:** The complete headless Release loop passed 3/3 tests after adding the new landmarks. The build doctor reported 17 passes, 0 warnings, and 0 failures.
-- **Capture:** [`../captures/traces/2026-07-31-prey-detached-aim-probe.md`](../captures/traces/2026-07-31-prey-detached-aim-probe.md)
+- **Capture:** [`../data/captures/traces/2026-07-31-prey-detached-aim-probe.md`](../data/captures/traces/2026-07-31-prey-detached-aim-probe.md)
 - **Next question:** Observe `CArkWeapon::GetReticleInfoForFiring` during an actual shot, record the returned entity/position, then repeat with a bounded synthetic reticle offset while keeping the camera fixed.
 
 ## 2026-07-31 — Inert smoke DLL and replayable aim evidence
@@ -69,7 +69,7 @@
 - **Interpretation:** Firearm and wrench paths share Prey's native camera-independent gameplay ray. Controller aim can therefore target the existing action systems rather than reproduce melee collision in the mod. A fixed-camera synthetic before/after impact is still required for A0b.
 - **Safety:** All x64dbg hardware breakpoints were cleared and Prey resumed normally. No code or persistent gameplay state was modified.
 - **Verification:** The Release build passes all eight CTest targets, including `wrench_query_fixture`. The engine map and inert DLL gate now contain 18 exact runtime landmarks; the build doctor reports 24 passes, 0 warnings, and 0 failures.
-- **Capture:** [`../captures/traces/2026-07-31-prey-wrench-hit-query.md`](../captures/traces/2026-07-31-prey-wrench-hit-query.md)
+- **Capture:** [`../data/captures/traces/2026-07-31-prey-wrench-hit-query.md`](../data/captures/traces/2026-07-31-prey-wrench-hit-query.md)
 - **Next question:** Run the bounded A0b synthetic-ray experiment against a static target, then proceed to the first no-op frame observer and rudimentary OpenXR bootstrap.
 
 ## 2026-07-31 — A0b reduced to a stack-local two-swing test
@@ -100,7 +100,7 @@
 - **Result:** The same collider and wall normal remained at distance `0.695485`. The contact moved to `(781.640869, 1568.768677, 17.001547)`: delta `(+0.126160, -0.000122, +0.015957)`, or `0.127165` units total. The new point equals `origin + writtenDirection * distance` within float tolerance.
 - **Interpretation:** This is direct live proof that controller-owned direction can steer Prey's native melee collision independently of the camera. H-004 and test stage A0b pass. It does not yet prove projectile or use-target behavior, nor visual weapon placement.
 - **Headless promotion:** Both raw hit records were added to `wrench_query_fixture`, which now asserts the same collider/depth, lateral displacement, and endpoint geometry.
-- **Capture:** [`../captures/traces/2026-08-01-prey-wrench-a0b.md`](../captures/traces/2026-08-01-prey-wrench-a0b.md)
+- **Capture:** [`../data/captures/traces/2026-08-01-prey-wrench-a0b.md`](../data/captures/traces/2026-08-01-prey-wrench-a0b.md)
 - **Next question:** Run the no-button interaction A0 changed-target test, then begin the inert frame observer/OpenXR bootstrap while continuing the viewmodel attachment trace offline.
 
 ## 2026-08-01 — Native interaction detached-aim A0 passed
@@ -112,7 +112,7 @@
 - **Interpretation:** This is direct live proof that controller-owned direction can steer Prey's native highlight/use selection independently of the camera while preserving `ArkPlayerInteraction::Interact` as the action path. Changed-melee-impact and changed-use-target now both pass; projectile runtime behavior and visual weapon ownership remain.
 - **Headless promotion:** Added a typed candidate-record decoder and `interaction_query_fixture` covering the exact baseline, useful-null, changed-target, direction-byte, scaled-query, and truncation cases.
 - **Verification:** The expanded clean Release headless loop passes all nine CTest targets, including the new interaction fixture and the existing build doctor/DLL/DXGI safety lanes.
-- **Capture:** [`../captures/traces/2026-08-01-prey-interaction-a0.md`](../captures/traces/2026-08-01-prey-interaction-a0.md)
+- **Capture:** [`../data/captures/traces/2026-08-01-prey-interaction-a0.md`](../data/captures/traces/2026-08-01-prey-interaction-a0.md)
 - **Next question:** Start the inert frame observer/OpenXR bootstrap, while tracing the late-frame weapon/viewmodel transform and reserving a later projectile-direction proof.
 
 ## 2026-08-01 — Default-off frame observer and OpenXR preflight passed
@@ -124,7 +124,7 @@
 - **Correction:** The first trial revealed that telemetry reset occurred immediately after publishing the hook, allowing a duplicate `count=1` line. Initialization was moved before `MH_EnableHook`; the full 10/10 headless loop and live proof were repeated with exactly one first-hit event.
 - **Safety:** Disable removed the hook and uninitialized MinHook. Target bytes exactly matched `40 57 48 83 EC 60 83 B9 F8 AE 00 00 00 48 8B F9`; all debugger breakpoint lists were empty; `FreeLibrary` removed the DLL; and Prey remained running.
 - **Verification:** The corrected Release loop passes all ten CTest targets. Artifact SHA-256 is `8FDF164B2EC566E5E5E0AB2D22DF1A17F2B81B547C17818DFCA71A3CE5523150`.
-- **Capture:** [`../captures/traces/2026-08-01-prey-frame-observer-smoke.md`](../captures/traces/2026-08-01-prey-frame-observer-smoke.md)
+- **Capture:** [`../data/captures/traces/2026-08-01-prey-frame-observer-smoke.md`](../data/captures/traces/2026-08-01-prey-frame-observer-smoke.md)
 - **Next question:** Add a default-off, fully reversible OpenXR instance/system-only smoke test. Do not create a session or bind D3D11 until instance lifecycle and desktop preservation pass.
 
 ## 2026-08-01 — No retained engine stereo path (H-001 stereo half)
@@ -136,7 +136,7 @@
 - **Interpretation:** Arkane shipped Prey with CryEngine's stereo device/output layer (`CD3DStereo` and the CryVR plugin set) removed. The remaining stereo strings belong to subsystems that register their own cvars independently. There is no retained engine stereo mode for the mod to enable, so the per-eye route must be mod-owned. This is a genuine narrowing of the design space, not a blocker: it removes the cheapest hypothetical route before effort is spent on it.
 - **Scope limit:** This resolves the stereo half of H-001 only. Whether `CRenderView` retains more than one `SRenderViewInfo` is a structural question that literal search cannot answer and remains open.
 - **Safety:** Read-only. No process attached, no memory written, no Ghidra annotation created or saved.
-- **Capture:** [`../captures/traces/2026-08-01-prey-stereo-path-recon.md`](../captures/traces/2026-08-01-prey-stereo-path-recon.md)
+- **Capture:** [`../data/captures/traces/2026-08-01-prey-stereo-path-recon.md`](../data/captures/traces/2026-08-01-prey-stereo-path-recon.md)
 - **Next question:** Determine `CRenderView`'s view-info count structurally, then compare a mod-owned scene re-entry at the `BeginRendererScene`/`EndRendererScene` boundary against direct view-info population.
 
 ## 2026-08-01 — Full Ghidra analysis pass; R-001 resolved and device creation mapped
@@ -149,7 +149,7 @@
 - **Evidence:** Decompiling `EndRendererScene` re-confirmed R-006 and R-007 by the same slot arithmetic and exposed the Present argument producers at `renderer+0xB1EC` (vsync branch selector), `+0xB1C0`/`+0xB1C4`, and `+0xB1F0` (Present flags). No per-eye or per-view iteration exists in the function; the only doubled structure is render-thread command double-buffering at `+0xAC30`.
 - **Interpretation:** `XR_KHR_D3D11_enable` requires the app device to sit on the adapter LUID reported by `xrGetD3D11GraphicsRequirementsKHR`, so R-025's `EnumAdapters1` loop is where adapter agreement would have to be enforced if the active runtime ever demands a non-default adapter. This is recorded so the OpenXR lane does not rediscover it; nothing here is proposed as a hook yet.
 - **Safety:** Read-only. No process attached, no memory written, no Ghidra annotation created or saved.
-- **Capture:** [`../captures/traces/2026-08-01-prey-device-creation-map.md`](../captures/traces/2026-08-01-prey-device-creation-map.md)
+- **Capture:** [`../data/captures/traces/2026-08-01-prey-device-creation-map.md`](../data/captures/traces/2026-08-01-prey-device-creation-map.md)
 - **Next question:** Re-apply the two lost renderer renames, promote a byte signature for R-025, and classify the second `CreateDXGIFactory1` consumer at `0xD87710`.
 
 ## 2026-08-01 — Analysis pass completed; R-025 promoted to the fail-closed gate
@@ -175,7 +175,7 @@
 - **Unplanned positive:** The frustum is stored as four independent edge values rather than a single FOV scalar. OpenXR requires per-eye asymmetric projection where `L != -R`, so asymmetric frusta are directly representable in this block without restructuring the camera. Together with the R-009 `ArkPlayerCamera::UpdateView` callback, the project now has two candidate pose-injection points; which is authoritative is not yet established.
 - **Tooling defect found and fixed:** Promoting the layout into `regenny/PreyVR.genny` exposed that ReGenny's `+N` is a delta from the previous field's end, not an absolute offset. The pre-existing `PreyRendererGraphics` had been silently wrong since it was written — `swapchain` resolved to `+0xAE90` and `swapchain_mirror` to `+0x36C58`. It went unnoticed because every prior finding came from x64dbg, Cheat Engine, or explicit address arithmetic rather than an overlay read. All three structs were rewritten with correct deltas and verified field-by-field: 21 of 21 overlay reads now match direct arithmetic. The check also confirmed live that `device_mirror` equals `device` and `swapchain_mirror` equals `swapchain`, as R-006 and R-007 record. No prior finding was affected. See [`FAILURE_REGISTRY.md`](FAILURE_REGISTRY.md) F-002.
 - **Safety:** Read-only throughout. No memory written, no breakpoints set, no code modified. Prey remained running and responsive.
-- **Capture:** [`../captures/traces/2026-08-01-prey-multiview-probe.md`](../captures/traces/2026-08-01-prey-multiview-probe.md)
+- **Capture:** [`../data/captures/traces/2026-08-01-prey-multiview-probe.md`](../data/captures/traces/2026-08-01-prey-multiview-probe.md)
 - **Next question:** Determine whether the R-026 view block is authoritative for rendering or a downstream copy of the R-009 gameplay camera, since that decides where an HMD pose must be injected.
 
 ## 2026-08-07 — Bootstrap lifecycle, preflight, and headless baseline hardened
@@ -220,7 +220,7 @@
 - **Method lesson:** both instruments purpose-built for this question failed — a counter that cannot see the event, and a timing share too noisy to read. The answer came from writing one cvar and looking at the screen. Three prior attempts to settle H-007 went through capture tooling and produced two crashes and no data.
 - **Limits:** the second scene is a different *environment*, not the main world from a second camera, and stereo needs the latter. Nothing here shows the second scene's camera is settable by a mod, and the cost of a second scene render is unmeasured because the timing data was unusable.
 - **Safety:** Two bounded `int` writes to display-mode cvars, both restored and verified. No hooks, no injection, no wrapper, nothing written to the game directory; Prey was launched normally from Steam and remained running throughout.
-- **Capture:** [`../captures/traces/2026-08-15-prey-lookingglass-second-scene.md`](../captures/traces/2026-08-15-prey-lookingglass-second-scene.md)
+- **Capture:** [`../data/captures/traces/2026-08-15-prey-lookingglass-second-scene.md`](../data/captures/traces/2026-08-15-prey-lookingglass-second-scene.md)
 - **Next question:** Determine whether the second scene's camera is settable and whether it can be pointed at the main world, which is what separates "renders two environments" from "renders one world twice".
 
 ## 2026-08-15 — `CRenderView` camera is settable; 14,622 PDB addresses available
@@ -1282,7 +1282,7 @@ Fresh loop 12/12, doctor 7 pass 0 warn 0 fail, all 30 landmarks matched. New art
 ## 2026-08-29 - Hurdle 1 passed, and the live frame corrected our own formula
 
 First supported-host load of the `0.3.0` artifact. Full record in
-[the capture trace](../captures/traces/2026-08-29-prey-hurdle1-live-capture.md); this entry keeps what
+[the capture trace](../data/captures/traces/2026-08-29-prey-hurdle1-live-capture.md); this entry keeps what
 changes how we work.
 
 **Hurdle 1 met every acceptance criterion.** `status=verified landmarks=30`,
@@ -1341,7 +1341,7 @@ landmarks. Artifact `407733D4D9089C3292E918607E1479E4CFB43AB111874EC8A9085BE08AF
 
 Same live session as the entry above, continued at the instruction to gather everything needed now
 or later. Prey PID `50832`, all reads through Frida, no writes to game memory. Full detail in
-`captures/traces/2026-08-29-prey-hurdle1-live-capture.md`; ten new registry entries, R-057 to R-066.
+`data/captures/traces/2026-08-29-prey-hurdle1-live-capture.md`; ten new registry entries, R-057 to R-066.
 
 **The rate discrepancy was my measurement, not the engine's behaviour.** Measured in one window
 instead of several, `RT_EndFrame`, `Present`, `SetCamera` and `RenderWorld` all returned exactly 432
@@ -1728,7 +1728,7 @@ sources and installed game files were not changed; no game launch, injection,
 attachment or event posting. [Full report and memory contracts](RE-H018-STATIC-GAPS-2026-09-06.md).
 Named eleven verified functions and saved Ghidra with the H-018 contracts and
 corrections. Raw decompilation/byte receipts and annotation payloads are retained
-under the gitignored `captures/traces/2026-09-06-h018-*` files.
+under the gitignored `data/captures/traces/2026-09-06-h018-*` files.
 
 ## 2026-09-07 -- H-021 verification and RE investigation guidance
 
@@ -1783,7 +1783,7 @@ Artifact version `0.3.1-static-ik-integration`, PreyVR.dll SHA-256:
 `D5C9AD7D4673AA89FD3183538AD625547AF997D425C7874CDDC884AEDFBCE2A7`.
 Receipts: `build/h021-integration-audit/ctest-results.xml`, `static-verification.json`,
 `build.log`; raw Ghidra assembly in ignored
-`captures/traces/2026-09-07-h021-integration-static.json`.
+`data/captures/traces/2026-09-07-h021-integration-static.json`.
 
 MSBuild initially rejected duplicate PATH/Path inherited by this desktop shell;
 build subprocesses used case-normalized environment keys. No machine environment
@@ -4016,7 +4016,7 @@ bindings, 205 on gamepad keys, and proved each key the mod posts in the `player`
 - `xi_dpad_up` `toggle_flashlight`, the other three `quickselect_*`;
 - `xi_triggerl_btn` `select_equipped_power`.
 
-The rows are in `docs/evidence/bindings-20261017/`. They read `enabled=0` because
+The rows are in `data/evidence/bindings-20261017/`. They read `enabled=0` because
 the dump ran on the main menu's first frame; it now waits for two seconds of play.
 
 **Phase 3, offline-tested (76/76), not yet worn:**

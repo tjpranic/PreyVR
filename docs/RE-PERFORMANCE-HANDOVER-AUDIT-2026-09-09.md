@@ -171,7 +171,7 @@ The audit harness compiled with MSVC 19.50.35729.0 using a snapshot of the commi
 `FrameTiming.cpp`/header and passed its empty-data, mixed-window, reset and threshold
 controls. Reproduce with CMake using the evidence directory as `-S` and a separate
 build directory, then run `frame_timing_audit.exe`. Exact commands/output are in
-`docs/evidence/performance-handover-audit-2026-09-09/verification.txt`.
+`data/evidence/performance-handover-audit-2026-09-09/verification.txt`.
 
 These are instrument-semantics results in an offline harness, not game timing,
 GPU attribution, a fix deployed to the DLL, or headset acceptance. The research

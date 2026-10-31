@@ -67,7 +67,7 @@ Ghidra 12.1.2. Import identity agrees with disk. The offline byte verifier check
 | Skeleton default absolute getter `0x8BC0E0` | Embedded CPoseData at skeleton+0x18, absolute virtual +0x48 -> `0x87C6D0` reads pose+0x18. Therefore default absolute array pointer is skeleton+0x30, QuatT stride 0x1C. |
 | Bone attachment vtable `0x1D212B8`, `0x7A2560` / `0x7A3390` | Socket index +0x15C; absolute default Q +0x114; relative default Q +0xF8; extra rotation Q +0x14C. When projected bit 0x4000 at +8 is clear, projection builds relative default = inverse(bind socket) * absolute default. Normal update consumes current socket * relative default * extra rotation. Simulation (+0x30) changes the formula and is refused, as is redirect (+0x33). |
 
-Raw files are under `docs/evidence/weapon-basis-2026-09-09/`. Three tiny getters
+Raw files are under `data/evidence/weapon-basis-2026-09-09/`. Three tiny getters
 were not recognized as functions by the decompile endpoint; their error outputs
 are retained alongside successful raw-byte reads. `shotgun.c` is an exploratory
 request that resolved inside `0x16AAB70`; it is **not** used as proof of shotgun
@@ -116,7 +116,7 @@ byte-identical through reads and refusals. These tests do not execute the comple
 injected ADIK callback or the native solver.
 
 Reproduce offline from the repo with Python 3.12 + pefile running
-`docs/evidence/weapon-basis-2026-09-09/verify_static.py`, then a configured Python
+`data/evidence/weapon-basis-2026-09-09/verify_static.py`, then a configured Python
 running the sibling `build_verify.py`. The build manifest pins source snapshots and
 output hashes against source HEAD `5efd7c8f75923eec0f2553590d302e82743a2b37` plus
 the recorded local changes.

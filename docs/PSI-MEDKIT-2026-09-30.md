@@ -103,10 +103,10 @@ disarms the feature instead of retrying a faulting transaction every frame.
 
 ## Evidence and reproduction
 
-- [Raw Steam decompiles](evidence/psi-medkit-2026-09-30/steam-decompiles.txt)
-- [Native candidate angular-bypass decompile](evidence/psi-medkit-2026-09-30/steam-candidate.txt)
-- [Read-only byte/ABI report](evidence/psi-medkit-2026-09-30/steam-contracts.json)
-- [Offline build/test summary](evidence/psi-medkit-2026-09-30/validation.txt)
+- [Raw Steam decompiles](../data/evidence/psi-medkit-2026-09-30/steam-decompiles.txt)
+- [Native candidate angular-bypass decompile](../data/evidence/psi-medkit-2026-09-30/steam-candidate.txt)
+- [Read-only byte/ABI report](../data/evidence/psi-medkit-2026-09-30/steam-contracts.json)
+- [Offline build/test summary](../data/evidence/psi-medkit-2026-09-30/validation.txt)
 - `tools/re/verify_psi_medkit.py`: exact DLL hash, x64 identity, 18 body hashes,
   relocation checks, 54 single-byte mutation refusals, concrete reticle vtable
   and producer/consumer call witnesses, medkit archetype string.

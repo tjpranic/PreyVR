@@ -110,7 +110,7 @@ visibility or presentation gating rather than a missing stats source.
 - Release DLL builds; final 49/49 offline CTest checks passed. DLL size:
   1,026,048 bytes; SHA-256:
   `3BB7ED3BD21E2EBC1111006996B20BAC29F282181A6940DB95260D8AE5FFCE1F`.
-  Full log: [CTest](evidence/body-equipment-2026-09-27/ctest.txt).
+  Full log: [CTest](../data/evidence/body-equipment-2026-09-27/ctest.txt).
 - Pure tests exercise neutral entry, held grip, drift into zones, modal/tracking
   cancellation, frame stalls, yaw invariance, wrist front/back/distance/gaze and
   health rounding.

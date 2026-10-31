@@ -219,7 +219,7 @@ verification distinct when reading a green test run.
 
 ## Results — Hurdle 1 session, 2026-08-29
 
-Full record in the [live capture](../captures/traces/2026-08-29-prey-hurdle1-live-capture.md). Headlines:
+Full record in the [live capture](../data/captures/traces/2026-08-29-prey-hurdle1-live-capture.md). Headlines:
 
 - **Hurdle 1 passed.** `smoke_result status=verified landmarks=30`, `snapshot result=complete`, all
   identity checks yes. Seven entries promoted from `static-only` to `reproduced`.

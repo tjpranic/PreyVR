@@ -49,4 +49,4 @@ the native HUD uses a transparent flat layer, while modal menus use the floating
 quad or cylinder. The reticle remains at the HUD's fixed depth.
 
 Project evidence: `docs/RE-UI-POINTER-2026-09-10.md` and
-`docs/evidence/ui-pointer-2026-09-10/`.
+`data/evidence/ui-pointer-2026-09-10/`.

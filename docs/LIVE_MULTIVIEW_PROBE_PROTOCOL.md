@@ -83,7 +83,7 @@ and vsync fields it models are explicitly out of scope here.
 **Completed 2026-08-01. Result: the probed resident view block is single-view.** This closes the
 stock/exposed route, not every possible dynamic scene re-entry seam.
 
-See [`../captures/traces/2026-08-01-prey-multiview-probe.md`](../captures/traces/2026-08-01-prey-multiview-probe.md).
+See [`../data/captures/traces/2026-08-01-prey-multiview-probe.md`](../data/captures/traces/2026-08-01-prey-multiview-probe.md).
 
 Outcome against the decision rule above:
 

@@ -97,7 +97,7 @@ the collaborator invitation is pending. No release asset is published by this ba
 
 ## Final run accounting
 
-The trace contains 17,986 xrEndFrame records, including 11,292 projection frames, with 0 xrEndFrame errors. Frozen logs, captures, manifest, trace and test results are in `docs/evidence/comfort-controls-20260919/`.
+The trace contains 17,986 xrEndFrame records, including 11,292 projection frames, with 0 xrEndFrame errors. Frozen logs, captures, manifest, trace and test results are in `data/evidence/comfort-controls-20260919/`.
 
 A forced-LOCAL second launch (PID 91192) was not injected: Windows Defender had
 quarantined the injector after the first run (ThreatID 2147749377). No exclusions

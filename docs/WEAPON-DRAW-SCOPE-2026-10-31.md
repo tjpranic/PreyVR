@@ -17,8 +17,8 @@ Two things are needed beyond dropping the wrench test:
 - **Each weapon's draw sound has to be captured.** Only the wrench's is known, and the capture code had been
   cut, in ba6599c and f9cc865.
 
-Evidence: [`evidence/weapon-draw-2026-10-31/`](evidence/weapon-draw-2026-10-31/). To replay it, run
-`python -E -B docs/evidence/weapon-draw-2026-10-31/verify_weapon_classes.py` (106 checks, all passing). It is
+Evidence: [`data/evidence/weapon-draw-2026-10-31/`](../data/evidence/weapon-draw-2026-10-31/). To replay it, run
+`python -E -B data/evidence/weapon-draw-2026-10-31/verify_weapon_classes.py` (106 checks, all passing). It is
 the investigation's own check; its rows have since moved into `tools/re/verify_weapon_draw.py` (169 checks), which
 ctest runs. The decompiles are alongside, and `gmix.py` reproduces them.
 

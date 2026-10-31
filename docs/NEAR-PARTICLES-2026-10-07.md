@@ -1,7 +1,7 @@
 # Draw-near particles at the weapon's depth, and the Q-Beam (2026-10-07)
 
 Measured on the headless OpenXR mock (Prey Steam, `PreyDll.dll` 7d6e322f…), **not yet in a
-headset**. Evidence: `docs/evidence/near-particles-2026-10-07/` (PNGs are not in git).
+headset**. Evidence: `data/evidence/near-particles-2026-10-07/` (PNGs are not in git).
 
 ## 1. Draw-near particles had twice the weapon's parallax (`near.fx`, default on)
 

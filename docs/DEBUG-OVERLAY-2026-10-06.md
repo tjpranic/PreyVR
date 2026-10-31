@@ -11,7 +11,7 @@ What is drawn is the debug layers, the lasers and the shot trail together (`debu
 or the Setup row's off leaves the lasers. From 10-06 to 10-13 VR start forced mask 129 on and a saved
 "off" was skipped; the 10-15 options rewrite removed that, which left no lasers at all.
 
-![Body slots, rays, wrist card and status panel](evidence/debug-overlay-2026-10-06/final_slots_eye0.png)
+![Body slots, rays, wrist card and status panel](../data/evidence/debug-overlay-2026-10-06/final_slots_eye0.png)
 
 ## How it is drawn
 

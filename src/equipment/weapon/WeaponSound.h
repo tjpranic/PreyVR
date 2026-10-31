@@ -14,7 +14,7 @@
 //
 // The triggers were found with a capture hook on PlaySound clips, trigger lookups and
 // proxy executes (`weapon.sound capture`), removed again on 2026-10-31: the version that
-// covers every weapon is in docs/evidence/weapon-draw-2026-10-31/.
+// covers every weapon is in data/evidence/weapon-draw-2026-10-31/.
 namespace preyvr::dll {
 // weapon.sound play [0|1].
 void SetWeaponSoundPlay(unsigned on);

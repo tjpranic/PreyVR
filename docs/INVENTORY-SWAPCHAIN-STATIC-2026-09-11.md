@@ -45,7 +45,7 @@ captured frame before returning to native drawing.
 ## Offline verification
 
 Build directory: `build/inventory-swapchain-static-20260911`, Release.
-Logs: `evidence/inventory-swapchain-2026-09-11/`.
+Logs: `data/evidence/inventory-swapchain-2026-09-11/`.
 Final build and CTest results are in `build.txt` and `ctest.txt`; `artifacts.json`
 records the relevant source and binary hashes for that revision.
 

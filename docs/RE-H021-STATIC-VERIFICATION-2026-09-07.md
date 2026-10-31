@@ -206,7 +206,7 @@ routing, gate writers, facial condition, and six virtual-slot mappings.
 Expected values are in `tools/re/h021_static_landmarks.json`; this is an
 address-specific regression verifier, not a general function finder.
 Raw static receipts are in the ignored local capture
-`captures/traces/2026-09-07-h021-static-verification.json`.
+`data/captures/traces/2026-09-07-h021-static-verification.json`.
 
 No runtime behavior is promoted to proven by these checks. In particular,
 weight 1 selects the full IK goal/rotation blend but does not guarantee an

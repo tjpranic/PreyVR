@@ -35,7 +35,7 @@ This is the first mutation-capable runtime rung. It is deliberately smaller than
 6. Call `PreyVR_SetFrameObserverEnabled(0)` and require one `status=disabled frames=N` summary with non-null first/milestone renderer telemetry.
 7. Confirm the target prologue is restored and no debugger breakpoints remain. Do not unload the supported module; close/restart Prey when replacing it.
 
-The first completed proof is recorded in [`../captures/traces/2026-08-01-prey-frame-observer-smoke.md`](../captures/traces/2026-08-01-prey-frame-observer-smoke.md). That historical `0.2.0`, 21-landmark artifact counted 301 callbacks, restored the original prologue, unloaded, and left Prey running. The lifecycle-hardened `0.3.0` artifact deliberately changes unload semantics and still needs the supported-host protocol above.
+The first completed proof is recorded in [`../data/captures/traces/2026-08-01-prey-frame-observer-smoke.md`](../data/captures/traces/2026-08-01-prey-frame-observer-smoke.md). That historical `0.2.0`, 21-landmark artifact counted 301 callbacks, restored the original prologue, unloaded, and left Prey running. The lifecycle-hardened `0.3.0` artifact deliberately changes unload semantics and still needs the supported-host protocol above.
 
 ## Next authorized rung
 

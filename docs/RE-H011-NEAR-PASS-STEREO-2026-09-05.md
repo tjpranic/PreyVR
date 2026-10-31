@@ -216,18 +216,18 @@ and 16:9 aspect, the synthetic NDC disparities were 0.138310713 at 0.5 m and
 0.069155357 at 1 m. These are analytic fixtures, not measurements of Prey pixels.
 
 Raw Ghidra output and the read-only PE scanner are under
-[`captures/re/h011/`](../captures/re/h011/static_scan.py).
+[`data/captures/re/h011/`](../data/captures/re/h011/static_scan.py).
 This directory is gitignored; the conclusions and addresses are preserved in
 this tracked report.
 
-- [Matrix helper](../captures/re/h011/fb0b70-build-view-matrices.c)
-- [View-info from CRenderView](../captures/re/h011/fb2ac0-viewinfo-from-render-view.c)
-- [View-info source dispatch](../captures/re/h011/fb1670-viewinfo-dispatch.c)
-- [Renderer fallback](../captures/re/h011/fb4280-viewinfo.c)
-- [Near projection](../captures/re/h011/fb1530-nearest-projection.c)
-- [Packing/upload](../captures/re/h011/fb57a0-upload-per-view.c)
-- [Camera-switch route](../captures/re/h011/f43d70-update-nearest.c)
-- [Static scan with exact module hash](../captures/re/h011/static_scan.json)
+- [Matrix helper](../data/captures/re/h011/fb0b70-build-view-matrices.c)
+- [View-info from CRenderView](../data/captures/re/h011/fb2ac0-viewinfo-from-render-view.c)
+- [View-info source dispatch](../data/captures/re/h011/fb1670-viewinfo-dispatch.c)
+- [Renderer fallback](../data/captures/re/h011/fb4280-viewinfo.c)
+- [Near projection](../data/captures/re/h011/fb1530-nearest-projection.c)
+- [Packing/upload](../data/captures/re/h011/fb57a0-upload-per-view.c)
+- [Camera-switch route](../data/captures/re/h011/f43d70-update-nearest.c)
+- [Static scan with exact module hash](../data/captures/re/h011/static_scan.json)
 
 Ghidra base was `0x180000000`. PE scan results are raw candidate references;
 the important calls and translation-clear instructions were independently read

@@ -36,8 +36,8 @@ Target is the installed Steam **file**, not a process image:
 SHA-256: `7d6e322f61b28331095a400f0ba5f09bd9a39c57bf993602285dd6acb05311a7`.
 Addresses below are RVAs; Ghidra preferred image base is `0x180000000`.
 Ghidra preflight found `/Prey/PreyDll.dll` open. Assembly and decompilation were
-checked against disk bytes. Raw receipts are in ignored `captures/re/h005c/`,
-with earlier entity/render receipts in `captures/re/h005b/` and `h005/`.
+checked against disk bytes. Raw receipts are in ignored `data/captures/re/h005c/`,
+with earlier entity/render receipts in `data/captures/re/h005b/` and `h005/`.
 
 The project graph was queried first (`input action camera stereo`); its September
 3 snapshot predates RenderFrame and this handover. The Prey PDB-derived headers

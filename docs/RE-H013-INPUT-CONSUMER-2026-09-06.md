@@ -260,7 +260,7 @@ worker-thread criticism or the new main-thread comment as runtime evidence.
   handler, its relative call target and the relevant input/manager vtables.
   Run with `C:\Python314\python.exe tools/re/verify_h013_input_consumer.py`.
 - Raw static receipts are in ignored local capture storage:
-  `captures/traces/2026-09-06-h013-static-receipts.json`.
+  `data/captures/traces/2026-09-06-h013-static-receipts.json`.
 
 No live attach, input post, game launch, injection, runtime source change,
 deployment, save operation or headset experiment was performed by this lane.

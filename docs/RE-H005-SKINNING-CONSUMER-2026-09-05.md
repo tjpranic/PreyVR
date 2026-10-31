@@ -58,7 +58,7 @@ complete controller integration. A precise experiment is specified below.
   installed file, checks its hash and **16 instruction/vtable landmarks**, and
   reports `runtime_tested: false`. An optional argument selects a different file.
 - Raw decompilations, assembly and PE-reference scans are in ignored
-  `captures/re/h005/`. This document and the verifier carry the durable findings.
+  `data/captures/re/h005/`. This document and the verifier carry the durable findings.
 
 Chairloader's EGS addresses were search leads. Steam addresses below were checked
 against the actual functions and vtables; a single EGS-to-Steam delta does not

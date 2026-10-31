@@ -295,7 +295,7 @@ accepted by the decoder. Capture coherence is the producer's responsibility.
 Named eleven verified functions in Ghidra, updated the character-render answer
 and added the equip, firearm, IK and manager contracts as listing comments; saved
 `/Prey/PreyDll.dll`. Local raw evidence is in the gitignored
-`captures/traces/2026-09-06-h018-static-receipts.json` and the exact annotation
-payload in `captures/traces/2026-09-06-h018-ghidra-annotations.json`. The tracked
+`data/captures/traces/2026-09-06-h018-static-receipts.json` and the exact annotation
+payload in `data/captures/traces/2026-09-06-h018-ghidra-annotations.json`. The tracked
 verifier and this report carry the reproducible evidence independently of those
 local receipts.

@@ -45,7 +45,7 @@ void Log(const std::string& line) { lifecycle::Log("preyvr_carry " + line); }
 //
 // ArkPlayerCarry, layout from the PDB-generated Chairloader header (EGS build)
 // and every offset below confirmed in the Steam decompiles of Update/Stop/Start
-// (docs/evidence/physical-grab-2026-10-04): m_grabber +0x3C (m_bConstrained
+// (data/evidence/physical-grab-2026-10-04): m_grabber +0x3C (m_bConstrained
 // +0x60), m_throwKickBacks +0x80, m_pickedUpEntityId +0xB0, constraint +0xB4,
 // m_dragCorpse* +0xD8.., m_attachedEmitterSlot +0xF4, m_bThrowCarriedEntity +0xFC.
 constexpr std::uintptr_t kUpdateRva = 0x125E400;   // bool Update(float frameTime)

@@ -5,7 +5,7 @@ headset. It builds on Funk's native wrist work: the filtered replay of the HUD's
 (`NativeHudIsolation.h`), the GPU fitter and the wrist quad. Everything is switchable at runtime:
 `wrist.anchor 0` brings back the grip-anchored card, `wrist.face 0` puts the meters back in front of the eyes,
 and the VR option WRIST STATUS turns the whole feature off.
-Evidence: [`evidence/wrist-hologram-2026-10-07/`](evidence/wrist-hologram-2026-10-07/)
+Evidence: [`data/evidence/wrist-hologram-2026-10-07/`](../data/evidence/wrist-hologram-2026-10-07/)
 (`report.txt`, in git; `wrist_hologram_sheet.jpg`, nine cases, on disk only: images are git-ignored).
 
 ## Why the wrist never showed anything

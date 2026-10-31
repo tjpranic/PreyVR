@@ -104,7 +104,7 @@ alien organ at −70°). `UseCases.ps1` then runs every case end to end and judg
 | right grip, left hand on a pickup | reload | pickup kept; GLOO fired 17, then a full clip (42) after |
 | left grip on the foregrip / at the medkit slot / in the recentre chord, something selected | — | no press: two-hand hold, medkit grip, recentre |
 
-Runs (`docs/evidence/interaction-2026-10-06/`): every case passed on fresh boots. When a case failed it was the
+Runs (`data/evidence/interaction-2026-10-06/`): every case passed on fresh boots. When a case failed it was the
 harness's own clutter: a carried prop it dropped lay in front of the next target, and the game used what was
 really selected (`uc3`: the fan in front of the bench; `uc4`: the dropped bench over the shelf). The final
 harness drops facing an empty sector, throws the big props away, and tests the bench last. During GLOO fire the

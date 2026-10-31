@@ -72,7 +72,7 @@ The point is moved 3 cm towards the centre (at most half way) so the fingers clo
 towel stack (diag 0.66 m): grab point (0.21, 0.11, 0.16) local, centre error 0.000 m, rotation error 0.0 deg; the fist holds the stack's edge and the view above it is clear (A/B with `carry.grabpoint 0`
 and `arms.free 0` in the evidence).
 
-## Verification on the mock (`docs/evidence/arms-2026-10-07/`; PNGs are kept out of git)
+## Verification on the mock (`data/evidence/arms-2026-10-07/`; PNGs are kept out of git)
 
 - `build/jordi-mock/ArmsCases.ps1` from a clean boot, judged by the drawn skeleton (`pose.marks` palms against
   the controllers' grip points) and the lane reports: **15/15** (`ac1_report.txt`): armed, holstered (still and

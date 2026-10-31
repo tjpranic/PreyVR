@@ -170,7 +170,7 @@ adapter override.
   Probe exit 0, D3D11, `FOCUSED`, 10 frames, 19 probe invariants checked with
   zero failures; **xr-tape 19 passed, 0 failed, 1 skipped** (depth absent).
 - Replayable trace:
-  `captures/audit-2026-09-06/tape/trace-preyvr_xr_session_probe.exe-95652-20260905-221503.ndjson`.
+  `data/captures/audit-2026-09-06/tape/trace-preyvr_xr_session_probe.exe-95652-20260905-221503.ndjson`.
   Its header explicitly names the **probe**, not Prey. These receipts live in
   ignored capture storage and do not prove injected-game behavior.
 

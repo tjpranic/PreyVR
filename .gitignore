@@ -8,16 +8,16 @@
 *.suo
 
 # Generated evidence and captures (keep the README files that describe them)
-/captures/**/*.png
-/captures/**/*.jpg
-/captures/**/*.jpeg
-/captures/**/*.exr
-/captures/**/*.dds
-/captures/**/*.rdc
-/captures/**/*.zip
-/captures/**/*.log
-/captures/**/*.json
-/captures/**/*.bin
+/data/captures/**/*.png
+/data/captures/**/*.jpg
+/data/captures/**/*.jpeg
+/data/captures/**/*.exr
+/data/captures/**/*.dds
+/data/captures/**/*.rdc
+/data/captures/**/*.zip
+/data/captures/**/*.log
+/data/captures/**/*.json
+/data/captures/**/*.bin
 
 # Local configuration and secrets
 /.env
@@ -31,13 +31,13 @@
 /tools/Chairloader-*/
 /tools/Chairloader-*.zip
 
-# Local IDA/Hex-Rays reference exports; keep evidence excerpts in docs instead.
+# Local IDA/Hex-Rays reference exports; keep evidence excerpts in data/evidence instead.
 **/ida_decompile/
 
 # Frame dumps: 14.7 MB each at 2560x1440. Kept on disk for comparison across
 # sessions, never in the repo -- the numbers that matter are in the protocol docs.
 *.pvrframe
-captures/
+/data/captures/
 captures_archive/
 
 # ---------------------------------------------------------------------------
@@ -79,9 +79,9 @@ captures_archive/
 
 # Evidence screenshots and eye dumps: 442 files, 168 MB. The measurements taken
 # from them live in the docs; the pixels do not need to travel.
-docs/evidence/**/*.png
-docs/evidence/**/*.jpg
-docs/evidence/**/*.zip
+data/evidence/**/*.png
+data/evidence/**/*.jpg
+data/evidence/**/*.zip
 
 # Raw texture/buffer dumps.
 *.bgra

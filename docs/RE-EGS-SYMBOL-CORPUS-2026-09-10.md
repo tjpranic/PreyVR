@@ -7,7 +7,7 @@ that this mod currently supports.
 
 ## Independently checked identity and coverage
 
-`docs/evidence/ui-pointer-2026-09-10/audit_symbol_export.py` reads the PE CodeView
+`data/evidence/ui-pointer-2026-09-10/audit_symbol_export.py` reads the PE CodeView
 record, MSF/PDB streams, CSV index and SQLite database without modifying them.
 Its result is `symbol-export-audit.json` beside the script.
 

@@ -19,7 +19,7 @@ does not promote those bodies or prove their receiver/vtable. Never infer a
 module-wide constant RVA delta from this local group.
 
 Raw Steam decompiles/assembly and candidate output are retained under
-`docs/evidence/physical-grab-2026-10-04/`. Decompiler types are not authoritative;
+`data/evidence/physical-grab-2026-10-04/`. Decompiler types are not authoritative;
 register producers and consumers must resolve ambiguous parameters.
 
 ## Inspected Steam producer/consumer contracts

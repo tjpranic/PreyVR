@@ -44,7 +44,7 @@ for every instance of either reported symptom.
 
 ## Verification and next trial
 
-Logs and hashes: `evidence/hud-input-regression-2026-09-11/`.
+Logs and hashes: `data/evidence/hud-input-regression-2026-09-11/`.
 Regression cases cover one old eye containing a HUD, both cleaned eyes, capture
 loss/recovery, mono capture freshness, queued Y/D-pad after a context change,
 the release of a menu-closing press, orphan-release rejection and preservation

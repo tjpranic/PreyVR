@@ -49,8 +49,8 @@ IK targets or moving the near camera.
   landmarks and 8 synthetic transform fixtures**. An optional argument selects a
   DLL file. It refuses another hash and reports `runtime_tested: false`.
 - Raw decompilations, disassembly and reference candidates are in ignored
-  `captures/re/h005b/`, with earlier render/skinning evidence in
-  `captures/re/h005/`. Raw byte xrefs were treated as candidates and their
+  `data/captures/re/h005b/`, with earlier render/skinning evidence in
+  `data/captures/re/h005/`. Raw byte xrefs were treated as candidates and their
   relevant owners checked in Ghidra; unwind fragments are not function entries.
 - Project graph timestamp was September 3; the graph query did not include the
   September 5 hand-control results. Current handovers and R-084–R-087 take

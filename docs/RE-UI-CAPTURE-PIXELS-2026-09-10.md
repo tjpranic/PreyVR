@@ -30,7 +30,7 @@ diagnostic count, not a substitute for the exact pixel comparison or reading the
 reference text. The other groups have their own consistent counts because eye
 sampling and the older card alpha differ.
 
-![Exact crop from the historical image previously described as faulty](evidence/ui-compositor-2026-09-10/old-actual-inventory-07-crop.png)
+![Exact crop from the historical image previously described as faulty](../data/evidence/ui-compositor-2026-09-10/old-actual-inventory-07-crop.png)
 
 The earlier raw 1024×160 GPU readback also contains all three text lines. That
 readback alone did not establish the state of uninstrumented frames; the new
@@ -80,10 +80,10 @@ Run with the Pillow-capable Python used by the evidence script:
 
 ```powershell
 & 'C:/Users/meise/AppData/Local/Programs/Python/Python312/python.exe' -B `
-  'docs/evidence/ui-compositor-2026-09-10/check-card-pixels.py'
+  'data/evidence/ui-compositor-2026-09-10/check-card-pixels.py'
 ```
 
-Evidence directory: `docs/evidence/ui-compositor-2026-09-10/`.
+Evidence directory: `data/evidence/ui-compositor-2026-09-10/`.
 `card-pixel-verification.json` records every PNG/sidecar hash, layout group,
 pixel hash, count and exclusion. `title-state.json` and `inventory-state.json`
 contain the bounded D3D observations. `sample-compositor.py` records CPU-side

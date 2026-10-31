@@ -29,7 +29,7 @@ The highest-value contribution from Jordi's code is gameplay integration and the
 | **P** | `D:/Dev Debug/PreyVR` | `1ac2d6103d97f1321f991c46f2ccae8bbae6a115` **plus current uncommitted changes**, including September 13 inventory and September 14 two-hand work |
 | **J** | `D:/Dev Debug/Other VR Mods/prey-vr` | Clean `master`, `b680f8bcb70d2deb6910c497d38e54d26683f933`; local `origin/stage-6` points to the same commit |
 
-J's root README describes an older flat-screen build. Its latest HANDOFF, actual source, and git history supersede that description. Older remote branch tips were inventoried, not treated as additional current products. P's public 0.5.0 is not the same as the inspected development tree. Source hashes and checkout state are recorded in [the audit manifest](evidence/prey-vr-comparison-20260916/manifest.json).
+J's root README describes an older flat-screen build. Its latest HANDOFF, actual source, and git history supersede that description. Older remote branch tips were inventoried, not treated as additional current products. P's public 0.5.0 is not the same as the inspected development tree. Source hashes and checkout state are recorded in [the audit manifest](../data/evidence/prey-vr-comparison-20260916/manifest.json).
 
 Git authors are `phunkaeg` for P's committed history and `jordicalsina` for J's. Below, **P team** means the maintainers of our implementation, and **Jordi** means the maintainer represented by that second history. This is a proposed division of work based on demonstrated code, not proof of individual authorship of every line, a ranking of people, or an assignment already communicated to anyone. P includes mixed Codex/Claude-assisted and uncommitted work.
 
@@ -110,7 +110,7 @@ P returns unknown on an empty eye FIFO and holds the old pair. J returns its las
 
 Its source comment that the engine “cannot render asymmetric projections” records this implementation's experience, not a proof of a universal CryEngine/Steam limitation. Prefer the cheapest demonstrated correct route; validate near pass, culling and post effects alongside any projection change.
 
-The bounded [arithmetic controls](evidence/prey-vr-comparison-20260916/checks.json) reproduce this horizontal crop formula: an exactly aligned case has zero error; a 1511-pixel case has a subpixel angular discrepancy; an intentionally insufficient source interval silently clamps away 0.3 tangent units while retaining the wider declared interval. This is a Python reproduction of the inspected formula, not execution of the donor DLL or evidence that those exact inputs occurred in a headset.
+The bounded [arithmetic controls](../data/evidence/prey-vr-comparison-20260916/checks.json) reproduce this horizontal crop formula: an exactly aligned case has zero error; a 1511-pixel case has a subpixel angular discrepancy; an intentionally insufficient source interval silently clamps away 0.3 tangent units while retaining the wider declared interval. This is a Python reproduction of the inspected formula, not execution of the donor DLL or evidence that those exact inputs occurred in a headset.
 
 ### 3. Our optional muzzle-origin work is not normal-startup behavior
 

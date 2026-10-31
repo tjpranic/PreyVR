@@ -34,7 +34,7 @@ truncated before this span; the PE's chained unwind entries and direct bytes
 cover it. Do not treat that incomplete decompiler body as absence of the call.
 The receiver adjustment is player+0x9B0, and the time step is in **XMM1**, not an
 integer argument. Raw decompiles and this decoded span are preserved in
-`evidence/ui-pointer-2026-09-10/examination-steam-proof.json`.
+`data/evidence/ui-pointer-2026-09-10/examination-steam-proof.json`.
 
 This corrects the R-109 research-log statement that both reticlePosition
 producers are examination transitions. One is an input-integrating update

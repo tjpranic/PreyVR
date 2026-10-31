@@ -1,6 +1,6 @@
 # Live interaction A0 protocol
 
-Status: completed 2026-08-01. The edge-position -15-degree pass changed both selected and usable entity from `0xFDE0` to `0x1117`; see [`../captures/traces/2026-08-01-prey-interaction-a0.md`](../captures/traces/2026-08-01-prey-interaction-a0.md).
+Status: completed 2026-08-01. The edge-position -15-degree pass changed both selected and usable entity from `0xFDE0` to `0x1117`; see [`../data/captures/traces/2026-08-01-prey-interaction-a0.md`](../data/captures/traces/2026-08-01-prey-interaction-a0.md).
 
 This is a no-button, one-frame proof that Prey's native **use/highlight target** follows the detached gameplay ray. It does not invoke `Interact`, change the camera, or write persistent ArkPlayer state.
 
@@ -57,4 +57,4 @@ It calls the same tested Z-up yaw policy used by the wrench A0b experiment and p
 - **Useful null:** pass B changes the candidate vector or aim-distance scoring but lands on the same entity. Repeat with a scene that has two close targets or the opposite yaw sign.
 - **Fail/stop:** persistent ray/camera bytes change, the target becomes an implausible entity, an action executes without input, Prey faults, or any guard signature fails.
 
-Save both local rays, candidate-vector summaries, selected and usable entity IDs, exact written bytes, yaw sign, module hash, and a short scene description under `captures/traces/`. Promote the pair into a deterministic fixture before implementing a persistent controller-ray hook.
+Save both local rays, candidate-vector summaries, selected and usable entity IDs, exact written bytes, yaw sign, module hash, and a short scene description under `data/captures/traces/`. Promote the pair into a deterministic fixture before implementing a persistent controller-ray hook.

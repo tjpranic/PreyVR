@@ -2,7 +2,7 @@
 
 Branch `jordi/polishing`. Measured on the mock (xr runtime simulator, Steam `PreyDll.dll`), not yet in a
 headset. Everything is switchable at runtime: `grenade.hand 0` restores the game's own throw exactly.
-Evidence: [`evidence/grenades-2026-10-07/`](evidence/grenades-2026-10-07/) (reports in git, images not).
+Evidence: [`data/evidence/grenades-2026-10-07/`](../data/evidence/grenades-2026-10-07/) (reports in git, images not).
 
 ## What a player saw before
 

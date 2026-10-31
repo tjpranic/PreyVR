@@ -202,7 +202,7 @@ float RenderCameraResidual(const CameraView& source, const RenderCameraView& der
     // CONFIRMED LIVE 2026-08-29: SetCamera scales the tangent by the NEAR PLANE
     // before applying asymmetry, so fW* are glFrustum near-plane coordinates, not
     // raw tangents. Omitting the factor scored 1.5588 against a live frame; with
-    // it, 1e-9. See captures/traces/2026-08-29-prey-hurdle1-live-capture.md.
+    // it, 1e-9. See data/captures/traces/2026-08-29-prey-hurdle1-live-capture.md.
     const float tangent = std::tan(source.fov * 0.5f) * source.nearPlane;
     if (!Finite(tangent)) {
         return std::numeric_limits<float>::infinity();

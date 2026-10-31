@@ -48,7 +48,7 @@ python -E -B tools/re/verify_scene_query.py
 
 The verifier checks the exact binary SHA, seven complete native bodies, constructor/slot/player-accessor witnesses and a one-bit corruption negative control for every body. `SceneQueryTests` tests ABI offsets, reserved bytes, private storage, miss/malformed output and aim provenance. `HapticsTests` calls the production adapter against mocked OpenXR functions, including focus, epoch, reference, disable and failure cases. Menu tests exercise the new page through the production settings adapter.
 
-Release DLL build passed. **52/52 offline CTest checks passed**; see [test output](evidence/scene-query-2026-09-29/ctest.txt). The [production Feedback page raster](evidence/scene-query-2026-09-29/feedback-options.png) was inspected for clipping and layout. Capstone 5.0.7 produced the retained instruction listings. No native query or real controller vibration was exercised.
+Release DLL build passed. **52/52 offline CTest checks passed**; see [test output](../data/evidence/scene-query-2026-09-29/ctest.txt). The [production Feedback page raster](../data/evidence/scene-query-2026-09-29/feedback-options.png) was inspected for clipping and layout. Capstone 5.0.7 produced the retained instruction listings. No native query or real controller vibration was exercised.
 
 The project graph refresh wrapper refuses this integration worktree because only the canonical `PreyVR` root is registered in the fleet. No fleet configuration was changed; refresh the canonical graph after integration. The project-owned receipt can be validated against this worktree; fleet submission likewise requires its artifacts to reach the configured project root.
 

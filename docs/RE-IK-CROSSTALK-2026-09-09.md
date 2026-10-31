@@ -212,7 +212,7 @@ DLL was rebuilt or injected by this investigation.
 
 ## Artifacts and reproduction
 
-`docs/evidence/ik-crosstalk-2026-09-09/` contains the native producer's full
+`data/evidence/ik-crosstalk-2026-09-09/` contains the native producer's full
 decompile, assembly, checked bytes/identity, pinned source excerpts, the original
 handover, and snapshots of the math implementation used by the harness.
 

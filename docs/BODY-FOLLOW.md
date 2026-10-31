@@ -11,10 +11,10 @@ the engine facts all of it rests on, what was tried and removed, and the history
   (its cause A) and the torso and shoulder parts of [ARM-POSE-2026-10-06.md](ARM-POSE-2026-10-06.md).
 
 The removed documents are in git history. Their evidence stays in
-[evidence/turn-lean-arms-2026-10-19/](evidence/turn-lean-arms-2026-10-19/) (the follow, arm and
+[data/evidence/turn-lean-arms-2026-10-19/](../data/evidence/turn-lean-arms-2026-10-19/) (the follow, arm and
 teleport simulations, the stance and living dumps, `verify_teleport.py`),
-[evidence/move-stop-2026-10-24/](evidence/move-stop-2026-10-24/) and
-[evidence/posture-slot-feedback-2026-10-04/](evidence/posture-slot-feedback-2026-10-04/).
+[data/evidence/move-stop-2026-10-24/](../data/evidence/move-stop-2026-10-24/) and
+[data/evidence/posture-slot-feedback-2026-10-04/](../data/evidence/posture-slot-feedback-2026-10-04/).
 
 Kept separate, because their main subject is something else:
 - [MOVE-STOP-2026-10-24.md](MOVE-STOP-2026-10-24.md): movement stops from Prey re-reading the stick
@@ -663,7 +663,7 @@ the same real arm:
 
 Folded that much, the elbow chooser put the extra bend round the shoulder-to-wrist axis: the
 "inward" bend. The October mock never showed it: its known arms used exactly the model's shoulder
-offsets and arm length, with the head level (`evidence/arm-pose-2026-10-06/truth-gloo.txt`).
+offsets and arm length, with the head level (`data/evidence/arm-pose-2026-10-06/truth-gloo.txt`).
 Scaling the player to the character instead was rejected: it changes how big the world feels, and
 the drawn arm is already the mod's, not the rig's (Prey's is 51.6 cm, stretched).
 

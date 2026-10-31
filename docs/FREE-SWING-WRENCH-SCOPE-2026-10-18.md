@@ -15,7 +15,7 @@ Everything below was read from the Steam binary with the local Ghidra project an
 capstone. Neither the EGS symbols nor the CryEngine source is on this machine, so
 CryEngine names are matches by signature and layout, not by symbol. The decompiles,
 scripts and their output are in
-[evidence/free-swing-wrench-2026-10-18/](evidence/free-swing-wrench-2026-10-18/).
+[data/evidence/free-swing-wrench-2026-10-18/](../data/evidence/free-swing-wrench-2026-10-18/).
 
 ## The goal
 
@@ -63,7 +63,7 @@ swings. Physical contact never pushes live NPCs, but the wrench must hurt them.
 (`+0x40`), its stats (`+0x1A8`, through `0x1695020`) and one flag (`+0x1A0`). The
 component reads its packages, impulse scale, fatigue and the dodge flag. No read of
 weapon `+0x500..0x540` occurs. Instruction list:
-[onhit_field_reads.txt](evidence/free-swing-wrench-2026-10-18/onhit_field_reads.txt).
+[onhit_field_reads.txt](../data/evidence/free-swing-wrench-2026-10-18/onhit_field_reads.txt).
 So it can be called directly, without the attack or its animation.
 
 **Its call** (from WeaponHit at `0x16B2C21`):
@@ -152,7 +152,7 @@ the component at `+0x4C0`. That class is not the wrench and is unidentified.
 - Prey has its own: `CArkBreakableGlass`, an `ArkBreakableGlass` render node (type 26),
   the `ArkGlassBreaker` entity, `ArkLooseGlassFrag`, and the cvar
   `e_ArkGlassMinImpactRadius`. List:
-  [glass_strings.txt](evidence/free-swing-wrench-2026-10-18/glass_strings.txt).
+  [glass_strings.txt](../data/evidence/free-swing-wrench-2026-10-18/glass_strings.txt).
 - Which listener breaks it is not traced. The design does not need it: the component hit
   sends the same event Prey's own wrench sends.
 
@@ -310,7 +310,7 @@ of it, 85 checks:
 - 6 cross-checks: call targets, the 100 m/s constant, the deferred-event switch, the
   material-manager chain, and the HUD string.
 
-[Output](evidence/free-swing-wrench-2026-10-18/verification.json). `ctest` 83/83 with the
+[Output](../data/evidence/free-swing-wrench-2026-10-18/verification.json). `ctest` 83/83 with the
 new `swing_native` test (rows gated and unique across all four native tables).
 
 **New rows** (`SwingNative.h`):
@@ -763,7 +763,7 @@ The wearer confirmed it tested and working.
 
 ## Evidence
 
-[evidence/free-swing-wrench-2026-10-18/](evidence/free-swing-wrench-2026-10-18/):
+[data/evidence/free-swing-wrench-2026-10-18/](../data/evidence/free-swing-wrench-2026-10-18/):
 - `native_melee_decompile.c`: Ghidra's decompile of the chain above and its callees;
 - `onhit_field_reads.txt`: every field the component hit reads, and its calls;
 - `constants_and_call_sites.txt`: the floats it uses (100 m/s, the half-degree factor,

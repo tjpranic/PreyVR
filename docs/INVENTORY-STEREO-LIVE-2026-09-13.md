@@ -12,7 +12,7 @@ Steam PreyDll SHA-256 remains
 Injected Release DLL: 921600 bytes, SHA-256
 `E49098B03CEDF252AD1EE24D6F211318524E205C73783B720563F67613521880`.
 The tested binary and run manifest are preserved in
-`evidence/inventory-stereo-live-2026-09-13/`.
+`data/evidence/inventory-stereo-live-2026-09-13/`.
 
 The previously blocking Omikron processes were closed with explicit user approval.
 A fleet process check was empty before launching Prey. Runtime and recorder were

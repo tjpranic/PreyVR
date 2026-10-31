@@ -535,7 +535,7 @@ int main()
     // Exact values read out of Prey.exe PID 50832 on 2026-08-29, from
     // m_pRenderViews[0][0]. This is the test that would have caught the missing
     // near-plane factor on day one: under the old formula it scores 1.5588.
-    // See captures/traces/2026-08-29-prey-hurdle1-live-capture.md.
+    // See data/captures/traces/2026-08-29-prey-hurdle1-live-capture.md.
     {
         CameraView live{};
         live.fov = 1.5447412729263306f;

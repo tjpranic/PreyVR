@@ -11,7 +11,7 @@ Target: Steam `PreyDll.dll` SHA-256 `7d6e322f...05311a7`, RVAs from `0x180000000
 Neither the CryEngine source nor the EGS symbol build is on this machine, so everything
 below was read from the Steam binary. CryEngine names are matches by signature, not
 proof by symbol. Scripts and output are in
-[evidence/physical-contact-2026-10-18/](evidence/physical-contact-2026-10-18/); they need
+[data/evidence/physical-contact-2026-10-18/](../data/evidence/physical-contact-2026-10-18/); they need
 capstone, which this session installed in a scratch venv only.
 
 ## The two requirements
@@ -120,7 +120,7 @@ out pushes it, and a snap turn alone does not.
 Static only, from the Steam binary. `python -E -B tools/re/verify_physical_contact.py`
 checks all of it: 11 complete bodies (split chunks included; no base relocations;
 mutation controls), 10 vtable slots, 41 instruction witnesses, one string and three constants.
-[Output](evidence/physical-contact-2026-10-18/verification.json); the disassembly it was
+[Output](../data/evidence/physical-contact-2026-10-18/verification.json); the disassembly it was
 read from is in the same folder.
 
 **Per-entity primitive collision, `0xBA1D80` (4002 bytes, 7 chunks).**
@@ -472,7 +472,7 @@ The wearer confirmed it works over two runs.
 
 **Static results.** `tools/re/verify_physical_contact.py` passes with 15 rows and the phase 4
 witnesses. The dumps (`artic_*.asm.txt`) and scripts (`p4_*.py`) are in
-`docs/evidence/physical-contact-2026-10-18/`.
+`data/evidence/physical-contact-2026-10-18/`.
 - **Set velocity on one part:** the articulated Action (type 10) takes `ipart` at +4 or
   `partid` at +8.
   - **Both unused:** the whole body. The engine turns it into one impulse at the centre of

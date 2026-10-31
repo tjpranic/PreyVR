@@ -220,6 +220,6 @@ GET API with explicit `/Prey/PreyDll.dll` selection instead. No security setting
 or target selection were changed.
 
 Reproduction commands, source snapshots/excerpts, Ghidra results and the
-standalone harness are in `docs/evidence/equip-alignment-hud-2026-09-09/`.
+standalone harness are in `data/evidence/equip-alignment-hud-2026-09-09/`.
 The shipping fix still requires validated authored weapon transforms and native
 UI object ownership, followed by runtime and wearer acceptance.
