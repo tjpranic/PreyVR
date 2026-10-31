@@ -16,7 +16,9 @@
 // - its previous camera (CRenderView::SetPreviousFrameCamera) and the
 //   renderer's previous view-projection;
 // - the renderer's previous views, which moving and first-person objects'
-//   motion vectors are taken against (the known issue in the scope doc).
+//   motion vectors are taken against (the known issue in the scope doc);
+// - for the second eye, what takes the first eye's previous view to its own:
+//   objects compile once, against the first eye's (preyvr/WorldMotion.h).
 //
 // It acts only in a both-eyes frame, while a temporal AA mode is set
 // (r_AntialiasingMode 2-5). Gated on the bodies in preyvr/TemporalAaNative.h.
@@ -40,8 +42,24 @@ void TaaLaneFrameEnd(void* view, bool complete);
 DWORD SetTaaLane(unsigned enabled);
 bool TaaLaneEnabled();
 
+// The second eye's world motion vectors: 1 corrected (the default), 0 as the
+// objects compiled, for an A/B in the headset (taa.motion). Any thread.
+DWORD SetTaaSecondEyeMotion(unsigned enabled);
+
+// While the second eye of an applied frame draws, V1^-1 x V2 as 16 floats, from
+// the view its objects compiled against to its own previous view; false otherwise,
+// and for the first eye. NearViewStereo's pack calls this, on any render thread.
+bool TaaLaneSecondEyeMotion(float* relative);
+// What the pack made of it: moved the eye's previous projection, or left it
+// because it was not perspective-shaped.
+void TaaLaneMotionPacked(bool moved);
+
 // "taaLane={...}": taa.vr, taa.report and the status line. Any thread. viewsIn
-// counts eyes given their own previous views back.
+// counts eyes given their own previous views back. motion={...}: on; the
+// r_GraphicsPipeline the renderer latched; second eyes given a matrix, and packs
+// that used it or found the projection the wrong shape; second eyes without one,
+// because a previous view was missing or was not a view, or because the objects
+// compile per draw; and the two views' separation.
 std::string TaaLaneReport();
 
 } // namespace preyvr::dll

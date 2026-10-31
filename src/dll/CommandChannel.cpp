@@ -703,6 +703,12 @@ constexpr Verb kVerbs[] = {
         out << "taa.vr result=" << (Valued(args) ? SetTemporalAntialiasing(ArgU(args, 1, 1)) : 0) << ' '
             << TaaLaneReport();
     }},
+    {"taa.motion", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
+        // The second eye's world motion vectors (preyvr/WorldMotion.h): 1 corrected, 0 as the
+        // objects compiled, for an A/B. Bare: report.
+        out << "taa.motion result=" << (Valued(args) ? SetTaaSecondEyeMotion(ArgU(args, 1, 1)) : 0) << ' '
+            << TaaLaneReport();
+    }},
     {"frame.probe", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
         // The stall flight recorder for the render freeze (FrameProbe.h).
         out << "frame.probe result=" << (Valued(args) ? SetFrameProbe(ArgU(args, 1, 1)) : 0) << FrameProbeReport();

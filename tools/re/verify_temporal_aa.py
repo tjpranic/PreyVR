@@ -4,7 +4,8 @@ jitter sample are all chosen from one global counter that the post-processing dr
 resolve's camera comes from the render view's current (+0x11A0) and previous (+0x13E0) cameras. Moving and
 first-person objects' motion vectors are taken against the renderer's previous view per viewport (+0xAB0), which
 only the same driver writes, and first-person ones through the near projection alone (view-info +0x260), which
-NearViewStereo must move with each eye. Never attaches."""
+NearViewStereo must move with each eye. Those motion constants compile once for the one render view both eyes draw,
+so the world's previous projection (+0x220) must take the second eye from the first eye's view. Never attaches."""
 import struct,sys
 from pathlib import Path
 from preydll import DEFAULT_MODULE,Image,fnv1a64 as fnv,native_rows
@@ -32,6 +33,9 @@ PREV_VIEW_STORE,PREV_VIEW_SLOT,SET_VIEWPORT=0xfe7440,0xfe5560,0xf7ea90
 CURRENT_VIEW,PREV_WORLD,MOTION_MATRIX,MOTION_RING=0xfe49e0,0xfd4150,0xfd4570,0x2b321d0
 MOTION_THRESHOLD=0x2b1c248            # r_MotionBlurThreshold
 NEAR_PROJECTION=0xfb1530
+COMPILE_OBJECTS,COMPILE,INSTANCE_CONSTANTS,DRAW_COMPILED=0xee46d0,0xeffcd0,0xf001d0,0xf00a90
+RENDERER=0x2b24e80                    # gcpRendD3D, an object in .data
+GRAPHICS_PIPELINE=0x2b1c8dc           # r_GraphicsPipeline
 
 def branches_to(image,target):
     """Every call or jmp rel32 in .text whose target is `target`."""
@@ -195,12 +199,39 @@ def verify():
                                   '0xFB4280: the near projection to +0x260':(0xfb4eda,'f30f119660020000')})
     checks.append("first-person motion: the near projection alone (+0x260), so NearViewStereo moves it with each eye")
 
+    # Both eyes draw one render view, and its objects' motion constants are built once. SwitchUsageMode returns for an
+    # unchanged mode and only its Reading branch compiles, so with ReadingDone held back after the first submission
+    # (DualSceneStereo) the second submission's switch to Reading does nothing.
+    witness('SwitchUsageMode 0xEE82F0',{'an unchanged mode returns':(0xee8306,'3b51100f84cd020000')})
+    assert branches_to(image,COMPILE_OBJECTS)==[0xee859c]
+    assert sorted(branches_to(image,COMPILE))==[0xee4808,0xee486b,0xee4960,0xf8ff74]
+    assert branches_to(image,INSTANCE_CONSTANTS)==[0xeffe7d]
+    checks.append("each object's constants: only from SwitchUsageMode's Reading branch, or a pass's per-draw compile")
+    # The two cases: the passes' per-draw compile (0xF8FD40) runs below r_GraphicsPipeline 2, whose registered default
+    # is 2 and which RT_BeginFrame latches at renderer +0x805C. From 2 they draw compiled objects, which bind the
+    # constants at +0xD8; neither that draw nor anything but the two callers above calls Compile.
+    assert image.rip_target(0xf8fd01,7,2)==RENDERER+0x805c and at(0xf8fd07,1)==b'\x02' and at(0xf8fd0c,2)==b'\x7c\x0e'
+    assert image.call_target(0xf8fd15)==0xf37f50 and image.call_target(0xf8fd1f)==0xf8fd40
+    assert image.cstring(0x1c823f0)=='r_GraphicsPipeline' and image.rip_target(0xec7367,7,3)==0x1c823f0
+    assert image.rip_target(0xec735b,7,3)==GRAPHICS_PIPELINE and image.rip_target(0xf7d86d,6,2)==GRAPHICS_PIPELINE
+    witness('r_GraphicsPipeline',{'edi cleared in the registration':(0xec72eb,'33ff'),'its default, edi + 2':(0xec7352,'448d4f02'),
+                                  'latched at renderer +0x805C':(0xf7d876,'89835c800000')})
+    witness('compiled draw 0xF00A90',{'its per-instance constants':(0xf00b13,'4c8b87d8000000')})
+    # The world's previous projection: the second eye's way out of that. And why objects at rest have motion at all: a
+    # character is flagged while its movement passes a threshold of 0 (0x81BC90).
+    witness('view-info builder 0xFB2AC0',{'the world projection to +0x220':(0xfb3d2f,'f3440f118320020000')})
+    assert image.cstring(0x1d2efd0)=='ca_MotionBlurMovementThreshold' and image.rip_target(0x8e8422,7,3)==0x1d2efd0
+    witness('ca_MotionBlurMovementThreshold',{'default 0':(0x8e841a,'0f57db'),
+                                              'the check: threshold against +0xAD4':(0x81bc98,'0f2f81d40a0000')})
+    checks.append("world motion: the second eye's constants hold the first eye's previous view, so +0x220 must move")
+
     # TemporalAaNative.h: the bodies the probe's gate checks, and the constants it reads through.
     entries=native_rows(HEADER)
     assert [(rva,name) for rva,_,_,name in entries]==[(POST_DRIVER,'PostDriver'),(RESOLVE,'TemporalResolve'),
         (0xfe3760,'AaModeFlags'),(0xecec10,'AaModeClamp'),(0xfb2a00,'PipelineAaExecute'),(VIEW_INFO,'ViewInfo'),
         (SET_PREVIOUS_CAMERA,'SetPreviousFrameCamera'),(PREV_VIEW_STORE,'PrevViewStore'),(PREV_VIEW_SLOT,'PrevViewSlot'),
-        (SET_VIEWPORT,'SetViewport')],entries
+        (SET_VIEWPORT,'SetViewport'),(COMPILE_OBJECTS,'CompileObjects'),(INSTANCE_CONSTANTS,'InstanceConstants'),
+        (PREV_WORLD,'PrevWorld'),(MOTION_MATRIX,'PrevInViewSpace'),(DRAW_COMPILED,'DrawCompiled')],entries
     relocs=image.relocations()
     for rva,size,expected,name in entries:
         b=at(rva,size)
@@ -220,7 +251,8 @@ def verify():
                        'RendererViewProj':0xcf0,'RendererPrevViewProj':0xd30,'ViewProjSize':0x40,
                        'RendererJitter':0xd70,'SetPreviousFrameCamera':SET_PREVIOUS_CAMERA,
                        'ViewPreviousCamera':0x13e0,'CameraSize':0x240,'RendererPrevViews':0xab0,
-                       'RendererViewport':0x8060,'PrevViewSlots':8,'PrevViewSize':0x40}.items():
+                       'RendererViewport':0x8060,'PrevViewSlots':8,'PrevViewSize':0x40,
+                       'RendererGraphicsPipeline':0x805c,'CompiledOncePipeline':2}.items():
         assert header_constant(name)==value,name
     assert HISTORY[1]==HISTORY[0]+8
     checks.append("TemporalAaNative.h's constants are the ones witnessed above")

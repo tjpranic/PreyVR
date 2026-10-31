@@ -8,6 +8,8 @@
 // its output and stamp, and post-processing copies the view-projection to
 // "previous", stores this run's view as its viewport's previous view (what
 // moving objects' motion vectors are taken against) and advances the counter.
+// The views are real ones, translated by a tag, because the second eye's world
+// motion is worked out from them (preyvr/WorldMotion.h).
 #include "../src/dll/TemporalAaLane.cpp"
 #include "DllTestSupport.h"
 #include "TestSupport.h"
@@ -61,6 +63,14 @@ void Mode(int mode) { Put<int>(image + tn::ModeEffective, mode); }
 // The viewport Prey draws the eyes in; any of the 8.
 constexpr int kViewport = 2;
 std::uintptr_t PrevView() { return Renderer(tn::RendererPrevViews + kViewport * tn::PrevViewSize); }
+// Multiplies the rotation of the views Prey stores: 2 makes them not views.
+float viewScale = 1.0f;
+void StoreView(float tag)
+{
+    const float stored[16] = {viewScale, 0, 0, 0, 0, viewScale, 0, 0, 0, 0, viewScale, 0, tag, 0, 0, 1};
+    std::memcpy(reinterpret_cast<void*>(PrevView()), stored, sizeof(stored));
+}
+float ViewTag() { return Get<float>(PrevView() + 12 * sizeof(float)); }
 
 // CRenderView::SetPreviousFrameCamera: the camera copied to the view's +0x13E0.
 unsigned previousCameraCalls = 0;
@@ -156,6 +166,8 @@ struct Seen {
     int viewPrevious = -1;    // the view's previous camera, for motion vectors
     float prevViewProj = -1;  // the renderer's previous view-projection
     float prevView = -1;      // the viewport's previous view, for moving objects' motion vectors
+    bool motion = false;      // offered a move from the compiled view to this eye's
+    float motionTag = 0;      // that move, as a difference of view tags
     std::uint32_t counter = 0;
 };
 
@@ -166,7 +178,10 @@ Seen Engine(int eye, int frame, bool temporal)
     seen.counter = c;
     seen.viewPrevious = Get<int>(Address(view.data()) + tn::ViewPreviousCamera);
     seen.prevViewProj = Get<float>(Renderer(tn::RendererPrevViewProj));
-    seen.prevView = Get<float>(PrevView());
+    seen.prevView = ViewTag();
+    float motion[16]{};
+    seen.motion = TaaLaneSecondEyeMotion(motion);
+    seen.motionTag = motion[12];
     Put<float>(Renderer(tn::RendererViewProj), Tag(eye, frame));
     if (temporal) {
         const std::uintptr_t stamp = Stage(tn::StageLastResolve);
@@ -177,7 +192,7 @@ Seen Engine(int eye, int frame, bool temporal)
         Fill(taa::HistoryOut(c), Tag(eye, frame));
         Put<std::uint32_t>(stamp, c);
     }
-    Put<float>(PrevView(), Tag(eye, frame));
+    StoreView(Tag(eye, frame));
     std::memcpy(renderer.data() + tn::RendererPrevViewProj, renderer.data() + tn::RendererViewProj, tn::ViewProjSize);
     Put<std::uint32_t>(image + tn::FrameCounter, taa::Advance(c));
     return seen;
@@ -228,6 +243,11 @@ void CheckOwn(const std::array<Seen, 2>& seen, int frame, const char* what)
         Check(seen[eye].prevViewProj == Tag(eye, frame - 1), "its own previous view-projection");
         Check(seen[eye].prevView == Tag(eye, frame - 1), "its own previous view for moving objects");
     }
+    Check(!seen[0].motion, "the first eye's objects compiled against its own view");
+    // From last frame's first eye: the view the objects compiled against, not the
+    // one its submission has since left.
+    Check(seen[1].motion && seen[1].motionTag == Tag(1, frame - 1) - Tag(0, frame - 1),
+          "the second eye gets the move from the compiled view to its own");
     Check(seen[1].counter == taa::Advance(seen[0].counter, taa::kEyeLead), "the second eye two counts ahead");
 }
 void CheckStart(const std::array<Seen, 2>& seen, int frame, const char* what)
@@ -235,6 +255,7 @@ void CheckStart(const std::array<Seen, 2>& seen, int frame, const char* what)
     for (int eye = 0; eye < 2; ++eye) {
         Check(!seen[eye].fresh && seen[eye].history == Tag(eye, frame), what);
         Check(seen[eye].viewPrevious == CameraTag(eye, frame), "a start: the eye's own camera as its previous one");
+        Check(!seen[eye].motion, "a start: no previous views, so no move");
     }
 }
 
@@ -248,6 +269,7 @@ void TestLane()
     Put<ID3D11Device*>(Renderer(preyvr::engine::RendererLayout::device), device.Get());
     Put<std::uint32_t>(image + tn::FrameCounter, 100);
     Put<int>(Renderer(tn::RendererViewport), kViewport);
+    Put<int>(Renderer(tn::RendererGraphicsPipeline), tn::CompiledOncePipeline);
     Put<std::uintptr_t>(image + tn::Pipeline, Address(pipeline.data()));
     Put<std::uintptr_t>(Address(pipeline.data()) + tn::PipelineAaStage, Address(stage.data()));
     for (unsigned i = 0; i < 2; ++i) { deviceTexture[i][0] = Address(history[i].Get()); }
@@ -272,6 +294,7 @@ void TestLane()
           "off: the counter moves once per eye and nothing is touched");
     Check(seen[0].prevView == Tag(1, frame - 2) && seen[1].prevView == Tag(0, frame - 1),
           "off: each eye's moving objects take the other eye's view as their previous one");
+    Check(!seen[1].motion && Reports("given=0"), "off: nothing to correct against");
 
     // Other bytes: refused, nothing touched.
     readiness = ERROR_BAD_EXE_FORMAT;
@@ -294,8 +317,8 @@ void TestLane()
     Mode(4);
     seen = Frame(frame++, true);
     CheckStart(seen, frame - 1, "the first TSAA frame starts both eyes afresh");
-    Check(Logged("preyvr_taa_lane result=0 detail=gate_ok rows=10") && Logged("start reason=enable"),
-          "the gate opens on the ten bodies; the start is the enable");
+    Check(Logged("preyvr_taa_lane result=0 detail=gate_ok rows=15") && Logged("start reason=enable"),
+          "the gate opens on the fifteen bodies; the start is the enable");
     std::array<std::set<unsigned>, 2> jitter;
     for (int n = 0; n < 6; ++n) {
         seen = Frame(frame++, true);
@@ -309,6 +332,41 @@ void TestLane()
               Reports("copiesOut=14") && Reports("viewsIn=12") && Reports("freshStarts=2") && Reports("resolveMissed=0") &&
               Reports("counterOff=0") && Reports("history=64x32") && Reports("format=10"),
           "the report: frames, copies and views in, the history's size and format");
+    Check(Reports("on=1") && Reports("pipeline=2") && Reports("given=6") && Reports("separationUm=1000000"),
+          "the report: the second eye's move, the latched pipeline, the views' separation");
+
+    // The second eye's world motion: off for an A/B, and left alone without its inputs.
+    Check(SetTaaSecondEyeMotion(2) == ERROR_INVALID_PARAMETER, "0 or 1 only");
+    Check(SetTaaSecondEyeMotion(0) == ERROR_SUCCESS && Reports("on=0"), "motion off");
+    seen = Frame(frame++, true);
+    Check(!seen[1].motion && seen[1].prevView == Tag(1, frame - 2), "off: as the objects compiled, the lane otherwise as it was");
+    Check(SetTaaSecondEyeMotion(1) == ERROR_SUCCESS, "motion on");
+    seen = Frame(frame++, true);
+    CheckOwn(seen, frame - 1, "on again: at once");
+    // Below 2, each pass compiles per draw, so each eye's objects have its own view.
+    Put<int>(Renderer(tn::RendererGraphicsPipeline), 1);
+    seen = Frame(frame++, true);
+    Check(!seen[1].motion && Reports("perDraw=1") && Reports("pipeline=1"), "objects compiled per draw: nothing to correct");
+    Put<int>(Renderer(tn::RendererGraphicsPipeline), tn::CompiledOncePipeline);
+    seen = Frame(frame++, true);
+    CheckOwn(seen, frame - 1, "compiled once again: corrected");
+    // A previous view that isn't one, then an unreadable viewport.
+    viewScale = 2.0f;
+    Frame(frame++, true);
+    viewScale = 1.0f;
+    seen = Frame(frame++, true);
+    Check(!seen[1].motion && Reports("badViews=1"), "a previous view that is not a view: left alone");
+    seen = Frame(frame++, true);
+    CheckOwn(seen, frame - 1, "good views again: corrected");
+    Put<int>(Renderer(tn::RendererViewport), static_cast<int>(tn::PrevViewSlots));
+    seen = Frame(frame++, true);
+    Check(!seen[1].motion, "a viewport outside the slots: left alone");
+    Put<int>(Renderer(tn::RendererViewport), kViewport);
+    seen = Frame(frame++, true);
+    CheckOwn(seen, frame - 1, "its viewport back: corrected");
+    TaaLaneMotionPacked(true);
+    TaaLaneMotionPacked(false);
+    Check(Reports("packed=1") && Reports("unshaped=1"), "the packs' reports");
 
     // A frame the renderer counted between: both eyes start afresh.
     seen = Frame(frame++, true, false, 1);

@@ -7,12 +7,14 @@
 #include "preyvr/NativeContract.h"
 #include "preyvr/TemporalAa.h"
 #include "preyvr/TemporalAaNative.h"
+#include "preyvr/WorldMotion.h"
 
 #include <d3d11.h>
 #include <wrl/client.h>
 
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <sstream>
@@ -110,6 +112,12 @@ Count gRefusedGate{0}, gRefusedStage{0}, gRefusedTextures{0}, gRefusedDevice{0};
 std::atomic<const char*> gLastStart{"none"};
 std::atomic<std::uint32_t> gCounterFirst{0}, gCounterSecond{0};
 std::atomic<std::uint32_t> gSavedWidth{0}, gSavedHeight{0}, gSavedFormat{0};
+std::atomic<bool> gMotionOn{true};
+// V1^-1 x V2: written with gMotionReady false, and read only while it is true.
+std::atomic<bool> gMotionReady{false};
+float gMotion[16]{};
+Count gMotionGiven{0}, gMotionPackedCount{0}, gMotionUnshaped{0}, gMotionNoViews{0}, gMotionBadViews{0}, gMotionPerDraw{0};
+std::atomic<int> gPipelineLatched{-1}, gSeparationUm{0};
 
 // --- render thread only -------------------------------------------------------------
 
@@ -139,6 +147,9 @@ D3D11_TEXTURE2D_DESC gSavedDesc{};
 ComPtr<ID3D11DeviceContext> gContext;         // this frame's
 bool gHaveCentre = false;
 alignas(16) std::uint8_t gCentrePrevCamera[tn::CameraSize]{};
+// The first eye's previous view, which this frame's objects compile against.
+float gCompiledView[16]{};
+bool gHaveCompiledView = false;
 
 void Bump(Count& count)
 {
@@ -212,6 +223,44 @@ bool AdoptHistory(void* renderer, const std::array<std::uintptr_t, 2>& ctexture)
     gHistory = texture;
     gHistoryCTexture = ctexture;
     return true;
+}
+
+// The previous view of the renderer's viewport, as 0xFE5560 picks it.
+bool ReadPrevView(const void* renderer, float* view)
+{
+    int viewport = -1;
+    const auto* bytes = static_cast<const std::uint8_t*>(renderer);
+    if (!SafeRead(bytes + tn::RendererViewport, viewport) || viewport < 0 ||
+        viewport >= static_cast<int>(tn::PrevViewSlots)) {
+        return false;
+    }
+    return SafeCopy(view, bytes + tn::RendererPrevViews + viewport * tn::PrevViewSize, tn::PrevViewSize);
+}
+
+// Puts up what takes this frame's objects from the first eye's previous view to
+// the second eye's, or leaves it down for this submission.
+void OfferSecondEyeMotion(const void* renderer, const Eye& second)
+{
+    if (!gMotionOn.load(std::memory_order_relaxed)) { return; }
+    int pipeline = -1;
+    SafeRead(static_cast<const std::uint8_t*>(renderer) + tn::RendererGraphicsPipeline, pipeline);
+    gPipelineLatched.store(pipeline, std::memory_order_relaxed);
+    if (pipeline < tn::CompiledOncePipeline) {
+        Bump(gMotionPerDraw);
+        return;
+    }
+    float own[16];
+    if (!gHaveCompiledView || !second.havePrevViews || !ReadPrevView(renderer, own)) {
+        Bump(gMotionNoViews);
+        return;
+    }
+    if (!worldmotion::Between(gCompiledView, own, gMotion)) {
+        Bump(gMotionBadViews);
+        return;
+    }
+    gSeparationUm.store(static_cast<int>(std::lround(worldmotion::Separation(gMotion) * 1.0e6)), std::memory_order_relaxed);
+    Bump(gMotionGiven);
+    gMotionReady.store(true, std::memory_order_release);
 }
 
 // Both eyes from the engine's counter, neither with history.
@@ -311,6 +360,11 @@ void TaaLaneEyeBegin(void* renderer, void* view, int eye, const void* eyeCamera)
         SafeCopy(static_cast<std::uint8_t*>(renderer) + tn::RendererPrevViews, e.prevViews, kPrevViewsSize);
         Bump(gViewsIn);
     }
+    if (eye == 0) {
+        gHaveCompiledView = ReadPrevView(renderer, gCompiledView);
+    } else {
+        OfferSecondEyeMotion(renderer, e);
+    }
     // The resolve's stamp says whether it uses history: this eye's, or none yet
     // (it starts from this frame).
     const std::uint32_t stamp = e.fresh ? taa::FreshStamp(e.counter) : taa::StaleStamp(e.counter);
@@ -325,6 +379,7 @@ void TaaLaneEyeBegin(void* renderer, void* view, int eye, const void* eyeCamera)
 
 void TaaLaneEyeEnd(void* renderer, int eye, const void* eyeCamera)
 {
+    gMotionReady.store(false, std::memory_order_release);
     if (!gFrameOn || (eye != 0 && eye != 1) || eyeCamera == nullptr) { return; }
     auto& e = gEye[static_cast<std::size_t>(eye)];
     const std::uintptr_t base = gBase.load(std::memory_order_relaxed);
@@ -378,6 +433,27 @@ bool TaaLaneEnabled()
     return gEnabled.load(std::memory_order_acquire);
 }
 
+DWORD SetTaaSecondEyeMotion(unsigned enabled)
+{
+    if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
+    if (gMotionOn.exchange(enabled != 0, std::memory_order_relaxed) != (enabled != 0)) {
+        Log(std::string("second_eye_motion=") + (enabled != 0 ? "1" : "0"));
+    }
+    return ERROR_SUCCESS;
+}
+
+bool TaaLaneSecondEyeMotion(float* relative)
+{
+    if (!gMotionReady.load(std::memory_order_acquire)) { return false; }
+    std::memcpy(relative, gMotion, sizeof(gMotion));
+    return true;
+}
+
+void TaaLaneMotionPacked(bool moved)
+{
+    Bump(moved ? gMotionPackedCount : gMotionUnshaped);
+}
+
 std::string TaaLaneReport()
 {
     std::ostringstream s;
@@ -387,8 +463,11 @@ std::string TaaLaneReport()
       << " viewsIn=" << gViewsIn.load() << " freshStarts=" << gFreshStarts.load() << " resolveMissed=" << gResolveMissed.load()
       << " counterOff=" << gCounterOff.load() << " idleMode=" << gIdleMode.load() << " refused=gate:"
       << gRefusedGate.load() << ",stage:" << gRefusedStage.load() << ",textures:" << gRefusedTextures.load()
-      << ",device:" << gRefusedDevice.load() << " counters=" << gCounterFirst.load() << ',' << gCounterSecond.load()
-      << " history=";
+      << ",device:" << gRefusedDevice.load() << " motion={on=" << (gMotionOn.load() ? 1 : 0)
+      << " pipeline=" << gPipelineLatched.load() << " given=" << gMotionGiven.load() << " packed=" << gMotionPackedCount.load()
+      << " unshaped=" << gMotionUnshaped.load() << " noViews=" << gMotionNoViews.load() << " badViews=" << gMotionBadViews.load()
+      << " perDraw=" << gMotionPerDraw.load() << " separationUm=" << gSeparationUm.load() << "} counters=" << gCounterFirst.load()
+      << ',' << gCounterSecond.load() << " history=";
     if (gSavedWidth.load() == 0) {
         s << "none";
     } else {

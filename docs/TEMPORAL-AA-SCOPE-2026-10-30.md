@@ -213,6 +213,98 @@ The fix would be a per-eye copy of `$HDRTargetPrev`.
 - **`0xFD0260`**: noise seed.
 - **`0xFCDFA0`**: one-time history clear.
 
+## Known issue: world objects with motion vectors are wrong in the second eye (reported 2026-10-31, fixed in PreyVR-121, worn OK)
+
+PreyVR-113 did not finish the job above. On the wearer's report, the recycle symbol on the recycler is a
+different texture in each eye, and the left eye looks right.
+
+**Worn OK 2026-10-31: "Tested and confirmed working."** The fault was gone at once, so the wearer skipped the
+`taa.motion` A/B. The cause below is therefore a static reading backed by the fix working, not by turning it off
+and on. Before the fix, airlocks had become sharper in the left eye, the reverse of before PreyVR-113, as
+predicted. The other prediction didn't hold: they saw no smearing on enemies, and that's unexplained.
+
+Run `player-20261031-142929`, 86,440 frames:
+- `pipeline=2` and `perDraw=0`: objects compile once, as read statically.
+- `given=86436`, with 4 `noViews` for the run's 4 restarts, and `badViews=0`.
+- `separationUm=64941` against an IPD of 65,044 µm.
+- `packed` about 90 and `unshaped` about 5 per second eye. Those 5 were expected to be 0. They hold steady through
+  the run and aren't identified. They're packs whose `+0x220` isn't perspective-shaped, so they go out as Prey
+  built them, and they showed no effect in the headset.
+
+**The symptom.** The symbol is painted in the diffuse map only (`recycler_a_3_diff`; not in the normal or
+specular maps), so reflections and normal maps can't be the cause. The recycler and `airlock_a` are characters
+(`.cdf` with a `CA_SKIN` attachment).
+
+**Inference: the cause.** Both eyes draw one render view, and each object's constants are built once.
+- `SwitchUsageMode` (`0xEE82F0`) returns at once when the mode is unchanged. Only the switch to Reading (1)
+  runs `CompileModifiedRenderObjects` (`0xEE46D0`).
+- The mod holds back ReadingDone after the first submission, so the second submission's switch to Reading does
+  nothing. Objects compile once, inside the first eye's `RT_RenderScene`.
+- Compile runs `0xF001D0`, which stores previous world x previous view (`0xFD4570`) in the per-instance
+  constants. `DrawAsync` (`0xF00A90`) only binds that buffer.
+- The velocity shader then multiplies those constants by `CV_PrevViewProjMatr`, which is per eye.
+
+So the second eye computes each flagged object's previous position from the first eye's previous view. Its
+motion vector is a constant stereo disparity, even with the head and object still: focal 926 px x 65 mm IPD /
+distance, or about 60 px at 1 m and 30 px at 2 m. The resolve then reads history from that far away, and the
+neighbourhood clip only limits the damage in flat areas. First-person objects escape, because `0xFD4570` drops
+the view's translation for them. That is why the pistol was fixed.
+
+The error moved with PreyVR-113. Before it, compile read the view the second eye's post run had left, so the
+first (left) eye was wrong and the right eye "sharper", as reported. The lane's restore put the first eye's view
+there, so the error should now be in the second (right) eye.
+
+**Why still objects are flagged.** A character gets `FOB_MOTION_BLUR` when `ca_MotionBlurMovementThreshold`
+(default 0) is below its movement, the sum of `1 - |dot(q, prev q)|` over its joints (`0x82EE10`). An unmoved pose
+should give 0, but float rounding doesn't. A model of that arithmetic, not the game's own bones, gave movement
+above 0 for about 47 to 87% of poses, and exactly 0 for about 3 to 35%. Which objects are affected is then
+effectively arbitrary but stable per pose, which would fit "only certain objects". `0xFD4150` and `0xED8550`
+need the object within `r_MotionBlurMaxViewDist` (16 m at the default spec).
+
+**What this rests on.** `r_GraphicsPipeline` picks the path: 2 or more draws compiled objects, and below 2
+compiles per draw, per eye, in which case this reading is wrong. Its registered default is 2 and no config in the
+game or its paks sets it, and the worn run read 2 (`pipeline=` in `taaLane`). PreyVR-121 leaves the second eye
+alone below 2. Whether the recycler is flagged in a given pose hasn't been read.
+
+**Ruled out.**
+- `$VelocityObjects` is cleared each submission (`0xF3B070`).
+- The temporal-AA branches outside the resolve are the jitter, a global mip bias (default -0.25) and render target
+  setup. Each eye walks all four jitter samples.
+
+**The fix (built 2026-10-31, PreyVR-121).** For the second eye only, view-info `+0x220` becomes
+`V1^-1 x V2 x P` while it packs, restored after. That cancels the first eye's view from the constants, for one
+matrix a submission and no per-object work.
+- **`V1`** is the view the objects really compiled against: the lane reads the viewport's slot just before the
+  first submission, because by the second that eye has stored this frame's view.
+- **`V2`** is the second eye's own previous view, which the lane has just put back.
+- **The maths** (`preyvr/WorldMotion.h`) keeps the exact stored matrices, in doubles, rather than an IPD
+  estimate, so the rounding in `V1` cancels the rounding compiled into the constants. It's a full matrix, not a
+  row shift, in case the eyes are canted.
+- **The seam** is `NearViewStereo`'s pack, with the `+0x260` edit, under the same guards.
+
+It stands aside, and counts why, when a previous view is missing or isn't a view, when objects compile per draw,
+or when `+0x220` isn't perspective-shaped. All 15 gate rows must match, including the compile, the constants and
+the compiled draw. `taa.motion 0|1` turns it off and on for an A/B ([TUNING-COMMANDS](TUNING-COMMANDS.md)).
+
+Other velocity writers: the main view's G-buffer stage only draws compiled objects, so nothing there takes the
+per-draw `PI_MotionBlurData` path (`0xF1D0A0`), which would already hold the right view. Water reflections
+(`waterreflectionspass.cfi:294`) also read this constant, as a view-projection, which `+0x220` already isn't,
+so they should lose nothing. Raising `ca_MotionBlurMovementThreshold` would hide the idle cases only.
+
+**Tests.**
+- `world_motion`: at rest, moving, canted eyes, and 2 km from the origin.
+- `temporal_aa_lane`: the matrix is only offered to the second eye, from the compiled view, and is withheld for
+  each refusal.
+- `verify_temporal_aa.py`: 79 checks.
+
+**Headset checklist.**
+1. At the recycler, the symbol should match in both eyes. `taa.motion 0` should bring the difference back in the
+   right eye and `taa.motion 1` clear it, with no other change. That A/B is the proof of the cause.
+2. An airlock should look the same in both eyes.
+3. Move the head while looking at the recycler: no new smearing or swimming in either eye.
+4. The status line or `taa.report` should show `pipeline=2`, `given` and `packed` climbing, `unshaped` about 5 per
+   frame, `noViews` about one per restart, `badViews=0`, and `separationUm` near the IPD (about 65000).
+
 ## Phase 1 results (headset, 2026-10-30, PreyVR-106, run `player-20261030-150105`)
 
 **Worn OK: "It looks good, I like it."** `taa.vr 1` at 04:02:31, about 2.5 minutes of play:

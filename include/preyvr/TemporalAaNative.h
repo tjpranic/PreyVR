@@ -35,6 +35,15 @@ inline constexpr std::size_t RendererJitter=0xD70;
 // slot (0xFE5560 into 0xFD4570, from the instance setup 0xF001D0), the slot's
 // translation dropped for first-person (FOB_NEAREST) objects.
 inline constexpr std::size_t RendererPrevViews=0xAB0,RendererViewport=0x8060,PrevViewSlots=8,PrevViewSize=0x40;
+// Moving objects' constants (above) are built when they compile, and the view's
+// compile runs once: SwitchUsageMode (0xEE82F0) returns at once for an unchanged
+// mode, and only its switch to Reading runs 0xEE46D0, which compiles (0xEFFCD0)
+// into 0xF001D0. So the second eye's objects hold the first eye's previous view
+// (preyvr/WorldMotion.h). This is the latched r_GraphicsPipeline: from 2 the
+// passes draw those compiled objects (0xF8FD01), which only binds their constants
+// (0xF00A90); below it each pass compiles per draw, each eye against its own view.
+inline constexpr std::size_t RendererGraphicsPipeline=0x805C;
+inline constexpr int CompiledOncePipeline=2;
 // CRenderView::SetPreviousFrameCamera(view, const CCamera&) (R-064, view vtable
 // slot 9): add rcx,0x13E0, then CCamera::operator= (0x111C70). The view's
 // previous camera, which 0xFB1670 hands every pass that needs motion, is that
@@ -53,5 +62,10 @@ inline constexpr Contract Contracts[]={
     {0xFE7440,187,0xC1676179A7124364ull}, // PrevViewStore
     {0xFE5560,21,0x17A206F5BF784CB6ull}, // PrevViewSlot
     {0xF7EA90,138,0x73EFC2342254ECF9ull}, // SetViewport
+    {0xEE46D0,681,0x43D502367BF57B72ull}, // CompileObjects
+    {0xF001D0,1652,0xDCDF05B0D549FA3Full}, // InstanceConstants
+    {0xFD4150,373,0x61689218A57433D4ull}, // PrevWorld
+    {0xFD4570,2371,0x91387703389400CDull}, // PrevInViewSpace
+    {0xF00A90,500,0xC39940F2DB651CD3ull}, // DrawCompiled
 };
 }

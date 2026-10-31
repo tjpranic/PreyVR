@@ -176,7 +176,7 @@ void TestProbe()
     BothEyes();
     BothEyes();
     BothEyes();
-    Check(Logged("preyvr_taa result=0 detail=gate_ok rows=10"), "the gate opens on the ten bodies");
+    Check(Logged("preyvr_taa result=0 detail=gate_ok rows=15"), "the gate opens on the fifteen bodies");
     Check(Reports("gate=ok") && Reports("mode=1") && Reports("effective=1") && Reports("counter=106"),
           "mode, effective mode and the counter after three frames");
     Check(Reports("frames=3") && Reports("frameDelta=1:0,2:2,other:0"),

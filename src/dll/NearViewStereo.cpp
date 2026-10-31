@@ -7,10 +7,12 @@
 #include "MainRenderHook.h"
 #include "EyeRecords.h"
 #include "Logger.h"
+#include "TemporalAaLane.h"
 #include "preyvr/BodyDepth.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/NearMotion.h"
 #include "preyvr/StereoCamera.h"
+#include "preyvr/WorldMotion.h"
 
 #include <MinHook.h>
 
@@ -60,6 +62,10 @@ constexpr std::size_t kNearViewProjection = 0xA0;
 // here the projection +0xA0 is built from (0xFB2AC0 at 0xFB3DA7, 0xFB4280 at
 // 0xFB4EDA; tools/re/verify_temporal_aa.py).
 constexpr std::size_t kPreviousNearProjection = 0x260;
+// The world projection alone, sent as CV_PrevViewProjMatr (+0x220 to payload
+// +0x110, 0xFB5D9B): world motion vectors' previous positions go through it, and
+// the second eye moves it (preyvr/WorldMotion.h).
+constexpr std::size_t kPreviousWorldProjection = 0x220;
 // The world's view-projections the packer reads before it: translation-free
 // (packed to the per-view payload +0x00, CV_ViewProjZeroMatr) and with the
 // camera's translation (payload +0x50). The near VP goes to payload +0x90
@@ -437,6 +443,9 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
     float* const previousNear = reinterpret_cast<float*>(viewInfo + kPreviousNearProjection);
     float previousOriginal[16];
     bool previousShifted = false;
+    float* const previousWorld = reinterpret_cast<float*>(viewInfo + kPreviousWorldProjection);
+    float previousWorldOriginal[16];
+    bool previousWorldMoved = false;
     DepthSaved depthSaved{};
     bool edited = depth && RemapNearDepth(viewInfo, eye, depthSaved);
 
@@ -466,6 +475,20 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
         } else {
             gPreviousRefused.fetch_add(1, std::memory_order_relaxed);
         }
+        // The second eye's objects compiled against the first eye's previous view
+        // (preyvr/WorldMotion.h). Not moved twice: as with the near VP, a racing
+        // pack may have left it moved already.
+        float motion[16];
+        if (eye == 1 && TaaLaneSecondEyeMotion(motion) &&
+            !RowAlreadyWritten(static_cast<const void*>(previousWorld), eye, previousWorld + 12)) {
+            previousWorldMoved = nearmotion::LooksPerspective(previousWorld);
+            if (previousWorldMoved) {
+                std::memcpy(previousWorldOriginal, previousWorld, sizeof(previousWorldOriginal));
+                worldmotion::Follow(motion, previousWorldOriginal, previousWorld);
+                RememberWrittenRow(static_cast<const void*>(previousWorld), eye, previousWorld + 12);
+            }
+            TaaLaneMotionPacked(previousWorldMoved);
+        }
         RememberWrittenRow(static_cast<const void*>(viewInfo), eye, nearVp + 12);
         RecordLineage(static_cast<const void*>(viewInfo), original_ + 12, eye);
         gLastDeltaMicrometres.store(static_cast<int>(signed_ * 1.0e6f), std::memory_order_relaxed);
@@ -485,6 +508,9 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
     std::memcpy(nearVp, original_, sizeof(original_));
     if (previousShifted) {
         std::memcpy(previousNear, previousOriginal, sizeof(previousOriginal));
+    }
+    if (previousWorldMoved) {
+        std::memcpy(previousWorld, previousWorldOriginal, sizeof(previousWorldOriginal));
     }
     if (depthSaved.zero) {
         std::memcpy(viewInfo + kViewProjectionZero, depthSaved.zeroVp, sizeof(depthSaved.zeroVp));

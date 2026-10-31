@@ -6,9 +6,6 @@
 - DLSS (?)
 - Upscaling (?)
 - Foveated rendering (?)
-- Temporal AA seems to have a strange astigmatism; one eye (right) is sharper than the other
-    Looks like an environmental reflection texturing issue, possibly a depth issue.
-    I'm seeing different textures in each eye.
 
 ### UX/Immersion
 - Rotate to face direction (?)
@@ -42,6 +39,10 @@
     Grabs are only allowed with the left hand, will need to rethink how this works
 - Remove Q-Beam equip animation (?)
 - Hacking minigame doesn't display, it just shows a black screen
+- Arm IK should be biased to stay downwards
+    They tend to "chicken-wing" when I rotate my hands
+- Aim lasers should come out of my pointer fingers
+    This way it will handle like the weapon aiming
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -161,6 +162,8 @@
 - The player body renders over the top of everything
     > Prey drew the body, arms and weapon in its near pass, which is always in front of the world. PreyVR-91/92 drew the body in the world instead, which left the stun gun's charge sparks showing through the gun and its charge meter frozen. Since PreyVR-101 the body stays in the near pass and that pass gets the world's depth (`body.depth 1`; the old way is `body.depth 2`), so the weapon's effects, its display and the PDA stay with it. Setup's Near Clip Distance (3 cm) stops the view cutting into the body when you look down. Worn OK 2026-10-25 and 2026-10-28. See docs/BODY-FOLLOW.md, "How the body is drawn".
 - Temporal anti-aliasing
+- Temporal AA seems to have a strange astigmatism; one eye (right) is sharper than the other
+    > One eye was reading temporal history from the wrong place on animated models such as the recycler and airlocks. The mod draws one scene twice, and Prey builds each object's motion data once, for the first eye, so the second eye treated the gap between the eyes as motion. PreyVR-113 gave each eye its own previous view and fixed first-person objects, which moved the fault on world objects from the left eye to the right. PreyVR-121 corrects the right eye. Worn OK 2026-10-31. See docs/TEMPORAL-AA-SCOPE-2026-10-30.md.
 
 ---
 

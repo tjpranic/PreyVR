@@ -90,6 +90,10 @@ unsigned long long NearViewNoProvenanceCount();
 unsigned long long NearViewPreviousShiftedCount();
 unsigned long long NearViewPreviousRefusedCount();
 
+// The second eye also moves the world's previous projection (view-info +0x220),
+// in the same packs, because its objects compiled against the first eye's view
+// (preyvr/WorldMotion.h). TemporalAaLane supplies the move and counts the packs.
+
 // **One draw without the edit**, on the calling thread only: while set, the
 // packer forwards the near VP unedited. For DrawNear particle sprites in a
 // both-eyes frame, whose renderer already subtracts the eye camera
