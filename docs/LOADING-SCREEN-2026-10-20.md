@@ -71,7 +71,7 @@ Addresses and spans: [the address registry](ADDRESS_REGISTRY.md#loading-screen--
   - uploads the newest copy into slice 0 of the session's swapchain, the menu
     panel's image, under `gMutex`;
   - submits the menu panel (flat or curved, as menus are) with nothing behind it,
-    and the laser on it.
+    and, since 2026-10-31, no laser (see below).
 - **Where it goes.** On the game menu's panel:
   - loading from a menu, where that menu was;
   - otherwise placed in front of the wearer, as a menu opening is, and kept as the
@@ -127,7 +127,7 @@ Addresses and spans: [the address registry](ADDRESS_REGISTRY.md#loading-screen--
    - the loading screen should appear on the menu panel within about 0.1 s;
    - anything on it that moves on the desktop (progress, tips) should move in
      the headset too;
-   - the laser should follow the hand over it.
+   - there should be no laser (2026-10-31).
    The log shows `loading_screen captured size=…`, then `loading_screen shown …`,
    and at the end `loading_screen ended captures=… uploads=… frames=…`.
 3. **"Press any key"** should appear where the loading screen was, with no jump.
@@ -141,3 +141,21 @@ Addresses and spans: [the address registry](ADDRESS_REGISTRY.md#loading-screen--
    menu predicate change is one line to revert.
 7. Watch for a black or stuttering frame at the end of a load.
    `renderWaitMisses` in the minute status line should stay 0.
+
+## No laser on loading screens (2026-10-31)
+
+The wearer asked for the laser to go. Nothing on a loading screen takes a pointer. Built as PreyVR-123. **Headset,
+2026-10-31: confirmed working by the wearer.** Run `player-20261031-174704`: all 4 post-load prompts read as mode 3,
+each ended on a button in about 2 s, and the 1 real pause menu did not read as the prompt.
+
+- **The loading screen.** `ServiceHoldFrame` no longer gives it a laser. A stall over a menu keeps the one it was held
+  with, as [the hold-frame notes](LOADING-LASER-2026-10-17.md) describe.
+- **"Press any key".** Not a screen of its own: it is `DaniellePauseMenu` over the world on Prey's normal frames, so
+  the element alone cannot tell it from a pause. `ArkPauseMenu` keeps a mode at `+0x68` (setter `0x139D620`), and 3 is
+  this prompt. `HudRefreshMenuOpenState` reads it while that element is up, and `HudMenuTakesPointer` hides the laser
+  and stops its mouse events. If any gate fails it reads as no prompt: a laser, as before.
+- **It does not need the laser.** It ends on a button: there was no laser click in any of 54 post-load windows (last
+  30 runs), and it lasted anywhere from 1.5 to 11.7 s (last 50 runs), so no timer ends it.
+
+In the log: `preyvr_hud result=0 detail=load_prompt open=1`, then `open=0`. `tools/re/verify_loading_screen.py` checks
+the lookup, the vtable, the offset and the mode.

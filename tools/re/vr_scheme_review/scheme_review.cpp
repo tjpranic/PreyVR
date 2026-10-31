@@ -12,6 +12,7 @@ std::vector<Posted> posted;
 preyvr::dll::TrackingFrame tracked;
 bool focused = true;
 bool gameplay = true;     // no menu, and VR Options does not own the controllers
+bool hackingUp = false;   // the hacking minigame is the only menu up
 bool wheelOpen = false;   // Prey's weapon wheel (its focusmode map)
 bool zeroG = false;       // the player's movement state is Prey's zero-G one
 // Snap steps the torso lane was asked for: axis (0 pitch, 1 roll), signed degrees.
@@ -36,6 +37,7 @@ bool TryGetTrackingFrame(TrackingFrame& out) {
     return true;
 }
 bool HudGameplayInputAllowed() { return gameplay; }
+bool HudHackingInputAllowed() { return hackingUp; }
 bool InputPostDrivingThisThread() { return true; }
 DWORD SetInputPostEnabled(unsigned int) { return 0; }
 DWORD PostRawInputImmediate(int key, unsigned int, int value) {
@@ -97,6 +99,7 @@ void Reset() {
     using namespace preyvr::dll;
     focused = true;
     gameplay = true;
+    hackingUp = false;
     wheelOpen = false;
     zeroG = false;
     steps.clear();
@@ -344,6 +347,48 @@ int main() {
           "after it, a stick still pushed waits for centre");
     tracked = {}; Tick(); posted.clear(); Held();
     Check(Sent(locomotion::kKeyThumbLX, 800) && Sent(locomotion::kKeyThumbRX, turnMilli), "centred, it moves again");
+    tracked = {}; Tick();
+
+    // **The hacking minigame keeps the left stick, and only that** (UiMode.h): a
+    // menu to every other lane, with its cursor on xi_thumblx and xi_thumbly.
+    // Head-relative on, and no head pose (the setter's own release takes a frame).
+    Reset(); Tick(); SetHeadRelativeMovement(1); Tick(); posted.clear();
+    tracked.play.move = {0.6f, -0.8f}; Tick();
+    Check(!StickSent(), "positive control: in play, head-relative movement needs a head pose");
+    gameplay = false; hackingUp = true; Tick();
+    Check(Sent(locomotion::kKeyThumbLX, 600) && Sent(locomotion::kKeyThumbLY, -800),
+          "behind the minigame it is posted as it reads: turning the head cannot rotate the cursor");
+    gameplay = true; hackingUp = false; tracked = {}; Tick(); Tick();
+
+    Reset(); tracked = {}; Tick(); Tick();
+    gameplay = false; hackingUp = true;
+    tracked.play.move = {0.8f, 0.6f};
+    tracked.play.turn = {0.8f, 0.0f};
+    tracked.play.fire = 0.8f; tracked.play.firePressed = true;
+    posted.clear(); Tick();
+    Check(Sent(locomotion::kKeyThumbLX, 800) && Sent(locomotion::kKeyThumbLY, 600),
+          "the left stick reaches Prey from the minigame's first frame");
+    Tick();
+    posted.clear(); tracked.play.move = {-0.6f, 0.8f}; Tick();
+    Check(Sent(locomotion::kKeyThumbLX, -600) && Sent(locomotion::kKeyThumbLY, 800),
+          "and still follows the stick once the menu has settled");
+    Check(!Sent(locomotion::kKeyThumbRX, turnMilli) && !Sent(input::kTriggerR, 800) &&
+          !Sent(input::kTriggerRButton, 1000), "the right stick and the trigger stay off behind it");
+    playerInput.axes.moveX = playerInput.axes.moveY = 0.0f;
+    posted.clear(); Tick();
+    Check(!StickSent() && gReasserted[0] == 0 && gReassertRefused[0] == 0,
+          "the player map is off behind it: its stored axes are not a lost stick");
+    hackingUp = false; posted.clear(); Tick();
+    Check(ZeroFor(locomotion::kKeyThumbLX) && ZeroFor(locomotion::kKeyThumbLY), "a pause menu over it takes the stick back");
+    hackingUp = true; posted.clear(); Tick();
+    Check(Sent(locomotion::kKeyThumbLX, -600) && Sent(locomotion::kKeyThumbLY, 800), "and resuming gives it back");
+    gameplay = true; hackingUp = false; posted.clear(); Tick();
+    Check(ZeroFor(locomotion::kKeyThumbLX) && ZeroFor(locomotion::kKeyThumbLY) && !Sent(locomotion::kKeyThumbLX, -600),
+          "a stick still held as hacking ends is let go, so the player does not walk");
+    posted.clear(); Tick();
+    Check(!StickSent(), "and waits for centre");
+    tracked = {}; Tick(); posted.clear(); tracked.play.move = {0.8f, 0.6f}; Tick();
+    Check(Sent(locomotion::kKeyThumbLX, 800), "centred, it walks again");
     tracked = {}; Tick();
 
     xrframe::FrameContract contract;

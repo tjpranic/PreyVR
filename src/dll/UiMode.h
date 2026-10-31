@@ -30,6 +30,16 @@ bool HudGameplayShown();
 // HudGameplayShown, and VR Options does not own the controllers: what every
 // gameplay input lane waits for.
 bool HudGameplayInputAllowed();
+// **The hacking minigame is the only menu up**, the state is known, and VR Options
+// does not own the controllers. It counts as a menu in everything above: its movie
+// is on the panel, and play's buttons and right stick are off. But its cursor flies
+// on Prey's analog left stick, which the navigator's D-pad taps cannot send, so the
+// move lane keeps posting that stick for it (docs/HACKING-MINIGAME-2026-10-31.md).
+bool HudHackingInputAllowed();
+// False over a menu with nothing to point at: hacking alone, or the "press any
+// key" prompt after a load (docs/LOADING-SCREEN-2026-10-20.md). The laser is hidden
+// there, and its mouse events stop.
+bool HudMenuTakesPointer();
 unsigned long long HudMenuStateSampleCount();
 
 } // namespace preyvr::dll

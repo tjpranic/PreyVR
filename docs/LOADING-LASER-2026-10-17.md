@@ -1,5 +1,9 @@
 # The laser during loads: hold frames
 
+**2026-10-31:** Prey's loading screen no longer has a laser
+([why](LOADING-SCREEN-2026-10-20.md#no-laser-on-loading-screens-2026-10-31)). Hold frames still bring the laser along
+when Prey stalls over a menu.
+
 Status, 2026-10-17:
 - **Headset run (`player-20261017-104010`): the laser followed the hand through a
   10.5 s load** (933 hold frames, about 89 a second) and two short stalls.

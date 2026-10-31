@@ -616,8 +616,11 @@ void UpdateXrInput(void* sessionHandle, void* spaceHandle, long long predictedDi
         }
 
         input::ModalMenuState menu;
-        menu.stickX = frame.menu.navigate.x;
-        menu.stickY = frame.menu.navigate.y;
+        // No D-pad taps behind hacking: the default map's ui_up and the like
+        // stay bound, and its cursor is on the move lane's stick (UiMode.h).
+        const bool navigates = !HudHackingInputAllowed();
+        menu.stickX = navigates ? frame.menu.navigate.x : 0.0f;
+        menu.stickY = navigates ? frame.menu.navigate.y : 0.0f;
         menu.accept = frame.menu.confirm;
         menu.cancel = frame.menu.back;
         // Short menu taps / long options holds share one tested owner. Menu

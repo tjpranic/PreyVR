@@ -173,13 +173,13 @@ bool ServiceHoldFrame()
 
     // **The loading screen** (CaptureXrLoadingScreen): while Prey's loading loop
     // runs, its latest image on the game menu's panel in place of the frame held
-    // from before the load, with nothing behind it, and the laser on it.
+    // from before the load, with nothing behind it. No laser: nothing on it
+    // takes a pointer. A stall over a menu keeps the laser it was held with.
     const bool loading=LoadingScreenWaiting() && haveViews && PlaceLoadingPanel(views) && UploadLoadingScreen();
     FrameLayerSet set=loading?FrameLayerSet{}:gHost.heldLayers;
-    HeldPointer heldPointer=gHost.heldPointer;
+    const HeldPointer heldPointer=loading?HeldPointer{}:gHost.heldPointer;
     if(loading) {
-        heldPointer={true,*gHost.menuPanel};
-        FillMenuLayer(set.menu,heldPointer.surface,gHost.swapchain,0);
+        FillMenuLayer(set.menu,*gHost.menuPanel,gHost.swapchain,0);
         set.shown.menu=true;
     }
     set.shown.beam=set.shown.cursor=false;

@@ -440,7 +440,9 @@ void ServiceXrFrame(void* renderer)
         PublishUiPointer(nullptr,0,0,0);
         if(gHost.pointerReady){pointer=OptionsPointer(options.surface);heldPointer={true,options.surface};}
     } else {
-        const bool menuPointer=panelActive&&rendered&&gHost.pointerReady&&!VrOptionsInputOwned();
+        // Without its mouse events a hidden laser cannot pull Prey off the pad's
+        // scheme, which would stop hacking's left stick (UiMode.h).
+        const bool menuPointer=panelActive&&rendered&&gHost.pointerReady&&!VrOptionsInputOwned()&&HudMenuTakesPointer();
         pointer=PublishUiPointer(menuPointer?&surface:nullptr,gHost.width,gHost.height,gHost.surfaceSerial);
         if(menuPointer)heldPointer={true,surface};
     }

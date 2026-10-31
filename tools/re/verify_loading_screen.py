@@ -11,7 +11,10 @@ definition, then confirms in the image:
   once after;
 - gfx_loadtimethread is registered with default 1, so the loop is the default;
 - FlashUI's loading element is named "DanielleLoadingScreen", the name HudBridge
-  asks for.
+  asks for;
+- "press any key" is ArkPauseMenu's mode 3, read the way Prey's own callers reach
+  that object, so HudBridge can tell it from a pause (no laser there);
+- the mode comes from DaniellePauseMenu, the element HudBridge polls first.
 No game access. Usage: verify_loading_screen.py [path to PreyDll.dll]
 """
 import re
@@ -32,6 +35,15 @@ DEFERRAL_RVA = 0xFE9D0A
 # After the loop: if +0x44, clear it and call vtable +0x8D0 once.
 REPLAY_RVA = 0xFE9A1E
 GFX_LOADTIMETHREAD_RVA = 0x2D40A1  # lea rdx,"gfx_loadtimethread"; the help text and default precede it
+# ArkPauseMenu: its name as Prey's callers look it up, and the UI manager's lookup.
+PAUSE_NAME_RVA, UI_MODULE_BY_NAME_RVA, PAUSE_MODULE_VTABLE_RVA = 0x1E00AF0, 0x182C080, 0x1E2DB78
+PAUSE_LOOKUPS = {0x119D561: 7, 0x158528F: 7, 0x11EDFE9: 7, 0x182E8D6: 10}  # lea rdx,name ... call: offset of the call
+PAUSE_CTOR_VTABLE_RVA = 0x139AB46  # lea rax,vtable, then at 0x139AB51 mov [rdi+0x20],rax
+PAUSE_GET_NAME_RVA = 0x139BD40
+MODE_SETTER_STORE_RVA = 0x139D7B1  # mov [rbx+0x68],edi
+MODE_THREE_CHECK_RVA = 0x139C5C2   # cmp [rbx+0x40],3, on the object's +0x28: its +0x68
+PRESS_ANY_KEY_RVA = 0x139C829      # lea r8,"@ui_PressAnyKey", in the same function
+PROMPT_SHOW_RVA = 0x139D6A9        # lea rdx,"Play_Show_ContinuePrompt", in the setter
 
 
 def gate_from_source(text):
@@ -104,6 +116,43 @@ def verify(path):
     if '"DanielleLoadingScreen",' not in HUD_SOURCE.read_text(encoding="utf-8"):
         raise ValueError("HudBridge does not ask for DanielleLoadingScreen")
     checks.append("element=DanielleLoadingScreen")
+
+    hud = HUD_SOURCE.read_text(encoding="utf-8")
+    hud_code = byte_arrays(hud)["kUiModuleByNameCode"]
+    if image.at(UI_MODULE_BY_NAME_RVA, len(hud_code)) != hud_code:
+        raise ValueError("Gate mismatch: kUiModuleByNameCode")
+    for constant, value in (("kUiModuleByNameRva", UI_MODULE_BY_NAME_RVA),
+                            ("kPauseModuleVtableRva", PAUSE_MODULE_VTABLE_RVA)):
+        if f"{constant} = 0x{value:X};" not in hud:
+            raise ValueError(f"HudBridge's {constant} differs")
+    if image.cstring(PAUSE_NAME_RVA) != "ArkPauseMenu":
+        raise ValueError("ArkPauseMenu's name moved")
+    for rva, call in PAUSE_LOOKUPS.items():
+        if (image.at(rva, 3) != bytes.fromhex("488d15") or image.rip_target(rva, 7, 3) != PAUSE_NAME_RVA
+                or image.call_target(rva + call) != UI_MODULE_BY_NAME_RVA):
+            raise ValueError(f"Prey's lookup at 0x{rva:X} differs")
+        # 0x182E8D6 reads gGame between the call and the test.
+        after = image.at(rva + call + 5, 0x18)
+        if bytes.fromhex("4885c0") not in after or (
+                bytes.fromhex("4883c0e0") not in after and bytes.fromhex("488d48e0") not in after):
+            raise ValueError(f"The lookup at 0x{rva:X} does not take the object at -0x20")
+    if (image.rip_target(PAUSE_CTOR_VTABLE_RVA, 7, 3) != PAUSE_MODULE_VTABLE_RVA
+            or image.at(0x139AB51, 4) != bytes.fromhex("48894720")):
+        raise ValueError("The constructor does not put that vtable at +0x20")
+    if image.vtable_target(PAUSE_MODULE_VTABLE_RVA + 8) != PAUSE_GET_NAME_RVA or (
+            image.rip_target(PAUSE_GET_NAME_RVA, 7, 3) != PAUSE_NAME_RVA or image.at(PAUSE_GET_NAME_RVA + 7, 1) != bytes.fromhex("c3")):
+        raise ValueError("That vtable's name slot is not ArkPauseMenu's")
+    if "kPauseModuleMode = 0x48;" not in hud or image.at(MODE_SETTER_STORE_RVA, 3) != bytes.fromhex("897b68"):
+        raise ValueError("The mode is not at the object's +0x68")
+    if (image.at(MODE_THREE_CHECK_RVA, 4) != bytes.fromhex("837b4003")
+            or image.cstring(image.rip_target(PRESS_ANY_KEY_RVA, 7, 3)) != "@ui_PressAnyKey"
+            or image.cstring(image.rip_target(PROMPT_SHOW_RVA, 7, 3)) != "Play_Show_ContinuePrompt"
+            or "kContinuePromptMode = 3;" not in hud):
+        raise ValueError("Mode 3 is not the continue prompt")
+    listed = re.search(r"kMenuElements\[\] = \{\s*\"(\w+)\"", hud)
+    if listed is None or listed.group(1) != "DaniellePauseMenu" or "kPauseMask = 1u;" not in hud:
+        raise ValueError("DaniellePauseMenu is not the first element HudBridge polls")
+    checks.append("prompt=ArkPauseMenu+0x68==3")
     return checks
 
 

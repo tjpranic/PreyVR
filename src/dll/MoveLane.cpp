@@ -431,6 +431,17 @@ void UpdateMoveLane()
         if (!awaitNeutral) { gMenuTook.fetch_add(1, std::memory_order_relaxed); }
         awaitNeutral=true;
     }
+    // **The hacking minigame keeps this stick** (UiMode.h), posted as it reads:
+    // its cursor is flown on xi_thumblx/xi_thumbly. Only this lane: gSticksPlay
+    // stays false, so the turn lane leaves the player alone behind the panel,
+    // and awaitNeutral stays armed, so a stick held as hacking ends does not walk.
+    const bool hacking = HudHackingInputAllowed();
+    static bool wasHacking=false;
+    if (hacking != wasHacking) {
+        wasHacking = hacking;
+        Log(std::string("result=0 detail=hacking_stick active=") + (hacking ? "1" : "0") +
+            " posted=" + std::to_string(gPosted.load(std::memory_order_relaxed)));
+    }
 
     // The move action (the LEFT stick by default) moves, matching
     // `xi_thumblx`/`xi_thumbly` and every mod in the fleet survey.
@@ -440,17 +451,17 @@ void UpdateMoveLane()
     const auto movementReference=HeadTrackingReferenceGeneration();
     TrackingFrame movementFrame{};
     unsigned release = kReleaseCount;   // none
-    bool hold = gMenuFlagFrame;
+    bool hold = gMenuFlagFrame && !hacking;
     if (!active || neutralize) { release = kReleaseOff; hold = false; }
-    else if (!gSticksPlay) { release = kReleaseMenu; }
+    else if (!gSticksPlay && !hacking) { release = kReleaseMenu; }
     else if (!hold && !TryGetTrackingFrame(movementFrame)) { release = kReleaseRead; }
     bool haveInput = release == kReleaseCount && !hold;
     if(haveInput) state=movementFrame.play.move;
-    if (haveInput && awaitNeutral) {
+    if (haveInput && awaitNeutral && !hacking) {
         if (std::fabs(state.x)<=.15f && std::fabs(state.y)<=.15f) awaitNeutral=false;
         else { haveInput=false; release=kReleaseCentre; }
     }
-    if(haveInput && gHeadRelative.load()) {
+    if(haveInput && gHeadRelative.load() && !hacking) {
         const auto yaw=stereo::RecenterYawFromHeadPose(movementFrame.head);
         if(!yaw || !IsPoseUsable(movementFrame.head,movementFrame.headValidity,kMaxPoseAgeNs)) {
             haveInput=false; release=kReleaseHead;
@@ -523,7 +534,9 @@ void UpdateMoveLane()
         gStick = candidate;
         if (gStick.LastSentX() == 0 && gStick.LastSentY() == 0) { gMoveMayBeHeld = false; }
     }
-    ReassertHeld(0, 1);
+    // The player map is off behind the minigame: its stored axes do not follow
+    // these posts, so a read-back would call every frame a lost stick.
+    if (!hacking) { ReassertHeld(0, 1); }
 }
 
 void UpdateTurnAndFireLanes()

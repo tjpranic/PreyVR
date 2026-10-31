@@ -2741,3 +2741,34 @@ Static, `tools/re/verify_body_depth.py` (94 checks); worn OK on PreyVR-101 (`bod
   `0x243A688`; gate `0x1F91E0`, six callers, all 3D-engine nodes) are not the near/world difference.
 
 See [how the body is drawn](BODY-FOLLOW.md#how-the-body-is-drawn).
+
+### 2026-10-31 addendum -- the no-world flag and the hacking minigame
+
+Static, `tools/re/verify_hacking_ui.py`. See [HACKING-MINIGAME-2026-10-31.md](HACKING-MINIGAME-2026-10-31.md).
+
+- `0x224DC2B` (`gEnv+0x2AB`), the no-world flag. `CSystem::Render` tests it at `0xE0BAC7` and skips `RenderWorld`;
+  `PrepareOcclusion` (`0x20DA20`) skips too. Writers: hacking (`0x1623100`, `0x1623820`, `0x1623B30`, `0x1626760`) and
+  the PDA (`0x16369D0`, `0x1637430`, `0x163BCA0`, `0x163CFF0`), no others. The black 800x600 `Draw2dImage` in
+  `CSystem::Render` is the origin-camera branch, not this one.
+- `ArkHackingUI`, element `DanielleHacking2` (`0x1E63F28`), at `+0x138` of the object `0x119A3A0` returns. Open `0x1626370`: listener,
+  input mode 7 (`hacking`, token `+0x94`), `SetVisible(1)`, `hackingOpen`. Update `0x1627E70`, state `+0xF0`. Way out
+  `0x1623820`, also the movie's `closeCompleted`. Paused by system events `0x34`/`0x35` (`0x1626300`, `setPaused`).
+- `0x1626CD0` takes the actions: `hack_moveprompt_x` to `+0x48`, `_y` negated to `+0x4C`, the keyboard's four to
+  `+0x50`/`+0x54`; a prompted `hack_final1-4` compares `+0x60`, a wrong one is `obstacleHit` plus a stun. The update
+  reads `+0x50` instead of `+0x48` when the UI scheme (`[gGame]+0x1A8 +0x28`) is 2. Action names at the table's
+  `+0xA30..+0xA78` (constructor `0x1706DA0`).
+
+### 2026-10-31 addendum -- ArkPauseMenu's mode and "press any key"
+
+Static, `tools/re/verify_loading_screen.py`. See
+[LOADING-SCREEN-2026-10-20.md](LOADING-SCREEN-2026-10-20.md#no-laser-on-loading-screens-2026-10-31).
+
+- `CUIManager` `0x182C080(ui, name)`: a name-to-module map (`+0x68`), `[gGame]+0x1A8` being the manager. `ArkPauseMenu`
+  comes back as the object's `+0x20`: Prey's callers `0x119D561`, `0x158528F`, `0x11EDFE9`, `0x182E8D6` each take the
+  object at `-0x20`.
+- ArkPauseMenu, constructor about `0x139AB00`: vtables `+0x18` `0x1E2DB60`, `+0x20` `0x1E2DB78` (slot `+8` = `0x139BD40`,
+  its name), `+0x28` `0x1E2DBA8`, `+0x30` `0x1E2DBB8`. Element `+0x60`, mode `+0x68`, requested mode `+0x6C`.
+- Mode setter `0x139D620`. 3 plays `Play_Show_ContinuePrompt` and runs `continueOpen`; `0x139C590`, the scheme listener
+  on `+0x28`, shows `@ui_PressAnyKey` while it is 3. `0x139BA30` plays the close. `0x139D4D0` clears the mode; a request
+  of 3 still pending reopens through `UIMenuEvents`.
+- `ArkPlayer::Update` requests mode 3 at `0x15852A9` while the player's `+0x188A` is set.

@@ -101,12 +101,13 @@ Seen 2026-09-10 (twice, before dual stereo existed) and 2026-10-17.
 **The order in a frame.** `CCryAction::PostUpdate` (`0x5C6BA0`) calls
 `PrepareOcclusion(m_ViewCamera)` (`C3DEngine` vtable `+0x40` = `0x20DA10`) and
 then `CSystem::Render`. Both skip:
-- while the `gEnv+0x2AB` no-world flag is set (the pause menu sets it);
+- while the `gEnv+0x2AB` no-world flag is set (only the PDA and the hacking
+  minigame set it);
 - while the camera is within 0.05 of the origin.
 
 The prepare also needs `cvars+0x1A4`.
 
-**What goes wrong.** On the frame a pause menu closes:
+**What goes wrong.** On the frame the PDA closes:
 - the flag is still set at the prepare and clear at the render, about 4 ms later;
 - so the prepare is skipped and the render is not, and `CullStart` parks in 3;
 - that frame's batch stays queued;
@@ -146,10 +147,15 @@ vtable. That is the engine's own call, a little later in the same frame.
 - **Log:** `installed`, `guard value=`, and the first 8 `kick_failed` lines.
 
 **In the field.**
-- In its first headset run (2026-10-21) it paired a refused pause-menu close, and
-  the culler never fell behind.
+- In its first headset run (2026-10-21) it paired a refused close, and the culler
+  never fell behind.
 - In the 61 runs since, it kicked 10 times, each on that same frame (the
   engine's prepare skipped by the no-world flag).
+- **Correction, 2026-10-31:** this section called those closes the pause menu's.
+  The flag's only writers are the PDA and hacking
+  ([tools/re/verify_hacking_ui.py](../tools/re/verify_hacking_ui.py)), and in the
+  last 40 runs 30 of the 34 logged refusals follow a PDA close; the other 4 were
+  one hacking session.
 
 ### If it recurs
 1. Keep the run's `error.dmp`, `error.log` and `Game.log`. The launcher copies
@@ -424,7 +430,7 @@ preyvr_frame_probe window=1 summary main=312ms(render_enter->render_exit) render
 - `preyvr_frame_probe result=0 detail=recording value=1 trigger=hold_stall`;
 - `preyvr_cull_prepare … detail=installed`, then `guard value=1`.
 
-**While playing:** close a pause menu or two. `cull.prepare` should then show
+**While playing:** close the PDA once or twice. `cull.prepare` should then show
 `kicks` and `kickFailed=0`. A freeze leaves a `preyvr_frame_probe window=…` block.
 
 **At the next launch:** the launcher prints `Kept the last session's Game.log

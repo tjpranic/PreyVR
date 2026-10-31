@@ -135,6 +135,8 @@ using IsVisibleFn = bool(__fastcall*)(void*);
 // on the XR frame service and must not enter Scaleform there -- the same reason
 // `hud.call` is queued -- so the predicate is a value, not a call.
 std::atomic<bool> gMenuOpen{false};
+std::atomic<bool> gHackingOpen{false};
+std::atomic<bool> gLoadPromptOpen{false};
 std::atomic<unsigned long long> gMenuEpoch{1};
 std::atomic<unsigned long long> gMenuStateSamples{0};
 std::atomic<std::uint64_t> gMenuStamp{0};
@@ -517,8 +519,9 @@ namespace {
 // table; a name that does not resolve simply contributes nothing, which is the
 // honest behaviour for an element that is not loaded rather than a reason to
 // fail the whole predicate.
+constexpr const char* kHackingElement = "DanielleHacking2"; // target string RVA 0x1E63F28
 constexpr const char* kMenuElements[] = {
-    "DaniellePauseMenu",
+    "DaniellePauseMenu",         // keep it first
     "DanielleShell",
     "DanielleOptions",
     "DanielleSaveLoad",
@@ -529,7 +532,56 @@ constexpr const char* kMenuElements[] = {
     "DanielleLoadingScreen",     // target string RVA 0x1CB49E0
     "DanielleDialog",            // native modal dispatcher 0x1632857
     "DanielleDialogInGame",
+    // Like the PDA, hacking hides the world behind it (the no-world flag), so
+    // the panel is all that frame has to show: unlisted, the headset got no
+    // layers at all (docs/HACKING-MINIGAME-2026-10-31.md). Keep it last.
+    kHackingElement,
 };
+constexpr unsigned kPauseMask = 1u;
+constexpr unsigned kHackingMask = 1u << (std::size(kMenuElements) - 1);
+
+// **"Press any key" after a load is the pause menu**: DaniellePauseMenu over the
+// world, in a mode of its own. A button ends it, so a laser has nothing to do
+// there, and only that mode tells it from a pause, which needs one.
+// ArkPauseMenu keeps the mode at +0x68: one setter (0x139D620), and 3 is the mode
+// that plays Play_Show_ContinuePrompt and runs continueOpen. The UI manager's
+// lookup hands back the object's +0x20, as each of Prey's own callers takes it
+// (0x119D561, 0x158528F, 0x11EDFE9, 0x182E8D6), and the constructor puts
+// kPauseModuleVtableRva there. tools/re/verify_loading_screen.py checks all of it.
+constexpr std::uintptr_t kGameRva = 0x2C16840;
+constexpr std::uintptr_t kGameUiManager = 0x1A8;
+constexpr std::uintptr_t kUiModuleByNameRva = 0x182C080;
+constexpr std::uint8_t kUiModuleByNameCode[] = {
+    0x48,0x89,0x5C,0x24,0x08,0x48,0x89,0x6C,0x24,0x10,0x48,0x89,0x74,0x24,0x18,0x57,
+    0x48,0x83,0xEC,0x20,0x48,0x8D,0x35,0xA1,0x0F,0xA2,0x00};
+constexpr std::uintptr_t kPauseModuleVtableRva = 0x1E2DB78;
+constexpr std::uintptr_t kPauseModuleMode = 0x48; // +0x68 from the object
+constexpr std::int32_t kContinuePromptMode = 3;
+using UiModuleByNameFn = void*(__fastcall*)(void*, const char*);
+
+void* CallUiModuleByName(std::uintptr_t address, void* ui, const char* name)
+{
+    __try {
+        return reinterpret_cast<UiModuleByNameFn>(address)(ui, name);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return nullptr;
+    }
+}
+
+// False for anything unexpected, which only leaves the laser where it was.
+bool LoadPromptUp(std::uintptr_t base)
+{
+    if (!BytesMatch(reinterpret_cast<const std::uint8_t*>(base + kUiModuleByNameRva), kUiModuleByNameCode,
+                    sizeof(kUiModuleByNameCode))) { return false; }
+    const std::uintptr_t game = ReadPointer(base + kGameRva);
+    const std::uintptr_t ui = game != 0 ? ReadPointer(game + kGameUiManager) : 0;
+    if (ui == 0) { return false; }
+    const auto module = reinterpret_cast<std::uintptr_t>(
+        CallUiModuleByName(base + kUiModuleByNameRva, reinterpret_cast<void*>(ui), "ArkPauseMenu"));
+    if (module == 0 || ReadPointer(module) != base + kPauseModuleVtableRva) { return false; }
+    std::int32_t mode = 0;
+    return SafeRead(module + kPauseModuleMode, mode) && mode == kContinuePromptMode;
+}
 
 void* ResolveNamedElement(std::uintptr_t base, const char* name)
 {
@@ -592,6 +644,12 @@ DWORD HudRefreshMenuOpenState()
     // load screen or an early frame would look exactly like gameplay and re-arm
     // the D-pad taps this predicate exists to suppress.
     if (!anyAnswered) { return 7; }
+    // Alone: a pause menu or a dialog over the minigame wants its stick back.
+    gHackingOpen.store(visibleMask == kHackingMask, std::memory_order_release);
+    const bool loadPrompt = (visibleMask & kPauseMask) != 0 && LoadPromptUp(base);
+    if (gLoadPromptOpen.exchange(loadPrompt, std::memory_order_acq_rel) != loadPrompt) {
+        Log(std::string("result=0 detail=load_prompt open=") + (loadPrompt ? "1" : "0"));
+    }
     if(gMenuOpen.exchange(anyVisible,std::memory_order_acq_rel)!=anyVisible) {
         gMenuEpoch.fetch_add(1);
         // Which element opened it, so a flag that flickers in play can be
@@ -648,6 +706,14 @@ unsigned long long HudMenuEpoch() { return gMenuEpoch.load(std::memory_order_acq
 bool HudMenuStateKnown() { return FreshSample(MonotonicNanoseconds(), gMenuStamp.load()); }
 bool HudGameplayShown() { return HudMenuStateKnown() && !HudMenuIsOpen(); }
 bool HudGameplayInputAllowed() { return !VrOptionsInputOwned() && HudGameplayShown(); }
+bool HudHackingInputAllowed()
+{
+    return !VrOptionsInputOwned() && HudMenuStateKnown() && gHackingOpen.load(std::memory_order_acquire);
+}
+bool HudMenuTakesPointer()
+{
+    return !gHackingOpen.load(std::memory_order_acquire) && !gLoadPromptOpen.load(std::memory_order_acquire);
+}
 unsigned long long HudMenuStateSampleCount()
 {
     return gMenuStateSamples.load(std::memory_order_relaxed);

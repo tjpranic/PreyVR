@@ -37,6 +37,9 @@ layout wherever VR leaves one free.
 
 Release a held stick, trigger, or button after closing a menu before using it in gameplay. This prevents an inventory input from immediately moving, turning, firing, or jumping.
 
+The hacking minigame opens on the menu panel. Steer with the left stick, and press the button it asks for at each
+target. There is no laser, and the right stick does nothing.
+
 For two-handed aiming, bring your left hand to the weapon's foregrip and squeeze
 the left grip. Keep it squeezed while aiming with both hands; release to return
 smoothly to one hand. A squeeze away from the weapon does nothing. With the pistol
@@ -331,7 +334,7 @@ The launcher migrates the old, unversioned **2560 × 1440** default once, backin
 
 Both eyes are rendered from the same game frame by default (`DualStereo: 1`). `DualStereo: 0` (or launching with `-DualStereo 0`, which is also saved) returns to the earlier method that renders one eye per frame; it shows doubled edges when you or the scene move. Use it only to check whether a problem belongs to the both-eyes method, and report what you find. Fades, markers and anything else Prey draws over the world are drawn into both eyes; `dual.overlay 0` in **Tune Prey VR.cmd** leaves them in the right eye only, for comparison, and `dual.overlay 1` restores them. Once VR is ready, the launcher prints which method is running. If the both-eyes method is unavailable, it says so and Prey continues with alternate eyes.
 
-While Prey loads, it draws only its loading screen, outside its normal frames, so the mod shows that screen on the menu panel and keeps the laser following your hand ([the hold-frame notes](LOADING-LASER-2026-10-17.md), [the loading-screen notes](LOADING-SCREEN-2026-10-20.md)). That needs Direct3D's thread protection on for the whole session, which may cost a little frame rate. `xr.hold 0` in **Tune Prey VR.cmd** turns both off for this session (loads show the frame from before them again, with the laser frozen); `xr.hold 1` turns them back on.
+While Prey loads, it draws only its loading screen, outside its normal frames, so the mod shows that screen on the menu panel, with no laser, then "press any key" after it, where any button continues. If Prey stalls over a menu, the laser keeps following your hand ([the hold-frame notes](LOADING-LASER-2026-10-17.md), [the loading-screen notes](LOADING-SCREEN-2026-10-20.md)). That needs Direct3D's thread protection on for the whole session, which may cost a little frame rate. `xr.hold 0` in **Tune Prey VR.cmd** turns both off for this session (loads show the frame from before them again, with the laser frozen); `xr.hold 1` turns them back on.
 
 ## Recovery and support
 

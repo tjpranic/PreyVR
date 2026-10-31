@@ -38,11 +38,14 @@
 - Can't grab when two-handing weapons
     Grabs are only allowed with the left hand, will need to rethink how this works
 - Remove Q-Beam equip animation (?)
-- Hacking minigame doesn't display, it just shows a black screen
+    Maybe all weapon draw animations should be disabled?
+    Wrench draw animation is already disabled.
 - Arm IK should be biased to stay downwards
     They tend to "chicken-wing" when I rotate my hands
 - Aim lasers should come out of my pointer fingers
     This way it will handle like the weapon aiming
+- The in-game cutscenes show on a flat plane but it needs to be adjusted downward a bit
+    The first-time Typhon neuromod usage trigger 3 of these cutscenes in a row. it also causes the game to pause between each cutscene.
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -68,7 +71,6 @@
     It makes them hard to see. They need to be moved a little closer in.
 - Left hand laser doesn't hit at surface of objects unlike the right hand aim laser (?)
     Only sometimes? This might be intentional? Will need to investigate.
-- Disable aim laser on loading screen
 - Will need to adjust UI element depths
 - 2D marker (objective, repair etc.) position jitter a lot
     They need some smoothing
@@ -125,6 +127,10 @@
 - The hand lasers start outside of player hands
     They seem to begin out of nowhere. Something like a fade in along the length (like when the laser fades out in menus when it's not hitting a surface) would make them look a bit nicer.
     The lasers also render over the top of everything.
+- Hacking minigame doesn't display, it just shows a black screen
+    > Prey hides the world behind the minigame, as it does for the PDA, and the mod didn't count it as a menu, so the headset got no image at all. It now opens on the menu panel, the left stick flies the cursor and there's no laser. PreyVR-122, worn OK 2026-10-31. See docs/HACKING-MINIGAME-2026-10-31.md.
+- Disable aim laser on loading screen
+    > The loading screen no longer has a laser, and neither does "press any key" after it. That prompt is Prey's pause menu in a mode of its own, so the mod reads the mode, and a real pause keeps its laser. PreyVR-123, worn OK 2026-10-31. See docs/LOADING-SCREEN-2026-10-20.md.
 - Psychoscope zoom is broken
     > Prey zooms by narrowing the view's FOV, and the mod told the headset the true FOV of each frame, so the image covered less of the lens instead of magnifying. Zoomed frames are now declared at the FOV slider's frustum, with the eyes moved closer by the zoom, and the world reticle and wrist card follow the magnified image. Every zoom in the game goes through this. PreyVR-120, worn OK 2026-10-31. See docs/PSYCHOSCOPE-ZOOM-SCOPE-2026-10-31.md.
 
