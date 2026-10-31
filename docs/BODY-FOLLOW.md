@@ -23,8 +23,7 @@ Kept separate, because their main subject is something else:
   the torso, the reach, the elbow, the Arm Length option.
 - [COMFORT-CONTROLS-2026-09-19.md](COMFORT-CONTROLS-2026-09-19.md): snap and smooth turning,
   recenter and the calibrated height. Where it says the snap pivots about the head, it is
-  superseded by [rule 1](#when-the-body-is-turned-and-why). A receipt pins its bytes, so it is not
-  edited.
+  superseded by [rule 1](#when-the-body-is-turned-and-why).
 - [BODY-EQUIPMENT-2026-09-27.md](BODY-EQUIPMENT-2026-09-27.md) and
   [PSI-MEDKIT-2026-09-30.md](PSI-MEDKIT-2026-09-30.md): the holster and medkit slots. Both describe
   a torso of their own (a 45° deadband, at most 90°/s); since 2026-10-24 that is only the fallback

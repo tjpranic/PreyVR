@@ -4,8 +4,8 @@
 // an engine function. Each row is {rva, size, hash}: the FNV-1a 64 hash of the
 // function's `size` bytes at that RVA.
 //
-// The tables stay in the *Native.h headers, each with its own row type: several
-// of those headers are pinned by receipts, so the shared part is only the check.
+// The tables stay in the *Native.h headers, each with its own row type, so the
+// shared part is only the check.
 #include <cstddef>
 #include <cstdint>
 

@@ -38,32 +38,12 @@ Line numbers are as of commit 8c07a51, before the section A fixes. Files those f
   - **A9:** a malformed command value keeps falling back to a default; it is not refused. B9 keeps today's fallbacks.
   - **Engine calls:** guard them with SEH (the `CallX` style). B6's shared wrappers are guarded. NearFovOverride's unguarded call to the engine's original is a detour forwarding, not a wrapper, and is not changed.
 - **Not started:** B6–B11, D3, D4, E4, E5 and E7.
-- **Receipt pins (checked 2026-10-18).** These files have their committed content pinned by a receipt; edit none of them:
-  - `include/preyvr/{Equipment,NativeWrist,PsiMedkit,Psychoscope}Native.h`
-  - `src/dll/NativeHudValue.h`
-  - `tests/test_extract_native_hud.py`
-  - `tools/re/{extract_native_hud,map_native_hud,verify_body_equipment,verify_inventory_stereo,verify_native_wrist,verify_psychoscope}.py`
-  - `tools/re/verify_twohand_no_alias.py`, pinned from `docs/receipts/20261004-twohand-no-alias.json` (found 2026-10-18; the first scan covered only `receipts/`)
-
-  Not pins: `docs/evidence/prey-vr-comparison-20260916/manifest.json` and `docs/evidence/vr-interface-2026-09-09/final-player/verification.json` list hashes of about 60 source files as a historical inventory. Those files match only because they have not changed since.
-
-  Compare against committed blobs, not the working tree: with `core.autocrlf` the checkout is CRLF, while receipts hashed the LF content. No pin was staled by `b5fc093` or `8380154`.
 - **CameraEditHook research experiments (C):** the user decided on 2026-10-18 to keep them for now.
 
 ## Constraints that shape every fix
 
 - **Shared C++ helpers must be header-only (`inline`).** These tests `#include "../src/dll/X.cpp"` directly, link only minhook, and stub `EnsureMinHook`, `ModulePinStatus` and `lifecycle::Log`: CullCameraWatchTests, FocusHoldTests, NearFovOverrideTests and InventoryPointerCaptureTests, among others. Tests also call file-local names directly (`SpanMatches`, `CodeMatches`, `MatchesCode`, `kCode`), so keep those as aliases.
 - **Log line formats may be grepped by tools.** Keep `detail=` strings when collapsing installers.
-- **Seven `tools/re` scripts have SHA-256 pins in receipts:**
-  - verify_body_equipment
-  - verify_native_wrist
-  - verify_psychoscope
-  - verify_twohand_no_alias
-  - extract_native_hud
-  - map_native_hud
-  - verify_inventory_stereo (already stale)
-
-  Editing one stales its pin. `.gitattributes` also forces their line endings.
 - **`tools/Start-PreyVR.ps1` must stay self-contained.** It ships alone and runs on Windows PowerShell 5.1, and `tests/Launcher*.Tests.ps1` parse its source by function name.
 - **Hook, layer and input changes still need a headset run.** That matches how the current uncommitted work is being handled.
 
@@ -582,7 +562,7 @@ Left:
     - `resolve_module`/`DEFAULT_MODULE` and `EXPECTED_SHA256`;
     - `Image`, the PE32+ parse with `at`, `u32`/`u64`/`i32`, `cstring`, `section`, `rip_target`, `call_target`, `vtable_target`, `directory`, `relocations` and `import_slots`;
     - `fnv1a64`, `native_rows` (the `*Native.h` table) and `byte_arrays` (C++ gate arrays).
-  - 17 unpinned scripts use it, and `verify_h005_skinning` re-exports the two names the pinned verifiers import. FocusHold's verifier no longer has its own D:/E: module list.
+  - 17 scripts use it, and `verify_h005_skinning` re-exports the two names the other verifiers import. FocusHold's verifier no longer has its own D:/E: module list.
   - **Verification:**
     - All 26 `tools/re` scripts print byte-identical stdout and stderr before and after, the pinned ones included.
     - `map_carry_candidates` needs capstone, so its new parse was compared with its old one directly.
@@ -654,7 +634,7 @@ Left:
   - FrameTiming, FrameClock and the XrHold StallTracker are different concepts; only the clock function is a true duplicate.
 - **Scripts:**
   - Start-PreyVR's inline logic.
-  - Receipt-pinned verifiers, and the per-verifier mutation controls and claim wording.
+  - The per-verifier mutation controls and claim wording.
   - Run-Headless vs UnderXrSim (build+ctest vs runtime wrapper).
   - xr_adapter_probe vs xr_session_probe as binaries: share code, keep both.
 

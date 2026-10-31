@@ -372,7 +372,7 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
   - **Safety:** verbs that start sessions or threads, install hooks, post input, read raw memory or capture frames are excluded and listed in the test.
   - **Oddities pinned as they are** (for B9): see section 5.
 - **Done 10-24 (batch A):** `re_verifiers` (tools/re/run_verifiers.py) runs the 26 verifiers against the installed PreyDll.dll, and skips when there is none. 25 pass here; `verify_inventory_stereo` needs pefile.
-- **Blocked:** register `test_extract_native_hud.py`. The receipt-pinned `extract_native_hud.py` calls `hashlib.file_digest`, which needs Python 3.11+, and this machine has 3.10.6, so 1 of its 9 tests errors. It also needs pycryptodome. Registering it needs a newer Python on the machine, or a CMake version check that skips it.
+- **Blocked:** register `test_extract_native_hud.py`. `extract_native_hud.py` calls `hashlib.file_digest`, which needs Python 3.11+, and this machine has 3.10.6, so 1 of its 9 tests errors. It also needs pycryptodome. Registering it needs a newer Python on the machine, or a CMake version check that skips it.
 
 ### T2: one smoke headset run per batch
 - **FrameSchedule batch:** the four tick lists, the worker loop out of CommandChannel, and the CameraEditHook split.
@@ -411,7 +411,6 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
   - the stereo route
   - the test pyramid and headset gate
   - which instrumentation must stay
-- **Don't move or archive dated docs:** receipts link 31 `docs/*.md` paths.
 
 ---
 

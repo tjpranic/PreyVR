@@ -129,12 +129,3 @@ That is internal stereo depth, distinct from wrapping a flat picture on a curved
 panel. It does not establish internal head-motion parallax, good dialogs/cursor
 behavior or headset comfort. The PDA path remains experimental and is not enabled
 by this options batch.
-
-## Research maintenance
-
-The project-owned static receipt is in
-`receipts/20260927-psychoscope-static.json`. The fleet's graph updater and receipt
-intake map the canonical PreyVR root, not this integration worktree. Code graph
-refresh was attempted and refused with "No fleet project is configured for root:
-D:\Dev Debug\PreyVR-integration". Refresh and submit the validated receipt after
-this branch reaches the canonical checkout; no fleet configuration was changed.

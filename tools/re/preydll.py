@@ -5,8 +5,8 @@ carry its own of: where the module is, the PE32+ header and section walk, base
 relocations, imports, RIP-relative targets, the FNV-1a 64 body hash, and the
 `{0xRVA,size,0xHASHull}, // Name` rows of the `*Native.h` tables.
 
-The receipt-pinned verifiers keep their own copies (their bytes are evidence);
-they reach DEFAULT_MODULE and EXPECTED_SHA256 through verify_h005_skinning.
+Some verifiers keep their own copies; they reach DEFAULT_MODULE and
+EXPECTED_SHA256 through verify_h005_skinning.
 """
 import hashlib
 import os

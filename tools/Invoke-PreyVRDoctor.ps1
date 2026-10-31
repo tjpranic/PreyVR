@@ -109,12 +109,5 @@ if ($gameAvailable) {
     }
 }
 
-$repoRoot = Split-Path -Parent $PSScriptRoot
-if (Test-Path -LiteralPath (Join-Path $repoRoot 'regenny\PreyVR.genny') -PathType Leaf) {
-    Write-DoctorResult PASS 'ReGenny type notebook is present'
-} else {
-    Write-DoctorResult FAIL 'ReGenny type notebook is missing'
-}
-
 Write-Host "SUMMARY: pass=$passed warn=$warnings fail=$failures"
 if ($failures -ne 0) { exit 1 }

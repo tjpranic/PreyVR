@@ -797,8 +797,7 @@ carried `FAIL-RE-022`, which says to set `EFLAGS.RF` on an execution breakpoint.
 That advice is right and incomplete -- `RF` lands because it lives in the default
 context, while the `DR6` clear beside it silently does not.
 
-The Prey-specific addresses stay here. Project receipts own target facts; the
-playbook owns transferable method.
+The Prey-specific addresses stay here; the playbook owns transferable method.
 
 ### Still not established
 

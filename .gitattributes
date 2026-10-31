@@ -1,66 +1,20 @@
-# Preserve byte hashes of this integration receipt's frozen evidence.
-docs/INTEGRATION-CORRECTNESS-2026-09-16.md -text
+# Frozen evidence keeps its exact bytes across Windows checkouts.
 docs/evidence/integration-contract-20260916/** -text
-
-# Preserve frozen comfort-control evidence hashes across Windows checkouts.
-docs/COMFORT-CONTROLS-2026-09-19.md -text
 docs/evidence/comfort-controls-20260919/** -text
-
-# Keep the static scope receipt reproducible across Windows checkouts.
 docs/evidence/vr-options-2026-09-27/** -text
-src/equipment/psi/PsychoscopeNative.h text eol=lf
-tools/re/verify_psychoscope.py text eol=lf
-receipts/20260927-psychoscope-static.json -text
 docs/evidence/body-equipment-2026-09-27/** text eol=lf
-src/equipment/body/EquipmentNative.h text eol=lf
-tools/re/verify_body_equipment.py text eol=lf
-receipts/20260927-equipment-static.json text eol=lf
-
-# Offline native HUD extraction evidence and reproducible tools.
-tools/re/extract_native_hud.py text eol=lf
-tools/re/map_native_hud.py text eol=lf
-tests/test_extract_native_hud.py text eol=lf
 docs/evidence/native-hud-2026-09-27/** text eol=lf
-receipts/20260927-native-hud-extraction.json text eol=lf
-
-# Native wrist implementation receipts use stable bytes across checkouts.
-src/ui/hud/NativeHudIsolation.h text eol=lf
-src/ui/hud/NativeWristNative.h text eol=lf
-src/ui/hud/NativeHudValue.h text eol=lf
-src/ui/hud/NativeWristTexture.h text eol=lf
-src/ui/hud/NativeWristTexture.cpp text eol=lf
-tests/ui/NativeWristTests.cpp text eol=lf
-tools/re/verify_native_wrist.py text eol=lf
 docs/evidence/native-wrist-2026-09-28/** text eol=lf
-receipts/20260928-native-wrist-candidate.json text eol=lf
-
-# Frozen physical-contact evidence must survive Windows checkout unchanged.
-docs/PHYSICAL-MELEE-2026-09-30.md -text
 docs/evidence/physical-melee-2026-09-30/** -text
-receipts/20260930-physical-melee-static.json text eol=lf
-src/physics/contact/PhysicalNative.h text eol=lf
-tools/re/verify_physical_interactions.py text eol=lf
-
-# Keep this static/harness receipt's frozen evidence byte-stable on Windows.
-docs/PSI-MEDKIT-2026-09-30.md -text
 docs/evidence/psi-medkit-2026-09-30/** -text
-receipts/20260930-psi-medkit-static.json -text whitespace=cr-at-eol
-src/equipment/psi/PsiMedkitNative.h text eol=lf
-src/equipment/psi/PsiMedkit.cpp text eol=lf
-tests/equipment/PsiMedkitRuntimeTests.cpp text eol=lf
-tools/re/verify_psi_medkit.py text eol=lf
+docs/evidence/twohand-no-alias-2026-10-04/** -text whitespace=cr-at-eol
+
 # Ghidra's exact text includes spaces on blank lines and a final blank line.
 docs/evidence/psi-medkit-2026-09-30/steam-decompiles.txt whitespace=-blank-at-eol,-blank-at-eof
 docs/evidence/psi-medkit-2026-09-30/steam-candidate.txt whitespace=-blank-at-eol,-blank-at-eof
 # Native Windows build/test logs keep their original CRLF bytes.
 docs/evidence/psi-medkit-2026-09-30/build-release.txt whitespace=cr-at-eol
 docs/evidence/psi-medkit-2026-09-30/ctest-release.txt whitespace=cr-at-eol
-
-# Preserve this no-alias native receipt and its artifacts across checkouts.
-docs/TWO-HAND-NO-ALIAS-2026-10-04.md -text
-docs/evidence/twohand-no-alias-2026-10-04/** -text whitespace=cr-at-eol
-docs/receipts/20261004-twohand-no-alias.json -text whitespace=cr-at-eol
-tools/re/verify_twohand_no_alias.py text eol=lf
 
 # Static carry exports and Windows UI build logs retain their original bytes.
 docs/evidence/physical-grab-2026-10-04/** -text whitespace=cr-at-eol

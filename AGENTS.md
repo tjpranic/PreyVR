@@ -17,7 +17,7 @@ preflight and caveats. Read their `SKILL.md` files directly if there is no skill
 The session's discoverable tools and schemas determine what is callable; a configured
 server, a responding host and the correct open program/process are separate checks.
 
-Useful tool families: Ghidra for static contracts; ReGenny / `cheatengine` for live
+Useful tool families: Ghidra for static contracts; `cheatengine` for live
 layouts; Frida / x64dbg or x32dbg for execution; RenderDoc / apitrace for graphics
 evidence. `local-llm` is optional bounded assistance: probe once, fall back if offline,
 and verify its output against the original evidence. A second model is not proof.
@@ -56,24 +56,10 @@ H-021 examples cover receiver bases, concrete virtual callees, writers and consu
 Before choosing a seam or repeating an experiment, route through
 `D:/Dev Debug/VR Modding/docs/bottleneck-map.md` for this project's gate, or
 `failure-atlas.md` / `symptom-index.md` for its symptom. Read only the relevant row
-and linked section. The project's current receipts outrank a stale fleet summary.
+and linked section. The project's current evidence outranks a stale fleet summary.
 State hypothesis, control, variable and decision rule before experimental code.
 Record transferable results in the playbook when they change the route.
 
 To find sibling documents use `cross-project-index.md`, scoped `rg`, and sibling
 failure registries. Cross-project links are leads, not confirmation for this target.
 External prior art is indexed in the playbook's `sources.yml` / `docs/coverage.md`.
-
-
-<!-- vr-research-integration:start -->
-## Research receipts and playbook contributions
-
-For a substantial VR research finding or failed approach, read
-`D:/Dev Debug/VR Modding/docs/research-receipts.md` and use the
-`vr-research-receipts` skill when available. `tools/research_receipt.py` in the
-playbook creates/validates a project-owned receipt and queues a candidate for review.
-Keep validity, fact verdict, baseline health, evidence grade and observation environment
-separate. Raw evidence stays in this project; intake never promotes claims or clears
-bottlenecks. Use the numerical camera-mapping recipe and `tools/research_checks.py`
-when that is the cheapest relevant proof. Existing runtime/launch restrictions apply.
-<!-- vr-research-integration:end -->

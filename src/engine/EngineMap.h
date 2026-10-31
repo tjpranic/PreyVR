@@ -92,7 +92,7 @@ struct RendererLayout {
     static constexpr int viewTypeDefault = 0;
     static constexpr int viewTypeRecursive = 1;
 
-    // R-026: per-frame render view block, live-verified by ReGenny probe.
+    // R-026: per-frame render view block, live-verified.
     // Two slots of stride 0x328 selected by the index at +0x499C, with a
     // CRenderCamera at +0x240 within each block.
     static constexpr std::uintptr_t frameBlock = 0x4A08;

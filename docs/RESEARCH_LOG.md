@@ -3627,8 +3627,7 @@ an appropriate status-only wrist implementation.
 Nine synthetic offline tests pass, including corrupt-input controls. Original
 game files remain unchanged; no game process or headset was used. Native widget
 capture and wrist submission remain unimplemented; the default-off prototype
-card is unchanged. See [native HUD extraction and integration boundary](NATIVE-WRIST-HUD-2026-09-27.md)
-and [static receipt](../receipts/20260927-native-hud-extraction.json).
+card is unchanged. See [native HUD extraction and integration boundary](NATIVE-WRIST-HUD-2026-09-27.md).
 ## 2026-09-28 — Native wrist capture candidate implemented offline
 
 The native `_visible` setter is not a pure display switch: Steam sprite

@@ -20,6 +20,6 @@ C++ tests sit in a folder per category, the same categories as `src/`. The launc
 - `TestGeometry.h`.
 - `DllTestSupport.h`, for DLL-source tests: the captured log with `Logged`/`Count`, and the `PREYVR_TEST_CAPTURE_LOG()`, `PREYVR_TEST_DROP_LOG()` and `PREYVR_TEST_STUB_MINHOOK()` stubs.
 
-**Not in ctest:** `test_extract_native_hud.py`. The receipt-pinned extractor it tests needs Python 3.11+ (`hashlib.file_digest`) and pycryptodome.
+**Not in ctest:** `test_extract_native_hud.py`. The extractor it tests needs Python 3.11+ (`hashlib.file_digest`) and pycryptodome.
 
 **Running them:** `./tools/Run-Headless.ps1` runs the whole loop: configure, build, then ctest. Runtime validation is described in `docs/TEST_PLAN.md`.

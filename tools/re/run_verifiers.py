@@ -2,8 +2,7 @@
 
 The verifiers read the game's file on disk, never a process (preydll.py says
 which file). Each runs in its own interpreter from the repository root, as it
-is run by hand; none is edited or imported, so the receipt-pinned ones run as
-pinned.
+is run by hand; none is edited or imported.
 
 Exit 0 when every verifier that could run passed, 1 when one failed, and 77
 (the test's skip code) when there is no PreyDll.dll of the supported build. A

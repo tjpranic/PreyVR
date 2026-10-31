@@ -8,8 +8,8 @@ import struct
 import sys
 from pathlib import Path
 
-# Re-exported: the receipt-pinned verifiers import these two names from here,
-# so they pick up the resolved path without their own bytes changing.
+# Re-exported: other verifiers import these two names from here, so they pick
+# up the resolved path.
 from preydll import DEFAULT_MODULE, EXPECTED_SHA256, Image
 
 # Ghidra instruction listings and raw bytes, recorded 2026-09-05.
