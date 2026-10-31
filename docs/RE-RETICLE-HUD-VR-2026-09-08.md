@@ -63,12 +63,6 @@ All addresses in this table are **RVAs**, not EGS header addresses.
 | `0x11797C0` | Builds two float UI arguments, invokes returned element's virtual `+0x210` | Candidate native two-float dispatch helper; complete concrete callee still to resolve |
 | `0x118C970` | Corresponding one-float argument helper, same virtual dispatch | Used for normal X/Y offset calls |
 
-Evidence and selected decompilations are preserved in
-[`evidence/reticle-hud-static-2026-09-08.json`](evidence/reticle-hud-static-2026-09-08.json).
-String-xref seeds: VA `181E59E48` (`reticlePosition`), `181E57428/438`
-(`reticleXOffset/YOffset`), `181E69AC0` (`reticleDisplay`), `181E5DF18`
-(`scanningUpdateTargetReticle`).
-
 **ABI warning backed by instructions:** `0x11797C5/CB` save XMM3/XMM2.
 The two-coordinate helper's argument shape is element pointer in RCX, function
 name in RDX, float X in XMM2 and float Y in XMM3. Its decompiled `undefined4`

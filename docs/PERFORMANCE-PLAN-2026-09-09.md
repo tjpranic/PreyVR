@@ -45,9 +45,6 @@ The startup script selects `xr.native 1` (`tools/Invoke-PreyVRStartup.ps1:152`).
 This preserves Prey's projection; it does not select OpenXR eye FOVs. Changing the
 half-FOV argument to `xr.stereo` has no effect on projection in this mode.
 
-Saved evidence: `docs/evidence/headset-session-static-2026-09-08.json`,
-`last_tape_views` versus `last_tape_end`, sequence 12380:
-
 | Quantity | Current submitted left eye | Runtime requested left eye |
 | --- | --- | --- |
 | Horizontal angles | -60 / +60 degrees | -54 / +40 degrees |

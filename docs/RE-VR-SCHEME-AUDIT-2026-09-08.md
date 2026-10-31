@@ -26,13 +26,6 @@ float to `[rsp+0x20]` before `call`. Native reads/writes now address that slot.
 The observer now samples movement **after** the original handler; previously its
 reported axis described the old value, despite claiming to confirm delivery.
 
-Evidence: `docs/evidence/vr-scheme-move-abi-2026-09-08.json`, containing both old
-and fixed object disassembly and hashes. `tools/re/verify_vr_scheme_native.py`
-checks six native byte landmarks against PreyDll SHA256
-`7d6e322f61b28331095a400f0ba5f09bd9a39c57bf993602285dd6acb05311a7`.
-Ghidra had no defined functions at these two entries, so raw target bytes and
-the compiled object were used; an undefined function was not treated as absence.
-
 ### 2. P1 — input could remain held after focus loss or disable
 
 The lanes returned when tracking disappeared and stopped running after disable,

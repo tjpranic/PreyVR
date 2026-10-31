@@ -210,6 +210,5 @@ five exact Steam instruction anchors, a delayed-frame counterexample with
 two valid but disagreeing eye tags, outward-jump projection math, different-
 pointer row-guard coverage, and zero-delta cross-pass collapse.
 
-These are static/analytic checks, not a rendered reproduction. Raw native
-evidence is in [`evidence/h022-near-paths-2026-09-08.json`](evidence/h022-near-paths-2026-09-08.json).
+These are static/analytic checks, not a rendered reproduction.
 No implementation change or headset fix is claimed complete.

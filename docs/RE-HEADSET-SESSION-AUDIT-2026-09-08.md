@@ -81,7 +81,6 @@ The tape snapshot has 12380 complete views/begin/end records, 12381 waits and
 one incomplete final JSON record. It has no controller-space location records.
 Complete records remain usable; no failure conclusion is drawn from its partial
 tail. The saved report and the last tape frame are not presented as one frame.
-Receipt: `docs/evidence/headset-session-static-2026-09-08.json`.
 
 ## 4. The right stick has a second mod-owned producer
 
