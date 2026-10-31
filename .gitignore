@@ -7,7 +7,7 @@
 *.user
 *.suo
 
-# Generated evidence and captures (keep the README files that describe them)
+# Generated evidence and captures (data/README.md describes them)
 /data/captures/**/*.png
 /data/captures/**/*.jpg
 /data/captures/**/*.jpeg

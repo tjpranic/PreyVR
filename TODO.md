@@ -59,6 +59,7 @@
     Removing (or gating behind a debug only build) of all the console logging and bug-finding instrumentation needs to be done at some point.
 - Documentation cleanup
     Feature work has been tracked across multiple documents. These should be summarized and combined into one document.
+    Also need to update any out of date comments.
 
 ### HUD/UI
 - Psi energy shows on wrist before installing first neuromod
