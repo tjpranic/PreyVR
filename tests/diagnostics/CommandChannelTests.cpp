@@ -276,7 +276,7 @@ const Case kCases[] = {
     {"aim.reticlesize 10", "aim.reticlesize result=1", ReticleWorldReport, processed},
     {"aim.reticlesize abc", "aim.reticlesize result=0", ReticleWorldReport, processed},   // the default, 100
 
-    // Contact, the surface stop, the swing and the wrench's draw.
+    // Contact, the surface stop, the swing and the weapon draw.
     {"contact", "contact result=0", ContactReport, processed},
     {"contact log", "contact result=0", ContactReport, processed},
     {"contact log 0", "contact result=0", ContactReport, processed},
@@ -289,12 +289,11 @@ const Case kCases[] = {
     {"swing", "swing result=0", SwingReport, processed},
     {"swing log 1", "swing result=0", SwingReport, processed},
     {"swing log 0", "swing result=0", SwingReport, processed},
-    {"wrench.draw", "wrench.draw result=0", WrenchDrawReport, processed},
-    {"wrench.draw abc", "wrench.draw result=0", WrenchDrawReport, processed},   // 1: on, the default
-    {"wrench.sound", "wrench.sound result=0", WrenchSoundReport, processed},
-    {"wrench.sound play", "wrench.sound result=0", WrenchSoundReport, processed},
-    {"wrench.sound play 0", "wrench.sound result=0", WrenchSoundReport, processed},
-    {"wrench.sound play abc", "wrench.sound result=0", WrenchSoundReport, processed},
+    {"weapon.draw", "weapon.draw result=0", WeaponDrawReport, processed},
+    {"weapon.sound", "weapon.sound result=0", WeaponSoundReport, processed},
+    {"weapon.sound play", "weapon.sound result=0", WeaponSoundReport, processed},
+    {"weapon.sound play 0", "weapon.sound result=0", WeaponSoundReport, processed},
+    {"weapon.sound play abc", "weapon.sound result=0", WeaponSoundReport, processed},
 
     // The session, the menus and panels, and the rest. A bare setter only
     // reports; a malformed value is the verb's default (A9) unless the verb

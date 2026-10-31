@@ -1,0 +1,296 @@
+
+== ArkWeaponEMPGrenade select  windows=3  lengths(clips)=[2, 2, 2]
+  clip Play_Grenade_EMP_Select                      in 3/3 windows t=[11, 15, 14] ent=player stop=null ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  clip Play_switch_weapon                           in 3/3 windows t=[11, 15, 14] ent=player stop=- ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  exec Play_Grenade_EMP_Select                      in 3/3 windows t=[11, 15, 14] ent=player proxy=1
+  exec Play_switch_weapon                           in 3/3 windows t=[11, 15, 14] ent=player proxy=1
+  exec 0xdbcdb393                                   in 1/3 windows t=[57] ent=2396 proxy=1
+  exec Play_Player_Blood_Drop_Step                  in 1/3 windows t=[271] ent=player proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/3 windows t=[570, 317, 1346] ent=64793 proxy=1
+  exec null                                         in 3/3 windows t=[456, 458, 459] ent=player proxy=1
+  exec Play_Turret_mvmt_B                           in 2/3 windows t=[543, 772] ent=2767 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/3 windows t=[570, 572, 574] ent=64806 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/3 windows t=[570, 572, 588] ent=64791 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/3 windows t=[683, 572, 1088] ent=64806 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/3 windows t=[572, 1088, 574, 1093] ent=64791 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/3 windows t=[583, 1100, 957] ent=64793 proxy=1
+
+== ArkWeaponEMPGrenade stow  windows=3  lengths(clips)=[1, 1, 1]
+  clip Play_Player_Unequip                          in 3/3 windows t=[24, 25, 25] ent=player stop=null ff=0 flags=0 joint=0x0 blend=300 dur=-1000
+  exec Play_Player_Unequip                          in 3/3 windows t=[24, 25, 25] ent=player proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/3 windows t=[321, 84] ent=64806 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/3 windows t=[173, 410] ent=64806 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/3 windows t=[246, 290] ent=64793 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/3 windows t=[410, 321, 380] ent=64791 proxy=1
+  exec Play_Turret_mvmt_B                           in 2/3 windows t=[367, 468] ent=2767 proxy=1
+  exec Play_Player_Blood_Drop_Step                  in 1/3 windows t=[440] ent=player proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/3 windows t=[486] ent=64793 proxy=1
+  exec null                                         in 3/3 windows t=[541, 528, 558] ent=player proxy=1
+
+== ArkWeaponGooGun select  windows=6  lengths(clips)=[2, 2, 2, 2, 2, 2]
+  clip Play_Pickup_GooGun                           in 6/6 windows t=[13, 12, 11, 13, 11, 11] ent=player stop=- ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  clip Play_switch_weapon                           in 6/6 windows t=[13, 12, 11, 13, 11, 11] ent=player stop=null ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  exec Play_Pickup_GooGun                           in 6/6 windows t=[13, 12, 11, 13, 11, 11] ent=player proxy=1
+  exec Play_switch_weapon                           in 6/6 windows t=[13, 12, 11, 13, 11, 11] ent=player proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 3/6 windows t=[937, 1462, 128, 646, 953, 1466] ent=64793 proxy=1
+  exec 0xdbcdb393                                   in 4/6 windows t=[1916, 144, 1316, 767] ent=2396 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 5/6 windows t=[259, 867, 2005, 522, 586, 580, 552] ent=64791 proxy=1
+  exec Play_Player_Blood_Drop_Step                  in 1/6 windows t=[291, 608] ent=player proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/6 windows t=[306, 1253, 320, 1253, 298, 894] ent=64793 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/6 windows t=[586, 1080, 298, 1250] ent=64806 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 4/6 windows t=[882, 1901, 1342, 586, 1080, 311] ent=64791 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 3/6 windows t=[586, 1094, 325, 964] ent=64806 proxy=1
+  exec Play_Player_Hobbled_Step                     in 1/6 windows t=[436] ent=player proxy=1
+  exec Play_Turret_mvmt_B                           in 4/6 windows t=[520, 1301, 748, 1095, 767, 1513] ent=2767 proxy=1
+  exec 0xf4c76db6                                   in 1/6 windows t=[538] ent=1771 proxy=1
+  exec null                                         in 6/6 windows t=[825, 778, 792, 782, 790, 781] ent=player proxy=1
+
+== ArkWeaponGooGun stow  windows=6  lengths(clips)=[1, 1, 1, 1, 1, 1]
+  clip Play_Player_Unequip                          in 6/6 windows t=[28, 27, 25, 11, 12, 26] ent=player stop=- ff=0 flags=0 joint=0x0 blend=300 dur=-1000
+  exec Play_Player_Unequip                          in 6/6 windows t=[28, 27, 25, 11, 12, 26] ent=player proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/6 windows t=[108, 281] ent=64791 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 1/6 windows t=[190] ent=64793 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 5/6 windows t=[428, 326, 280, 193, 463] ent=64791 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/6 windows t=[250, 278] ent=64793 proxy=1
+  exec Play_Turret_mvmt_B                           in 2/6 windows t=[445, 356] ent=2767 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/6 windows t=[419] ent=64806 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 1/6 windows t=[419] ent=64806 proxy=1
+
+== ArkWeaponInstalaser select  windows=4  lengths(clips)=[2, 2, 2, 2]
+  clip Play_Player_Arm_Instalaser                   in 4/4 windows t=[12, 11, 11, 16] ent=player stop=- ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  clip Play_switch_weapon                           in 4/4 windows t=[12, 11, 11, 16] ent=player stop=null ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  exec null                                         in 4/4 windows t=[12, 1351, 11, 1324, 11, 1313, 1322] ent=player proxy=1
+  exec Play_Player_Arm_Instalaser                   in 4/4 windows t=[12, 11, 11, 16] ent=player proxy=1
+  exec Play_switch_weapon                           in 4/4 windows t=[12, 11, 11, 16] ent=player proxy=1
+  exec Play_Turret_mvmt_B                           in 4/4 windows t=[82, 726, 1666, 928, 1836, 1371, 2196, 231] ent=2767 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 4/4 windows t=[243, 811, 1480, 630, 560, 285, 1222] ent=64793 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 4/4 windows t=[327, 272, 1210, 1921, 445, 516, 1171, 768] ent=64791 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/4 windows t=[399, 272, 1210, 285, 1221] ent=64806 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 3/4 windows t=[313, 853, 1737, 2238, 913, 1437, 2339, 923] ent=64806 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 4/4 windows t=[1096, 1594, 2544, 900, 1409, 516, 2051, 1615] ent=64791 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 4/4 windows t=[924, 2252, 615, 1182, 2105, 544, 1100, 2009] ent=64793 proxy=1
+  exec 0xdbcdb393                                   in 4/4 windows t=[1879, 2475, 930, 2530] ent=2396 proxy=1
+
+== ArkWeaponInstalaser stow  windows=4  lengths(clips)=[1, 1, 1, 1]
+  clip Play_Player_Unequip                          in 4/4 windows t=[25, 23, 25, 25] ent=player stop=null ff=0 flags=0 joint=0x0 blend=300 dur=-1000
+  exec Play_Player_Unequip                          in 4/4 windows t=[25, 23, 25, 25] ent=player proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 4/4 windows t=[230, 212, 42, 440] ent=64793 proxy=1
+  exec Play_switch_weapon                           in 4/4 windows t=[85, 67, 73, 224] ent=player proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/4 windows t=[188] ent=64793 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/4 windows t=[332, 212] ent=64806 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 4/4 windows t=[230, 403, 307, 412] ent=64791 proxy=1
+  exec Play_Turret_mvmt_B                           in 1/4 windows t=[289] ent=2767 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/4 windows t=[363, 470] ent=64791 proxy=1
+  exec null                                         in 4/4 windows t=[593, 546, 539, 653] ent=player proxy=1
+
+== ArkWeaponLureGrenade select  windows=3  lengths(clips)=[2, 2, 2]
+  clip Play_WPN_Grenade_Lure_Unholster              in 3/3 windows t=[12, 14, 13] ent=player stop=null ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  clip Play_switch_weapon                           in 3/3 windows t=[12, 15, 14] ent=player stop=- ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  exec Play_WPN_Grenade_Lure_Unholster              in 3/3 windows t=[12, 14, 14] ent=player proxy=1
+  exec Play_switch_weapon                           in 3/3 windows t=[12, 15, 14] ent=player proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/3 windows t=[591, 1041, 170] ent=64791 proxy=1
+  exec Play_Turret_mvmt_B                           in 3/3 windows t=[187, 1088, 815, 472] ent=2767 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/3 windows t=[230, 735, 944] ent=64806 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/3 windows t=[316, 1276, 319, 1277, 315] ent=64793 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/3 windows t=[330, 319, 1277, 515] ent=64806 proxy=1
+  exec null                                         in 3/3 windows t=[460, 457, 459] ent=player proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 3/3 windows t=[576, 1088, 986, 964] ent=64791 proxy=1
+  exec 0xdbcdb393                                   in 2/3 windows t=[720, 771] ent=2396 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 3/3 windows t=[961, 944, 964] ent=64793 proxy=1
+
+== ArkWeaponLureGrenade stow  windows=3  lengths(clips)=[1, 1, 1]
+  clip Play_Player_Unequip                          in 3/3 windows t=[25, 25, 25] ent=player stop=null ff=0 flags=0 joint=0x0 blend=300 dur=-1000
+  exec Play_Player_Unequip                          in 3/3 windows t=[25, 25, 25] ent=player proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/3 windows t=[114, 156] ent=64793 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/3 windows t=[455, 156] ent=64806 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/3 windows t=[380, 187, 408] ent=64793 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/3 windows t=[246] ent=64791 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/3 windows t=[380, 261, 260] ent=64791 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/3 windows t=[380, 261, 407] ent=64806 proxy=1
+  exec Play_Turret_mvmt_B                           in 2/3 windows t=[391, 408] ent=2767 proxy=1
+  exec null                                         in 3/3 windows t=[559, 493, 492] ent=player proxy=1
+
+== ArkWeaponNullwaveTransmitter select  windows=3  lengths(clips)=[2, 2, 2]
+  clip Play_Nullwave_Select                         in 3/3 windows t=[14, 14, 14] ent=player stop=null ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  clip Play_switch_weapon                           in 3/3 windows t=[14, 14, 14] ent=player stop=- ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  exec Play_Nullwave_Select                         in 3/3 windows t=[14, 14, 14] ent=player proxy=1
+  exec Play_switch_weapon                           in 3/3 windows t=[14, 14, 14] ent=player proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/3 windows t=[935, 199, 705] ent=64806 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/3 windows t=[258, 765, 1678, 1003] ent=64791 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 1/3 windows t=[285, 1204, 1217] ent=64806 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/3 windows t=[285, 1217, 574, 315] ent=64793 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/3 windows t=[574, 315, 899] ent=64791 proxy=1
+  exec Play_Turret_mvmt_B                           in 2/3 windows t=[341, 1019, 827] ent=2767 proxy=1
+  exec null                                         in 3/3 windows t=[454, 460, 459] ent=player proxy=1
+  exec 0xdbcdb393                                   in 1/3 windows t=[559] ent=2396 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 3/3 windows t=[920, 1430, 588, 1089, 972] ent=64793 proxy=1
+
+== ArkWeaponNullwaveTransmitter stow  windows=3  lengths(clips)=[1, 1, 1]
+  clip Play_Player_Unequip                          in 3/3 windows t=[25, 24, 26] ent=player stop=null ff=0 flags=0 joint=0x0 blend=300 dur=-1000
+  exec Play_Player_Unequip                          in 3/3 windows t=[25, 24, 26] ent=player proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/3 windows t=[185, 85] ent=64806 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/3 windows t=[202, 185, 216, 392] ent=64793 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/3 windows t=[291, 488] ent=64791 proxy=1
+  exec null                                         in 3/3 windows t=[506, 488, 523] ent=player proxy=1
+  exec Play_Turret_mvmt_B                           in 1/3 windows t=[489] ent=2767 proxy=1
+
+== ArkWeaponPistol select  windows=1  lengths(clips)=[2]
+  clip Play_WPN_Pistol_Equip                        in 1/1 windows t=[13] ent=player stop=null ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  clip Play_switch_weapon                           in 1/1 windows t=[13] ent=player stop=null ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  exec Play_WPN_Pistol_Equip                        in 1/1 windows t=[13] ent=player proxy=1
+  exec Play_switch_weapon                           in 1/1 windows t=[13, 25] ent=player proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 1/1 windows t=[238] ent=64806 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/1 windows t=[338] ent=64791 proxy=1
+  exec null                                         in 1/1 windows t=[715, 715] ent=player proxy=1
+  exec 0xdbcdb393                                   in 1/1 windows t=[814] ent=2396 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/1 windows t=[882] ent=64793 proxy=1
+
+== ArkWeaponPistol stow  windows=1  lengths(clips)=[1]
+  clip Play_Player_Unequip                          in 1/1 windows t=[10] ent=player stop=null ff=0 flags=0 joint=0x0 blend=300 dur=-1000
+  exec Play_Player_Unequip                          in 1/1 windows t=[10] ent=player proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/1 windows t=[120] ent=64791 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/1 windows t=[135] ent=64806 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 1/1 windows t=[162] ent=64806 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/1 windows t=[288] ent=64793 proxy=1
+  exec null                                         in 1/1 windows t=[316] ent=player proxy=1
+
+== ArkWeaponRecyclerGrenade select  windows=3  lengths(clips)=[2, 2, 2]
+  clip Play_Recycler_Grenade_Equip                  in 3/3 windows t=[14, 15, 11] ent=player stop=null ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  clip Play_switch_weapon                           in 3/3 windows t=[14, 15, 11] ent=player stop=null ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  exec Play_Recycler_Grenade_Equip                  in 3/3 windows t=[14, 15, 11] ent=player proxy=1
+  exec Play_switch_weapon                           in 3/3 windows t=[14, 15, 11] ent=player proxy=1
+  exec Play_Turret_mvmt_B                           in 2/3 windows t=[790, 1577, 184, 830] ent=2767 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/3 windows t=[260, 1187, 289, 1225, 358] ent=64793 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/3 windows t=[260, 832, 1548, 631] ent=64791 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/3 windows t=[519, 289, 1225] ent=64806 proxy=1
+  exec null                                         in 3/3 windows t=[490, 490, 449, 449, 458, 458] ent=player proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/3 windows t=[519, 1017, 909] ent=64806 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/3 windows t=[624, 1125, 615, 1129] ent=64791 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 3/3 windows t=[889, 1414, 924, 1451, 1113] ent=64793 proxy=1
+  exec 0xdbcdb393                                   in 1/3 windows t=[929] ent=2396 proxy=1
+
+== ArkWeaponRecyclerGrenade stow  windows=3  lengths(clips)=[1, 1, 1]
+  clip Play_Player_Unequip                          in 3/3 windows t=[25, 24, 24] ent=player stop=null ff=0 flags=0 joint=0x0 blend=300 dur=-1000
+  exec Play_Player_Unequip                          in 3/3 windows t=[26, 24, 25] ent=player proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/3 windows t=[127] ent=64793 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/3 windows t=[289, 278, 172] ent=64793 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/3 windows t=[278, 172] ent=64791 proxy=1
+  exec 0xdbcdb393                                   in 1/3 windows t=[273] ent=2396 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 1/3 windows t=[289] ent=64806 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/3 windows t=[380] ent=64791 proxy=1
+  exec Play_Turret_mvmt_B                           in 1/3 windows t=[407] ent=2767 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/3 windows t=[421] ent=64806 proxy=1
+  exec null                                         in 3/3 windows t=[594, 494, 478] ent=player proxy=1
+
+== ArkWeaponShotgun select  windows=4  lengths(clips)=[2, 2, 2, 2]
+  clip Play_Pickup_Shotgun                          in 4/4 windows t=[11, 13, 11, 13] ent=player stop=- ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  clip Play_switch_weapon                           in 4/4 windows t=[11, 13, 11, 13] ent=player stop=null ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  exec Play_Pickup_Shotgun                          in 4/4 windows t=[11, 13, 11, 13] ent=player proxy=1
+  exec Play_switch_weapon                           in 4/4 windows t=[11, 13, 11, 13] ent=player proxy=1
+  exec Play_Player_Blood_Drop_Step                  in 3/4 windows t=[12, 71, 328] ent=player proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 3/4 windows t=[566, 1078, 917, 1443, 13, 525] ent=64806 proxy=1
+  exec Play_Player_Hobbled_Step                     in 1/4 windows t=[71, 202] ent=player proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/4 windows t=[551, 100] ent=64791 proxy=1
+  exec Play_Turret_mvmt_B                           in 4/4 windows t=[629, 217, 1150, 544, 907] ent=2767 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/4 windows t=[1030, 866, 286, 1228] ent=64806 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/4 windows t=[294, 1221, 286, 1228] ent=64793 proxy=1
+  exec null                                         in 4/4 windows t=[558, 521, 514, 525] ent=player proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 3/4 windows t=[551, 1078, 945, 1458, 525] ent=64791 proxy=1
+  exec 0xdbcdb393                                   in 2/4 windows t=[588, 817] ent=2396 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 3/4 windows t=[921, 1503, 917, 1430, 751] ent=64793 proxy=1
+
+== ArkWeaponShotgun stow  windows=4  lengths(clips)=[1, 1, 1, 1]
+  clip Play_Player_Unequip                          in 4/4 windows t=[26, 24, 25, 25] ent=player stop=- ff=0 flags=0 joint=0x0 blend=300 dur=-1000
+  exec Play_Player_Unequip                          in 4/4 windows t=[26, 24, 25, 25] ent=player proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 4/4 windows t=[27, 336, 229, 612] ent=64791 proxy=1
+  exec Play_switch_weapon                           in 4/4 windows t=[56, 53, 40, 54] ent=player proxy=1
+  exec 0xdbcdb393                                   in 1/4 windows t=[55] ent=2396 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/4 windows t=[336, 318, 354] ent=64793 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/4 windows t=[538, 336, 354] ent=64806 proxy=1
+  exec Play_Turret_mvmt_B                           in 1/4 windows t=[346] ent=2767 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/4 windows t=[354] ent=64793 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/4 windows t=[513] ent=64806 proxy=1
+
+== ArkWeaponStunGun select  windows=3  lengths(clips)=[1, 1, 1]
+  clip Play_switch_weapon                           in 3/3 windows t=[12, 14, 12] ent=player stop=- ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  exec Play_switch_weapon                           in 3/3 windows t=[12, 41, 14, 27, 12, 29] ent=player proxy=1
+  exec Play_Turret_mvmt_B                           in 3/3 windows t=[462, 654, 1445, 70, 843] ent=2767 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/3 windows t=[1250, 99] ent=64806 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 1/3 windows t=[314, 1254] ent=64793 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/3 windows t=[365, 682, 659, 1152] ent=64791 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/3 windows t=[654, 1177, 643] ent=64791 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/3 windows t=[1550, 955, 1516] ent=64793 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/3 windows t=[955, 1516] ent=64806 proxy=1
+  exec 0xdbcdb393                                   in 1/3 windows t=[1267] ent=2396 proxy=1
+
+== ArkWeaponStunGun stow  windows=4  lengths(clips)=[1, 1, 1, 1]
+  clip Play_Player_Unequip                          in 4/4 windows t=[25, 25, 28, 26] ent=player stop=null ff=0 flags=0 joint=0x0 blend=300 dur=-1000
+  exec Play_Player_Unequip                          in 4/4 windows t=[25, 25, 28, 26] ent=player proxy=1
+  exec Play_Turret_mvmt_B                           in 2/4 windows t=[113, 405] ent=2767 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/4 windows t=[189, 188] ent=64793 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/4 windows t=[453, 188] ent=64806 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/4 windows t=[406, 277] ent=64791 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/4 windows t=[406] ent=64791 proxy=1
+  exec Play_Player_Blood_Drop_Step                  in 1/4 windows t=[410, 525] ent=player proxy=1
+  exec null                                         in 4/4 windows t=[673, 578, 525, 520] ent=player proxy=1
+
+== ArkWeaponToyGun select  windows=5  lengths(clips)=[2, 2, 2, 2, 2]
+  clip Play_WPN_NarfGun_Equip                       in 5/5 windows t=[12, 12, 12, 13, 11] ent=player stop=null ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  clip Play_switch_weapon                           in 5/5 windows t=[12, 12, 12, 13, 12] ent=player stop=- ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  exec Play_WPN_NarfGun_Equip                       in 5/5 windows t=[12, 12, 12, 13, 12] ent=player proxy=1
+  exec Play_switch_weapon                           in 5/5 windows t=[12, 12, 12, 13, 12] ent=player proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 5/5 windows t=[1884, 543, 1070, 556, 1094, 537, 1044, 98] ent=64793 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 5/5 windows t=[272, 1022, 2583, 557, 541, 551, 140] ent=64793 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 4/5 windows t=[782, 1288, 412, 927, 228, 734, 1626, 962] ent=64806 proxy=1
+  exec Play_Turret_mvmt_B                           in 4/5 windows t=[271, 1318, 698, 239, 1279, 907] ent=2767 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 5/5 windows t=[428, 2784, 557, 1157, 269, 1222, 282, 1210] ent=64791 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/5 windows t=[2784, 557, 308, 1252] ent=64806 proxy=1
+  exec null                                         in 5/5 windows t=[513, 514, 526, 523, 516] ent=player proxy=1
+  exec 0xdbcdb393                                   in 3/5 windows t=[1682, 529, 1239] ent=2396 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 5/5 windows t=[1288, 1841, 543, 938, 1527, 918, 1458, 1461] ent=64791 proxy=1
+  exec Play_Player_Blood_Drop_Step                  in 1/5 windows t=[782, 1162, 2915] ent=player proxy=1
+  exec Play_Player_Hobbled_Step                     in 1/5 windows t=[911] ent=player proxy=1
+
+== ArkWeaponToyGun stow  windows=5  lengths(clips)=[1, 1, 1, 1, 1]
+  clip Play_Player_Unequip                          in 5/5 windows t=[25, 25, 27, 25, 23] ent=player stop=null ff=0 flags=0 joint=0x0 blend=300 dur=-1000
+  exec Play_Player_Unequip                          in 5/5 windows t=[25, 25, 27, 25, 23] ent=player proxy=1
+  exec Play_switch_weapon                           in 5/5 windows t=[38, 53, 57, 52, 39] ent=player proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 4/5 windows t=[224, 418, 327, 269] ent=64806 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 4/5 windows t=[311, 273, 383, 253] ent=64791 proxy=1
+  exec Play_Turret_mvmt_B                           in 2/5 windows t=[498, 253] ent=2767 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 5/5 windows t=[311, 406, 302, 327, 338] ent=64793 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/5 windows t=[346] ent=64806 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/5 windows t=[411] ent=64793 proxy=1
+  exec 0xdbcdb393                                   in 2/5 windows t=[479, 580] ent=2396 proxy=1
+  exec null                                         in 5/5 windows t=[537, 607, 577, 595, 565] ent=player proxy=1
+
+== ArkWeaponWrench select  windows=4  lengths(clips)=[3, 3, 3, 4]
+  clip Play_Player_Arm_Wrench                       in 4/4 windows t=[13, 10, 13, 12] ent=player stop=null ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  clip Play_switch_weapon                           in 4/4 windows t=[13, 10, 13, 12] ent=player stop=null ff=0 flags=0 joint=0x0 blend=0 dur=-1000
+  clip Play_Player_Cancel_Wrench_Charge             in 4/4 windows t=[1488, 1444, 1454, 1446, 1898] ent=player stop=null ff=0 flags=0 joint=0x0 blend=300 dur=-1000
+  exec Play_Player_Arm_Wrench                       in 4/4 windows t=[13, 10, 13, 12] ent=player proxy=1
+  exec Play_switch_weapon                           in 4/4 windows t=[13, 10, 13, 12] ent=player proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 4/4 windows t=[644, 2047, 138, 297, 903, 308] ent=64791 proxy=1
+  exec Play_Turret_mvmt_B                           in 2/4 windows t=[826, 1657, 308, 1167] ent=2767 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/4 windows t=[334, 1378, 1587, 914, 350, 1378, 1584, 2728] ent=64806 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 4/4 windows t=[559, 644, 1335, 547, 354, 546] ent=64793 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 4/4 windows t=[630, 547, 1053, 1044, 1553, 546, 1061, 1943] ent=64793 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 4/4 windows t=[630, 1123, 998, 1559, 987, 991, 1529, 2417] ent=64791 proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 2/4 windows t=[829, 1333, 2646] ent=64806 proxy=1
+  exec 0xdbcdb393                                   in 3/4 windows t=[1335, 1648, 2077] ent=2396 proxy=1
+  exec null                                         in 4/4 windows t=[1488, 1488, 1444, 1444, 1454, 1454, 1446, 1446] ent=player proxy=1
+  exec Play_Player_Cancel_Wrench_Charge             in 4/4 windows t=[1488, 1444, 1454, 1446, 1898] ent=player proxy=1
+  exec Play_Player_Blood_Drop_Step                  in 1/4 windows t=[1516] ent=player proxy=1
+  exec Play_Player_Hobbled_Step                     in 1/4 windows t=[1639] ent=player proxy=1
+
+== ArkWeaponWrench stow  windows=3  lengths(clips)=[2, 2, 2]
+  clip Play_Player_Unequip                          in 3/3 windows t=[23, 26, 24] ent=player stop=null ff=0 flags=0 joint=0x0 blend=300 dur=-1000
+  clip Play_Player_Cancel_Wrench_Charge             in 3/3 windows t=[589, 601, 530] ent=player stop=null ff=0 flags=0 joint=0x0 blend=300 dur=-1000
+  exec null                                         in 3/3 windows t=[23, 588, 26, 601, 24, 530] ent=player proxy=1
+  exec Play_Player_Unequip                          in 3/3 windows t=[23, 26, 24] ent=player proxy=1
+  exec Play_Phantom_Synth_MvmtA                     in 1/3 windows t=[98] ent=64791 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 2/3 windows t=[301, 154] ent=64791 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 3/3 windows t=[199, 402, 271] ent=64793 proxy=1
+  exec Play_Turret_mvmt_B                           in 1/3 windows t=[214] ent=2767 proxy=1
+  exec Play_Phantom_Vox_Effort_Fast                 in 1/3 windows t=[301] ent=64806 proxy=1
+  exec Play_Player_Cancel_Wrench_Charge             in 3/3 windows t=[589, 601, 530] ent=player proxy=1

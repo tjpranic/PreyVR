@@ -236,8 +236,10 @@ void LayoutChecks(){
  Check(Defaults()[ArmLength]==56&&Valid(ArmLength,40)&&Valid(ArmLength,70)&&!Valid(ArmLength,39)&&!Valid(ArmLength,71)&&
        Display(ArmLength,56)==L"56 CM",
        "the arm is 56 cm by default, shoulder to wrist, 40 to 70");
- Check(MenuEntries(4)[0]==Holsters&&MenuEntries(4)[1]==ClearHolsterSlots&&MenuEntries(4)[2]==Wrist,
-       "equipment: holsters, clearing them, then the wrist");
+ Check(MenuEntries(4)[0]==Holsters&&MenuEntries(4)[1]==ClearHolsterSlots&&MenuEntries(4)[2]==WeaponDrawAnims&&
+       MenuEntries(4)[3]==Wrist,"equipment: holsters, clearing them, the draw animations, then the wrist");
+ Check(Defaults()[WeaponDrawAnims]==0&&KindOf(WeaponDrawAnims)==Kind::toggle&&
+       std::string(Describe(WeaponDrawAnims).key)=="weapon_draw_anims","weapon draw animations are off by default, on/off");
  Check(MenuEntries(0).size()==7&&MenuEntries(0)[0]==CalibratePosture&&MenuEntries(0)[1]==RecenterView&&
        MenuEntries(0)[2]==LeanZone&&MenuEntries(0)[3]==HipsBack&&MenuEntries(0)[4]==NearClip&&
        MenuEntries(0)[5]==Antialiasing&&MenuEntries(0)[6]==DebugOverlay,

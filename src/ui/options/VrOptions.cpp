@@ -88,7 +88,8 @@ constexpr Spec specs[]={
  {"helmet_size",L"HELMET SIZE",L"Scales the helmet around its centre. Larger looks further away; it covers more or less of your view only once it has been moved.",100,50,200,5,U::percent},
  // The move lane takes the same 0 or 15-90 as Turning (MoveLane.h).
  {"zerog_roll",L"ZERO-G ROLL",L"In zero gravity the bumpers roll you left and right, and both together brake. Smooth rolls while held, as the game does; or one fixed step a press.",0,0,90,15,U::degrees,{},turnChoices,L"SMOOTH"},
- {"zerog_pitch",L"ZERO-G PITCH",L"In zero gravity the right stick up and down tips you forward and back. Smooth tips while held, as the game does; or one fixed step a push.",0,0,90,15,U::degrees,{},turnChoices,L"SMOOTH"}
+ {"zerog_pitch",L"ZERO-G PITCH",L"In zero gravity the right stick up and down tips you forward and back. Smooth tips while held, as the game does; or one fixed step a push.",0,0,90,15,U::degrees,{},turnChoices,L"SMOOTH"},
+ {"weapon_draw_anims",L"WEAPON DRAW ANIMATIONS",L"Prey's animations for taking a weapon out and putting it away. Off: a weapon is in your hand at once and ready to use. On: they play, and your drawn hand turns with the weapon as they do.",0,0,1,1}
 };
 static_assert(std::size(specs)==Count,"one Spec per Setting, in order");
 // Each default, name and choice belongs to its setting's range, one name per value.
@@ -110,7 +111,7 @@ constexpr int hands[]={AimLasers,ShotTrail,TwoHand,GripToggle,AutoSnap,AutoSnapA
     CarryThrowStrength,GrenadeThrowStrength,SurfaceStop,HeavyMass,PhysicalContact,PushStrength,FreeSwing,SwingSpeed,HeavySwingSpeed};
 constexpr int interface_[]={UiScale,UiDistance,UiOffsetRight,UiOffsetUp,UiText,ScreenPullback,
     PointerHand,ReticleSize,MarkerSize,Helmet,HelmetHeight,HelmetForward,HelmetSize};
-constexpr int equipment[]={Holsters,ClearHolsterSlots,Wrist,WristSize,WristTick,WristAlong,WristHover,WristTilt};
+constexpr int equipment[]={Holsters,ClearHolsterSlots,WeaponDrawAnims,Wrist,WristSize,WristTick,WristAlong,WristHover,WristTilt};
 constexpr int feedback[]={Haptics,HapticStrength};
 constexpr int abilities[]={PsiTarget,Medkit,BeltHints};
 // CONTROLS holds no setting: the panel draws what each action is bound to there.

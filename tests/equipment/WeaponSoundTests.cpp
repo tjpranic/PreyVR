@@ -1,7 +1,7 @@
-// The wrench draw's sound: the production lane with Prey replaced at its ABI
+// A weapon draw's sound: the production lane with Prey replaced at its ABI
 // boundary -- the entity system, the player's entity, its audio proxy and the
 // audio system.
-#include "equipment/wrench/WrenchSound.cpp"
+#include "equipment/weapon/WeaponSound.cpp"
 #include "DllTestSupport.h"
 #include "TestSupport.h"
 #include <cstring>
@@ -14,7 +14,7 @@ namespace {
 using namespace preyvr::dll;
 using preyvr::test::Check;
 using preyvr::test::Logged;
-bool Reports(const char* field) { return (WrenchSoundReport() + " ").find(std::string(" ") + field + " ") != std::string::npos; }
+bool Reports(const char* field) { return (WeaponSoundReport() + " ").find(std::string(" ") + field + " ") != std::string::npos; }
 std::uint32_t Crc(const char* name)   // the ATL's id: ~CRC32 of the lowercased name
 {
     std::uint32_t crc = 0xFFFFFFFFu;
@@ -75,6 +75,7 @@ DWORD FakeResolve(Natives& n)
     n.proxyVtable = reinterpret_cast<std::uintptr_t>(proxyTable);
     return ERROR_SUCCESS;
 }
+constexpr std::uint32_t kSwitch = 0x364DA6FE, kUnequip = 0xE06723D1;
 } // namespace
 
 int main()
@@ -87,67 +88,87 @@ int main()
     entitySystemGlobal = reinterpret_cast<std::uintptr_t>(&entitySystem);
     audioGlobal = reinterpret_cast<std::uintptr_t>(&audio);
     gResolve = FakeResolve;
-    for (std::size_t i = 0; i < std::size(sn::DrawTriggers); ++i) {
-        Check(Crc(sn::DrawTriggers[i]) == sn::DrawTriggerIds[i], "each draw trigger's id is the CRC32 of its lowercased name");
-    }
+
+    // Which sounds a class plays: every class has its row, and past the table the defaults.
+    const unsigned wrench = WeaponSoundFor("ArkWeaponWrench"), shotgun = WeaponSoundFor("ArkWeaponShotgun"),
+                   stunGun = WeaponSoundFor("ArkWeaponStunGun"), pistol = WeaponSoundFor("ArkWeaponPistol"),
+                   unheard = WeaponSoundFor("ArkWeaponDiscRifle");
+    Check(wrench < std::size(sn::ClassSounds) && shotgun < std::size(sn::ClassSounds) && stunGun < std::size(sn::ClassSounds) &&
+              pistol < std::size(sn::ClassSounds), "the classes heard each have their row");
+    Check(unheard == std::size(sn::ClassSounds) && WeaponSoundFor("?") == unheard, "any other class takes the defaults");
 
     // On by default, nothing checked yet.
-    Check(Reports("gate=unchecked") && WrenchSoundPlay() == 1, "play on, nothing checked yet");
+    Check(Reports("gate=unchecked") && WeaponSoundPlay() == 1, "play on, nothing checked yet");
 
     // Refused bytes: no replay.
     gResolve = [](Natives& n) -> DWORD { n = {}; return ERROR_BAD_EXE_FORMAT; };
-    Check(!WrenchSoundPlayDraw() && replayed.empty() && Reports("playFailed=1") && Reports("gate=refused") &&
+    Check(!WeaponSoundPlayDraw(wrench) && replayed.empty() && Reports("playFailed=1") && Reports("gate=refused") &&
               Logged("gate result=193") && Logged("play what=draw result=fault triggers=0 gate=refused"),
           "mismatched bytes refuse the replay");
     fault = false;
     gate = "unchecked";
     gResolve = FakeResolve;
 
-    // The replay: the player's audio proxy plays both draw triggers, as the clips did.
-    Check(WrenchSoundPlayDraw(), "the draw's sound plays");
+    // The replay: the player's audio proxy plays the wrench's draw triggers, as the clips did.
+    Check(WeaponSoundPlayDraw(wrench), "the draw's sound plays");
     Check(Logged("gate result=0 rows=4 audioSystem=caudiosystem") && Reports("gate=ok"), "the gate holds");
-    Check(replayed.size() == 2 && replayed[0].id == 0x446C5BFDu && replayed[1].id == 0x364DA6FEu,
+    Check(replayed.size() == 2 && replayed[0].id == 0x446C5BFDu && replayed[1].id == kSwitch,
           "Play_Player_Arm_Wrench, then Play_switch_weapon");
     Check(replayed[0].lipSync == 0 && replayed[0].local == 1 && replayed[0].flags == 1, "default proxy, no lip sync, normal priority");
     Check(lookups == 2 && Reports("played=1") && Reports("lastPlay=played") && Logged("play what=draw result=played triggers=2"),
           "looked up once each, counted");
-    WrenchSoundPlayDraw();
+    WeaponSoundPlayDraw(wrench);
     Check(replayed.size() == 4 && lookups == 2, "the ids are kept");
+    replayed.clear();
+
+    // Each class its own: the shotgun's trigger, the Disruptor's two switches, the pistol's
+    // trigger and two switches, and a class nobody heard.
+    Check(WeaponSoundPlayDraw(shotgun) && replayed.size() == 2 && replayed[0].id == 0x258CF3ADu && replayed[1].id == kSwitch,
+          "the shotgun's own trigger, then the switch");
+    replayed.clear();
+    Check(WeaponSoundPlayDraw(stunGun) && replayed.size() == 2 && replayed[0].id == kSwitch && replayed[1].id == kSwitch,
+          "the Disruptor has no trigger of its own");
+    replayed.clear();
+    Check(WeaponSoundPlayDraw(pistol) && replayed.size() == 3 && replayed[0].id == 0xEAA21D0Au, "the pistol's own, then two switches");
+    replayed.clear();
+    Check(WeaponSoundPlayDraw(unheard) && replayed.size() == 1 && replayed[0].id == kSwitch, "any other weapon plays the switch alone");
     replayed.clear();
 
     // What stops it: no player, a proxy that is not the entity audio proxy, no proxy.
     havePlayer = false;
-    Check(!WrenchSoundPlayDraw() && Reports("lastPlay=no_entity"), "no player entity, no sound");
+    Check(!WeaponSoundPlayDraw(wrench) && Reports("lastPlay=no_entity"), "no player entity, no sound");
     havePlayer = true;
     audioProxy.table = otherProxyTable;
-    Check(!WrenchSoundPlayDraw() && Reports("lastPlay=no_proxy"), "an unknown proxy class is not called");
+    Check(!WeaponSoundPlayDraw(wrench) && Reports("lastPlay=no_proxy"), "an unknown proxy class is not called");
     audioProxy.table = proxyTable;
     haveProxy = false;
-    Check(!WrenchSoundPlayDraw() && Reports("lastPlay=no_proxy") && replayed.empty(), "no audio proxy, no sound");
+    Check(!WeaponSoundPlayDraw(wrench) && Reports("lastPlay=no_proxy") && replayed.empty(), "no audio proxy, no sound");
     haveProxy = true;
     // An unknown trigger (a later lookup, the ids not yet kept): nothing plays.
-    drawIds[0] = drawIds[1] = 0;
+    confirmed = {};
     knownTriggers = false;
-    Check(!WrenchSoundPlayDraw() && Reports("lastPlay=unknown_trigger") && replayed.empty(), "an unknown trigger plays nothing");
+    Check(!WeaponSoundPlayDraw(wrench) && Reports("lastPlay=unknown_trigger") && replayed.empty(), "an unknown trigger plays nothing");
     knownTriggers = true;
-    SetWrenchSoundPlay(0);
-    Check(!WrenchSoundPlayDraw() && replayed.empty() && Reports("play=0") && Logged("settings play=0"), "off plays nothing");
-    SetWrenchSoundPlay(1);
-    Check(WrenchSoundPlayDraw() && replayed.size() == 2, "on again");
+    SetWeaponSoundPlay(0);
+    Check(!WeaponSoundPlayDraw(wrench) && replayed.empty() && Reports("play=0") && Logged("settings play=0"), "off plays nothing");
+    SetWeaponSoundPlay(1);
+    Check(WeaponSoundPlayDraw(wrench) && replayed.size() == 2, "on again");
     replayed.clear();
 
-    // The stow's sound: one trigger, the same way.
-    for (std::size_t i = 0; i < std::size(sn::StowTriggers); ++i) {
-        Check(Crc(sn::StowTriggers[i]) == sn::StowTriggerIds[i], "each stow trigger's id is the CRC32 of its lowercased name");
-    }
-    Check(WrenchSoundPlayStow() && replayed.size() == 1 && replayed[0].id == 0xE06723D1u && replayed[0].local == 1,
+    // The stow's sound, the same way; three weapons' stows also play the switch.
+    Check(WeaponSoundPlayStow(wrench) && replayed.size() == 1 && replayed[0].id == kUnequip && replayed[0].local == 1,
           "Play_Player_Unequip on the player");
+    replayed.clear();
+    Check(WeaponSoundPlayStow(shotgun) && replayed.size() == 2 && replayed[0].id == kUnequip && replayed[1].id == kSwitch,
+          "the shotgun's stow plays the switch as well");
+    replayed.clear();
+    Check(WeaponSoundPlayStow(unheard) && replayed.size() == 1 && replayed[0].id == kUnequip, "any other weapon plays the unequip alone");
     Check(Logged("play what=stow result=played triggers=1") && Logged("play what=draw result=played triggers=2"),
           "each play says what it was");
-    SetWrenchSoundPlay(0);
-    Check(!WrenchSoundPlayStow() && replayed.size() == 1, "off plays no stow sound either");
-    SetWrenchSoundPlay(1);
+    SetWeaponSoundPlay(0);
+    Check(!WeaponSoundPlayStow(wrench) && replayed.size() == 1, "off plays no stow sound either");
+    SetWeaponSoundPlay(1);
     replayed.clear();
 
-    std::cout << "wrench_sound: the draw's and the stow's sounds replay on the player\n";
+    std::cout << "weapon_sound: each weapon's draw and stow sounds replay on the player\n";
 }

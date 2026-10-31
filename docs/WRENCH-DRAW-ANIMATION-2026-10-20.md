@@ -1,5 +1,10 @@
 # The wrench draw animation spins the hand
 
+> **Since 2026-10-31** the skip covers every weapon, and this lane is `src/equipment/weapon/WeaponDraw.cpp`
+> ([scope](WEAPON-DRAW-SCOPE-2026-10-31.md)). That work corrected three things below: `+0x2C9` is an attack
+> under way, not "lowered", `player+0x992` is attacking, not a switch, and `+0x108` is not the select's alone.
+> The text here is left as it was written.
+
 Status, 2026-10-20 (Steam `PreyDll.dll` `7d6e322f...05311a7`):
 - **The draw skip: worn OK** (PreyVR-49). The hand no longer spins.
   [WrenchDraw.cpp](../src/dll/WrenchDraw.cpp) skips the wrench's select action and

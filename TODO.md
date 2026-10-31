@@ -37,24 +37,19 @@
     Technically everything is working game wise, it would just be an improvement.
 - Can't grab when two-handing weapons
     Grabs are only allowed with the left hand, will need to rethink how this works
-- Remove Q-Beam equip animation (?)
-    Maybe all weapon draw animations should be disabled?
-    Wrench draw animation is already disabled.
 - Arm IK should be biased to stay downwards
     They tend to "chicken-wing" when I rotate my hands
 - Aim lasers should come out of my pointer fingers
     This way it will handle like the weapon aiming
 - The in-game cutscenes show on a flat plane but it needs to be adjusted downward a bit
     The first-time Typhon neuromod usage trigger 3 of these cutscenes in a row. it also causes the game to pause between each cutscene.
+- Left hand IK seems to break aiming a Typhon ability
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
     Low-hanging fruit like dead code removal, renaming and de-duplication should be prioritised for the first pass. Next should be low-risk refactors that involve refactoring code that can verified with just tests and no VR headset runs.
     Code should also be reorganized and restructured to be more understandable, where possible.
     One thing I'm particularly concerned about is 1. bad abstractions and 2. logic that should be abstracted but isn't. A lot of hyper-focused work has been done on various issues that may leave similar logic unconnected and ungeneralized when they ought to be.
-- Restructuring
-    Related source files should be grouped with directories.
-    Structure by feature set? (UI, In-Game Controls, Debug/Crash Instrumentation, VR Body and Motion Logic, Engine Hooking, Physics, etc.).
 - Optimization
     The mod is starting to lag a bit due to all the feature work. Two types of optimizations are needed. Big O optimization of code and actual targeted optimization of bottlenecks (this will require instrumentation). Will need to look for quick wins on both, if any.
 - Tuning parameter cleanup
@@ -72,8 +67,9 @@
 - Left hand laser doesn't hit at surface of objects unlike the right hand aim laser (?)
     Only sometimes? This might be intentional? Will need to investigate.
 - Will need to adjust UI element depths
-- 2D marker (objective, repair etc.) position jitter a lot
+- 2D marker (objective, repair etc.) position jitter a lot (?)
     They need some smoothing
+- Remove the background from the wrist status HUD
 
 ### VR Options Menu
 - Have bindings section let you change your bindings (?)
@@ -162,6 +158,11 @@
     > The elbow chooser didn't know the body was there: with the hands at the chest it could put the elbow 12–15 cm inside it (measured on PreyVR-103 against capsules fitted to the drawn torso). It now prefers elbows outside the body, and the drawn elbow goes round the body to them, never through it. PreyVR-104, worn OK 2026-10-29. See docs/ARM-TORSO-SCOPE-2026-10-29.md.
 - Body IK seems to cause the body to twist a bit when leaning down
     > Not the IK, and not the zero-G work. Within 5° of straight down the play space's yaw went wrong, off by how far the head's heading had moved, which turned the chest, hands and aim about the head until the head came back out of that range. Bending over is what gets a head that far down. The yaw is now read from the view instead of worked back from the camera. PreyVR-118, worn OK 2026-10-31. See docs/BODY-FOLLOW.md, the four yaws.
+- Remove Q-Beam equip animation (?)
+    Maybe all weapon draw animations should be disabled?
+    Wrench draw animation is already disabled.
+    Add an option to toggle all of them?
+    > Every weapon now comes out and goes away at once instead of playing Prey's draw and stow animations, and each still makes its own sounds. Swaps are instant as a result: those animations took about 1 to 2 seconds between them. Equipment's Weapon Draw Animations brings them back, along with the wrench's hand spin. PreyVR-126, worn OK 2026-10-31. See docs/WEAPON-DRAW-SCOPE-2026-10-31.md.
 
 ### Rendering
 - The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision). (Archived)
@@ -170,6 +171,10 @@
 - Temporal anti-aliasing
 - Temporal AA seems to have a strange astigmatism; one eye (right) is sharper than the other
     > One eye was reading temporal history from the wrong place on animated models such as the recycler and airlocks. The mod draws one scene twice, and Prey builds each object's motion data once, for the first eye, so the second eye treated the gap between the eyes as motion. PreyVR-113 gave each eye its own previous view and fixed first-person objects, which moved the fault on world objects from the left eye to the right. PreyVR-121 corrects the right eye. Worn OK 2026-10-31. See docs/TEMPORAL-AA-SCOPE-2026-10-30.md.
+
+### Technical Debt
+- Restructuring
+    > `src/` and `tests/` are grouped by feature, with each header beside its source and `include/` gone. The compiled code matches PreyVR-123 byte for byte. PreyVR-124, smoke tested OK 2026-10-31. See src/README.md.
 
 ---
 
@@ -180,6 +185,7 @@ Feature set tracking list, in broad terms:
     Player interaction with objects in the world. Encompasses touching, pushing and throwing stuff along with hitting things with the wrench.
 - Stereoscopic rendering (**IMPLEMENTED**)
     Using the dormant stereoscopic rendering code in Prey's CryEngine fork. Cutscenes, fades and UI elements need special handling to display in both eyes correctly.
+- Temporal Anti-Aliasing (**IMPLEMENTED**)
 - VR Options Menu (**IN PROGRESS**)
 - Engine Instability Bugs (**IN PROGRESS**)
 - ...

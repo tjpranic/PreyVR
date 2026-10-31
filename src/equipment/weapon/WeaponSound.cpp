@@ -1,17 +1,21 @@
-#include "equipment/wrench/WrenchSound.h"
+#include "equipment/weapon/WeaponSound.h"
 #include "engine/EngineAccess.h"
 #include "base/Logger.h"
 #include "engine/NativeContract.h"
-#include "equipment/wrench/WrenchSoundNative.h"
+#include "equipment/weapon/WeaponSoundNative.h"
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdint>
+#include <cstring>
 #include <iterator>
+#include <span>
 
 namespace preyvr::dll {
 namespace {
-namespace sn = wrenchsound::native;
+namespace sn = weaponsound::native;
 
-void Log(const std::string& line) { lifecycle::Log("preyvr_wrench_sound " + line); }
+void Log(const std::string& line) { lifecycle::Log("preyvr_weapon_sound " + line); }
 
 // Every function the replay calls through a slot is one the gate checks.
 static_assert(contract::Gated(sn::Contracts, sn::GetAudioTriggerId) && contract::Gated(sn::Contracts, sn::ProxyExecuteTrigger));
@@ -103,18 +107,16 @@ using GetProxyFn = std::uintptr_t(__fastcall*)(std::uintptr_t, int);
 // SAudioCallBackInfos as the PlaySound clip passes it: nothing to notify, normal priority.
 struct CallbackInfo { void* object; void* userData; void* owner; std::uint32_t flags; };
 const CallbackInfo kNoCallback{nullptr, nullptr, nullptr, sn::CallbackFlags};
-// A set of triggers to play, and each one's id once the audio system has confirmed it
-// (the trigger exists and its id is the captured one).
-struct Sound {
-    const char* what;
-    const char* const* names;
-    const std::uint32_t* ids;
-    std::uint32_t* cache;
-    std::size_t count;
-};
-std::uint32_t drawIds[std::size(sn::DrawTriggers)]{}, stowIds[std::size(sn::StowTriggers)]{};
-const Sound kDraw{"draw", sn::DrawTriggers, sn::DrawTriggerIds, drawIds, std::size(sn::DrawTriggers)};
-const Sound kStow{"stow", sn::StowTriggers, sn::StowTriggerIds, stowIds, std::size(sn::StowTriggers)};
+// The ids the audio system has confirmed: the trigger exists and its id is the
+// captured one. Asked once each; a full list only means asking again.
+std::array<std::uint32_t, 32> confirmed{};
+bool Confirmed(std::uint32_t id) { return std::find(confirmed.begin(), confirmed.end(), id) != confirmed.end(); }
+void Confirm(std::uint32_t id)
+{
+    if (const auto free = std::find(confirmed.begin(), confirmed.end(), 0u); free != confirmed.end()) { *free = id; }
+}
+// A set of triggers to play.
+struct Sound { const char* what; std::span<const sn::Trigger> triggers; };
 enum class Play : std::uint8_t { played, noEntity, noProxy, unknownTrigger, fault };
 const char* PlayName(Play p)
 {
@@ -143,16 +145,17 @@ Play PlayTriggers(const Natives& n, const Sound& s, unsigned& count)
         const auto proxy = Virtual<GetProxyFn>(entity, sn::GetProxySlot)(entity, sn::AudioProxyType);
         if (!proxy || *reinterpret_cast<const std::uintptr_t*>(proxy) != n.proxyVtable) { return Play::noProxy; }
         const auto audio = *reinterpret_cast<const std::uintptr_t*>(n.audioSystem);
-        for (std::size_t i = 0; i < s.count; ++i) {
-            if (!s.cache[i]) {
+        for (std::size_t i = 0; i < s.triggers.size(); ++i) {
+            const sn::Trigger& trigger = s.triggers[i];
+            if (!Confirmed(trigger.id)) {
                 std::uint32_t id = 0;
                 if (!audio || *reinterpret_cast<const std::uintptr_t*>(audio) != n.audioSystemVtable ||
-                    !Virtual<TriggerIdFn>(audio, sn::TriggerIdSlot)(audio, s.names[i], &id) || id != s.ids[i]) {
+                    !Virtual<TriggerIdFn>(audio, sn::TriggerIdSlot)(audio, trigger.name, &id) || id != trigger.id) {
                     return Play::unknownTrigger;
                 }
-                s.cache[i] = id;
+                Confirm(id);
             }
-            Virtual<ExecuteFn>(proxy, sn::ExecuteTriggerSlot)(proxy, s.cache[i], 0, sn::DefaultProxyId, &kNoCallback);
+            Virtual<ExecuteFn>(proxy, sn::ExecuteTriggerSlot)(proxy, trigger.id, 0, sn::DefaultProxyId, &kNoCallback);
             ++count;
         }
         return Play::played;
@@ -173,15 +176,32 @@ bool PlayTriggerSet(const Sound& s)
 }
 } // namespace
 
-void SetWrenchSoundPlay(unsigned on)
+void SetWeaponSoundPlay(unsigned on)
 {
     playOn = on != 0;
     Log("settings play=" + std::to_string(playOn.load()));
 }
-unsigned WrenchSoundPlay() { return playOn.load() ? 1u : 0u; }
-bool WrenchSoundPlayDraw() { return PlayTriggerSet(kDraw); }
-bool WrenchSoundPlayStow() { return PlayTriggerSet(kStow); }
-std::string WrenchSoundReport()
+unsigned WeaponSoundPlay() { return playOn.load() ? 1u : 0u; }
+unsigned WeaponSoundFor(const char* className)
+{
+    unsigned sound = 0;
+    for (const auto& c : sn::ClassSounds) {
+        if (std::strcmp(c.className, className) == 0) { return sound; }
+        ++sound;
+    }
+    return sound;   // past the table: the defaults
+}
+bool WeaponSoundPlayDraw(unsigned sound)
+{
+    return PlayTriggerSet({"draw", sound < std::size(sn::ClassSounds) ? sn::ClassSounds[sound].draw
+                                                                      : std::span<const sn::Trigger>(sn::DefaultDraw)});
+}
+bool WeaponSoundPlayStow(unsigned sound)
+{
+    return PlayTriggerSet({"stow", sound < std::size(sn::ClassSounds) ? sn::ClassSounds[sound].stow
+                                                                      : std::span<const sn::Trigger>(sn::DefaultStow)});
+}
+std::string WeaponSoundReport()
 {
     return " play=" + std::to_string(playOn.load()) + " played=" + std::to_string(played.load()) + " playFailed=" +
            std::to_string(playFailed.load()) + " lastPlay=" + lastPlay.load() + " gate=" + gate.load() + " fault=" +

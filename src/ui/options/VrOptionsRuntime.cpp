@@ -10,6 +10,7 @@
 #include "render/stereo/MarkerStereo.h"
 #include "aim/AimTakeover.h"
 #include "equipment/body/BodyEquipmentLane.h"
+#include "equipment/weapon/WeaponDraw.h"
 #include "render/camera/HeadTrackingHook.h"
 #include "equipment/head/HelmetLane.h"
 #include "ui/screens/ExamineCamera.h"
@@ -221,6 +222,7 @@ constexpr Wiring wiring[]={
  {options::HelmetSize,Set<SetHelmetSizePercent>,Get<HelmetSizePercent>},
  {options::ZeroGRoll,Set<SetZeroGRollDegrees>,Get<ZeroGRollDegrees>},
  {options::ZeroGPitch,Set<SetZeroGPitchDegrees>,Get<ZeroGPitchDegrees>},
+ {options::WeaponDrawAnims,Set<SetWeaponDrawAnimations>,Get<WeaponDrawAnimations>},
 };
 constexpr bool InSettingOrder(){
  for(unsigned i=0;i<std::size(wiring);++i)if(wiring[i].id!=i)return false;

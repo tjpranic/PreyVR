@@ -49,8 +49,8 @@
 #include "physics/contact/ContactLane.h"
 #include "physics/contact/SurfaceStopLane.h"
 #include "physics/swing/SwingLane.h"
-#include "equipment/wrench/WrenchDraw.h"
-#include "equipment/wrench/WrenchSound.h"
+#include "equipment/weapon/WeaponDraw.h"
+#include "equipment/weapon/WeaponSound.h"
 #include "equipment/psi/PsiMedkit.h"
 #include "controls/input/Haptics.h"
 #include "ui/hud/HudBridge.h"
@@ -769,26 +769,19 @@ constexpr Verb kVerbs[] = {
         if (bool on = true; EventLogSwitch(args, on)) { SetSwingEventLog(on); }
         out << "swing result=0" << SwingReport();
     }},
-    // docs/WRENCH-DRAW-ANIMATION-2026-10-20.md: wrench.draw [0|1]. 1 (default) takes
-    // the wrench out and puts it away without Prey's draw and stow animations; 0 plays
-    // them again.
-    // wrench.sound [play 0|1]: the draw's and stow's sound after a skip (WrenchSound.h,
-    // default 1).
-    {"wrench.sound", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
+    // docs/WEAPON-DRAW-SCOPE-2026-10-31.md: weapon.sound [play 0|1]: the draw's and
+    // stow's sound after a skip (WeaponSound.h, default 1).
+    {"weapon.sound", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
         for (std::size_t i = 1; i + 1 < args.size(); i += 2) {
             int on = 1;
             ParseInt(args[i + 1], on);
-            if (args[i] == "play") { SetWrenchSoundPlay(on != 0); }
+            if (args[i] == "play") { SetWeaponSoundPlay(on != 0); }
         }
-        out << "wrench.sound result=0" << WrenchSoundReport();
+        out << "weapon.sound result=0" << WeaponSoundReport();
     }},
-    {"wrench.draw", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
-        if (args.size() > 1) {
-            int on = 1;
-            ParseInt(args[1], on);
-            SetWrenchDrawSkip(on != 0);
-        }
-        out << "wrench.draw result=0" << WrenchDrawReport();
+    // The skip's report. VR Options' Weapon Draw Animations is its switch.
+    {"weapon.draw", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
+        out << "weapon.draw result=0" << WeaponDrawReport();
     }},
     // The session, menus and panels, the HUD, the view, the near pass, IK, aim,
     // capture, movement and input.

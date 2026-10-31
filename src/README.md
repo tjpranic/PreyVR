@@ -13,7 +13,7 @@ Everything is grouped by feature. A feature's pure logic, its DLL side, its engi
 | `body/` | Hands, arms, torso, body turn and room-scale. `ik/`: the animation-driven IK lane. |
 | `aim/` | Controller aim, the gameplay frame, shots from the muzzle, weapon alignment and the two-handed hold. |
 | `physics/` | `contact/`: contact, surface stop and scene queries. `swing/`: the free-swing wrench. `hands/`: carrying, throwing and use. |
-| `equipment/` | `body/`: holsters and the medkit slot. `psi/`: psi, medkit and psychoscope. `head/`: head lamp and helmet. `wrench/`: the draw skip and its sound. |
+| `equipment/` | `body/`: holsters and the medkit slot. `psi/`: psi, medkit and psychoscope. `head/`: head lamp and helmet. `weapon/`: the draw skip and its sound. |
 | `ui/` | `hud/`: the HUD, wrist hologram and reticle. `screens/`: panels, the UI pointer, loading screens and keypads. `options/`: VR Options. |
 | `diagnostics/` | `commands/`: the tuning channel and research verbs. `overlay/`: the debug overlay, which also draws the aim lasers. `probes/`: every probe. `capture/`: frame dumps, crash dumps and hardware breakpoints. |
 

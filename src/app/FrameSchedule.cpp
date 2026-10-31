@@ -30,7 +30,7 @@
 #include "app/VrMode.h"
 #include "ui/options/VrOptionsRuntime.h"
 #include "ui/hud/WristLane.h"
-#include "equipment/wrench/WrenchDraw.h"
+#include "equipment/weapon/WeaponDraw.h"
 #include "xr/XrSessionHost.h"
 #include "engine/EngineMap.h"
 
@@ -86,8 +86,8 @@ void TickMainRender()
     // frame's events left; on the main thread, as the scheme's listeners need.
     ServiceControllerPromptsFrame();
     ServiceBindingDump();
-    // The wrench's skipped draws finish here, a frame on (WrenchDraw.h).
-    ServiceWrenchDrawFrame();
+    // The skipped weapon draws finish here, a frame on (WeaponDraw.h).
+    ServiceWeaponDrawFrame();
 }
 
 void BeforeEngineRender(void* system)

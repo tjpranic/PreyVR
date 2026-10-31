@@ -253,8 +253,8 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/physics/contact/ContactLane.cpp
         src/physics/contact/SurfaceStopLane.cpp
         src/physics/swing/SwingLane.cpp
-        src/equipment/wrench/WrenchDraw.cpp
-        src/equipment/wrench/WrenchSound.cpp
+        src/equipment/weapon/WeaponDraw.cpp
+        src/equipment/weapon/WeaponSound.cpp
         src/physics/hands/GrenadeLane.cpp
         src/body/ArmsLane.cpp
         src/diagnostics/commands/MemoryCommands.cpp
@@ -469,7 +469,7 @@ if(PREYVR_BUILD_TESTS)
     preyvr_add_test(contact_native tests/physics/ContactNativeTests.cpp)
     preyvr_add_test(swing_native tests/physics/SwingNativeTests.cpp)
     preyvr_add_test(swing_strike tests/physics/SwingStrikeTests.cpp)
-    preyvr_add_test(wrench_draw_native tests/equipment/WrenchDrawNativeTests.cpp)
+    preyvr_add_test(weapon_draw_native tests/equipment/WeaponDrawNativeTests.cpp)
     preyvr_add_test(contact_query tests/physics/ContactQueryTests.cpp)
     preyvr_add_test(surface_stop tests/physics/SurfaceStopTests.cpp)
     preyvr_add_test(psi_medkit_contracts tests/equipment/PsiMedkitTests.cpp TARGET preyvr_psi_medkit_tests)
@@ -514,10 +514,10 @@ if(PREYVR_BUILD_TESTS)
         preyvr_add_test(swing_lane tests/physics/SwingLaneTests.cpp
             DLL
             LIBS preyvr_core minhook)
-        preyvr_add_test(wrench_draw tests/equipment/WrenchDrawTests.cpp
+        preyvr_add_test(weapon_draw tests/equipment/WeaponDrawTests.cpp
             DLL
             LIBS preyvr_core minhook)
-        preyvr_add_test(wrench_sound tests/equipment/WrenchSoundTests.cpp
+        preyvr_add_test(weapon_sound tests/equipment/WeaponSoundTests.cpp
             DLL
             LIBS preyvr_core minhook)
         preyvr_add_test(starfield_stereo tests/render/StarfieldStereoTests.cpp

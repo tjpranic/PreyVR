@@ -20,6 +20,7 @@ enum Setting : unsigned { Turn, HeadRelative, TurnSpeed, TwoHand, GripToggle, Au
     CarryHand,
     FingerCurl, AimLasers, ShotTrail, ArmLength, SurfaceStop, HeavyMass, LeanZone, HipsBack, NearClip,
     ScreenPullback, Antialiasing, Helmet, HelmetHeight, HelmetForward, HelmetSize, ZeroGRoll, ZeroGPitch,
+    WeaponDrawAnims,
     Count };
 // What a value counts, for Display. The directional units name the side instead
 // of a sign.

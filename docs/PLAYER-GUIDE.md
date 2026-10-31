@@ -181,11 +181,13 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   crosshair sits on), which hand's laser points at menus, the reticle's size, and
   **Marker Size** (the markers in the world: objectives, repair and danger icons,
   enemy awareness and points of interest).
-- **Equipment:** optional body holsters, clear holster assignments, wrist status,
-  wrist-hologram size, the wrist tick, and the display's position along the
-  forearm, height and tilt. Health, suit and psi leave the HUD while the wrist
-  status is on. Holsters
-  default off; the wrist status defaults on.
+- **Equipment:** optional body holsters, clear holster assignments, **Weapon Draw
+  Animations**, wrist status, wrist-hologram size, the wrist tick, and the display's
+  position along the forearm, height and tilt. Health, suit and psi leave the HUD
+  while the wrist status is on. Holsters default off; the wrist status defaults on.
+  Weapon Draw Animations defaults off, so a weapon is in your hand at once. On plays
+  Prey's animations for taking weapons out and putting them away, and your drawn hand
+  turns with the weapon as they do.
 - **Feedback:** controller feedback and its strength.
 - **Abilities:** psychic targeting (Original / Head / Left Controller), the
   optional left-hip medkit slot, and body slot feedback. Original targeting and

@@ -1,0 +1,46 @@
+#pragma once
+#include <cstdint>
+#include <string>
+
+// **A weapon draw's sound** (docs/WEAPON-DRAW-SCOPE-2026-10-31.md,
+// docs/WRENCH-DRAW-ANIMATION-2026-10-20.md, "The equip sound").
+//
+// The replay: WeaponDraw skips the draw, and with it the PlaySound clips that were
+// its sound (the wrench's: Play_Player_Arm_Wrench and Play_switch_weapon, on the
+// player, 11-13 ms in: WeaponSoundNative.h). A frame after each skip WeaponDraw
+// calls WeaponSoundPlayDraw, which plays that weapon's on the player's audio proxy
+// as the clips did. The stow is skipped too, and WeaponSoundPlayStow plays its sound
+// (Play_Player_Unequip). On by default (`weapon.sound play 0` turns both off).
+//
+// The capture, off by default, is how they are found, and it goes again once the
+// tables are full. While it is on, every weapon's draw and stow play again (WeaponDraw
+// does not skip them), and for 3 s after each starts the log gets, timed from that
+// start (`preyvr_weapon_sound`):
+//  - `window`: what started it (select, pickup or stow), the weapon's class and item;
+//  - `clip`: each Mannequin PlaySound clip that enters (its start and stop
+//    triggers, fire-and-forget, sound flags, joint, entity);
+//  - `resolve`: each audio trigger looked up by name (name, id, found);
+//  - `execute`: each trigger played on an entity's audio proxy (id, entity).
+namespace preyvr::dll {
+// weapon.sound capture [0|1].
+void SetWeaponSoundCapture(unsigned on);
+bool WeaponSoundCapturing();
+// weapon.sound play [0|1].
+void SetWeaponSoundPlay(unsigned on);
+unsigned WeaponSoundPlay();
+// WeaponDraw's hooks while capturing: opens a window. `what` is select, pickup or
+// stow, `item` the weapon's entity id, `className` its entity class.
+void WeaponSoundWindow(const char* what, std::uint32_t item, const char* className);
+// Which draw a weapon of this entity class plays, for WeaponSoundPlayDraw.
+unsigned WeaponSoundDrawFor(const char* className);
+// Prey's main thread, a frame after WeaponDraw skipped a draw: plays the draw's
+// sound on the player. False when it is off or could not play (the report says why).
+bool WeaponSoundPlayDraw(unsigned draw);
+// Prey's main thread, right after WeaponDraw stowed a weapon at once: plays the
+// stow's sound (Play_Player_Unequip) on the player.
+bool WeaponSoundPlayStow();
+// Prey's main thread, once a frame (ServiceWeaponDrawFrame): installs the capture's
+// hooks the first time it is wanted, and ends windows.
+void ServiceWeaponSoundFrame();
+std::string WeaponSoundReport();
+} // namespace preyvr::dll

@@ -89,6 +89,8 @@ PREYVR_STUB(SetUiPointerHand,UiPointerHand,PointerHand,unsigned)
 PREYVR_STUB(SetTemporalAntialiasing,TemporalAntialiasingEnabled,Antialiasing,unsigned)
 PREYVR_STUB(SetZeroGRollDegrees,ZeroGRollDegrees,ZeroGRoll,unsigned)
 PREYVR_STUB(SetZeroGPitchDegrees,ZeroGPitchDegrees,ZeroGPitch,unsigned)
+void SetWeaponDrawAnimations(unsigned v){applied[options::WeaponDrawAnims]=static_cast<int>(v);}
+unsigned WeaponDrawAnimations(){return static_cast<unsigned>(applied[options::WeaponDrawAnims]);}
 #undef PREYVR_STUB
 DWORD TextPanelDistanceCm(){return TextPanelDistanceCmValue();}
 DWORD SetMovementAxisScales(unsigned strafe,unsigned backward){
@@ -235,7 +237,7 @@ int main(){
    {options::LeanZone,40},{options::HipsBack,12},{options::NearClip,6},{options::ScreenPullback,45},
    {options::Antialiasing,0},{options::Helmet,0},
    {options::HelmetHeight,-25},{options::HelmetForward,-40},{options::HelmetSize,130},{options::ZeroGRoll,45},
-   {options::ZeroGPitch,30}};
+   {options::ZeroGPitch,30},{options::WeaponDrawAnims,1}};
   VrOptionsUiResult result;
   for(const auto& [id,v]:chosen){options::Change change;change.setting=static_cast<int>(id);change.value=v;
    result.changes.push_back(change);}
