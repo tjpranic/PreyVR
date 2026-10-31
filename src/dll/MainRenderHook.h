@@ -85,6 +85,9 @@ bool DualStereoContractEnabled();
 
 // The eye separation the stereo path is armed with; 0 when stereo is off.
 float SyntheticStereoIpdMetres();
+// The separation of the eyes last built: less while Prey zooms (preyvr/ViewZoom.h).
+// For what is drawn with those eyes.
+float RenderedEyeIpdMetres();
 
 // Render-thread half of rung 1b. Turns `camera` (a CCamera, 0x240 bytes, the
 // frame's head camera) into eye `eye` by the same construction as the

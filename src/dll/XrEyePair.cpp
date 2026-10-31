@@ -116,6 +116,24 @@ bool EnsureEyeImages(const D3D11_TEXTURE2D_DESC& desc)
     return true;
 }
 
+// What the compositor is told this frame's image covers (preyvr/ViewZoom.h).
+XrFovf DeclaredFov(const RenderContract& contract)
+{
+    const auto declared = DeclaredTangents(contract);
+    return {std::atan(declared[0]), std::atan(declared[1]), std::atan(declared[2]), std::atan(declared[3])};
+}
+
+// The headset's frustum, in the image's terms for what is drawn into it: a zoom
+// shows the image over more of the display than its tangents say.
+struct ShownTangents {
+    float tangents[4];
+    ShownTangents(const XrFovf& fov, float zoom)
+        : tangents{std::tan(fov.angleLeft) / zoom, std::tan(fov.angleRight) / zoom, std::tan(fov.angleUp) / zoom,
+                   std::tan(fov.angleDown) / zoom}
+    {
+    }
+};
+
 } // namespace
 
 namespace xrsession {
@@ -247,13 +265,13 @@ bool SubmitStereoPair(
             const Pose& source = contract.eyePoses[rendered];
             RenderContract eyeContract = contract;
             eyeContract.eye = rendered;
-            eyeContract.pose = source;
-            const float shown[4] = {std::tan(views[target].fov.angleLeft), std::tan(views[target].fov.angleRight),
-                                    std::tan(views[target].fov.angleUp), std::tan(views[target].fov.angleDown)};
-            DrawDebugOverlay(gHost.device, context, gHost.eyeImage[target], eyeContract, shown);
+            eyeContract.pose = RenderedEyePose(contract, rendered);
+            ShownTangents shown(views[target].fov, contract.zoom);
+            DrawDebugOverlay(gHost.device, context, gHost.eyeImage[target], eyeContract, shown.tangents);
             gHost.eyePose[target] = ToXrPose(source);
-            gHost.eyeFov[target] = {std::atan(contract.tangents[0]), std::atan(contract.tangents[1]),
-                std::atan(contract.tangents[2]), std::atan(contract.tangents[3])};
+            gHost.eyeFov[target] = DeclaredFov(contract);
+            gHost.eyeHead = contract.pose;
+            gHost.eyeZoom = contract.zoom;
             gHost.requestedFov[target] = views[target].fov;
             gHost.requestedFovValid[target] = true;
             gEyeContractsPublished.fetch_add(1, std::memory_order_relaxed);
@@ -269,16 +287,16 @@ bool SubmitStereoPair(
         context->CopyResource(gHost.eyeImage[target], backBuffer);
         // Drawn into this eye with the contract that rendered it, so the
         // overlay and the pixels beneath it can never belong to different poses.
-        const float shown[4] = {std::tan(views[target].fov.angleLeft), std::tan(views[target].fov.angleRight),
-                                std::tan(views[target].fov.angleUp), std::tan(views[target].fov.angleDown)};
-        DrawDebugOverlay(gHost.device, context, gHost.eyeImage[target], contract, shown);
+        ShownTangents shown(views[target].fov, contract.zoom);
+        DrawDebugOverlay(gHost.device, context, gHost.eyeImage[target], contract, shown.tangents);
         gHost.hudCapturePair.RecordEye(target,hudCaptured);
         // Publish the pixels and the contract that produced them together. The
         // copy and these three writes are the one publication unit; nothing
         // downstream may pair this image with any other frame's pose or FOV.
         gHost.eyePose[target] = ToXrPose(contract.pose);
-        gHost.eyeFov[target] = {std::atan(contract.tangents[0]),std::atan(contract.tangents[1]),
-            std::atan(contract.tangents[2]),std::atan(contract.tangents[3])};
+        gHost.eyeFov[target] = DeclaredFov(contract);
+        gHost.eyeHead = contract.pose;
+        gHost.eyeZoom = contract.zoom;
         // Stored in the SAME publication unit as the declaration it is compared
         // against, so a coverage figure can never pair this frame's request with
         // another frame's render.

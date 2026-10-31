@@ -513,7 +513,7 @@ unsigned MarkerSizePercent() { return gSizePercent.load(std::memory_order_acquir
 void BeginMarkerEyes(void* root)
 {
     tMovedCount = 0;
-    tHalfIpd = 0.5f * SyntheticStereoIpdMetres();
+    tHalfIpd = 0.5f * RenderedEyeIpdMetres();
     tShift = gEnabled.load(std::memory_order_acquire) && tHalfIpd > 0.0f;
     const unsigned size = gSizePercent.load(std::memory_order_acquire);
     if (!(tShift || size != 100) || root == nullptr) {

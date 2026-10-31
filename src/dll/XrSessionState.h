@@ -340,6 +340,10 @@ struct Host {
     XrPosef eyePose[2]{};
     unsigned long long eyeReference = ~0ull;
     XrFovf eyeFov[2]{};
+    // The head the held images were rendered from and their magnification
+    // (preyvr/ViewZoom.h), for what is placed in the world to match them.
+    Pose eyeHead{};
+    float eyeZoom = 1.f;
     // What the runtime asked for, kept beside what we declared. The two are
     // different frusta and the gap between them is spent pixels: comparing them
     // is the only way to say how much of the render the headset can show.

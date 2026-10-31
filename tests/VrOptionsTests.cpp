@@ -110,10 +110,12 @@ void SettingsChecks(){
  Check(Serialize(parsed).find("scene_reticle")==std::string::npos,"and the next save leaves it out");
  Check(!Parse("version=1\nscene_reticle=x\n",parsed),"a retired key still needs a number");
  // The options audit, 2026-10-31: each of these is now fixed, and a file saved
- // with all of them, at any value they took, keeps everything else.
+ // with all of them, at any value they took, keeps everything else. Zoom Limit
+ // came and went the same day.
  {constexpr const char* retired[]={"support_snap=0","arms_free=0","controller_prompts=0","hud_layer=0","reticle_world=0",
    "reticle_fallback_mm=200000","wrist_on_hud=1","grenade_deploy=0","long_reach=0","muzzle_aim=0",
-   "ui_margin=72","ui_curve=35","ui_guide=1","inventory_layer=1","inventory_stereo=1","inventory_depth=25"};
+   "ui_margin=72","ui_curve=35","ui_guide=1","inventory_layer=1","inventory_stereo=1","inventory_depth=25",
+   "zoom_limit=30"};
   std::string text="version=1\nhaptic_strength=35\n";
   for(const char* line:retired)text+=std::string(line)+"\n";
   Check(Parse(text,parsed)&&parsed[HapticStrength]==35,"a file saved before the audit still loads, its choices kept");

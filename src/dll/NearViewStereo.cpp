@@ -375,6 +375,7 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
     // eye from the data being rendered, and supplies the right axis that
     // belongs to it rather than a newer head orientation.
     int eye = -1;
+    float zoom = 1.0f;
     Vec3 right{};
     {
         void* sourceCamera = nullptr;
@@ -395,6 +396,7 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
             return forward();
         }
         eye = record.eye;
+        zoom = record.zoom;
         right = Vec3{record.right[0], record.right[1], record.right[2]};
     }
     if (eye != 0 && eye != 1) {
@@ -439,10 +441,11 @@ void* __fastcall PackViewInfoWithEyeOffset(void* owner, std::uint8_t* viewInfo,
     bool edited = depth && RemapNearDepth(viewInfo, eye, depthSaved);
 
     if (offset) {
-        // Eye minus cyclops: half the IPD, left negative and right positive.
+        // Eye minus cyclops: half the IPD, left negative and right positive, and
+        // closer in by the frame's zoom, as the world's eye was (preyvr/ViewZoom.h).
         const float half = gZeroDelta.load(std::memory_order_acquire)
                                ? 0.0f
-                               : gHalfIpd.load(std::memory_order_relaxed);
+                               : gHalfIpd.load(std::memory_order_relaxed) / zoom;
         const float signed_ = stereo::EyeSign(eye) * half;
         const Vec3 delta{right.x * signed_, right.y * signed_, right.z * signed_};
 

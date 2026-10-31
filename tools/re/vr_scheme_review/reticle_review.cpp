@@ -16,6 +16,7 @@ DWORD CallHudOneFloat(const char* name, float value) {
 // viewport fraction, dispatched as is.
 unsigned SceneReticleEnabled() { return 0; }
 bool HudLayerReticle(float, float, float&, float&) { return false; }
+float ViewZoomOf(float) { return 1.0f; }
 DWORD HudScreenToFlashFraction(float, float, bool, float*, float*) { return 1; }
 DWORD XrResolutionChain(XrResolution) { return 0; }
 unsigned long long HeadTrackingReferenceGeneration() { return 0; }

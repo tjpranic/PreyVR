@@ -8,6 +8,7 @@
 - Foveated rendering (?)
 - Temporal AA seems to have a strange astigmatism; one eye (right) is sharper than the other
     Looks like an environmental reflection texturing issue, possibly a depth issue.
+    I'm seeing different textures in each eye.
 
 ### UX/Immersion
 - Rotate to face direction (?)
@@ -70,14 +71,17 @@
 - Will need to adjust UI element depths
 - 2D marker (objective, repair etc.) position jitter a lot
     They need some smoothing
-- Psychoscope zoom is broken
 
 ### VR Options Menu
-- Have bindings section let you change your bindings
+- Have bindings section let you change your bindings (?)
 - Group related options in the tabs into sections
 - Development tab
     This tab will be used to run input tuning commands because sending commands through the "Tune Prey VR.cmd" script is way too annoying to use properly.
 - The arms length option doesn't affect the whole arm, just the forearm
+
+### Engine Instability
+- Very rarely, the mod will fail to attach to the game
+    Closing and re-running the mod works just fine, but it's worth looking into
 
 ## IN PROGRESS
 
@@ -120,6 +124,8 @@
 - The hand lasers start outside of player hands
     They seem to begin out of nowhere. Something like a fade in along the length (like when the laser fades out in menus when it's not hitting a surface) would make them look a bit nicer.
     The lasers also render over the top of everything.
+- Psychoscope zoom is broken
+    > Prey zooms by narrowing the view's FOV, and the mod told the headset the true FOV of each frame, so the image covered less of the lens instead of magnifying. Zoomed frames are now declared at the FOV slider's frustum, with the eyes moved closer by the zoom, and the world reticle and wrist card follow the magnified image. Every zoom in the game goes through this. PreyVR-120, worn OK 2026-10-31. See docs/PSYCHOSCOPE-ZOOM-SCOPE-2026-10-31.md.
 
 ### UX/Immersion
 - Zero-G doesn't have rotate controls

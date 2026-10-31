@@ -202,6 +202,7 @@ const Case kCases[] = {
     {"examine.pullback 101", "examine.pullback result=87 ", ExamineCameraReport, processed},
     {"examine.pullback abc", "examine.pullback result=87 ", ExamineCameraReport, processed},   // refused
     {"examine.pullback 30", "examine.pullback result=0 ", ExamineCameraReport, processed},
+    {"zoom.report", "zoom.report result=0 ", ZoomLaneReport, processed},
     {"body.depth", "body.depth result=0 ", BodyDepthReports, processed},
     {"body.depth 3", "body.depth result=87 ", BodyDepthReports, processed},
     {"body.depth abc", "body.depth result=87 ", BodyDepthReports, processed},   // refused

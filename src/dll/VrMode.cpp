@@ -358,7 +358,8 @@ void FollowNearFov() {
     float left=0,right=0,up=0,down=0;
     if(!RenderedEyeTangents(left,right,up,down))return;
     const float vertical=std::max(std::fabs(up),std::fabs(down));
-    if(!std::isfinite(vertical) || vertical<.2f || vertical>10.f)return;
+    // A zoom's view can be narrow: Prey's own reach about 0.2 (ViewZoom.h).
+    if(!std::isfinite(vertical) || vertical<.02f || vertical>10.f)return;
     const auto deci=static_cast<unsigned>(std::lround(2*std::atan(vertical)*572.9577951f));
     // Against the value in force, not the last one followed: activation and a
     // VR restart set their own, which must be replaced again.

@@ -32,6 +32,7 @@
 #include "ReticleFollow.h"
 #include "DebugOverlay.h"
 #include "preyvr/UiPanel.h"
+#include "preyvr/ViewZoom.h"
 #include "preyvr/LatestSnapshot.h"
 #include "preyvr/HudCapturePair.h"
 #include "preyvr/StereoCamera.h"
@@ -165,11 +166,13 @@ bool BuildReticleLayer(const FrameView& view, const HudPartImage& image, const R
        UploadPanelCapture(gHost.reticleSwapchain,gHost.reticleSwapchainLogged,image.texture,"reticle_swapchain",
                           [](const char* reason){RefuseHudPart(HudPart::reticle,reason);})) {
         D3D11_TEXTURE2D_DESC desc{};image.texture->GetDesc(&desc);
-        const Vec3 offset{target->point.x-view.head.position.x,target->point.y-view.head.position.y,
-                          target->point.z-view.head.position.z};
+        // This layer is not in the image a zoom magnifies: it goes where the image
+        // shows the point, from the head that image was rendered from.
+        const Vec3 point=viewzoom::ShownPoint(target->point,gHost.eyeHead,gHost.eyeZoom);
+        const Vec3 offset{point.x-view.head.position.x,point.y-view.head.position.y,point.z-view.head.position.z};
         const float seen=std::sqrt(offset.x*offset.x+offset.y*offset.y+offset.z*offset.z);
         const float width=ui::AngularWidth(seen,hudPanelWidth,2.0f,static_cast<float>(ReticleSizePercent())*.01f);
-        if(const auto quad=ui::FacingQuad(target->point,view.head.position,width,
+        if(const auto quad=ui::FacingQuad(point,view.head.position,width,
                                           width*static_cast<float>(desc.Height)/desc.Width)) {
             FillPanelLayer(layer,*quad,gHost.reticleSwapchain->Handle(),desc);
             active=true;
@@ -303,6 +306,8 @@ bool BuildWristLayer(const FrameView& view, ID3D11Texture2D* nativeWristTexture,
         active=active&&view.reference==HeadTrackingReferenceGeneration();
         if(active){
             const float width=WristCardWidthMetres();
+            // On the drawn forearm, which a zoom magnifies as it does the reticle's point.
+            wristPose.position=viewzoom::ShownPoint(wristPose.position,gHost.eyeHead,gHost.eyeZoom);
             FillQuad(layer,gHost.space,wristPose,
                      hologram?XrExtent2Df{hologramDecision.width,hologramDecision.height}:
                               XrExtent2Df{width,width*NativeWristHeight/NativeWristWidth},

@@ -29,13 +29,16 @@ struct BuiltEye {
     // The camera this eye was offset FROM: the cyclops the game built the frame
     // around. Camera-space content (the near pass) is relative to it.
     float centre[3];
+    // The frame's magnification (preyvr/ViewZoom.h): the eye sits this much closer
+    // to the centre than half the IPD.
+    float zoom;
     int eye;
     unsigned long long serial;
 };
 // Records an eye as its camera is built, by the thread that built it, so the
 // record holds the exact bits the render view will carry. `centre` is the camera
 // it was offset from.
-void PublishBuiltEye(const stereo::Matrix34& camera, const stereo::Matrix34& centre, int eye);
+void PublishBuiltEye(const stereo::Matrix34& camera, const stereo::Matrix34& centre, int eye, float zoom);
 
 // Finds the record whose camera position matches `position`. False when no eye
 // matches, which a caller must treat as "refuse", never as "assume the latest".

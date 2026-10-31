@@ -199,12 +199,14 @@ bool Parse(std::string_view text,Values& result,Present* present){
   // and its 10 m fallback, the wrist alone showing status, charges that stick, long
   // weapons held back, shots from the muzzle, panels to the edge of the view, flat
   // menus, no guide card, and the inventory on the menu panel like any other menu.
+  // zoom_limit: Zoom Limit, 2026-10-31, the day it came: Prey's zooms stop on their own.
   if(key=="scene_reticle"||key=="physical_contacts"||key=="contact_strength"||key=="physical_melee"||
      key=="body_follow"||key=="body_turn_deadzone"||key=="body_step"||key=="body_glide"||
      key=="support_snap"||key=="arms_free"||key=="controller_prompts"||key=="hud_layer"||
      key=="reticle_world"||key=="reticle_fallback_mm"||key=="wrist_on_hud"||key=="grenade_deploy"||
      key=="long_reach"||key=="muzzle_aim"||key=="ui_margin"||key=="ui_curve"||key=="ui_guide"||
-     key=="inventory_layer"||key=="inventory_stereo"||key=="inventory_depth")continue;
+     key=="inventory_layer"||key=="inventory_stereo"||key=="inventory_depth"||
+     key=="zoom_limit")continue;
   // swing_speed took 80-250 until 2026-10-18; a file saved at 80 or 90 rises to the new minimum.
   if(key=="swing_speed"&&value>=80&&value<100)value=100;
   unsigned i=0;for(;i<Count&&key!=specs[i].key;++i){}

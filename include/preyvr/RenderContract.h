@@ -16,7 +16,10 @@ struct RenderContract {
     int eye = -1;
     Pose pose{};
     std::array<Pose,2> eyePoses{};
-    std::array<float,4> tangents{}; // left, right, up, down
+    std::array<float,4> tangents{}; // left, right, up, down, as rendered
+    // How much narrower Prey's view is than the FOV slider's (preyvr/ViewZoom.h),
+    // 1 without a zoom: the frame is declared this much wider than it was rendered.
+    float zoom = 1.f;
     long long displayTime = 0;
     unsigned long long reference = 0;
     // The tracking space the poses are in (HeadTrackingSpaceEpoch); 0 is none.
@@ -48,7 +51,24 @@ inline bool ValidRenderContract(const RenderContract& c) {
     if (c.eye == kRenderContractBothEyes &&
         (!ValidContractPose(c.eyePoses[0]) || !ValidContractPose(c.eyePoses[1]))) return false;
     for(float t:c.tangents) if(!std::isfinite(t)) return false;
+    if(!std::isfinite(c.zoom) || c.zoom<1.f) return false;
     return c.tangents[0]<0 && c.tangents[1]>0 && c.tangents[2]>0 && c.tangents[3]<0;
+}
+// The frustum the compositor is told a frame's image covers: the rendered one,
+// unless Prey has zoomed, when it is the unzoomed one and the image is magnified.
+inline std::array<float,4> DeclaredTangents(const RenderContract& c) {
+    return {c.tangents[0]*c.zoom, c.tangents[1]*c.zoom, c.tangents[2]*c.zoom, c.tangents[3]*c.zoom};
+}
+// Where a both-eyes frame's eye was rendered from: eyePoses, which the compositor
+// is given, are the real eyes, and a zoom's eyes sit closer to the head by its
+// magnification. For what is drawn into the image afterwards.
+inline Pose RenderedEyePose(const RenderContract& c, int eye) {
+    Pose pose=c.eyePoses[eye];
+    if(c.zoom==1.f) return pose;
+    const Vec3& head=c.pose.position;
+    pose.position={head.x+(pose.position.x-head.x)/c.zoom, head.y+(pose.position.y-head.y)/c.zoom,
+                   head.z+(pose.position.z-head.z)/c.zoom};
+    return pose;
 }
 // Whether a frame can still be submitted once it reaches the XR thread, a frame
 // after it was built. Its eye poses are in tracking space, so only a change of

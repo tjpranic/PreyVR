@@ -11,6 +11,7 @@
 #include "FrameSchedule.h"
 
 #include "HeadTrackingHook.h"
+#include "ZoomLane.h"
 
 #include "FrameCaptureWin32.h"
 #include "Logger.h"
@@ -64,6 +65,8 @@ std::atomic<unsigned long long> gApplied{0};
 std::atomic<unsigned long long> gRestoreFailures{0};
 std::atomic<bool> gLoggedFirstApplication{false};
 std::atomic<float> gStereoIpd{0.0f};
+// The magnification of the eyes last built, for what is drawn with them after.
+std::atomic<float> gBuiltEyeZoom{1.0f};
 std::atomic<float> gStereoHalfFov{50.0f};
 std::atomic<unsigned long long> gEyeCounter{0};
 std::atomic<int> gLastEye{-1};
@@ -82,6 +85,13 @@ bool PrologueMatches(std::uintptr_t address, const std::uint8_t* expected, std::
 {
     return IsExecutableAddress(reinterpret_cast<const void*>(address)) &&
            std::memcmp(reinterpret_cast<const void*>(address), expected, length) == 0;
+}
+
+// A frame's magnification, from its own camera (preyvr/ViewZoom.h).
+float CameraZoom(std::span<const std::uint8_t> camera)
+{
+    const auto view = stereoframe::TangentsFromCamera(camera);
+    return view ? ViewZoomOf(view->tanUp) : 1.0f;
 }
 
 void __fastcall RenderWithCameraEdit(void* system)
@@ -156,7 +166,10 @@ void __fastcall RenderWithCameraEdit(void* system)
                 stereo::EyeSign(eye) * .5f * renderIpd, 0, 0}});
         }
         const auto fov = stereoframe::TangentsFromCamera(edited);
-        if (fov) renderContract.tangents = {fov->tanLeft, fov->tanRight, fov->tanUp, fov->tanDown};
+        if (fov) {
+            renderContract.tangents = {fov->tanLeft, fov->tanRight, fov->tanUp, fov->tanDown};
+            renderContract.zoom = ViewZoomOf(fov->tanUp);
+        }
         renderContract.valid = haveRenderHead && fov.has_value();
     } else {
         // Alternate every frame. With the simulation frozen, consecutive frames
@@ -171,11 +184,13 @@ void __fastcall RenderWithCameraEdit(void* system)
             : static_cast<int>(gEyeCounter.fetch_add(1, std::memory_order_relaxed) & 1ull);
         const float renderIpd = gStereoIpd.load(std::memory_order_acquire);
         const stereo::Matrix34 centre = stereo::ReadMatrix(edited);
+        const float zoom = CameraZoom(edited);
         built = BuildSyntheticEye(edited, eye,
-                                  renderIpd,
+                                  renderIpd / zoom,
                                   gStereoHalfFov.load(std::memory_order_acquire));
         if (built) {
-            PublishBuiltEye(stereo::ReadMatrix(edited), centre, eye);
+            PublishBuiltEye(stereo::ReadMatrix(edited), centre, eye, zoom);
+            gBuiltEyeZoom.store(zoom, std::memory_order_relaxed);
             gLastEye.store(eye, std::memory_order_release);
             // Stamp the capture so the two dumps of a pair cannot be confused.
             SetFrameCaptureTagOverride(eye);
@@ -186,6 +201,7 @@ void __fastcall RenderWithCameraEdit(void* system)
                 stereo::EyeSign(eye)*.5f*renderIpd,0,0}});
             const auto fov=stereoframe::TangentsFromCamera(edited);
             if(fov) renderContract.tangents={fov->tanLeft,fov->tanRight,fov->tanUp,fov->tanDown};
+            renderContract.zoom=zoom;
             renderContract.valid=haveRenderHead && fov.has_value();
         }
     }
@@ -337,6 +353,11 @@ float SyntheticStereoIpdMetres()
     return gStereoIpd.load(std::memory_order_acquire);
 }
 
+float RenderedEyeIpdMetres()
+{
+    return gStereoIpd.load(std::memory_order_acquire) / gBuiltEyeZoom.load(std::memory_order_relaxed);
+}
+
 bool BuildDualEyeCamera(std::uint8_t* camera, int eye)
 {
     const float ipd = gStereoIpd.load(std::memory_order_acquire);
@@ -347,16 +368,18 @@ bool BuildDualEyeCamera(std::uint8_t* camera, int eye)
     std::array<std::uint8_t, cameraedit::kCameraSize> edited{};
     std::memcpy(edited.data(), camera, edited.size());
     const stereo::Matrix34 centre = stereo::ReadMatrix(edited);
+    const float zoom = CameraZoom(edited);
     // The same construction the alternate-eye path uses, so the two routes give
     // identical eyes for identical heads.
-    if (!BuildSyntheticEye(edited, eye, ipd, gStereoHalfFov.load(std::memory_order_acquire))) {
+    if (!BuildSyntheticEye(edited, eye, ipd / zoom, gStereoHalfFov.load(std::memory_order_acquire))) {
         return false;
     }
     updateFrustum(edited.data());
     if (!cameraedit::RotationIsSafeToWrite(edited)) {
         return false;
     }
-    PublishBuiltEye(stereo::ReadMatrix(edited), centre, eye);
+    PublishBuiltEye(stereo::ReadMatrix(edited), centre, eye, zoom);
+    gBuiltEyeZoom.store(zoom, std::memory_order_relaxed);
     std::memcpy(camera, edited.data(), edited.size());
     return true;
 }

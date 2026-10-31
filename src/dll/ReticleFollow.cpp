@@ -10,6 +10,7 @@
 #include "AimTakeover.h"
 #include "HandWorld.h"
 #include "HeadTrackingHook.h"
+#include "ZoomLane.h"
 #include "Logger.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/WeaponAim.h"
@@ -279,7 +280,9 @@ bool WriteReticleForCamera(void* player, const Vec3& rayOrigin,
         float displayX=fractionX,displayY=fractionY;
         // Preserve off-panel coordinates: the private target clips the symbol.
         // Pinning a reticle to the safe HUD edge falsely labels a different aim.
-        HudLayerReticle(tanX,tanY,displayX,displayY);
+        // The panel is in the lens's angles, which a zoom magnifies (ViewZoom.h).
+        const float zoom = ViewZoomOf(view->tanUp);
+        HudLayerReticle(tanX*zoom,tanY*zoom,displayX,displayY);
         auto canvas = preyvr::aim::CanvasPoint{displayX, displayY};
         if (mode == 1) {
             canvas = preyvr::aim::ViewportToHudCanvas(displayX, displayY,

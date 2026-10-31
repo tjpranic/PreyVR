@@ -114,12 +114,13 @@ void Reset() {
 // a frame ahead of the render thread and every tag it carries is individually
 // valid. Called by whichever thread built the camera, immediately, so the record
 // holds the exact bits the render view will carry.
-void PublishBuiltEye(const stereo::Matrix34& m, const stereo::Matrix34& centre, int eye)
+void PublishBuiltEye(const stereo::Matrix34& m, const stereo::Matrix34& centre, int eye, float zoom)
 {
     BuiltEye record{};
     record.position[0] = m[3];  record.position[1] = m[7];  record.position[2] = m[11];
     record.right[0] = m[0];     record.right[1] = m[4];     record.right[2] = m[8];
     record.centre[0] = centre[3]; record.centre[1] = centre[7]; record.centre[2] = centre[11];
+    record.zoom = zoom;
     record.eye = eye;
     record.serial = gBuiltEyeSerial.fetch_add(1, std::memory_order_relaxed) + 1;
     gBuiltEyes[record.serial % kBuiltEyeSlots] = record;

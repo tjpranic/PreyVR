@@ -36,6 +36,26 @@ int main() {
     Require(!ValidRenderContract(b),"non-finite left eye pose accepted");
     b=pair;b.eye=3;Require(!ValidRenderContract(b),"out-of-range eye accepted");
     b=a;b.eye=-1;Require(!ValidRenderContract(b),"missing eye accepted");
+    // A zoom (preyvr/ViewZoom.h): declared wider than rendered by its magnification,
+    // the compositor keeping the real eyes and what is drawn in the image the
+    // rendered ones.
+    {
+        RenderContract zoomed=pair;
+        Require(DeclaredTangents(zoomed)==zoomed.tangents,"no zoom: declared exactly as rendered");
+        Require(RenderedEyePose(zoomed,0).position.x==-.032f&&RenderedEyePose(zoomed,1).position.x==.032f,
+                "no zoom: rendered from the real eyes");
+        zoomed.zoom=4.f;zoomed.pose.position={1,2,3};
+        zoomed.eyePoses[0].position={1-.032f,2,3};zoomed.eyePoses[1].position={1+.032f,2,3};
+        Require(ValidRenderContract(zoomed),"zoomed record rejected");
+        const auto declared=DeclaredTangents(zoomed);
+        Require(declared[0]==-4.f&&declared[1]==4.8f&&declared[2]==4.4f&&declared[3]==-3.6f,"declared wider by the zoom");
+        const Pose left=RenderedEyePose(zoomed,0),right=RenderedEyePose(zoomed,1);
+        Require(std::abs(left.position.x-(1-.008f))<1e-5f&&std::abs(right.position.x-(1+.008f))<1e-5f&&
+                left.position.y==2&&right.position.z==3,"rendered from eyes closer to the head by the zoom");
+        Require(left.orientation.w==zoomed.eyePoses[0].orientation.w,"facing as the real eye");
+        b=zoomed;b.zoom=.5f;Require(!ValidRenderContract(b),"a view declared narrower than rendered accepted");
+        b=zoomed;b.zoom=std::numeric_limits<float>::infinity();Require(!ValidRenderContract(b),"non-finite zoom accepted");
+    }
     queue.Reset();Require(queue.Push(pair)&&queue.Pop(out),"both-eyes publish");
     Require(out.eye==kRenderContractBothEyes&&out.eyePoses[0].position.x==-.032f&&
             out.eyePoses[1].position.x==.032f&&out.displayTime==pair.displayTime,"both-eyes record altered");

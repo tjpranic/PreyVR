@@ -9,6 +9,7 @@
 
 #include "Logger.h"
 #include "TorsoLane.h"
+#include "ZoomLane.h"
 #include "preyvr/CameraEdit.h"
 #include "preyvr/EngineMap.h"
 #include "preyvr/StereoCamera.h"
@@ -333,6 +334,7 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
     }
     gObserved.fetch_add(1, std::memory_order_relaxed);
     ApplyNearClip(viewParams, gApplying.load(std::memory_order_acquire));
+    NoteViewZoom(camera, ReadFloat(viewParams, kViewFov), gApplying.load(std::memory_order_acquire));
 
     if (!gApplying.load(std::memory_order_acquire) ||
         !gHaveReference.load(std::memory_order_acquire)) {

@@ -33,6 +33,7 @@
 #include "MarkerStereo.h"
 #include "StarfieldStereo.h"
 #include "ExamineCamera.h"
+#include "ZoomLane.h"
 #include "HeadLamp.h"
 #include "Helmet.h"
 #include "BodyDepthHook.h"
@@ -623,6 +624,9 @@ constexpr Verb kVerbs[] = {
         // 0 Prey's own camera. Bare: report.
         const DWORD result = Valued(args) ? SetExaminePullbackCm(static_cast<unsigned>(Arg(args, 1, -1))) : 0;
         out << "examine.pullback result=" << result << " " << ExamineCameraReport();
+    }},
+    {"zoom.report", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
+        out << "zoom.report result=0 " << ZoomLaneReport();
     }},
     {"flashlight.report", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
         out << "flashlight.report result=0 " << HeadLampReport();
