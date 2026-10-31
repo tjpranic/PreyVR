@@ -107,9 +107,8 @@ completes the stated end state.
 
 ## Correction, same day: far more is already built than this document first said
 
-Queried the project's own knowledge graph -- `graphify/graphify-out/graph.json`,
-current as of 2026-09-03 -- at the owner's suggestion, after repeated greps had
-missed things sitting in plain sight. It surfaced in one query what several
+Queried the project's own knowledge graph, current as of 2026-09-03, at the
+owner's suggestion, after repeated greps had missed things sitting in plain sight. It surfaced in one query what several
 searches had not.
 
 **The pure layer for three of the five stages already exists, with tests.**
@@ -137,10 +136,6 @@ Aim is reproduced with a measured number. Weapon *placement* has its maths built
 and a named native limb-IK facility identified -- `IKLIMB_LEFTHAND` /
 `IKLIMB_RIGHTHAND`, a two-bone solver, `CreateIKLimb`. What is missing is one
 address.
-
-**Method note.** The graph should be queried before grepping documentation. Three
-times in one session the answer was already in this repository and repeated
-searches did not surface it; one graph query did.
 
 ## What is already built and carries over
 

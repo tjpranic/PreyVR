@@ -174,7 +174,7 @@
 
 ### Technical Debt
 - Restructuring
-    > `src/` and `tests/` are grouped by feature, with each header beside its source and `include/` gone. The compiled code matches PreyVR-123 byte for byte. PreyVR-124, smoke tested OK 2026-10-31. See src/README.md.
+    > `src/` and `tests/` are grouped by feature, with each header beside its source and `include/` gone. The compiled code matches PreyVR-123 byte for byte. PreyVR-124, smoke tested OK 2026-10-31.
 
 ---
 

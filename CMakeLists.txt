@@ -675,7 +675,7 @@ if(PREYVR_BUILD_TESTS)
         add_test(NAME re_verifiers COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/re/run_verifiers.py")
         set_tests_properties(re_verifiers PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
         # Pure code and DLL code share folders, so nothing about a path keeps them
-        # apart: this does (src/README.md).
+        # apart: this does.
         add_test(NAME pure_boundary COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/check_pure_boundary.py")
     endif()
     if(PREYVR_POWERSHELL_EXECUTABLE AND PREYVR_BUILD_SMOKE_DLL AND WIN32)

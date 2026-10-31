@@ -12,7 +12,7 @@ namespace {
 // the ordering wrong.
 // The six weapon-offset entries were added 2026-09-03 on the owner's explicit
 // decision, not for convenience. They exist to settle H-005's cheapest route with
-// one live test: the fleet graph pointed at FarCry2-vr finding Dunia's weapon
+// one live test: FarCry2-vr found Dunia's weapon
 // camera offset -- reachable with no render-pass hook and no engine call -- and
 // PreyDll.dll turns out to carry the same family. If they are live, weapon
 // placement needs neither a bone API nor a transform-writer hook.

@@ -51,23 +51,6 @@ captures and offline byte verifiers remain useful independently of that failure.
 For static work, [the investigation guide](docs/RE-INVESTIGATION-GUIDE.md) and its
 H-021 examples cover receiver bases, concrete virtual callees, writers and consumers.
 
-## Project knowledge graph
-
-For architecture, ownership and design questions, query the existing project graph
-before broad source browsing: `graphify explain "<concept>"`, `graphify query
-"<engine noun phrase>"`, or `graphify path "<A>" "<B>"`. Use `rg` first for exact
-symbols, byte patterns and known filenames; verify graph leads in their source.
-Check age and coverage. Dirty graph files alone do not invalidate a query. If the
-graph or tool is unavailable, state that limitation once and use scoped source/doc
-searches. Do not turn graph setup into a prerequisite for an unrelated fix.
-Refresh after substantial indexed changes using the project's update procedure;
-avoid rebuilding third-party corpora for a small edit. Read a full graph report
-only when a broad architecture review needs it.
-
-Here the graph is **`graphify/graphify-out/graph.json`**, not at the repo root.
-Run queries from `graphify/`. Refresh with `Graphify-Update-All.ps1` or
-`Graphify-Update-CodeOnly.ps1` when relevant indexed content changes materially.
-
 ## Fleet prior art
 
 Before choosing a seam or repeating an experiment, route through
@@ -77,20 +60,9 @@ and linked section. The project's current receipts outrank a stale fleet summary
 State hypothesis, control, variable and decision rule before experimental code.
 Record transferable results in the playbook when they change the route.
 
-Use `D:/Dev Debug/VR Modding/cross-engine-graph/graphify-out/fleet-graph.json`
-to find sibling documents: `graphify explain "Frustum and Culling Adjustment" --graph
-"<absolute fleet-graph.json path>"` (one command). For queries use engine nouns, not
-a long question; try near-duplicate concept names. Inspect graph age and coverage.
-Cross-project links are `INFERRED` leads, not confirmation for this target. Open the
-named source; its path may be relative to that project's `docs/`, and its label may
-be a summary rather than literal text. A miss is not an exhaustive negative result:
-fall through to `cross-project-index.md`, scoped `rg`, and sibling failure registries.
+To find sibling documents use `cross-project-index.md`, scoped `rg`, and sibling
+failure registries. Cross-project links are leads, not confirmation for this target.
 External prior art is indexed in the playbook's `sources.yml` / `docs/coverage.md`.
-
-For scripts use `D:/Dev Debug/VR Modding/tools/graphio.py` (`load_graph`): node-link
-relationships live under `links`; a defaulted lookup of `edges` can hide real data.
-Check the interpreter before running helpers. Rebuild instructions live in
-`cross-engine-graph/README.md`; do not rebuild the whole fleet for a routine lookup.
 
 
 <!-- vr-research-integration:start -->

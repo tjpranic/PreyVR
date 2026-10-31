@@ -14,10 +14,8 @@ the actual connection rather than assuming equal access.
 1. **Write the decision being made.** Example: “Can layer 16 place an ordinary
    modifier after ADIK?” State a falsifier: “An unsigned bounds check rejects
    16.” This makes the next tool call specific.
-2. **Check existing evidence.** Query the project graph as AGENTS.md requires,
-   check its date, then search the exact nouns/addresses in
+2. **Check existing evidence.** Search the exact nouns/addresses in
    `docs/ADDRESS_REGISTRY.md`, relevant reports, and `tools/re/`.
-   A graph miss is a retrieval miss, especially for recent work.
    H-005B already had PushPoseModifier's RVA, queues, and post-loop limitation.
 3. **Preflight and pin the target.** Use Ghidra `list_instances`, then pass
    `program="/Prey/PreyDll.dll"` on each program-scoped call. Record module

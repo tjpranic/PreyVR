@@ -16,7 +16,7 @@ Place small, reproducible helpers here: log parsers, capture-index generators, b
 
 ## Pure boundary check
 
-`check_pure_boundary.py` keeps pure code free of DLL code and platform headers, now that the two share folders under `src/`. It runs in ctest as `pure_boundary`; [src/README.md](../src/README.md) has the rule.
+`check_pure_boundary.py` keeps pure code free of DLL code and platform headers, now that the two share folders under `src/`. It runs in ctest as `pure_boundary`; the script's docstring has the rule.
 
 ## OpenXR adapter probe
 

@@ -293,7 +293,7 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
   - CommandChannel.h: the 30-verb legacy list is replaced by a pointer to docs/TUNING-COMMANDS.md.
   - CommandChannel.cpp: `window.hold` no longer claims the launcher minimises the window, and `aim.reticleconverge` now describes the RETICLE FALLBACK DISTANCE option.
 - **Stale docs:**
-  - **Done 10-23:** src/README.md, include/preyvr/README.md and tests/README.md rewritten to match the tree.
+  - **Done 10-23:** include/preyvr/README.md and tests/README.md rewritten to match the tree.
   - **Open:** ARCHITECTURE.md (08-27, pre-implementation). Do it last (section 3, "Last").
 - **Build names:**
   - **Done 10-23:** the `PREYVR_BUILD_SMOKE_DLL` option text and the CMake comment no longer call PreyVR.dll an "inert smoke DLL".
@@ -401,7 +401,6 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
     - 21 `#include "../src/dll/X.cpp"` lines
     - 4 unpinned verifiers that read `src/dll/*.cpp` by path
     - stale receipt paths that would dangle for NativeWristTexture, PsiMedkit and two tests
-    - a graphify refresh
   - Leave the 97 `src/dll/...` references in dated docs alone.
 - **Rewrite ARCHITECTURE.md** once the structure settles. It should cover:
   - the four threads and seams with their tick order

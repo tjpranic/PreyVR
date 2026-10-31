@@ -116,12 +116,5 @@ if (Test-Path -LiteralPath (Join-Path $repoRoot 'regenny\PreyVR.genny') -PathTyp
     Write-DoctorResult FAIL 'ReGenny type notebook is missing'
 }
 
-$graphify = Get-Command graphify -ErrorAction SilentlyContinue
-if ($null -ne $graphify) {
-    Write-DoctorResult PASS "Graphify is available at $($graphify.Source)"
-} else {
-    Write-DoctorResult WARN 'Graphify is not on PATH; code tests remain available'
-}
-
 Write-Host "SUMMARY: pass=$passed warn=$warnings fail=$failures"
 if ($failures -ne 0) { exit 1 }

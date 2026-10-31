@@ -23,8 +23,7 @@ See [options](docs/VR-OPTIONS-2026-09-27.md) and
 | --- | --- |
 | `docs/` | Evidence, decisions, RE notes, build identity, and test plans. |
 | `captures/` | Local RenderDoc captures, eye dumps, screenshots, and traces. Large/generated evidence is ignored by Git. |
-| `graphify/` | A reproducible, local knowledge-graph corpus joining PreyVR with the cross-engine VR-mod research corpus. |
-| `src/`, `tests/` | The mod, grouped by feature ([src/README.md](src/README.md)), and its deterministic tests. |
+| `src/`, `tests/` | The mod, grouped by feature, and its deterministic tests. |
 | `config/` | Versioned default/configuration schemas; machine-local settings stay ignored. |
 | `tools/` | One-off utilities and capture/research helpers. |
 
@@ -147,7 +146,7 @@ mechanism does.
 - Promote a finding only when a capture, trace, runtime observation, or reproducible static-analysis result supports it.
 - Keep pure pose/projection/input math independent of hook callbacks and covered by tests.
 
-See [`docs/README.md`](docs/README.md) to begin research, or [`graphify/README.md`](graphify/README.md) to build the combined knowledge graph.
+See [`docs/README.md`](docs/README.md) to begin research.
 
 Run the no-game/no-headset verification loop with:
 

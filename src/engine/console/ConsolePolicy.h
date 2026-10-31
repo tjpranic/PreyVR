@@ -69,9 +69,9 @@ bool IsAllowlistedCvar(std::string_view name);
 //
 //     **Added 2026-09-03 on the owner's explicit decision, and they are the first
 //     writable gameplay entries in this list** -- everything else here is a
-//     renderer or debug toggle. The reason is H-005: the fleet graph surfaced
-//     FarCry2-vr finding Dunia's weapon camera offset, which moves the weapon with
-//     no render-pass hook and no engine call, and PreyDll.dll carries the same
+//     renderer or debug toggle. The reason is H-005: FarCry2-vr found Dunia's
+//     weapon camera offset, which moves the weapon with no render-pass hook and no
+//     engine call, and PreyDll.dll carries the same
 //     family. One live test settles whether Prey's are consumed, and F-007 is the
 //     reason a live test is needed rather than a symbol search: the sweep that
 //     found no consumer for g_detachCamera also found none for g_difficultyLevel,

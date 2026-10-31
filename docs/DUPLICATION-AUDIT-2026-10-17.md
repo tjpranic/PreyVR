@@ -474,7 +474,7 @@ Left:
   - the unused functions and the FOV-divergence leftovers;
   - the bring-up copies in Invoke-PreyVRStartup and the harness's `startVr`;
   - Publish-PreyVR051.
-- **Kept:** DualSceneStereo modes 1 and 2; the AimState, InteractionQuery and WrenchQuery leftovers; run-graphify. **Reversed 2026-10-31:** those three leftovers were cut as unused, with `preyvr_ray_probe`, whose only use was AimState.
+- **Kept:** DualSceneStereo modes 1 and 2; the AimState, InteractionQuery and WrenchQuery leftovers. **Reversed 2026-10-31:** those three leftovers were cut as unused, with `preyvr_ray_probe`, whose only use was AimState.
 
 **Status 2026-10-18: all signed-off items cut.** PreyVR-17 passed in the headset; committed as `1d8bae9`. About 3,300 lines net. Build passes with no new warnings, and 78/78 ctest pass (three tests went with their code: frame_clock, wrist_panel and depth_submission).
 - **CameraEditHook:** 2,134 → 850 lines, header 502 → 264.
@@ -510,7 +510,6 @@ Left:
 | `Invoke-PreyVRStartup.ps1:177-347` re-does `vr.enable` in PowerShell | ~150-200 | **[V]** The near-FOV formula is identical to `VrMode.cpp:174-175`. The script's own comment (:99-103) calls the two bring-up paths "the real defect". Medium risk: it uses a fixed 64 mm IPD and no dual stereo, and the root README documents it. |
 | `preyvr-harness.js` `startVr` (:489-630) | ~140 | A third bring-up copy. It uses `r_AntialiasingMode 3` where VrMode uses 1, and `thawScene` also restores 3. |
 | `Publish-PreyVR051.ps1` | 124 | A finished one-off. Its `-Publish` mode pushes and creates a release, which conflicts with the commit-local rule. |
-| `graphify/run-graphify.ps1` | ~48 | A shim that drops parameters; its README is stale. |
 
 ---
 
@@ -618,7 +617,6 @@ Left:
   - frame_diff wrappers: twice (IpdSweep vs StereoAnalysis).
   - AimCheck internals: the reading lookup 3 times, the frame wait twice.
   - preyvr-harness.js: `callTolerant` 79 times.
-  - Graphify-Update-All/CodeOnly: the updater path twice.
   - tools/README omits most of the tools and doesn't mark which is current.
 
 ---

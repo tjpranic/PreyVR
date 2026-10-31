@@ -19,12 +19,6 @@
 /captures/**/*.json
 /captures/**/*.bin
 
-# Graphify stages and generated knowledge graph
-/graphify/corpus/*
-!/graphify/corpus/README.md
-/graphify/graphify-out/
-/graphify/*.log
-
 # Local configuration and secrets
 /.env
 /.env.*
