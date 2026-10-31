@@ -137,5 +137,95 @@ int main() {
         Check(after.held&&Near(Rotate(after.orientation,{0,1,0}),Rotate(turn,Rotate(before.orientation,{0,1,0}))),
               "a snap turn keeps the hold and turns the steered aim with it");
     }
+    {
+        // Auto-snap: one more way to attach. Base's hand rests on the foregrip,
+        // 35 cm ahead, and 10 ms a frame takes kAutoSnapDwell in 10 frames.
+        constexpr int kDwell=12;
+        const Vec3 on{0,.35f,0},away{1,.35f,0};
+        const auto frames=[](Solver& s,Input& i,int n){Output o{};for(int k=0;k<n;++k)o=s.Update(i);return o;};
+        {
+            auto off=Base();Solver s0;
+            Check(!frames(s0,off,100).held,"without the option a hand at rest on the foregrip never attaches");
+        }
+        auto a=Base();a.autoSnap=true;Solver as;
+        a.support.position=away;frames(as,a,3);
+        a.support.position=on;
+        Check(!frames(as,a,7).held,"a hand that has just arrived has not attached");
+        a.support.position=away;frames(as,a,2);a.support.position=on;
+        Check(!frames(as,a,7).held,"passing through twice does not add up");
+        auto o=frames(as,a,kDwell);
+        Check(o.held&&o.snapped&&Near(o.socket,on),"a hand that stays attaches, with no squeeze");
+        Check(frames(as,a,60).blend>.99f&&Near(Rotate(as.Update(a).orientation,{0,1,0}),{0,1,0}),"and blends in with no aim jump");
+        // Hold mode: no grip to let go of, so the grip at rest does not release it.
+        a.support.position={0,.35f,.2f};o=as.Update(a);
+        Check(o.held&&o.snapped&&Rotate(o.orientation,{0,1,0}).z>.1f,"it steers, inside its range");
+        a.support.position={0,.35f,.26f};o=as.Update(a);
+        Check(!o.held&&!o.snapped&&o.blend>0,"a hand gone from where it attached lets go, blending");
+        a.support.position=away;frames(as,a,3);a.support.position=on;
+        Check(frames(as,a,kDwell).snapped,"it attaches again when the hand comes back");
+        // Hold mode: a squeeze takes it over, and then it is an ordinary hold.
+        a.squeeze=1;o=as.Update(a);Check(o.held&&!o.snapped,"a squeeze makes it an ordinary hold");
+        a.support.position={.6f,.35f,0};Check(as.Update(a).held,"which, as ever, does not let go by distance");
+        a.support.position=on;as.Update(a);
+        a.squeeze=0;Check(!as.Update(a).held,"letting go releases it");
+        Check(!frames(as,a,100).held,"and it does not snap back with the hand still there");
+        a.squeeze=1;Check(as.Update(a).held&&!as.Update(a).snapped,"a squeeze still attaches there");
+        a.squeeze=0;as.Update(a);
+        a.support.position=away;frames(as,a,3);a.support.position=on;
+        Check(frames(as,a,kDwell).snapped,"once the hand has left, it snaps again");
+        // Toggle mode: a press releases, and the hand must leave before it snaps.
+        auto t=Base();t.autoSnap=t.toggleGrip=true;Solver ts;
+        t.support.position=away;frames(ts,t,3);t.support.position=on;
+        o=frames(ts,t,kDwell);Check(o.held&&o.snapped,"toggle: it snaps too");
+        t.squeeze=1;Check(!ts.Update(t).held,"toggle: a press releases");
+        t.squeeze=0;Check(!frames(ts,t,100).held,"toggle: no snap with the hand still there");
+        t.squeeze=1;o=ts.Update(t);Check(o.held&&!o.snapped,"toggle: a fresh press attaches by squeeze");
+        t.squeeze=0;ts.Update(t);t.support.position={.6f,.35f,0};
+        Check(ts.Update(t).held,"toggle: which does not let go by distance");
+        // A squeezed hand is busy with something else.
+        auto b=Base();b.autoSnap=true;Solver bs;
+        b.support.position=away;frames(bs,b,3);b.squeeze=1;frames(bs,b,3);b.support.position=on;
+        Check(!frames(bs,b,100).held,"a hand arriving squeezed neither grabs nor snaps");
+        // What ends a hold ends a snapped one, and the option going off does too.
+        auto c=Base();c.autoSnap=true;Solver cs;
+        c.support.position=away;frames(cs,c,3);c.support.position=on;frames(cs,c,kDwell);
+        c.owner++;Check(!cs.Update(c).held,"a weapon switch ends it");
+        Check(frames(cs,c,kDwell).snapped,"and the new weapon snaps after the same wait");
+        c.usable=false;Check(!cs.Update(c).held,"losing tracking or a menu ends it");
+        c.usable=true;cs.Update(c);frames(cs,c,kDwell);
+        c.autoSnap=false;Check(!cs.Update(c).held,"switching the option off ends it, having no grip to");
+        c.autoSnap=true;c.support.position=away;frames(cs,c,3);
+        c.support.position=on;frames(cs,c,kDwell);c.support.position={0,.01f,0};
+        o=cs.Update(c);Check(!o.held&&o.blend==0,"hands together let go at once");
+        // A handgun snaps from nearer than a squeeze reaches, and goes by the break distance.
+        const Vec3 cup{-.044f,.073f,-.024f};
+        auto h=Base();h.autoSnap=true;h.region=SupportRegion(cup,0,LongReach{},Grip::handgun);Solver hs;
+        h.support.position=away;frames(hs,h,3);
+        h.support.position={cup.x-.12f,cup.y,cup.z};
+        Check(!frames(hs,h,100).held,"a hand 12 cm from a pistol's cup does not snap");
+        h.squeeze=1;Check(hs.Update(h).held,"though a squeeze there grabs it");
+        h.squeeze=0;hs.Update(h);h.support.position=away;frames(hs,h,3);
+        h.support.position={cup.x-.08f,cup.y,cup.z};
+        o=frames(hs,h,kDwell);Check(o.held&&o.snapped,"a hand 8 cm from it does");
+        Check(Near(Rotate(frames(hs,h,60).orientation,{0,1,0}),{0,1,0}),"and leaves its aim alone");
+        h.snapBreak=.4f;h.support.position={cup.x-.3f,cup.y,cup.z};
+        Check(hs.Update(h).held,"a snapped handgun goes by the break distance, past a squeeze's 30 cm");
+        h.snapBreak=.25f;Check(!hs.Update(h).held,"and lets go at it");
+        // The wearer's distances.
+        auto w=Base();w.autoSnap=true;Solver ws;
+        const auto arrive=[&](Vec3 at){w.support.position=away;frames(ws,w,3);w.support.position=at;return frames(ws,w,kDwell);};
+        Check(!arrive({.15f,.35f,0}).held,"15 cm off the foregrip is out of the default 10");
+        w.snapAttach=.2f;Check(arrive({.15f,.35f,0}).held,"a wider attach distance reaches it");
+        w.snapAttach=.05f;Check(!arrive({.08f,.35f,0}).held,"a narrower one does not reach 8 cm");
+        w.snapAttach=25*.01f;Check(arrive({.24f,.35f,0}).held,"the widest the setting goes still attaches");
+        w.snapAttach=.1f;w.snapBreak=.4f;arrive(on);w.support.position={.3f,.35f,0};
+        Check(ws.Update(w).held,"a wider break distance keeps it past the default");
+        w.snapBreak=.15f;arrive(on);w.support.position={.2f,.35f,0};
+        Check(!ws.Update(w).held,"a narrower one lets go sooner");
+        w.snapAttach=.2f;w.snapBreak=.1f;arrive({.18f,.35f,0});
+        Check(frames(ws,w,10).held,"a break nearer than the attach distance never lets go as it attaches");
+        w.support.position={.24f,.35f,0};Check(ws.Update(w).held,"it stays 5 cm past the attach distance");
+        w.support.position={.26f,.35f,0};Check(!ws.Update(w).held,"and lets go there");
+    }
     std::cout<<"Two-handed aim geometry, lifecycle and barrel integration passed\n";
 }

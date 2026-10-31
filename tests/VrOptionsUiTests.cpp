@@ -159,15 +159,13 @@ void WritePreviews(ID3D11Device* device, ID3D11DeviceContext* context, const std
             shot = shots.Idle();
             write(shot, std::to_string(page));
         }
-        shots.Grip(true);
-        shots.Grip(true);
-        shots.Grip(true);
+        for (int n = 0; n < 4; ++n) { shots.Grip(true); }
         VrOptionsUiInput down;
         down.dt = 1.0f / 90.0f;
         down.scroll = -1.0f;
         for (int n = 0; n < 120; ++n) { shot = shots.Frame(down); }
         shot = shots.Idle();
-        write(shot, "2-scrolled");
+        write(shot, "3-scrolled");
         shots.Grip(false);
         shots.Grip(false);
         shot = shots.Idle();
@@ -175,7 +173,7 @@ void WritePreviews(ID3D11Device* device, ID3D11DeviceContext* context, const std
         shots.Frame(At(*Find(shot, Kind::choice, options::Turn), true));
         shot = shots.Frame(At(*Find(shot, Kind::choice, options::Turn), false));
         shot = shots.Idle();
-        write(shot, "0-turning-list");
+        write(shot, "1-turning-list");
 }
 
 int main()
@@ -245,8 +243,11 @@ int main()
     context->CopyResource(swapImage.Get(), frame.texture);
     Check(Pixel(device.Get(), context.Get(), swapImage.Get(), tabX, tabY) == bgra, "copied into an sRGB image byte for byte");
 
-    // Comfort: each setting as the widget its values call for.
-    Check(frame.page == 0 && Find(frame, Kind::close).has_value(), "comfort page and back");
+    Check(frame.page == 0 && Find(frame, Kind::action, options::RecenterView).has_value(), "the panel opens on setup");
+
+    // Movement: each setting as the widget its values call for.
+    frame = panel.Grip(true);
+    Check(frame.page == 1 && Find(frame, Kind::close).has_value(), "movement page and back");
     Check(Find(frame, Kind::choice, options::Turn).has_value(), "turning is a choice of angles");
     Check(Find(frame, Kind::choice, options::HeadRelative).has_value(), "head/body relative is a named choice, not a checkbox");
     Check(Find(frame, Kind::range, options::TurnSpeed).has_value(), "turn speed is a slider");
@@ -263,7 +264,7 @@ int main()
 
     // Hands: a checkbox.
     frame = panel.Grip(true);
-    Check(frame.page == 1, "right grip: the hands page, drawn this frame");
+    Check(frame.page == 2, "right grip: the hands page, drawn this frame");
     const auto twoHand = Find(frame, Kind::toggle, options::TwoHand);
     Check(twoHand.has_value() && Find(frame, Kind::choice, options::GripToggle).has_value(), "on/off is a checkbox, hold/toggle a choice");
     frame = panel.Click(*twoHand);
@@ -273,7 +274,7 @@ int main()
     // Interface: a slider reports once, when let go, at where it was let go.
     panel.Grip(true);
     frame = panel.Idle();
-    Check(frame.page == 2, "interface page");
+    Check(frame.page == 3, "interface page");
     const auto scale = Find(frame, Kind::range, options::UiScale);
     Check(scale.has_value(), "interface size is a slider");
     panel.Frame(At(*scale, false, 0.1f));
@@ -292,8 +293,7 @@ int main()
     const auto distance = Find(frame, Kind::range, options::UiDistance);
     Check(distance && Find(frame, Kind::range, options::UiOffsetRight) && Find(frame, Kind::range, options::UiOffsetUp),
           "menu distance and offset are on the interface page");
-    Check(Find(frame, Kind::choice, options::PointerHand) && Find(frame, Kind::choice, options::HudLayer),
-          "laser hand and HUD style are named choices on it too");
+    Check(Find(frame, Kind::choice, options::PointerHand).has_value(), "laser hand is a named choice on it too");
     Check(frame.scrollMaxY > 0, "ten rows: the interface page scrolls at the designed size");
     frame = panel.Click(*distance, 0.98f);
     Check(frame.changes.size() == 1 && panel.Took(frame, options::UiDistance) >= 390,
@@ -308,11 +308,10 @@ int main()
     {
         Panel fine(device.Get(), context.Get());
         fine.Idle();
-        fine.Grip(true);
-        fine.Grip(true);
+        for (int n = 0; n < 3; ++n) { fine.Grip(true); }
         frame = fine.Idle();
         const auto bar = *Find(frame, Kind::range, options::UiDistance);
-        const auto curve = *Find(frame, Kind::range, options::UiCurve);
+        const auto offset = *Find(frame, Kind::range, options::UiOffsetRight);
         auto hover = At(bar, false);
         hover.right = true;
         frame = fine.Frame(hover);
@@ -339,22 +338,22 @@ int main()
         hover.right = true;
         frame = fine.Frame(hover);
         fine.Took(frame, options::UiDistance);
-        auto moved = At(curve, false);
+        auto moved = At(offset, false);
         moved.right = true;
-        bool curveChanged = false;
+        bool offsetChanged = false;
         int distanceSteps = 0;
         for (int n = 0; n < 45; ++n) {
             frame = fine.Frame(moved);
-            curveChanged = curveChanged || fine.Took(frame, options::UiCurve).has_value();
+            offsetChanged = offsetChanged || fine.Took(frame, options::UiOffsetRight).has_value();
             if (fine.Took(frame, options::UiDistance)) { ++distanceSteps; }
         }
-        Check(!curveChanged && distanceSteps >= 2, "the held stick keeps adjusting the control it started on");
+        Check(!offsetChanged && distanceSteps >= 2, "the held stick keeps adjusting the control it started on");
         moved.right = false;
         fine.Frame(moved);
         moved.right = true;
         frame = fine.Frame(moved);
-        Check(frame.changes.size() == 1 && frame.changes[0].setting == options::UiCurve &&
-              frame.changes[0].value == 40, "a new press takes the control now under the laser, one step of 5 degrees");
+        Check(frame.changes.size() == 1 && frame.changes[0].setting == options::UiOffsetRight &&
+              frame.changes[0].value == 1, "a new press takes the control now under the laser, one step of 1 degree");
         moved.right = false;
         fine.Frame(moved);
 
@@ -420,6 +419,7 @@ int main()
         Panel press(device.Get(), context.Get());
         press.Idle();
         press.Grip(true);
+        press.Grip(true);
         frame = press.Idle();
         const auto box = *Find(frame, Kind::toggle, options::TwoHand);
         auto a = At(box, false);
@@ -455,9 +455,10 @@ int main()
         Check(sent.size() == 1 && sent[0].setting == options::TwoHand && sent[0].value == 1,
               "A with the laser off any control ticks the selected checkbox back");
         // An action button under the laser.
-        for (int n = 0; n < 5; ++n) { press.Grip(true); }
+        press.Grip(false);
+        press.Grip(false);
         frame = press.Idle();
-        Check(frame.page == 6, "setup page");
+        Check(frame.page == 0, "setup page");
         const auto recenter = *Find(frame, Kind::action, options::RecenterView);
         a = At(recenter, false);
         press.Frame(a);
@@ -484,12 +485,11 @@ int main()
     {
         Panel tall(device.Get(), context.Get(), 1.6f);
         tall.Idle();
-        tall.Grip(true);
-        tall.Grip(true);
+        for (int n = 0; n < 3; ++n) { tall.Grip(true); }
         frame = tall.Idle();
-        Check(frame.page == 2 && frame.scrollMaxY > 0, "with larger text the interface page outgrows the panel");
+        Check(frame.page == 3 && frame.scrollMaxY > 0, "with larger text the interface page outgrows the panel");
         // The interface page's last row, a range.
-        const int lastRow = options::MenuEntries(2).back();
+        const int lastRow = options::MenuEntries(3).back();
         const auto& lastSpec = options::Describe(static_cast<unsigned>(lastRow));
         const auto last = Find(frame, Kind::range, lastRow);
         const auto back = Find(frame, Kind::close);
@@ -518,6 +518,7 @@ int main()
     {
         Panel hold(device.Get(), context.Get());
         hold.Idle();
+        hold.Grip(true);
         frame = hold.Idle();
         const auto turning = *Find(frame, Kind::choice, options::Turn);
         auto label = turning;              // the same row's left column: its name and help
@@ -526,6 +527,7 @@ int main()
         {
             Panel fresh(device.Get(), context.Get());
             fresh.Idle();
+            fresh.Grip(true);
             fresh.Idle();
             VrOptionsUiInput a = At(label, false);
             fresh.Frame(a);
@@ -542,11 +544,11 @@ int main()
         frame = hold.Idle();
         Check(!Find(frame, Kind::choiceItem, options::Turn, 30).has_value(), "and the list is closed");
         Check(hold.Click(label).grabStarted, "after which the same press grabs");
-        Check(!hold.Click(*Find(hold.Idle(), Kind::tab, 1)).grabStarted, "a tab is a control");
+        Check(!hold.Click(*Find(hold.Idle(), Kind::tab, 2)).grabStarted, "a tab is a control");
         hold.Grip(true); // from the hands tab that click opened, to the interface tab
         frame = hold.Idle();
         const auto bar = Find(frame, Kind::scrollbar);
-        Check(frame.page == 2 && bar.has_value(), "premise: the interface page has a scrollbar");
+        Check(frame.page == 3 && bar.has_value(), "premise: the interface page has a scrollbar");
         Check(!hold.Click(*bar).grabStarted, "the scrollbar is a control too");
     }
 
@@ -568,17 +570,17 @@ int main()
     }
 
     // Setup: an action is a button.
-    for (int n = 0; n < 4; ++n) { panel.Grip(true); }
+    for (int n = 0; n < 3; ++n) { panel.Grip(false); }
     frame = panel.Idle();
-    Check(frame.page == 6, "setup page");
+    Check(frame.page == 0, "setup page");
     const auto recenter = Find(frame, Kind::action, options::RecenterView);
     Check(recenter.has_value(), "recenter is offered");
     frame = panel.Click(*recenter);
     Check(frame.changes.size() == 1 && frame.changes[0].recenter && !frame.changes[0].calibrate, "recenter sends its action");
     // Controls: what each action is bound to, read only -- nothing on it is a
     // control but the tabs and Back, so the trigger anywhere on it grabs.
-    frame = panel.Grip(true);
-    Check(frame.page == options::ControlsPage(), "right grip: the Controls tab");
+    frame = panel.Grip(false);
+    Check(frame.page == options::ControlsPage(), "left grip wraps to the last tab: the Controls tab");
     for (const auto& target : frame.targets) {
         Check(target.kind == Kind::tab || target.kind == Kind::close || target.kind == Kind::scrollbar,
               "the Controls tab, waiting for the controllers, has no control");
@@ -597,10 +599,6 @@ int main()
                   "and still no control but the tabs, Back and the scrollbar");
         }
     }
-    frame = panel.Grip(true);
-    Check(frame.page == options::MenuPages() - 1 && Find(frame, Kind::toggle, options::CarryHand) &&
-          Find(frame, Kind::toggle, options::MuzzleAim) && Find(frame, Kind::range, options::InventoryDepth),
-          "right grip: the experimental tab, last");
     frame = panel.Grip(true);
     Check(frame.page == 0, "right grip wraps to the first tab");
     frame = panel.Grip(false);

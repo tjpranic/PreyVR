@@ -15,7 +15,6 @@
 #include "HeadTrackingHook.h"
 #include "XrInput.h"
 #include "UiMode.h"
-#include "UiGuide.h"
 #include "UiPointer.h"
 #include "HudLayer.h"
 #include "LayerSwapchain.h"
@@ -65,9 +64,8 @@
 #include <sstream>
 #include <vector>
 
-// The game menu's panel: placed from the menu anchor, fitted with its guide
-// card, shown flat or curved; the laser's texture and quads; and the panel's
-// settings (XrSessionState.h).
+// The game menu's panel, placed from the menu anchor; the laser's texture and
+// quads; and the panel's settings (XrSessionState.h).
 
 namespace preyvr::dll {
 using namespace xrsession;
@@ -127,7 +125,7 @@ const ui::MenuAnchor& MenuAnchorFor(const Pose& head, const XrView (&views)[2], 
 // The laser (ui::PointerQuadsFor) as two layers on the pointer texture: the dot
 // for the cursor; for the beam, the dot's centre texel, or the fading strip when
 // it hits nothing. Prey's frames and hold frames both draw it here.
-void FillPointerLayers(const UiPointerVisual& pointer, const ui::Surface& surface, const Vec3& head,
+void FillPointerLayers(const UiPointerVisual& pointer, const ui::Panel& surface, const Vec3& head,
                        XrCompositionLayerQuad& cursor, XrCompositionLayerQuad& beam, bool& cursorActive, bool& beamActive)
 {
     cursorActive=beamActive=false;
@@ -141,30 +139,19 @@ void FillPointerLayers(const UiPointerVisual& pointer, const ui::Surface& surfac
     if(quads.beam){fill(beam,*quads.beam,quads.fades?kFadingBeamRect:kSolidBeamRect);beamActive=true;}
 }
 
-// Whether the game menu's panel must be fitted again: none yet, the curve
-// changed, or a recenter has completed since it was placed.
-bool MenuPanelsStale(float curve, unsigned long long reference)
+// Whether the game menu's panel must be fitted again: none yet, or a recenter
+// has completed since it was placed.
+bool MenuPanelStale(unsigned long long reference)
 {
-    return !gHost.menuPanel || curve!=gHost.panelAngle || (!stereo::Recentering(reference) && reference!=gHost.panelReference);
+    return !gHost.menuPanel || (!stereo::Recentering(reference) && reference!=gHost.panelReference);
 }
 
-// **The game menu's panel**, and the guide card under it when that is on,
-// fitted from the shared menu anchor (Host::menuAnchor). Prey's frames, and hold
-// frames showing the loading screen; under gMutex.
-void PlaceMenuPanels(const Pose& head, const XrView (&views)[2], unsigned long long reference, float curve)
+// **The game menu's panel**, fitted from the shared menu anchor (Host::menuAnchor).
+// Prey's frames, and hold frames showing the loading screen; under gMutex.
+void PlaceMenuPanel(const Pose& head, const XrView (&views)[2], unsigned long long reference)
 {
     const auto& anchor=MenuAnchorFor(head,views,reference);
-    const auto& upright=anchor.upright;
-    const auto& optical=anchor.eyes;
     const float aspect=static_cast<float>(gHost.width)/static_cast<float>(gHost.height);
-    constexpr float guideRatio=static_cast<float>(kGuideHeight)/kGuideWidth;
-    constexpr float gapRatio=.015f;
-    const float margin=UiFitMargin();
-    const bool wantGuide=gUiGuide.load(std::memory_order_relaxed);
-    // Without the card the menu is fitted on its own aspect, so the height
-    // the card and its gap used to reserve goes back to the menu instead of
-    // being left empty -- which is the whole point of switching it off.
-    const float stackAspect=wantGuide?1/(1/aspect+guideRatio+gapRatio):aspect;
     // **Upright, at eye level, facing the wearer square-on**, ui.distance
     // ahead of the way the face was turned when the anchor was taken (on
     // opening, not now: a setting change re-places the menu from the same
@@ -172,55 +159,32 @@ void PlaceMenuPanels(const Pose& head, const XrView (&views)[2], unsigned long l
     // roll: opened while looking down, it came out low, tilted and rolled.
     // The anchor's eyes are levelled so the fit sizes it for a level gaze,
     // which also keeps a menu opened while looking down from failing the
-    // corner test (UiPanel.h). The stack's centre is what sits at eye
-    // level: with the guide card on, the menu rides half the card above it.
+    // corner test (UiPanel.h).
     const float distance=static_cast<float>(gUiDistanceCm.load(std::memory_order_relaxed))*.01f;
-    auto layout=ui::FitPanel(upright,optical,stackAspect,distance,
-        static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f,margin);
-    if(layout) {
-        gHost.menuPanel.reset();gHost.guidePanel.reset();
-        if(const auto stack=ui::FitMenuStack(*layout,aspect,guideRatio,gapRatio,wantGuide,curve,optical,margin)) {
-            gHost.menuPanel=stack->menu;
-            gHost.guidePanel=stack->guide;
-        }
-    }
-    // ui.offset carries the fitted stack around the head as one piece. After
-    // the fit, not before: the fit sizes for straight ahead, and an offset
-    // view would shrink or refuse a panel the wearer chose to put aside.
+    const float scale=static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f;
+    // ui.offset carries it around the head, after the fit (ui::PlaceMenu): the
+    // fit sizes for straight ahead, and an offset view would shrink or refuse a
+    // panel the wearer chose to put aside.
     const int offsetRight=gUiOffsetRight.load(std::memory_order_relaxed);
     const int offsetUp=gUiOffsetUp.load(std::memory_order_relaxed);
-    if(gHost.menuPanel && (offsetRight || offsetUp)) {
-        const float right=static_cast<float>(offsetRight)*kRadiansPerDegree,up=static_cast<float>(offsetUp)*kRadiansPerDegree;
-        gHost.menuPanel->pose=ui::AroundHead(upright,gHost.menuPanel->pose,right,up);
-        if(gHost.guidePanel)gHost.guidePanel->pose=ui::AroundHead(upright,gHost.guidePanel->pose,right,up);
-    }
+    if(const auto panel=ui::PlaceMenu(anchor,aspect,distance,scale,ui::kDefaultFitMargin,
+                                      static_cast<float>(offsetRight)*kRadiansPerDegree,
+                                      static_cast<float>(offsetUp)*kRadiansPerDegree))
+        gHost.menuPanel=panel;
     gHost.panelReference=reference;
-    gHost.panelAngle=curve;
     ++gHost.surfaceSerial;
-    Log("ui_surface angle_degrees="+std::to_string(curve*kDegreesPerRadian)+" distance_m="+std::to_string(distance)+
+    Log("ui_surface distance_m="+std::to_string(distance)+
         " offset_degrees="+std::to_string(offsetRight)+","+std::to_string(offsetUp)+
         " placed="+(gHost.menuPanel?"1":"0"));
 }
 
-// The game menu's panel as a quad of the whole of `swapchain`'s first slice,
-// and as the cylinder it is shown on when curved (surface.angle > 0).
-void FillMenuLayers(XrCompositionLayerQuad& quad, XrCompositionLayerCylinderKHR& cylinder, const ui::Surface& surface,
-                    XrSwapchain swapchain, XrCompositionLayerFlags flags)
+// The game menu's panel as a quad of the whole of `swapchain`'s first slice.
+void FillMenuLayer(XrCompositionLayerQuad& quad, const ui::Panel& panel, XrSwapchain swapchain,
+                   XrCompositionLayerFlags flags)
 {
-    const auto& p=surface.panel;
-    FillQuad(quad,gHost.space,p.pose,{p.width,p.height},swapchain,
+    FillQuad(quad,gHost.space,panel.pose,{panel.width,panel.height},swapchain,
              {{0,0},{static_cast<int>(gHost.width),static_cast<int>(gHost.height)}},flags);
     quad.subImage.imageArrayIndex=0;
-    if(surface.angle>0) {
-        const auto axis=ui::CylinderAxis(surface);
-        cylinder.space=quad.space;cylinder.eyeVisibility=XR_EYE_VISIBILITY_BOTH;
-        cylinder.subImage=quad.subImage;
-        cylinder.layerFlags=flags;
-        cylinder.pose=ToXrPose(axis);
-        cylinder.radius=surface.panel.width/surface.angle;
-        cylinder.centralAngle=surface.angle;
-        cylinder.aspectRatio=surface.panel.width/surface.panel.height;
-    }
 }
 
 } // namespace xrsession
@@ -229,13 +193,6 @@ DWORD SetUiPanelMode(unsigned int mode) {
     if(mode>2) return 1;
     gUiPanelMode.store(mode);if(mode==0)ClearUiPointer();return 0;
 }
-
-DWORD SetUiCurveDegrees(unsigned int degrees) {
-    if(degrees>60)return ERROR_INVALID_PARAMETER;
-    gUiCurveDegrees.store(degrees);return 0;
-}
-
-unsigned UiCurveDegrees(){return gUiCurveDegrees.load();}
 
 unsigned int UiPanelMode() { return gUiPanelMode.load(); }
 
@@ -303,43 +260,5 @@ DWORD SetUiOffsetDegrees(int right, int up)
 int UiOffsetRightDegrees() { return gUiOffsetRight.load(std::memory_order_acquire); }
 
 int UiOffsetUpDegrees() { return gUiOffsetUp.load(std::memory_order_acquire); }
-
-// **Why this exists.** `ui.scale` stopped having any effect above about 130 at
-// 2688x2880, which reads as a hard maximum but is not one: the fit loops were
-// shrinking the panel back until it sat inside 72 percent of the frustum the
-// runtime reports. This exposes that 72.
-//
-// Raising it is a real trade, not a free win. The reported frustum is already
-// wider than a Quest 3's lenses actually show, so at 100 percent the corners
-// are beyond what the wearer can see -- which is exactly why the inset was
-// there. It is reversible, and a wearer is the only instrument that can settle
-// where their own edge is.
-DWORD SetUiFitMarginPercent(unsigned int percent)
-{
-    if (percent < 30 || percent > 100) {
-        Log("result=refused detail=ui_margin_out_of_range");
-        return 1;
-    }
-    gUiFitMarginPercent.store(percent, std::memory_order_release);
-    gPanelSettingsGeneration.fetch_add(1, std::memory_order_release);
-    Log("result=0 detail=ui_margin percent=" + std::to_string(percent));
-    return 0;
-}
-
-DWORD UiFitMarginPercent() { return gUiFitMarginPercent.load(std::memory_order_acquire); }
-
-// The onboarding card under the menu. Ours, not Prey's, and it is charged to
-// the same vertical budget as the menu -- so switching it off is also the
-// cheapest way to make the menu bigger.
-DWORD SetUiGuideEnabled(unsigned int enabled)
-{
-    const bool on = enabled != 0;
-    gUiGuide.store(on, std::memory_order_release);
-    gPanelSettingsGeneration.fetch_add(1, std::memory_order_release);
-    Log(std::string("result=0 detail=ui_guide enabled=") + (on ? "1" : "0"));
-    return 0;
-}
-
-DWORD UiGuideEnabled() { return gUiGuide.load(std::memory_order_acquire) ? 1u : 0u; }
 
 } // namespace preyvr::dll

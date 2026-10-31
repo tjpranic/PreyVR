@@ -52,9 +52,14 @@ void PublishSupportGripGeometry(const SupportGripGeometry& geometry);
 DWORD SetTwoHandedAim(unsigned int enabled);
 unsigned int TwoHandedAimEnabled();
 DWORD SetTwoHandGripToggle(unsigned enabled);
-DWORD SetTwoHandSupportSnap(unsigned enabled);
+DWORD SetTwoHandAutoSnap(unsigned enabled);
+// Auto-snap's distances, cm: attach 5..25 (ClosestGrip takes no wider), break 10..60.
+DWORD SetTwoHandSnapAttachCm(unsigned cm);
+DWORD SetTwoHandSnapBreakCm(unsigned cm);
+unsigned TwoHandSnapAttachCm();
+unsigned TwoHandSnapBreakCm();
 bool TwoHandGripToggle();
-bool TwoHandSupportSnap();
+bool TwoHandAutoSnap();
 bool TwoHandedAimHeld();
 // The left hand is inside the equipped weapon's foregrip region this frame.
 bool SupportGripNear();

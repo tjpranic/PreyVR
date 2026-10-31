@@ -24,10 +24,11 @@ LatestSnapshot<SupportGripGeometry> gSupportGeometry;
 LatestSnapshot<twohand::Input> gSupportInput;
 std::atomic<unsigned> gTwoHandGates{0}, gTwoHandGatesSeen{0};
 std::atomic<bool> gTwoHandEnabled{true};
-std::atomic<bool> gTwoHandToggle{false},gTwoHandSnap{true};
+std::atomic<bool> gTwoHandToggle{false},gTwoHandAuto{false};
+std::atomic<unsigned> gTwoHandSnapAttachCm{10},gTwoHandSnapBreakCm{25};   // options::Defaults()
 std::atomic<unsigned int> gTwoHandReset{0};
 std::atomic<bool> gTwoHandHeld{false}, gTwoHandRegionReady{false}, gSupportNear{false};
-std::atomic<unsigned long long> gTwoHandFrames{0};
+std::atomic<unsigned long long> gTwoHandFrames{0},gTwoHandSnaps{0};
 thread_local twohand::Solver gTwoHandSolver;
 thread_local unsigned int gTwoHandSeenReset=0;
 thread_local std::uint64_t gTwoHandTime=0;
@@ -46,6 +47,9 @@ void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking)
     input.primary=primary.position;
     input.squeeze=left.squeezeValue;
     input.toggleGrip=gTwoHandToggle.load();
+    input.autoSnap=gTwoHandAuto.load();
+    input.snapAttach=static_cast<float>(gTwoHandSnapAttachCm.load())*.01f;
+    input.snapBreak=static_cast<float>(gTwoHandSnapBreakCm.load())*.01f;
     // A recenter ends a hold; a snap turn does not (SupportGripGeometry).
     input.reference=frame.recenterEpoch;input.epoch=frame.tracking.epoch;
     EquippedRig owner{};
@@ -86,12 +90,13 @@ void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking)
         // two-hand hold, never a use (InteractionUse.h).
         gSupportNear.store(region&&input.usable&&twohand::ClosestGrip(input,point));
     }
-    frame.twoHand.snapSupport=gTwoHandSnap.load();
     DebugOverlayForegrip(frame,input,frame.twoHand,region);
     gSupportInput.Publish(input);
     const bool wasHeld=gTwoHandHeld.exchange(frame.twoHand.held);
-    if(frame.twoHand.held&&!wasHeld)
+    if(frame.twoHand.held&&!wasHeld) {
         QueueHaptic(Hand::left,haptics::Event::ForegripAttached,frame.tracking);
+        if(frame.twoHand.snapped) ++gTwoHandSnaps;
+    }
     if(frame.twoHand.held) ++gTwoHandFrames;
 }
 
@@ -107,17 +112,33 @@ DWORD SetTwoHandGripToggle(unsigned enabled) {
     if(gTwoHandToggle.exchange(enabled!=0)!=(enabled!=0))++gTwoHandReset;
     return 0;
 }
-DWORD SetTwoHandSupportSnap(unsigned enabled) {
+// The solver drops its hold on the change: a hold by auto-snap has no grip to end it.
+DWORD SetTwoHandAutoSnap(unsigned enabled) {
     if(enabled>1)return ERROR_INVALID_PARAMETER;
-    gTwoHandSnap.store(enabled!=0);return 0;
+    gTwoHandAuto.store(enabled!=0);
+    return 0;
 }
+DWORD SetTwoHandSnapAttachCm(unsigned cm) {
+    if(cm<5||cm>25)return ERROR_INVALID_PARAMETER;
+    gTwoHandSnapAttachCm.store(cm);
+    return 0;
+}
+DWORD SetTwoHandSnapBreakCm(unsigned cm) {
+    if(cm<10||cm>60)return ERROR_INVALID_PARAMETER;
+    gTwoHandSnapBreakCm.store(cm);
+    return 0;
+}
+unsigned TwoHandSnapAttachCm(){return gTwoHandSnapAttachCm.load();}
+unsigned TwoHandSnapBreakCm(){return gTwoHandSnapBreakCm.load();}
 bool TwoHandGripToggle(){return gTwoHandToggle.load();}
-bool TwoHandSupportSnap(){return gTwoHandSnap.load();}
+bool TwoHandAutoSnap(){return gTwoHandAuto.load();}
 bool TwoHandedAimHeld(){return gTwoHandEnabled.load()&&gTwoHandHeld.load();}
 bool SupportGripNear(){return gTwoHandEnabled.load()&&gSupportNear.load();}
 std::string TwoHandedAimStatus() {
     std::ostringstream out;
     out<<" enabled="<<TwoHandedAimEnabled()<<" held="<<gTwoHandHeld.load()
+       <<" autoSnap="<<gTwoHandAuto.load()<<" snaps="<<gTwoHandSnaps.load()
+       <<" snapAttachCm="<<gTwoHandSnapAttachCm.load()<<" snapBreakCm="<<gTwoHandSnapBreakCm.load()
        <<" regionReady="<<gTwoHandRegionReady.load()<<" frames="<<gTwoHandFrames.load()
        // 1 region 2 tracking 4 medkit 8 headYaw 16 camera 32 disabled 64 hud 128 poses
        <<" gates="<<gTwoHandGates.load()<<" gatesSeen="<<gTwoHandGatesSeen.exchange(0);

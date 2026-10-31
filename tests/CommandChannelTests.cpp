@@ -59,10 +59,6 @@ std::string WorldReticleReports() { return ReticleWorldReport() + " scene:" + Sc
 std::string VrOptionsReports() { return VrOptionsReport() + PsychoscopeReport() + BodyEquipmentReport(); }
 std::string BodyReports() { return TorsoLaneReport() + BodyPinReport() + RoomScaleReport(); }
 std::string BodyDepthReports() { return BodyDepthReport() + " " + ViewNearClipReport(); }
-std::string InventoryLayerReports()
-{
-    return HudLayerReport() + " layerFrames=" + std::to_string(InventoryLayerFrameCount());
-}
 
 // One line, as the command file step runs it.
 std::string Run(const char* line)
@@ -180,13 +176,14 @@ const Case kCases[] = {
     {"dbg.draw on", "dbg.draw result=0", DebugOverlayReport, processed},
     {"dbg.draw off", "dbg.draw result=0", DebugOverlayReport, processed},
     {"dbg.lasers", "dbg.lasers result=0", DebugOverlayReport, processed},
+    {"dbg.shots", "dbg.shots result=0", DebugOverlayReport, processed},
+    {"dbg.shots 1", "dbg.shots result=0", DebugOverlayReport, processed},
+    {"dbg.shots abc", "dbg.shots result=0", DebugOverlayReport, processed},   // the default, off
     {"move.firehold", "move.firehold result=0 hold=1 posted=0", nullptr, processed},
     {"move.firehold 0", "move.firehold result=0 hold=0 posted=0", nullptr, processed},
     {"move.firehold 1", "move.firehold result=0 hold=1 posted=0", nullptr, processed},
     {"aim.shotprobe", "aim.shotprobe result=0", ShotProbeReport, processed},
     {"aim.shot", "aim.shot result=0", ShotRayReport, processed},
-    {"aim.shot 2", "aim.shot result=87", ShotRayReport, processed},
-    {"aim.shot abc", "aim.shot result=87", ShotRayReport, processed},   // refused, not defaulted
     {"near.fx", "near.fx result=0 ", NearParticleStereoReport, processed},
     {"near.fx 2", "near.fx result=87 ", NearParticleStereoReport, processed},
     {"near.fxbridge", "near.fxbridge result=0 ", NearParticleStereoReport, processed},
@@ -224,7 +221,6 @@ const Case kCases[] = {
     {"arms.att", "arms.att result=2", nullptr, processed},
     {"arms.hide", "arms.hide result=2", nullptr, processed},
     {"arms.draw", "arms.draw result=0 (requested)", nullptr, processed},
-    {"arms.free", "arms.free result=0", ArmsReport, processed},
     {"arms.report", "arms.report result=0 player=0x0 ikOwner=0x0 rig=0 weapon=0x0 character=0x0 attachment=0x0",
      ArmsReport, processed},
     {"wrist.report", "wrist.report result=0", WristReport, processed},
@@ -235,7 +231,6 @@ const Case kCases[] = {
     {"wrist.occlusion", "wrist.occlusion result=0 mask=3", nullptr, processed},
     {"wrist.occlusion 9", "wrist.occlusion result=0 mask=3", nullptr, processed},   // clamped
     {"wrist.force", "wrist.force result=0 force=0", nullptr, processed},
-    {"wrist.face", "wrist.face result=0 face=1", nullptr, processed},
     {"wrist.haptic", "wrist.haptic result=0 haptic=1", nullptr, processed},
     {"wrist.native", "wrist.native result=0 scale=400 background=0", nullptr, processed},
     {"wrist.place", "wrist.place result=0", WristReport, processed},   // no bare form: re-stores, clamped
@@ -272,18 +267,12 @@ const Case kCases[] = {
     {"xr.hold 1 5", "xr.hold result=87", XrHoldReport, processed},
     {"xr.hold 2", "xr.hold result=87", XrHoldReport, processed},
 
-    // The world reticle and the prompts. A malformed ui.prompts value is 1: on,
-    // its Spec default.
+    // The world reticle.
     {"aim.world", "aim.world result=0", WorldReticleReports, processed},
-    {"aim.world 2", "aim.world result=1", WorldReticleReports, processed},
     {"aim.reticlesize", "aim.reticlesize result=0", ReticleWorldReport, processed},
     {"aim.reticlesize 150", "aim.reticlesize result=0", ReticleWorldReport, processed},
     {"aim.reticlesize 10", "aim.reticlesize result=1", ReticleWorldReport, processed},
     {"aim.reticlesize abc", "aim.reticlesize result=0", ReticleWorldReport, processed},   // the default, 100
-    {"ui.prompts", "ui.prompts result=0 enabled=0", ControllerPromptsReport, processed},
-    {"ui.prompts 2", "ui.prompts result=1 enabled=0", ControllerPromptsReport, processed},
-    {"ui.prompts abc", "ui.prompts result=0 enabled=1", ControllerPromptsReport, processed},
-    {"ui.prompts 0", "ui.prompts result=0 enabled=0", ControllerPromptsReport, processed},
 
     // Contact, the surface stop, the swing and the wrench's draw.
     {"contact", "contact result=0", ContactReport, processed},
@@ -315,21 +304,14 @@ const Case kCases[] = {
     {"hud.var", "hud.var result=0 ", HudVariableReport, processed},
     {"hud.layer", "hud.layer result=0 ", HudLayerReport, processed},
     {"input.hotkeys", "input.hotkeys result=0 consoleToggles=0", nullptr, processed},
-    {"ui.stereo", "ui.stereo result=0 ", InventoryStereoReport, processed},
-    {"ui.stereo 2", "ui.stereo result=1 ", InventoryStereoReport, processed},
-    {"ui.depth", "ui.depth result=0 ", InventoryStereoReport, processed},
-    {"ui.depth 50", "ui.depth result=0 ", InventoryStereoReport, processed},
-    {"ui.depth 101", "ui.depth result=1 ", InventoryStereoReport, processed},
-    {"ui.depth abc", "ui.depth result=0 ", InventoryStereoReport, processed},
-    {"ui.inventory", "ui.inventory result=0 ", InventoryLayerReports, processed},
     {"ui.panel", "ui.panel result=0 mode=0 ", VrModeReport, processed},
     {"ui.panel 3", "ui.panel result=1 mode=0 ", VrModeReport, processed},
     {"ui.pointer", "ui.pointer result=0 ", UiPointerReport, processed},
     {"ui.pointer 3", "ui.pointer result=87 ", UiPointerReport, processed},
-    {"ui.scale", "ui.scale result=0 percent=100 margin=72 guide=0", nullptr, processed},
-    {"ui.scale 150", "ui.scale result=0 percent=150 margin=72 guide=0", nullptr, processed},
-    {"ui.scale 10", "ui.scale result=1 percent=150 margin=72 guide=0", nullptr, processed},
-    {"ui.scale abc", "ui.scale result=0 percent=100 margin=72 guide=0", nullptr, processed},
+    {"ui.scale", "ui.scale result=0 percent=100", nullptr, processed},
+    {"ui.scale 150", "ui.scale result=0 percent=150", nullptr, processed},
+    {"ui.scale 10", "ui.scale result=1 percent=150", nullptr, processed},
+    {"ui.scale abc", "ui.scale result=0 percent=100", nullptr, processed},
     {"ui.text", "ui.text result=0 cm=140", nullptr, processed},
     {"ui.text 150", "ui.text result=0 cm=150", nullptr, processed},
     {"ui.text 50", "ui.text result=1 cm=150", nullptr, processed},
@@ -349,17 +331,6 @@ const Case kCases[] = {
     {"ui.offset x 5", "ui.offset result=87 right=10 up=5", nullptr, processed},
     {"ui.offset 100 0", "ui.offset result=1 right=10 up=5", nullptr, processed},
     {"ui.offset 0 0", "ui.offset result=0 right=0 up=0", nullptr, processed},
-    {"ui.margin", "ui.margin result=0 percent=72", nullptr, processed},
-    {"ui.margin 80", "ui.margin result=0 percent=80", nullptr, processed},
-    {"ui.margin 10", "ui.margin result=1 percent=80", nullptr, processed},
-    {"ui.margin abc", "ui.margin result=0 percent=72", nullptr, processed},
-    {"ui.guide", "ui.guide result=0 enabled=0", nullptr, processed},
-    {"ui.guide 1", "ui.guide result=0 enabled=1", nullptr, processed},
-    {"ui.guide abc", "ui.guide result=0 enabled=0", nullptr, processed},
-    {"ui.curve", "ui.curve result=0 degrees=35", nullptr, processed},
-    {"ui.curve 40", "ui.curve result=0 degrees=40", nullptr, processed},
-    {"ui.curve 61", "ui.curve result=87 degrees=40", nullptr, processed},
-    {"ui.curve abc", "ui.curve result=0 degrees=35", nullptr, processed},
     {"observer", "observer status=unavailable(0)", nullptr, processed},
     {"xr.srgb", "xr.srgb result=0 note=no_value_nothing_changed", nullptr, processed},
     {"xr.native", "xr.native result=0 note=no_value_nothing_changed", nullptr, processed},
@@ -419,10 +390,6 @@ const Case kCases[] = {
     {"aim.scene", "aim.scene result=0", SceneQueryReport, processed},
     {"haptics", "haptics result=0", HapticsReport, processed},
     {"aim.reticle", "aim.reticle result=0 note=no_value_nothing_changed", nullptr, processed},
-    {"aim.reticleconverge", "aim.reticleconverge result=0 mm=10000", nullptr, processed},
-    {"aim.reticleconverge 1000", "aim.reticleconverge result=0 mm=1000", nullptr, processed},
-    {"aim.reticleconverge 10", "aim.reticleconverge result=0 mm=500", nullptr, processed},   // clamped
-    {"aim.reticleconverge abc", "aim.reticleconverge result=0 mm=10000", nullptr, processed},
     {"aim.reticledispatch", "aim.reticledispatch result=0 note=no_value_nothing_changed", nullptr, processed},
     {"aim.reticlecanvas", "aim.reticlecanvas result=0 mode=1 native=0 nativeFailed=0", nullptr, processed},
     {"aim.reticlestage", "aim.reticlestage result=0 note=no_value_nothing_changed", nullptr, processed},
@@ -484,10 +451,10 @@ const Case kCases[] = {
 // - install hooks, given a value (the bare forms above only report, and values
 //   refused before the setter runs are pinned): observer, near.fov, near.enable,
 //   near.fxhide, aim.shotprobe, aim.reticle, aim.enable, weapon.observe,
-//   view.observe, ik.mode, move.mode, use.hand, xr.stereo, ui.inventory,
-//   hud.layer, psi.target, medkit.slot, dual.observe, dual.mode, dual.overlay,
-//   dual.vr, frame.probe, cull.prepare; aim.shot, near.fx,
-//   markers.depth, stars.depth, body.depth, ui.stereo and window.hold given 1; aim.beam and dual.capture
+//   view.observe, ik.mode, move.mode, use.hand, xr.stereo,
+//   psi.target, medkit.slot, dual.observe, dual.mode, dual.overlay,
+//   dual.vr, frame.probe, cull.prepare; near.fx,
+//   markers.depth, stars.depth, body.depth and window.hold given 1; aim.beam and dual.capture
 //   even bare; hud.var, hud.setvar, hud.call, hud.fit and hud.probe given
 //   arguments that parse.
 // - post input or arm hardware breakpoints: menu, input.key, mem.watch with an
@@ -497,7 +464,7 @@ const Case kCases[] = {
 //   (grenade.give also installs the lane).
 // - read or write raw memory: mem.peek, mem.str, mem.scan and mem.deep with an
 //   address, arms.joints, arms.hide with an index.
-// - capture frames: capture, capture.hud, capture.inventory.
+// - capture frames: capture, capture.hud.
 // - wait: use.find (half a second), a second allowlisted console command
 //   (a second of retries while the queue is full).
 
@@ -525,7 +492,7 @@ std::vector<std::string> ReportSkeleton(unsigned long long processedCount, unsig
            "reticleCanvasXY", "reticleCanvasMode", "reticleNativeCanvas", "reticleNativeCanvasFailed",
            "reticleDispatched", "reticleDispatchFailed"});
     s.push_back(ReticleProjectionReport());
-    names({"aimDirMilli", "aimRawQMilli", "recenters", "reticleOriginMm", "reticleConvergeMm", "hudElement",
+    names({"aimDirMilli", "aimRawQMilli", "recenters", "reticleOriginMm", "hudElement",
            "hudCalls", "hudRefused", "captures", "camYawMdeg", "headYawMdeg", "playYawMdeg", "eyeMm",
            "headMm", "yawHeld", "yawUnavailable", "weaponMountMm", "weaponBaseline", "aimApplied", "aimNoPose",
            "aimNoPlayer", "aimCompose", "aimNativeMagMilli", "menuActions", "inputPosted", "menuDiscarded",

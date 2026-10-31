@@ -148,14 +148,12 @@ inline std::atomic<unsigned int> gSignatureJoints{101};
 
 inline std::atomic<unsigned int> gHands{1};
 
-// arms.free: with no weapon drawn (holstered, or carrying something) the game
+// The free arms: with no weapon drawn (holstered, or carrying something) the game
 // lowers the first-person arms out of view; the same rig is still skinned and
 // drawn, so it is driven too. Its owner is the player's own character
 // (ArkPlayer::GetAnimatedCharacter 0x157C6D0 = [player+0x1808]; the animated
 // character caches its ICharacterInstance at +0x710, live == the weapon rig's
 // owning character, 2026-10-07).
-inline std::atomic<unsigned int> gFreeArms{0};
-
 inline std::atomic<bool> gFreeBound{false};
 
 inline std::atomic<unsigned long long> gFreeFrames{0}, gFreeGateZero{0};
@@ -506,7 +504,7 @@ struct ArmPlan {
     float reach = -1.0f;        // the player's wrist from this shoulder (m), before reach shaping
     bool goalSet = false;       // DriveHand wrote this wrist goal (model)
     Vec3 goal{};
-    // arms.free: the wrist's rotation is set after the pass as well, with what
+    // The free arms: the wrist's rotation is set after the pass as well, with what
     // the hand carries: the lowered no-weapon pose may run no native IK at all.
     bool forceRotation = false;
     bool rotationSet = false;
@@ -563,11 +561,7 @@ inline Vec3 gDrawnPole[2]{};
 
 inline ArmStats gArmStats;
 
-// Long weapons held further back (twohand::HoldBack; ik.longreach), mm/deg.
-inline std::atomic<bool> gLongOn{true};
-
-inline std::atomic<int> gLongComfortMm{450}, gLongMaxBackMm{200}, gLongSupportBackMm{100}, gLongTwistDeg{30};
-
+// Long weapons held further back (twohand::HoldBack; ik.longreach), mm.
 inline std::atomic<int> gHoldBackMm{0};
 
 inline std::atomic<std::uint64_t> gLongGeneration{0};
@@ -630,8 +624,8 @@ inline std::mutex gSupportLatchMutex;
 
 inline preyvr::twohand::RegionLatch gSupportLatch;
 
-// Long weapons held further back (twohand::HoldBack; ik.longreach). Settings in
-// mm/deg; the applied hold-back is eased in per weapon (no jump at the latch).
+// Long weapons held further back (twohand::HoldBack; ik.longreach): the applied
+// hold-back is eased in per weapon (no jump at the latch).
 inline float gHoldBackEased = 0.0f;
 
 inline std::uint64_t gHoldBackOwner = 0, gHoldBackNs = 0;

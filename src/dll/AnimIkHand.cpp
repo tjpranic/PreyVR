@@ -35,15 +35,6 @@ std::uint32_t ReadVtableRva(std::uintptr_t object)
     } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
 }
 
-preyvr::twohand::LongReach LongReachSettings()
-{
-    preyvr::twohand::LongReach r{};
-    r.comfortForward = gLongComfortMm.load(std::memory_order_relaxed) * .001f;
-    r.maxHoldBack = gLongOn.load(std::memory_order_relaxed) ? gLongMaxBackMm.load(std::memory_order_relaxed) * .001f : 0.0f;
-    r.supportBack = gLongSupportBackMm.load(std::memory_order_relaxed) * .001f;
-    return r;
-}
-
 } // namespace
 
 namespace ik {
@@ -84,7 +75,7 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
     float holdBack=0.0f;   // metres the weapon sits back along the barrel (long weapons)
     float appliedRoll = 0.0f;   // pose.roll about the barrel this pass (radians)
     const bool twoHand=frame.weaponGeneration==owner.generation&&frame.twoHand.blend>0&&TwoHandedAimEnabled();
-    const bool supportLocked=hand==1&&twoHand&&frame.twoHand.snapSupport&&supportPrimary;
+    const bool supportLocked=hand==1&&twoHand&&supportPrimary;
     // pose.mode 1 on a rig whose hand was identified.
     const bool posed = pose.mode == 1 && gHandRig.valid[hand] && gHandRig.skeleton == gRigSkeleton.load();
     // The native two-handed hold, carried with the written right wrist.
@@ -200,7 +191,7 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
             haveSocket=haveSocket&&preyvr::twohand::ClassifySocket(socket,gWideSupport.load(std::memory_order_relaxed),grip);
             // A long weapon (its foregrip beyond reach) is held back by the
             // difference, eased in once its socket is known; 0 for the others.
-            const auto reachSettings=LongReachSettings();
+            constexpr preyvr::twohand::LongReach reachSettings{};
             const float holdTarget=haveSocket&&grip==preyvr::twohand::Grip::foregrip
                 ?preyvr::twohand::HoldBack(socket,reachSettings):0.0f;
             {
@@ -345,7 +336,7 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
                 }
                 if (fingers) { fingers->apply = posedFree; fingers->weight = 1.0f - blend; fingers->support = blend; }
             } else if (posed && hand == 0 && fingers) {
-                // arms.free: the right hand holds nothing either.
+                // No weapon: the right hand holds nothing either.
                 fingers->apply = posedFree; fingers->weight = 1.0f; fingers->support = 0.0f;
             } else if(supportLocked) {
                 // The weapon follows the already compressed primary wrist.

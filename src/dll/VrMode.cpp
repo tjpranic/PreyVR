@@ -29,6 +29,7 @@
 #include "AimTakeover.h"
 #include "ReticleFollow.h"
 #include "SceneQuery.h"
+#include "ShotRay.h"
 #include "HudLayer.h"
 #include "UiPointer.h"
 #include "AnimIkTakeover.h"
@@ -84,7 +85,7 @@ void StopFeatures() {
     SetSyntheticStereo(0,50);
     SetViewHookApplying(0); SetViewPositionApplying(0);
     SetNearViewStereo(0); SetNearFovDeciDegrees(0);
-    SetReticleFollowEnabled(0); SetAimTakeoverEnabled(0);
+    SetReticleFollowEnabled(0); SetAimTakeoverEnabled(0); SetShotRay(0);
     SetAnimIkControllerDrive(0); SetAnimIkMode(0);
     SetMenuNavigation(0); SetMoveLaneMode(0);
     SetTurnLaneEnabled(0); SetFireLaneEnabled(0); SetInteractionEnabled(0);
@@ -115,7 +116,7 @@ void EnableVrMode() {
     wchar_t value[24]{};
     desiredWidth=GetEnvironmentVariableW(L"PREYVR_RENDER_WIDTH",value,24)?static_cast<unsigned>(_wtoi(value)):0;
     desiredHeight=GetEnvironmentVariableW(L"PREYVR_RENDER_HEIGHT",value,24)?static_cast<unsigned>(_wtoi(value)):0;
-    // Panel curvature and the laser hand are VR Options settings: vr-options.ini
+    // The panel's size and the laser hand are VR Options settings: vr-options.ini
     // holds them (ApplySavedVrOptions), not the launcher's environment. The menu
     // panel's own settings apply now, so its first frame is already the saved one.
     LoadVrOptions();
@@ -281,22 +282,20 @@ void TickVrMode() {
         // Not fatal: without the hook each keeps its own estimate, and a snap
         // turn lands at the view instead.
         if(SetTorsoLaneActive(1)!=0) Log("torso=unavailable shoulders=own_estimate");
-        // The arms stay at the controllers with no weapon drawn: holstered (the
-        // right grip held) or carrying (AnimIkTakeover arms.free; arms.free 0 =
-        // the game lowers them out of view, as before).
-        SetAnimIkFreeArms(options::Default(options::ArmsFree));
         // The aim lasers by default (each hand's ray to what it points at); VR
         // Options' Aim lasers turns them off, and its saved choice applies below.
         // The debug overlay is not switched on here: it follows its own row, or
         // dbg.draw for the session, and leaves the lasers as they are.
         SetAimLasers(options::Default(options::AimLasers));
-        // The floating HUD by default; VR Options' HUD style can turn it off.
-        if(SetHudLayerEnabled(options::Default(options::HudLayer))!=0)Log("hud_layer=unavailable native_hud=retained");
-        // The menus keep the controller's prompts under the laser
-        // (ControllerPrompts.h); VR Options' Force Controller Prompts can turn it off.
-        SetControllerPrompts(options::Default(options::ControllerPrompts));
-        // The carry and grenade hands, the free arms, the lasers, the HUD layer
-        // and the prompts start off; above, each takes its VR Options default.
+        // The floating HUD. Not fatal: without its hooks Prey's own HUD stays.
+        if(SetHudLayerEnabled(1)!=0)Log("hud_layer=unavailable native_hud=retained");
+        // The menus keep the controller's prompts under the laser (ControllerPrompts.h).
+        SetControllerPrompts(1);
+        // Shots leave the muzzle along the aim (ShotRay.h). Not fatal: without
+        // the hooks they leave as Prey fires them.
+        if(SetShotRay(1)!=0)Log("shot_ray=unavailable shots=native");
+        // The carry and grenade hands and the lasers start off; above, each takes
+        // its VR Options default.
         // Saved VR Options choices last, so they win over the defaults above
         // (an F11 restart included).
         ApplySavedVrOptions();

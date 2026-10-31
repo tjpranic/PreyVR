@@ -15,7 +15,6 @@
 #include "HeadTrackingHook.h"
 #include "XrInput.h"
 #include "UiMode.h"
-#include "UiGuide.h"
 #include "UiPointer.h"
 #include "HudLayer.h"
 #include "LayerSwapchain.h"

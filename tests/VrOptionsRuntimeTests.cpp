@@ -32,22 +32,16 @@ DWORD SetExaminePullbackCm(unsigned v){applied[options::ScreenPullback]=v;return
 void SetSwingSpeed(unsigned v){applied[options::SwingSpeed]=v;}unsigned SwingSpeed(){return applied[options::SwingSpeed];}
 void SetHeavySwingSpeed(unsigned v){applied[options::HeavySwingSpeed]=v;}unsigned HeavySwingSpeed(){return applied[options::HeavySwingSpeed];}
 void QueueHaptic(Hand,haptics::Event,const TrackingFrame&){}
-DWORD SetReticleInWorld(unsigned v){applied[options::ReticleWorld]=v;return 0;}
-unsigned ReticleInWorld(){return applied[options::ReticleWorld];}
 DWORD SetReticleSizePercent(unsigned v){applied[options::ReticleSize]=v;return 0;}
 unsigned ReticleSizePercent(){return applied[options::ReticleSize];}
 void SetHapticsEnabled(unsigned v){applied[options::Haptics]=v;}
 unsigned HapticsEnabled(){return applied[options::Haptics];}
 void SetHapticStrength(unsigned v){applied[options::HapticStrength]=v;}
 unsigned HapticStrength(){return applied[options::HapticStrength];}
-DWORD SetReticleConvergenceMillimetres(unsigned v){applied[options::ReticleFallback]=v;return 0;}
 DWORD SetMarkerSizePercent(unsigned v){applied[options::MarkerSize]=v;return 0;}
 unsigned MarkerSizePercent(){return applied[options::MarkerSize];}
-DWORD ReticleConvergenceMillimetres(){return applied[options::ReticleFallback];}
 void ClearHolsters(){++holsterClears;}
 DWORD SetDebugOverlay(unsigned v){applied[options::DebugOverlay]=v?1:0;return 0;}
-DWORD SetShotRay(unsigned v){applied[options::MuzzleAim]=v;return 0;}
-unsigned ShotRayEnabled(){return applied[options::MuzzleAim];}
 unsigned DebugOverlayMask(){return applied[options::DebugOverlay];}
 DWORD SetSnapTurnDegrees(unsigned v){applied[options::Turn]=v;return 0;}
 unsigned SnapTurnDegrees(){return applied[options::Turn];}
@@ -59,16 +53,10 @@ DWORD SetTwoHandedAim(unsigned v){applied[options::TwoHand]=v;return 0;}
 unsigned TwoHandedAimEnabled(){return applied[options::TwoHand];}
 DWORD SetTwoHandGripToggle(unsigned v){applied[options::GripToggle]=v;return 0;}
 bool TwoHandGripToggle(){return applied[options::GripToggle]!=0;}
-DWORD SetTwoHandSupportSnap(unsigned v){applied[options::SupportSnap]=v;return 0;}
-bool TwoHandSupportSnap(){return applied[options::SupportSnap]!=0;}
+DWORD SetTwoHandAutoSnap(unsigned v){applied[options::AutoSnap]=v;return 0;}
+bool TwoHandAutoSnap(){return applied[options::AutoSnap]!=0;}
 DWORD SetUiScalePercent(unsigned v){applied[options::UiScale]=v;return 0;}
 DWORD UiScalePercent(){return applied[options::UiScale];}
-DWORD SetUiFitMarginPercent(unsigned v){applied[options::UiMargin]=v;return 0;}
-DWORD UiFitMarginPercent(){return applied[options::UiMargin];}
-DWORD SetUiCurveDegrees(unsigned v){applied[options::UiCurve]=v;return 0;}
-unsigned UiCurveDegrees(){return applied[options::UiCurve];}
-DWORD SetUiGuideEnabled(unsigned v){applied[options::UiGuide]=v;return 0;}
-DWORD UiGuideEnabled(){return applied[options::UiGuide];}
 unsigned menuDistance=200,distanceSets=0,offsetSets=0;int menuRight=0,menuUp=0;
 DWORD SetUiDistanceCm(unsigned v){if(v<100||v>400)return 1;menuDistance=v;++distanceSets;return 0;}
 DWORD UiDistanceCm(){return menuDistance;}
@@ -83,35 +71,26 @@ PREYVR_STUB(SetTextPanelDistanceCm,TextPanelDistanceCmValue,UiText,unsigned)
 PREYVR_STUB(SetMoveLaneDeadzone,MoveLaneDeadzone,MoveDeadzone,unsigned)
 PREYVR_STUB(SetTurnLaneDeadzone,TurnLaneDeadzone,TurnDeadzone,unsigned)
 PREYVR_STUB(SetArmLengthCm,ArmLengthCm,ArmLength,int)
-PREYVR_STUB(SetAnimIkFreeArms,AnimIkFreeArms,ArmsFree,unsigned)
 PREYVR_STUB(SetAnimIkFingerCurl,AnimIkFingerCurl,FingerCurl,unsigned)
+PREYVR_STUB(SetTwoHandSnapAttachCm,TwoHandSnapAttachCm,AutoSnapAttach,unsigned)
+PREYVR_STUB(SetTwoHandSnapBreakCm,TwoHandSnapBreakCm,AutoSnapBreak,unsigned)
 PREYVR_STUB(SetAimLasers,AimLasersEnabled,AimLasers,unsigned)
-PREYVR_STUB(SetControllerPrompts,ControllerPromptsEnabled,ControllerPrompts,unsigned)
+PREYVR_STUB(SetShotTrail,ShotTrailEnabled,ShotTrail,unsigned)
 PREYVR_STUB(SetCarryHoldToHold,CarryHoldPreference,CarryHold,unsigned)
 PREYVR_STUB(SetGrenadeHand,GrenadeHandEnabled,GrenadeHand,unsigned)
 PREYVR_STUB(SetCarryThrowGainPercent,CarryThrowGainPercent,CarryThrowStrength,unsigned)
 PREYVR_STUB(SetGrenadeThrowStrengthPercent,GrenadeThrowStrengthPercent,GrenadeThrowStrength,unsigned)
-PREYVR_STUB(SetWristStatusOnHud,WristStatusOnHud,WristOnHud,unsigned)
 PREYVR_STUB(SetWristTick,WristTickEnabled,WristTick,unsigned)
 PREYVR_STUB(SetWristAlongMm,WristAlongMm,WristAlong,int)
 PREYVR_STUB(SetWristHoverMm,WristHoverMm,WristHover,int)
 PREYVR_STUB(SetWristTiltDegrees,WristTiltDegrees,WristTilt,int)
 PREYVR_STUB(SetCarryHand,CarryHandEnabled,CarryHand,unsigned)
-PREYVR_STUB(SetGrenadeDeploy,GrenadeDeployEnabled,GrenadeDeploy,unsigned)
-PREYVR_STUB(SetAnimIkLongReachEnabled,AnimIkLongReachEnabled,LongReach,unsigned)
-PREYVR_STUB(SetInventoryDepthPercent,InventoryDepthPercent,InventoryDepth,unsigned)
 PREYVR_STUB(SetUiPointerHand,UiPointerHand,PointerHand,unsigned)
 PREYVR_STUB(SetTemporalAntialiasing,TemporalAntialiasingEnabled,Antialiasing,unsigned)
 PREYVR_STUB(SetZeroGRollDegrees,ZeroGRollDegrees,ZeroGRoll,unsigned)
 PREYVR_STUB(SetZeroGPitchDegrees,ZeroGPitchDegrees,ZeroGPitch,unsigned)
 #undef PREYVR_STUB
 DWORD TextPanelDistanceCm(){return TextPanelDistanceCmValue();}
-DWORD SetHudLayerEnabled(unsigned v){applied[options::HudLayer]=v!=0;return 0;}
-bool HudLayerEnabled(){return applied[options::HudLayer]!=0;}
-DWORD SetInventoryCaptureEnabled(unsigned v){applied[options::InventoryLayer]=v!=0;return 0;}
-bool InventoryCaptureEnabled(){return applied[options::InventoryLayer]!=0;}
-DWORD SetInventoryStereoEnabled(unsigned v){applied[options::InventoryStereo]=v!=0;return 0;}
-bool InventoryStereoEnabled(){return applied[options::InventoryStereo]!=0;}
 DWORD SetMovementAxisScales(unsigned strafe,unsigned backward){
  applied[options::StrafeSpeed]=static_cast<int>(strafe);applied[options::BackwardSpeed]=static_cast<int>(backward);return 0;}
 unsigned MovementStrafePercent(){return static_cast<unsigned>(applied[options::StrafeSpeed]);}
@@ -135,8 +114,8 @@ int main(){
  Check(!std::filesystem::exists(sandbox),"test sandbox must be new");
  Check(SetEnvironmentVariableW(L"LOCALAPPDATA",sandbox.c_str())!=0,"process-only settings destination");
  LoadVrOptions();Check(VrOptionsReady()&&!PsychoscopeGestureEnabled(),"startup gesture off");
- SetSnapTurnDegrees(75);SetUiFitMarginPercent(95);
- Check(VrOptionsValues()[options::Turn]==75&&VrOptionsValues()[options::UiMargin]==95,"UI reflects live command-channel changes");
+ SetSnapTurnDegrees(75);SetUiScalePercent(95);
+ Check(VrOptionsValues()[options::Turn]==75&&VrOptionsValues()[options::UiScale]==95,"UI reflects live command-channel changes");
  currentFrame.epoch=1;currentFrame.headValidity={true,true,true,true,0};
  currentFrame.hands[1].aimValidity={true,true,true,true,0};
  auto tick=[&]{currentFrame.displayTime+=10000000;currentFrame.publishedNs=MonotonicNanoseconds();return ProcessVrOptionsInput(currentFrame);};
@@ -177,17 +156,15 @@ int main(){
  Check(applied[options::GripToggle]==1,"menu applies toggle preference");
  {const auto data=readFile();
   auto persisted=options::Defaults();Check(options::Parse(data,persisted)&&persisted[options::GripToggle]==1,"menu choice persisted");
-  Check(data.find("\nturn=")==std::string::npos&&data.find("ui_margin")==std::string::npos,
+  Check(data.find("\nturn=")==std::string::npos&&data.find("ui_scale")==std::string::npos,
         "a tuner change is not saved by the next menu save");}
  set(options::Psychoscope,1);Check(PsychoscopeGestureEnabled(),"gesture opt-in through menu reaches consumer");
  set(options::Holsters,1);Check(HolstersEnabled(),"holster opt-in reaches input consumer");
  set(options::Wrist,0);Check(!WristDisplayEnabled()&&WristSizePercent()==100,"wrist toggle (on by default) reaches layer consumer");
  const auto clearBefore=holsterClears;press(options::ClearHolsterSlots);
  Check(holsterClears==clearBefore+1,"clear holsters invokes its own action");
- set(options::ReticleWorld,0);Check(ReticleInWorld()==0,"the reticle on the HUD reaches the reticle lane");
  set(options::ReticleSize,150);Check(ReticleSizePercent()==150,"the reticle's size reaches the reticle lane");
  set(options::MarkerSize,170);Check(MarkerSizePercent()==170,"the marker size reaches the markers");
- set(options::ReticleFallback,10500);Check(ReticleConvergenceMillimetres()==10500,"fallback setting retains sub-metre precision");
  set(options::Haptics,0);Check(!HapticsEnabled(),"haptics disable reaches XR adapter");
  Check(FreeSwingEnabled(),"the free-swing wrench is on by default");
  set(options::FreeSwing,0);
@@ -248,14 +225,13 @@ int main(){
  {// Every setting reaches its lane, reads back, and is saved like the rest.
   const std::pair<unsigned,int> chosen[]={
    {options::UiDistance,150},{options::UiOffsetRight,20},{options::UiOffsetUp,-10},{options::UiText,180},
-   {options::HudLayer,0},{options::MoveDeadzone,20},{options::TurnDeadzone,25},{options::StrafeSpeed,80},
+   {options::MoveDeadzone,20},{options::TurnDeadzone,25},{options::StrafeSpeed,80},
    {options::BackwardSpeed,60},
-   {options::ArmsFree,0},{options::CarryHold,0},{options::GrenadeHand,0},{options::CarryThrowStrength,200},
-   {options::GrenadeThrowStrength,150},{options::WristOnHud,1},{options::WristTick,0},{options::WristAlong,100},
-   {options::WristHover,50},{options::WristTilt,30},{options::CarryHand,0},{options::GrenadeDeploy,1},
-   {options::LongReach,0},{options::InventoryLayer,1},{options::InventoryStereo,1},{options::InventoryDepth,50},
-   {options::UiCurve,50},{options::DebugOverlay,1},{options::FingerCurl,0},{options::AimLasers,0},
-   {options::ControllerPrompts,0},{options::ArmLength,51},{options::SurfaceStop,0},{options::HeavyMass,40},
+   {options::CarryHold,0},{options::GrenadeHand,0},{options::CarryThrowStrength,200},
+   {options::GrenadeThrowStrength,150},{options::WristTick,0},{options::WristAlong,100},
+   {options::WristHover,50},{options::WristTilt,30},{options::CarryHand,0},
+   {options::DebugOverlay,1},{options::FingerCurl,0},{options::AimLasers,0},{options::ShotTrail,1},{options::AutoSnap,1},{options::AutoSnapAttach,15},{options::AutoSnapBreak,40},
+   {options::ArmLength,51},{options::SurfaceStop,0},{options::HeavyMass,40},
    {options::LeanZone,40},{options::HipsBack,12},{options::NearClip,6},{options::ScreenPullback,45},
    {options::Antialiasing,0},{options::Helmet,0},
    {options::HelmetHeight,-25},{options::HelmetForward,-40},{options::HelmetSize,130},{options::ZeroGRoll,45},
@@ -356,36 +332,34 @@ int main(){
    {std::lock_guard lock(preyvr::dll::savedMutex);preyvr::dll::saved=options::Defaults();preyvr::dll::present={};}
    LoadVrOptions();};
   // What VR start and earlier commands set before the saved choices apply.
-  applied[options::Turn]=45;applied[options::UiMargin]=72;applied[options::UiScale]=130;applied[options::UiCurve]=20;
+  applied[options::Turn]=45;applied[options::UiScale]=130;menuDistance=200;menuRight=menuUp=0;
   applied[options::HapticStrength]=70;applied[options::DebugOverlay]=0;applied[options::GrenadeHand]=1;
-  applied[options::AimLasers]=1;applied[options::ControllerPrompts]=1;
+  applied[options::AimLasers]=1;
   restart();
-  Check(HapticStrength()==70&&UiCurveDegrees()==20,"loading the file applies nothing");
+  Check(HapticStrength()==70&&menuDistance==200,"loading the file applies nothing");
   // The menu panel's settings first, before the session's first menu frame.
-  menuDistance=200;menuRight=menuUp=0;
   ApplySavedPanelOptions();
-  Check(UiCurveDegrees()==50&&menuDistance==150&&menuRight==20&&menuUp==-10,
+  Check(menuDistance==150&&menuRight==20&&menuUp==-10,
         "the saved panel settings apply before the rest of VR start");
   Check(HapticStrength()==70&&GrenadeHandEnabled()==1&&AimLasersEnabled()==1&&applied[options::UiScale]==130,
         "and nothing else, nor a panel setting never chosen in the menu");
   // Then the anti-aliasing choice, before VR start's renderer settings apply its mode.
   applied[options::Antialiasing]=1;
   ApplySavedRendererOptions();
-  Check(TemporalAntialiasingEnabled()==0&&HapticStrength()==70&&UiCurveDegrees()==50,
+  Check(TemporalAntialiasingEnabled()==0&&HapticStrength()==70&&menuDistance==150,
         "the saved anti-aliasing applies before the renderer settings, and nothing else");
   ApplySavedVrOptions();
-  Check(HapticStrength()==35&&UiCurveDegrees()==50&&GrenadeHandEnabled()==0&&menuDistance==150,
+  Check(HapticStrength()==35&&GrenadeHandEnabled()==0&&menuDistance==150,
         "saved choices win over VR start's defaults and earlier commands");
-  Check(applied[options::Turn]==45&&applied[options::UiMargin]==72&&applied[options::UiScale]==130,
+  Check(applied[options::Turn]==45&&applied[options::UiScale]==130,
         "settings never chosen in the menu keep their values; tuner values were never saved");
   Check(DebugOverlayMask()==0,"a saved \"off\" debug overlay stays off after a restart");
   Check(AimLasersEnabled()==0,"saved \"off\" aim lasers stay off though VR start switches them on");
-  Check(ControllerPromptsEnabled()==0,"and saved \"off\" controller prompts likewise");
   applied[options::DebugOverlay]=1;ApplySavedVrOptions();
   Check(DebugOverlayMask()==0,"and a dbg.draw does not outlast the next VR start");
-  // F11: a command's curvature lasts until the next VR start, then the saved one is back.
-  SetUiCurveDegrees(20);ApplySavedVrOptions();
-  Check(UiCurveDegrees()==50,"an F11 re-enable restores the saved curvature");}
+  // F11: a command's distance lasts until the next VR start, then the saved one is back.
+  SetUiDistanceCm(300);ApplySavedVrOptions();
+  Check(menuDistance==150,"an F11 re-enable restores the saved menu distance");}
  ResetVrOptionsSession();
  std::filesystem::remove(sandbox/L"PreyVR"/L"vr-options.ini");
  std::filesystem::remove(sandbox/L"PreyVR");std::filesystem::remove(sandbox);

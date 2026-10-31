@@ -33,12 +33,15 @@ namespace preyvr::dll {
 struct GameplayPoseFrame;
 struct TrackingFrame;
 
-// Settings and diagnostics (command channel). The debug layers and the aim
-// lasers are separate switches; what is drawn is both (dd::DrawnLayers).
+// Settings and diagnostics (command channel). The debug layers, the aim lasers
+// and the shot trail are separate switches; what is drawn is all three
+// (dd::DrawnLayers).
 DWORD SetDebugOverlay(unsigned mask);
 unsigned DebugOverlayMask();        // the debug layers alone, without the lasers
 DWORD SetAimLasers(unsigned enabled);
 unsigned AimLasersEnabled();
+DWORD SetShotTrail(unsigned enabled);
+unsigned ShotTrailEnabled();
 std::string DebugOverlayReport();   // counters and the status text
 std::string DebugOverlayMarks();    // primitive positions, OpenXR space and last projected pixels
 

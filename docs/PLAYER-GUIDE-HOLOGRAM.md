@@ -8,7 +8,7 @@ Press **A** at the title screen. Point the right controller at **Continue** or *
 
 Menus and inventory appear on a screen about **2 metres away**, anchored where you opened them. A cyan beam and dot show where you are pointing. Squeeze the beam hand's trigger to click; hold it while moving to drag, then release. Moving outside the screen cancels an inventory drag and stops hovering. Release the trigger before trying again. **B** backs out one screen at a time.
 
-The screen has a gentle curve when the runtime supports OpenXR cylinder layers and uses a flat panel otherwise. The menu and its control card fit inside both runtime eye frusta with room around the edges. **Menu + both grips**, or **F12**, reset the VR view and bring the screen back in front of you.
+The screen is a flat panel that fits inside both runtime eye frusta. **Menu + both grips**, or **F12**, reset the VR view and bring the screen back in front of you.
 
 Where Touch and the Steam Frame differ, both are named. Index follows Touch, with its left A/B as X/Y and
 its left trackpad (pressed) for the inventory. X and Y are Prey's own X and Y, so the game's prompts name the
@@ -55,13 +55,10 @@ After the first launch, edit `PreyVR.json` beside the launcher:
 Restart Prey after changing these settings. The F10-F12 keys only work while the
 window has focus.
 
-Interface size, panel curvature, the controls guide, the laser hand and the HUD
-style are **VR Options** settings: hold the menu button, then the
-Interface tab. They are saved in `%LOCALAPPDATA%\PreyVR\vr-options.ini`, the one
-place VR Options settings are kept. A `PreyVR.json` from an earlier version
-that still lists `UiScalePercent`, `UiCurveDegrees`, `UiGuide`, `PointerHand`,
-`HudLayer`, `SnapTurnDegrees` or `HeadRelativeMovement` has any you changed moved
-there at the next launch. In button-only laser mode both triggers keep their
+Interface size and the laser hand are **VR Options** settings: hold the menu
+button, then the Interface tab. They are saved in
+`%LOCALAPPDATA%\PreyVR\vr-options.ini`, the one place VR Options settings are
+kept. In button-only laser mode both triggers keep their
 page actions. Scale both render dimensions together to retain vertical view coverage. The default restores the tall aspect used in earlier headset tests; it is a starting preset, not automatic headset detection. Native menus may have unused space within the floating screen. World rendering should not be narrowed to 16:9 to remove that menu space.
 
 Unversioned configurations containing the old `2560`, `1440` default are backed up and migrated once. Custom sizes are preserved. To deliberately keep 2560×1440, add `"ResolutionDefaultsVersion": 1` to `PreyVR.json`, or pass both `-Width 2560 -Height 1440` to the launcher. Command-line overrides must provide both dimensions.
@@ -79,15 +76,7 @@ preyvr> ui.scale 130
   ui.scale result=0
 ```
 
-`help` lists the common ones. The two that decide panel size are `ui.margin`
-(30-100, default 72) and `ui.guide`. `ui.margin` is the real ceiling: the panel
-is shrunk until it sits inside that fraction of the frustum the headset reports,
-so once it binds, raising `ui.scale` does nothing at all. Raising it is a trade
--- the reported frustum is already wider than the lenses show, so at high values
-the corners go where you cannot see them. `ui.guide 0` is free by comparison and
-gives back about a sixth of the panel.
-
-The useful one for fit is `ui.scale` (20-200);
+`help` lists the common ones. The useful one for fit is `ui.scale` (20-200);
 once you find your number, set VR Options' Interface Size to it, and every
 later launch starts there. `vr.recenter` re-centres, and so do F12 and pressing
 Menu with both grips squeezed -- the grips are the ones that work with the headset on, since F12

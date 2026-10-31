@@ -44,7 +44,6 @@ int main() {
     context.trackingEpoch = 5;
     context.referenceGeneration = 3;
     SetReticleFollowEnabled(1);
-    SetReticleConvergenceMillimetres(10000);
     for (int degrees = -30; degrees <= 30; degrees += 5) {
         const float yaw = degrees * 0.0174532925199433f;
         context.head.orientation = {0, std::sin(yaw / 2), 0, std::cos(yaw / 2)};

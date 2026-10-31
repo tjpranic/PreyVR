@@ -131,16 +131,7 @@ private:
 
     void Tabs()
     {
-        // Half the usual side padding, so all nine names fit across the panel
-        // rather than the last, EXPERIMENTAL, being cut short.
-        // Tab widths are measured at each BeginTabItem, so it holds to EndTabBar.
-        const ImGuiStyle& style = ImGui::GetStyle();
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x * 0.5f, style.FramePadding.y));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(style.ItemInnerSpacing.x * 0.5f, style.ItemInnerSpacing.y));
-        if (!ImGui::BeginTabBar("##pages", ImGuiTabBarFlags_FittingPolicyShrink | ImGuiTabBarFlags_NoTooltip)) {
-            ImGui::PopStyleVar(2);
-            return;
-        }
+        if (!ImGui::BeginTabBar("##pages", ImGuiTabBarFlags_FittingPolicyShrink | ImGuiTabBarFlags_NoTooltip)) { return; }
         int shown = -1;
         for (unsigned p = 0; p < options::MenuPages(); ++p) {
             // A tab step (bumper or grip) selects the tab; otherwise ImGui's own selection leads.
@@ -153,7 +144,6 @@ private:
             }
         }
         ImGui::EndTabBar();
-        ImGui::PopStyleVar(2);
         // The list follows page_ in this frame, so a grip step never shows the
         // old page's rows for a frame.
         if (!forced_ && shown >= 0) { page_ = static_cast<unsigned>(shown); }

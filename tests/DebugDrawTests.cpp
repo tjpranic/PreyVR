@@ -375,13 +375,37 @@ void TestSceneLayers()
 
 void TestDrawnLayers()
 {
-    // The debug layers and the lasers are switched apart; neither's off takes the other.
-    Require(DrawnLayers(0, false) == 0, "both off: nothing is drawn");
-    Require(DrawnLayers(0, true) == (kRays | kHits), "the lasers alone: rays ended on the scene");
-    Require(DrawnLayers(kAllLayers, false) == kAllLayers, "the debug overlay alone: every layer");
-    Require(DrawnLayers(kBody, true) == (kBody | kRays | kHits), "a debug layer beside the lasers");
-    Require(DrawnLayers(kAllLayers, true) == kAllLayers, "both on: every layer, once");
-    Require(DrawnLayers(0x7FFu, false) == kAllLayers, "no layer beyond the known ones");
+    // The debug layers, the lasers and the shot trail are switched apart; no
+    // one's off takes another.
+    Require(DrawnLayers(0, false, false) == 0, "all off: nothing is drawn");
+    Require(DrawnLayers(0, true, false) == (kRays | kHits), "the lasers alone: rays ended on the scene, no shots");
+    Require(DrawnLayers(0, false, true) == kShots, "the shot trail alone");
+    Require(DrawnLayers(kAllLayers, false, false) == kAllLayers, "the debug overlay alone: every layer, shots included");
+    Require(DrawnLayers(kBody, true, false) == (kBody | kRays | kHits), "a debug layer beside the lasers");
+    Require(DrawnLayers(kBody, true, true) == (kBody | kRays | kHits | kShots), "and beside the shot trail");
+    Require(DrawnLayers(kAllLayers, true, true) == kAllLayers, "all on: every layer, once");
+    Require(DrawnLayers(0xFFFu, false, false) == kAllLayers, "no layer beyond the known ones");
+}
+
+void TestShotTrail()
+{
+    OverlayFrame f{};
+    f.shot.valid = true;
+    f.shot.spawn = {.2f, 1.4f, -.5f};
+    f.shot.target = {.2f, 1.4f, -6};
+    f.shot.age = .5f;
+    Scene scene;
+    BuildOverlayScene(f, kLaserLayers, scene);
+    Require(scene.lines.empty() && scene.markers.empty(), "the aim lasers draw no shot");
+    BuildOverlayScene(f, kShots, scene);
+    Require(scene.lines.size() == 1 && scene.markers.size() == 2 && scene.labels.empty(),
+            "the shot trail: its line and two ends, no text");
+    Require(scene.lines[0].a.z == f.shot.spawn.z && scene.lines[0].b.z == f.shot.target.z, "from the muzzle to the target");
+    BuildOverlayScene(f, kAllLayers, scene);
+    Require(scene.lines.size() == 1 && scene.labels.size() == 1, "the debug overlay shows it, labelled");
+    f.shot.age = kShotSeconds + .1f;
+    BuildOverlayScene(f, kShots, scene);
+    Require(scene.lines.empty() && scene.markers.empty(), "an old shot is gone");
 }
 
 void TestArmFitLayer()
@@ -513,6 +537,7 @@ int main()
     TestWristMeasureMatchesVisibility();
     TestSceneLayers();
     TestDrawnLayers();
+    TestShotTrail();
     TestPhysicalLayer();
     TestArmFitLayer();
     TestSlotColours();

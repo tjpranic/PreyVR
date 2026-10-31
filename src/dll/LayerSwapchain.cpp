@@ -25,9 +25,6 @@ bool Compatible(const D3D11_TEXTURE2D_DESC& a,const D3D11_TEXTURE2D_DESC& b,UINT
         a.Width==b.Width&&a.Height==b.Height&&Family(a.Format)==Family(b.Format);
 }
 }
-bool InventoryTextureCompatible(const D3D11_TEXTURE2D_DESC& a,const D3D11_TEXTURE2D_DESC& b) {
-    return Compatible(a,b,kLayerMinWidth,kLayerMinHeight);
-}
 const char* LayerSwapchain::RefusalName(Refusal refusal) {
     switch(refusal) {
     case Refusal::none:return "none";

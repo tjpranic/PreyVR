@@ -10,11 +10,8 @@ namespace {
 constexpr int turnChoices[]={0,15,30,45,60,90};
 constexpr const wchar_t* headRelativeNames[]={L"BODY RELATIVE",L"HEAD RELATIVE"};
 constexpr const wchar_t* gripToggleNames[]={L"HOLD",L"TOGGLE"};
-constexpr const wchar_t* supportSnapNames[]={L"FREE",L"SNAPPED"};
 constexpr const wchar_t* psiNames[]={L"ORIGINAL",L"HEAD",L"LEFT CONTROLLER"};
 constexpr const wchar_t* pointerNames[]={L"LEFT",L"RIGHT",L"BUTTONS ONLY"};
-constexpr const wchar_t* hudNames[]={L"IN THE WORLD",L"FLOATING PANEL"};
-constexpr const wchar_t* reticleNames[]={L"ON THE HUD",L"IN THE WORLD"};
 constexpr const wchar_t* carryHoldNames[]={L"PRESS TO TOGGLE",L"HOLD TO CARRY"};
 constexpr const wchar_t* grenadeNames[]={L"GAME THROW",L"HAND THROW"};
 constexpr const wchar_t* antialiasingNames[]={L"SMAA",L"TEMPORAL"};
@@ -26,18 +23,16 @@ constexpr Spec specs[]={
  {"turn_speed",L"SMOOTH TURN SPEED",L"Scales the game's turn rate. Applies in Smooth mode.",100,10,200,25,U::percent},
  {"two_hand",L"TWO-HAND AIM",L"Grip a long weapon's foregrip to aim it, or a pistol's grip to brace it.",1,0,1,1},
  {"grip_toggle",L"FOREGRIP INPUT",L"Hold the grip, or squeeze once to attach and again to release.",0,0,1,1,U::none,gripToggleNames},
- {"support_snap",L"SUPPORT HAND",L"Snap the displayed hand to the weapon, or follow your controller.",1,0,1,1,U::none,supportSnapNames},
+ {"support_auto",L"AUTO-SNAP SUPPORT HAND",L"Your left hand attaches to the weapon on its own when you hold it close, and lets go when you move it away. A squeeze still works as Foregrip Input says. While attached, the left hand can't grab or use, and you can't reload.",0,0,1,1},
+ // The two-hand lane takes the same 5-25 and 10-60 (AimTakeover.h).
+ {"support_auto_attach",L"AUTO-SNAP ATTACH DISTANCE",L"How close your left hand must come to the weapon's grip to attach. Needs Auto-Snap Support Hand.",10,5,25,1,U::cm},
+ {"support_auto_break",L"AUTO-SNAP BREAK DISTANCE",L"How far your left hand must move from where it attached to let go. Always at least 5 cm past the attach distance. Needs Auto-Snap Support Hand.",25,10,60,1,U::cm},
  {"psychoscope",L"PSYCHOSCOPE GESTURE",L"Left grip at forehead: pull down or lift up. Native unlock rules apply.",0,0,1,1},
- {"ui_scale",L"INTERFACE SIZE",L"Scales game panels and HUD within the visible-area limit.",100,20,200,10,U::percent},
- {"ui_margin",L"VISIBLE-AREA LIMIT",L"Larger values approach the lens edges. Tune while wearing the headset.",72,30,100,5,U::percent},
- {"ui_curve",L"PANEL CURVATURE",L"Curves supported mono menus. Experimental stereo PDA stays planar.",35,0,60,5,U::degrees,{},{},L"FLAT"},
- {"ui_guide",L"CONTROLS GUIDE",L"Shows a help card below native menus; uses some panel space.",0,0,1,1},
+ {"ui_scale",L"INTERFACE SIZE",L"Scales game panels and the HUD, as far as your view allows.",100,20,200,10,U::percent},
  {"holsters",L"BODY HOLSTERS",L"Right grip at right hip or left chest: store current weapon, then draw/stow. Assignments are not saved.",0,0,1,1},
  {"wrist",L"WRIST STATUS",L"Raise your left forearm and look at its back, like a watch: health, suit and psi.",1,0,1,1},
  {"wrist_size",L"WRIST DISPLAY SIZE",L"Adjust the status hologram size. Hidden in menus and during two-hand aiming.",100,80,140,10,U::percent},
- {"reticle_world",L"RETICLE",L"In the world: the crosshair sits on what you aim at, so it stays sharp when you look there. On the HUD: on the floating HUD panel. Needs the HUD on its floating panel.",1,0,1,1,U::none,reticleNames},
  {"reticle_size",L"RETICLE SIZE",L"The crosshair in the world, against its size on the HUD.",100,50,200,10,U::percent},
- {"reticle_fallback_mm",L"RETICLE FALLBACK DISTANCE",L"How far the crosshair sits when your aim hits nothing within 200 m.",10000,500,200000,500,U::metresInMm},
  {"marker_size",L"MARKER SIZE",L"The markers in the world: objectives, repair and danger icons, enemy awareness and points of interest.",100,50,200,10,U::percent},
  {"haptics",L"CONTROLLER FEEDBACK",L"Short pulses for VR menu changes and attaching the support hand.",1,0,1,1},
  {"haptic_strength",L"FEEDBACK STRENGTH",L"Scale controller feedback intensity. Zero silences all pulses.",70,0,100,10,U::percent},
@@ -50,36 +45,27 @@ constexpr Spec specs[]={
  {"medkit_slot",L"LEFT-HIP MEDKIT SLOT",L"Squeeze left grip at left hip, then press left trigger while holding grip. One medkit per grab; native use rules apply.",0,0,1,1},
  {"belt_hints",L"BODY SLOT FEEDBACK",L"Brief feedback for holster requests and medkit selection/use. Requires the corresponding body slot feature.",1,0,1,1},
  {"debug_overlay",L"DEBUG OVERLAY (TESTING)",L"Draws each hand's ray and target, body slots, the wrist test, the foregrip region and the weapon's contact sweep in the world.",0,0,1,1},
- {"muzzle_aim",L"SHOTS FROM THE MUZZLE",L"Shots leave the weapon's muzzle along your controller's aim, so they land where the barrel points at any distance.",0,0,1,1},
  {"ui_distance",L"MENU DISTANCE",L"How far away the game's menus float. They keep their apparent size.",200,100,400,5,U::cm},
  {"ui_offset_right",L"MENU LEFT / RIGHT",L"Turns the game's menus around you, left or right of where you faced when they opened.",0,-90,90,1,U::degreesRightLeft,{},{},L"CENTRE"},
  {"ui_offset_up",L"MENU UP / DOWN",L"Raises or lowers the game's menus; they stay upright.",0,-45,45,1,U::degreesUpDown,{},{},L"CENTRE"},
  {"ui_text",L"TEXT PANEL DISTANCE",L"How far notes, books, subtitles and tutorial cards float. Nearer is larger and sharper.",140,100,200,5,U::cm},
  {"pointer_hand",L"LASER HAND",L"Which hand points at menus. Buttons only turns the laser off.",1,0,2,1,U::none,pointerNames},
- {"hud_layer",L"HUD STYLE",L"The game's HUD on a panel floating in front of you, or drawn in the world as Prey draws it.",1,0,1,1,U::none,hudNames},
  {"move_deadzone",L"MOVE STICK DEADZONE",L"How far the left stick moves before you walk.",15,0,60,1,U::percent},
  {"turn_deadzone",L"TURN STICK DEADZONE",L"How far the right stick moves before you turn.",15,0,60,1,U::percent},
  {"strafe_speed",L"SIDEWAYS SPEED",L"Walking speed to the side, relative to walking forward.",100,10,200,5,U::percent},
  {"backward_speed",L"BACKWARD SPEED",L"Walking speed backward, relative to walking forward.",100,10,200,5,U::percent},
- {"arms_free",L"HANDS WITHOUT A WEAPON",L"Keep both hands at the controllers with no weapon drawn: holstered or carrying.",1,0,1,1},
  {"carry_hold",L"CARRY",L"Press X once to pick up and again to drop, as Prey does, or hold X to keep holding.",0,0,1,1,U::none,carryHoldNames},
  {"grenade_hand",L"GRENADE THROW",L"Throw grenades with your hand's motion, or with the game's charged throw along your view.",1,0,1,1,U::none,grenadeNames},
  {"carry_throw_strength",L"OBJECT THROW STRENGTH",L"How hard carried objects fly when you throw them.",140,50,300,10,U::percent},
  {"grenade_throw_strength",L"GRENADE THROW STRENGTH",L"How hard grenades fly when you throw them.",130,50,400,10,U::percent},
- {"wrist_on_hud",L"STATUS ON HUD TOO",L"Keep health, suit and psi in front of you as well as on the wrist.",0,0,1,1},
  {"wrist_tick",L"WRIST TICK",L"A faint pulse on the left controller as the wrist display unfolds.",1,0,1,1},
  {"wrist_along",L"WRIST DISPLAY POSITION",L"Where the display sits along the forearm, from the wrist toward the elbow.",75,-50,200,5,U::mm},
  {"wrist_hover",L"WRIST DISPLAY HEIGHT",L"How far the display floats above the forearm.",42,0,150,2,U::mm},
  {"wrist_tilt",L"WRIST DISPLAY TILT",L"How far the display turns toward your eyes.",40,0,90,5,U::degrees},
  {"carry_hand",L"PHYSICAL CARRYING",L"Carried objects sit in your left hand and are thrown with its motion. Off: the game's own carry in front of you.",1,0,1,1},
- {"grenade_deploy",L"STICK CHARGES TO SURFACES",L"With hand throwing, keep the game's sticking of charges to the surface you look at.",0,0,1,1},
- {"long_reach",L"LONG-WEAPON HOLD-BACK",L"Long weapons are held back toward the body, with a wider foregrip region and torso twist.",1,0,1,1},
- {"inventory_layer",L"INVENTORY LAYER",L"The inventory on a see-through layer of its own instead of the whole flat screen.",0,0,1,1},
- {"inventory_stereo",L"STEREO INVENTORY",L"Gives the inventory's layers depth. Needs Inventory Layer.",0,0,1,1},
- {"inventory_depth",L"INVENTORY DEPTH",L"How much depth Stereo Inventory gives.",25,0,100,5,U::percent},
  {"finger_curl",L"FINGERS FOLLOW THE CONTROLLER",L"A free hand's fingers follow yours: the thumb on a button, the index on the trigger, the rest with the grip.",1,0,1,1},
  {"aim_lasers",L"AIM LASERS",L"A laser from each hand to what it points at: where the right hand aims, and what the left hand can grab or use.",1,0,1,1},
- {"controller_prompts",L"FORCE CONTROLLER PROMPTS",L"Game menus show your controller's buttons while the laser points at them. Off: the laser switches them to mouse and keyboard.",1,0,1,1},
+ {"shot_trail",L"SHOT TRAIL",L"A green line from your weapon's muzzle to where each shot went, fading after a few seconds.",0,0,1,1},
  // The arm lane takes the same 40-70 (AnimIkTakeover's arm.length).
  {"arm_length",L"ARM LENGTH",L"Your arm from shoulder to wrist. Lower it if your arms look bent when yours are straight; raise it if your hands stop short of the controllers.",56,40,70,1,U::cm},
  {"surface_stop",L"HANDS STOP AT SURFACES",L"Your drawn hands and weapon stop against walls, floors, desks and glass, though your real hands go on. Loose objects are still pushed.",1,0,1,1},
@@ -117,26 +103,22 @@ constexpr bool Consistent(){
 static_assert(Consistent(),"every Spec describes its own range");
 
 // The panel's tabs. Each setting appears once, each button once.
-constexpr int comfort[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,StrafeSpeed,BackwardSpeed,ZeroGRoll,
+constexpr int setup[]={CalibratePosture,RecenterView,LeanZone,HipsBack,NearClip,Antialiasing,DebugOverlay};
+constexpr int movement[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,StrafeSpeed,BackwardSpeed,ZeroGRoll,
     ZeroGPitch};
-constexpr int hands[]={AimLasers,TwoHand,GripToggle,SupportSnap,Psychoscope,ArmsFree,FingerCurl,ArmLength,CarryHold,GrenadeHand,
+constexpr int hands[]={AimLasers,ShotTrail,TwoHand,GripToggle,AutoSnap,AutoSnapAttach,AutoSnapBreak,Psychoscope,FingerCurl,ArmLength,CarryHand,CarryHold,GrenadeHand,
     CarryThrowStrength,GrenadeThrowStrength,SurfaceStop,HeavyMass,PhysicalContact,PushStrength,FreeSwing,SwingSpeed,HeavySwingSpeed};
-constexpr int interface_[]={UiScale,UiMargin,UiCurve,UiGuide,UiDistance,UiOffsetRight,UiOffsetUp,UiText,ScreenPullback,
-    PointerHand,ControllerPrompts,HudLayer,ReticleWorld,ReticleSize,ReticleFallback,MarkerSize,Helmet,HelmetHeight,HelmetForward,HelmetSize};
-constexpr int equipment[]={Holsters,ClearHolsterSlots,Wrist,WristSize,WristOnHud,WristTick,WristAlong,WristHover,
-    WristTilt};
+constexpr int interface_[]={UiScale,UiDistance,UiOffsetRight,UiOffsetUp,UiText,ScreenPullback,
+    PointerHand,ReticleSize,MarkerSize,Helmet,HelmetHeight,HelmetForward,HelmetSize};
+constexpr int equipment[]={Holsters,ClearHolsterSlots,Wrist,WristSize,WristTick,WristAlong,WristHover,WristTilt};
 constexpr int feedback[]={Haptics,HapticStrength};
 constexpr int abilities[]={PsiTarget,Medkit,BeltHints};
-constexpr int setup[]={CalibratePosture,RecenterView,LeanZone,HipsBack,NearClip,Antialiasing,DebugOverlay};
-// Features still being proven, together with the settings that tune them.
-constexpr int experimental[]={CarryHand,GrenadeDeploy,LongReach,MuzzleAim,
-    InventoryLayer,InventoryStereo,InventoryDepth};
 // CONTROLS holds no setting: the panel draws what each action is bound to there.
 constexpr unsigned kControlsPage=7;
-constexpr std::span<const int> menuPages[]={comfort,hands,interface_,equipment,feedback,abilities,setup,
-    std::span<const int>{},experimental};
-constexpr const wchar_t* menuNames[]={L"COMFORT",L"HANDS",L"INTERFACE",L"EQUIPMENT",L"FEEDBACK",L"ABILITIES",
-    L"SETUP",L"CONTROLS",L"EXPERIMENTAL"};
+constexpr std::span<const int> menuPages[]={setup,movement,hands,interface_,equipment,feedback,abilities,
+    std::span<const int>{}};
+constexpr const wchar_t* menuNames[]={L"SETUP",L"MOVEMENT",L"HANDS",L"INTERFACE",L"EQUIPMENT",L"FEEDBACK",
+    L"ABILITIES",L"CONTROLS"};
 static_assert(kControlsPage<std::size(menuPages)&&menuPages[kControlsPage].empty());
 static_assert(std::size(menuPages)==std::size(menuNames));
 }
@@ -174,7 +156,6 @@ std::wstring Display(unsigned id,int v){
  case U::percent:return number+L"%";
  case U::cm:return number+L" CM";
  case U::mm:return number+L" MM";
- case U::metresInMm:return std::to_wstring(v/1000)+L"."+std::to_wstring((v%1000)/100)+L" M";
  case U::degrees:return number+L" DEGREES";
  case U::degreesRightLeft:return std::to_wstring(std::abs(v))+(v>0?L" DEGREES RIGHT":L" DEGREES LEFT");
  case U::degreesUpDown:return std::to_wstring(std::abs(v))+(v>0?L" DEGREES UP":L" DEGREES DOWN");
@@ -212,9 +193,18 @@ bool Parse(std::string_view text,Values& result,Present* present){
   // Object Nudges, removed 2026-10-18 for a redesign. physical_melee: the
   // Physical Wrench, replaced by the free-swing wrench (free_swing) 2026-10-18.
   // body_follow, body_turn_deadzone, body_step, body_glide: Body Follows You,
-  // removed 2026-10-24 (smooth turning jittered with it on).
+  // removed 2026-10-24 (smooth turning jittered with it on). The rest went in the
+  // options audit, 2026-10-31, each now fixed: the snapped support hand, the free
+  // arms, the controller's prompts, the HUD on its panel, the reticle in the world
+  // and its 10 m fallback, the wrist alone showing status, charges that stick, long
+  // weapons held back, shots from the muzzle, panels to the edge of the view, flat
+  // menus, no guide card, and the inventory on the menu panel like any other menu.
   if(key=="scene_reticle"||key=="physical_contacts"||key=="contact_strength"||key=="physical_melee"||
-     key=="body_follow"||key=="body_turn_deadzone"||key=="body_step"||key=="body_glide")continue;
+     key=="body_follow"||key=="body_turn_deadzone"||key=="body_step"||key=="body_glide"||
+     key=="support_snap"||key=="arms_free"||key=="controller_prompts"||key=="hud_layer"||
+     key=="reticle_world"||key=="reticle_fallback_mm"||key=="wrist_on_hud"||key=="grenade_deploy"||
+     key=="long_reach"||key=="muzzle_aim"||key=="ui_margin"||key=="ui_curve"||key=="ui_guide"||
+     key=="inventory_layer"||key=="inventory_stereo"||key=="inventory_depth")continue;
   // swing_speed took 80-250 until 2026-10-18; a file saved at 80 or 90 rises to the new minimum.
   if(key=="swing_speed"&&value>=80&&value<100)value=100;
   unsigned i=0;for(;i<Count&&key!=specs[i].key;++i){}

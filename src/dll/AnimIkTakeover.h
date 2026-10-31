@@ -86,14 +86,7 @@ unsigned AnimIkWideSupport();
 // ik.supportlatch: the two-handed support region is one settled socket per
 // weapon (1, default) or the raw animated native palm every frame (0, A/B).
 DWORD SetAnimIkSupportLatch(unsigned enabled);
-// ik.longreach [on comfortMm maxBackMm supportBackMm twistDeg]: a weapon whose
-// foregrip lies beyond comfortMm ahead of the trigger wrist is held back by the
-// difference (at most maxBackMm), its grab region reaches supportBackMm behind
-// the foregrip, and the drawn torso turns twistDeg while it is held two-handed.
-DWORD SetAnimIkLongReach(int enabled, int comfortMm, int maxBackMm, int supportBackMm, int twistDeg);
-// The same switch alone, keeping the distances and the twist.
-DWORD SetAnimIkLongReachEnabled(unsigned enabled);
-unsigned AnimIkLongReachEnabled();
+// ik.longreach: how far back the held weapon sits now (twohand::HoldBack).
 std::string AnimIkLongReachReport();
 unsigned AnimIkSupportLatch();
 
@@ -170,15 +163,13 @@ unsigned long long AnimIkOwnerCharacter();
 unsigned long long AnimIkOwnerGeneration();
 unsigned long long AnimIkPoseSequence();
 unsigned long long AnimIkNoOwner();
-// arms.free: with no weapon drawn (holstered, carrying) the player's own arms
-// rig is driven as well (open hands; the carrying hand closes).
-DWORD SetAnimIkFreeArms(unsigned enabled);
-unsigned AnimIkFreeArms();
 // hands.fingers: a free hand's fingers follow the player's on the controller
 // (trigger, grip, thumb and index touch); off, they keep one relaxed pose.
 DWORD SetAnimIkFingerCurl(unsigned enabled);
 unsigned AnimIkFingerCurl();
-// The IK is driving the no-weapon arms right now.
+// The IK is driving the no-weapon arms right now: with no weapon drawn (holstered,
+// carrying) the player's own arms rig is driven as well (open hands; the carrying
+// hand closes).
 bool AnimIkFreeArmsBound();
 std::string AnimIkFreeArmsReport();
 unsigned long long AnimIkBusy();

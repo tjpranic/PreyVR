@@ -11,7 +11,7 @@ The first version (headset-tested 2026-10-13) copied the classic card's look.
 It now uses ImGui's own dark style and widgets. The restyled panel, menu
 placement, the D-pad and A on a checkbox were worn on 2026-10-13; step 3, the
 panel over the running game, and moving it were worn on 2026-10-14. Step 4 is
-worn OK (marked 2026-10-27); only a bare `ui.curve` is still unworn (below).
+worn OK (marked 2026-10-27).
 
 ![The panel, interface page](VR-OPTIONS-IMGUI-PREVIEW.png)
 
@@ -24,8 +24,8 @@ worn OK (marked 2026-10-27); only a bare `ui.curve` is still unworn (below).
 
 ## What it shows
 
-- A tab per category -- Comfort, Hands, Interface, Equipment, Feedback,
-  Abilities, Setup, then **EXPERIMENTAL** -- then that category's settings as a
+- A tab per category -- Setup, Movement, Hands, Interface, Equipment, Feedback,
+  Abilities, Controls -- then that category's settings as a
   list: name and help on the left, the control on the right.
 - **The control follows the setting:** a checkbox for on/off; a choice list for
   named choices (head/body relative, hold/toggle, body following, psychic
@@ -41,7 +41,7 @@ worn OK (marked 2026-10-27); only a bare `ui.curve` is still unworn (below).
 - **Scrolling.** The list scrolls between the fixed tabs and the fixed back
   button whenever a category is longer than the panel: by the left stick, by the
   scrollbar (sized as a laser target), or by the right stick moving to a row out
-  of sight. Comfort, Hands, Interface, Equipment and Experimental are longer
+  of sight. Movement, Hands, Interface and Equipment are longer
   than the panel at the designed text size.
 - Controls: point and pull the trigger; right stick up/down moves; **A acts on
   the control under the laser, as the trigger does, else on the selected one**
@@ -293,8 +293,7 @@ code, leftovers of the classic card, and logic kept in two places.
   left; the weapon wheel in every set; the launcher keeping a retired key in
   DryRun, or retiring none.
 - **Worn OK** (marked 2026-10-27): the Frame's D-pad and the stick in the panel,
-  and the Experimental tab's longer list. **Not yet worn:** a bare `ui.curve` in
-  **Tune Prey VR.cmd** reporting without resetting.
+  and the Experimental tab's longer list.
 
 ## Validation
 

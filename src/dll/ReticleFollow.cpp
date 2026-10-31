@@ -64,15 +64,6 @@ bool WriteReticleForCamera(void* player, const Vec3& rayOrigin,
     const Vec3& worldDirection, std::span<const std::uint8_t> cameraSpan,
     const ReticleAimContext* context);
 
-// **The distance at which the crosshair is exact.** A crosshair marks one point,
-// and a shot leaving the muzzle rather than the eye reaches a different screen
-// position at every distance, so no single symbol can be right at all of them
-// without a raycast. Ten metres is a typical engagement distance; the residual
-// error grows toward the near end, which is where an eye-origin ray and a
-// muzzle-origin shot disagree most and therefore where this is worth judging.
-constexpr unsigned int kDefaultConvergenceMm = 10000;
-std::atomic<unsigned int> gConvergenceMm{kDefaultConvergenceMm};
-
 // The two names the engine's own reticle reset dispatches, read from that call
 // site rather than guessed (R-109). Names not read from a native call site are
 // not known to exist: Scaleform silently ignores an absent function and the
@@ -97,20 +88,6 @@ DWORD SetReticleFollowEnabled(unsigned int enabled)
                    (on ? "1" : "0"));
     return 0;
 }
-
-DWORD SetReticleConvergenceMillimetres(unsigned int millimetres)
-{
-    // Clamped rather than rejected: a zero would put the aim point at the muzzle
-    // itself, which projects to a meaningless screen position, and an absurd
-    // value is the same as infinity anyway.
-    const unsigned int clamped = millimetres < 500u      ? 500u
-                                 : (millimetres > 200000u ? 200000u : millimetres);
-    gConvergenceMm.store(clamped, std::memory_order_release);
-    lifecycle::Log("preyvr_reticle result=0 detail=convergence mm=" + std::to_string(clamped));
-    return 0;
-}
-
-DWORD ReticleConvergenceMillimetres() { return gConvergenceMm.load(std::memory_order_relaxed); }
 
 bool WriteReticleScreenPosition(void* player, const Vec3& rayOrigin,
     const Vec3& worldDirection, const ReticleAimContext* context)
@@ -177,8 +154,7 @@ bool WriteReticleForCamera(void* player, const Vec3& rayOrigin,
 
     const bool sceneEnabled=SceneReticleEnabled()!=0;
     const float distance = scene::ReticleDistance(sceneEnabled,
-        context?context->sceneDistance:-1.f,
-        static_cast<float>(gConvergenceMm.load(std::memory_order_acquire)) * 0.001f);
+        context?context->sceneDistance:-1.f,kReticleFallbackM);
     const Vec3 aimPoint{offset.x + worldDirection.x * distance,
                         offset.y + worldDirection.y * distance,
                         offset.z + worldDirection.z * distance};
@@ -444,22 +420,11 @@ DWORD ReticleFollowLastY() { return gLastY.load(std::memory_order_relaxed); }
 
 
 namespace {
-std::atomic<bool> gWorld{true};          // options::Defaults(): reticle_world 1
 std::atomic<unsigned> gSizePercent{100}; // options::Defaults(): reticle_size 100
 LatestSnapshot<ReticleTarget> gTarget;
 std::atomic<unsigned long long> gTargets{0}, gTargetHits{0}, gTargetRefused{0}, gShown{0}, gNotShown{0};
 std::atomic<unsigned> gLastTargetMm{0};
 } // namespace
-
-DWORD SetReticleInWorld(unsigned enabled)
-{
-    if (enabled > 1) { return 1; }
-    gWorld.store(enabled != 0, std::memory_order_release);
-    if (!enabled) { gTarget.Clear(); }
-    lifecycle::Log(std::string("preyvr_reticle result=0 detail=world value=") + (enabled ? "1" : "0"));
-    return 0;
-}
-unsigned ReticleInWorld() { return gWorld.load(std::memory_order_acquire) ? 1u : 0u; }
 
 DWORD SetReticleSizePercent(unsigned percent)
 {
@@ -471,7 +436,6 @@ unsigned ReticleSizePercent() { return gSizePercent.load(std::memory_order_acqui
 
 void PublishReticleTarget(const GameplayPoseFrame& frame, const aim::Sample& sample)
 {
-    if (!gWorld.load(std::memory_order_acquire)) { return; }
     const auto& right = frame.tracking.hands[static_cast<unsigned>(Hand::right)];
     if (!IsPoseUsable(right.aimPose, right.aimValidity, 200ull * 1000ull * 1000ull) ||
         !Finite(sample.origin) || !Finite(sample.direction)) {
@@ -483,7 +447,7 @@ void PublishReticleTarget(const GameplayPoseFrame& frame, const aim::Sample& sam
     // converged at; never inside the weapon.
     float distance = sample.sceneDistance;
     const bool hit = std::isfinite(distance) && distance >= 0.0f && distance <= scene::Range;
-    if (!hit) { distance = static_cast<float>(gConvergenceMm.load(std::memory_order_acquire)) * 0.001f; }
+    if (!hit) { distance = kReticleFallbackM; }
     distance = std::max(distance, kReticleNearestM);
     // Converted with the anchor the sample was built from, as the debug ray is:
     // the camera centre for the muzzle with aim.shot or the hand's line at a
@@ -511,7 +475,7 @@ void PublishReticleTarget(const GameplayPoseFrame& frame, const aim::Sample& sam
 
 bool TryGetReticleTarget(ReticleTarget& out)
 {
-    return gWorld.load(std::memory_order_acquire) && gTarget.TryRead(out) &&
+    return gTarget.TryRead(out) &&
            FreshSample(MonotonicNanoseconds(), out.ns) && out.reference == HeadTrackingReferenceGeneration();
 }
 
@@ -519,7 +483,7 @@ void NoteReticleShown(bool shown) { (shown ? gShown : gNotShown).fetch_add(1, st
 
 std::string ReticleWorldReport()
 {
-    return " world=" + std::to_string(ReticleInWorld()) + " size=" + std::to_string(ReticleSizePercent()) +
+    return " size=" + std::to_string(ReticleSizePercent()) +
            " targets=" + std::to_string(gTargets.load()) + " hits=" + std::to_string(gTargetHits.load()) +
            " refused=" + std::to_string(gTargetRefused.load()) + " lastMm=" + std::to_string(gLastTargetMm.load()) +
            " shown=" + std::to_string(gShown.load()) + " notShown=" + std::to_string(gNotShown.load());

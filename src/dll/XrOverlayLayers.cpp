@@ -15,7 +15,6 @@
 #include "HeadTrackingHook.h"
 #include "XrInput.h"
 #include "UiMode.h"
-#include "UiGuide.h"
 #include "UiPointer.h"
 #include "HudLayer.h"
 #include "LayerSwapchain.h"
@@ -135,13 +134,12 @@ bool BuildHudLayer(const FrameView& view, ID3D11Texture2D* hudTexture, XrComposi
         auto captured=hudTexture;
         if(captured) {
             D3D11_TEXTURE2D_DESC desc{};captured->GetDesc(&desc);
-            // A refusal drops the swapchain, so a later hud.layer 1 tries afresh.
+            // A refusal drops the swapchain, so the next VR start tries afresh.
             active=UploadPanelCapture(gHost.hudSwapchain,gHost.hudSwapchainLogged,captured,"hud_swapchain",
                                       RefuseHudLayer);
             auto panel=ui::FitPanel(view.head,OpticalEyes(view.views),
                 static_cast<float>(desc.Width)/desc.Height,2.0f,
-                static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f,
-                UiFitMargin());
+                static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f);
             active=active && panel.has_value();
             if(active) {
                 const auto& p=*panel;
@@ -177,7 +175,7 @@ bool BuildReticleLayer(const FrameView& view, const HudPartImage& image, const R
             active=true;
         }
     }
-    if(ReticleInWorld() && HudLayerEnabled() && view.rendered && view.haveViews && !view.panelActive)NoteReticleShown(active);
+    if(HudLayerEnabled() && view.rendered && view.haveViews && !view.panelActive)NoteReticleShown(active);
     return active;
 }
 
@@ -193,7 +191,7 @@ bool BuildWheelLayer(const FrameView& view, const HudPartImage& image, XrComposi
                                     "wheel_swapchain",[](const char* reason){RefuseHudPart(HudPart::wheel,reason);})) {
         D3D11_TEXTURE2D_DESC desc{};image.texture->GetDesc(&desc);
         if(const auto panel=ui::PlacePopup(*anchor,static_cast<float>(desc.Width)/desc.Height,2.0f,
-                static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f,UiFitMargin())) {
+                static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f)) {
             FillPanelLayer(layer,*panel,gHost.wheelSwapchain->Handle(),desc);
             active=true;
         }
@@ -219,7 +217,7 @@ bool BuildNoteLayer(const FrameView& view, ID3D11Texture2D* texture, float dista
                                     RefuseNoteLayer)) {
         D3D11_TEXTURE2D_DESC desc{};texture->GetDesc(&desc);
         if(const auto panel=ui::PlacePopup(*anchor,static_cast<float>(desc.Width)/desc.Height,distance,
-                                           scale,UiFitMargin())) {
+                                           scale)) {
             FillPanelLayer(layer,*panel,gHost.noteSwapchain->Handle(),desc);
             active=true;
         }
@@ -239,7 +237,7 @@ bool BuildTextLayer(const FrameView& view, ID3D11Texture2D* texture, float dista
        UploadPanelCapture(gHost.textSwapchain,gHost.textSwapchainLogged,texture,"text_swapchain",RefuseTextLayer)) {
         D3D11_TEXTURE2D_DESC desc{};texture->GetDesc(&desc);
         if(const auto panel=ui::FitPanel(view.head,OpticalEyes(view.views),static_cast<float>(desc.Width)/desc.Height,
-                                         distance,scale,UiFitMargin())) {
+                                         distance,scale)) {
             FillPanelLayer(layer,*panel,gHost.textSwapchain->Handle(),desc);
             active=true;
         }

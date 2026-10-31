@@ -19,7 +19,6 @@
 #include "CullPrepareGuard.h"
 #include "FrameProbe.h"
 #include "FocusHold.h"
-#include "ControllerPrompts.h"
 #include "ResearchHotkeys.h"
 #include "preyvr/ConsolePolicy.h"
 #include "FrameObserverHook.h"
@@ -232,7 +231,6 @@ void WriteReport(std::ostringstream& out)
         << "," << AimRawOrientationMilli(2)
         << " recenters=" << MoveLaneRecenterCount()
         << " reticleOriginMm=" << ReticleOriginOffsetMillimetres()
-        << " reticleConvergeMm=" << ReticleConvergenceMillimetres()
         << " hudElement=0x" << std::hex << HudElementPointer() << std::dec
         << " hudCalls=" << HudCallCount() << " hudRefused=" << HudRefusedCount()
         << " captures=" << CompletedFrameCaptureCount()
@@ -465,13 +463,8 @@ constexpr Verb kVerbs[] = {
         out << "ik.supportlatch result=" << (Valued(args) ? SetAnimIkSupportLatch(static_cast<unsigned>(Arg(args, 1, 1))) : 0)
             << " latch=" << AnimIkSupportLatch();
     }},
-    {"ik.longreach", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        // ik.longreach [on comfortMm maxBackMm supportBackMm twistDeg]; bare reports.
-        DWORD result = 0;
-        if (Valued(args)) {
-            result = SetAnimIkLongReach(Arg(args, 1, 1), Arg(args, 2, 450), Arg(args, 3, 200), Arg(args, 4, 100), Arg(args, 5, 30));
-        }
-        out << "ik.longreach result=" << result << AnimIkLongReachReport();
+    {"ik.longreach", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
+        out << "ik.longreach result=0" << AnimIkLongReachReport();
     }},
     {"ik.helpers", Audience::research, 0, [](const Args&, std::ostringstream& out) {
         out << "ik.helpers result=" << RequestAnimIkHelperDump() << " (see PreyVR.log: preyvr_anim_ik helper)";
@@ -573,6 +566,12 @@ constexpr Verb kVerbs[] = {
         out << "dbg.lasers result=" << (Valued(args) ? SetAimLasers(static_cast<unsigned>(Arg(args, 1, 1))) : 0)
             << DebugOverlayReport();
     }},
+    {"dbg.shots", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
+        // The shot trail (VR Options "Shot trail") for this session, beside
+        // whatever dbg.draw shows; bare, it only reports.
+        out << "dbg.shots result=" << (Valued(args) ? SetShotTrail(static_cast<unsigned>(Arg(args, 1, 0))) : 0)
+            << DebugOverlayReport();
+    }},
     {"move.firehold", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
         out << "move.firehold result=" << (Valued(args) ? SetFireLaneHold(static_cast<unsigned>(Arg(args, 1, 1))) : 0)
             << " hold=" << FireLaneHold() << " posted=" << FireLaneHoldPosted();
@@ -581,16 +580,8 @@ constexpr Verb kVerbs[] = {
         out << "aim.shotprobe result=" << (Valued(args) ? SetShotProbe(static_cast<unsigned>(Arg(args, 1, 0))) : 0)
             << ShotProbeReport();
     }},
-    {"aim.shot", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        // Bare `aim.shot` only reports (and installs the observers, so a shot
-        // with the lane off is measured too). 1 = the shot leaves the muzzle
-        // along the aim; 0 = the native eye-origin query.
-        DWORD result = 0;
-        if (Valued(args)) {
-            const int value = Arg(args, 1, -1);
-            result = value == 0 || value == 1 ? SetShotRay(static_cast<unsigned>(value)) : ERROR_INVALID_PARAMETER;
-        }
-        out << "aim.shot result=" << result << ShotRayReport();
+    {"aim.shot", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
+        out << "aim.shot result=0" << ShotRayReport();
     }},
     {"aim.beam", Audience::research, 0, [](const Args&, std::ostringstream& out) {
         // Q-Beam: the last beam (damage ray + drawn beam) against the muzzle,
@@ -731,22 +722,12 @@ constexpr Verb kVerbs[] = {
             << XrHoldReport();
     }},
     // The world reticle (ReticleFollow.h).
-    {"aim.world", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        // Prey's crosshair at the depth it marks (1), or on the HUD panel (0).
-        // Saved by VR Options (reticle_world).
-        const auto result = Valued(args) ? SetReticleInWorld(static_cast<unsigned>(Arg(args, 1, 1))) : 0;
-        out << "aim.world result=" << result << ReticleWorldReport() << " scene:" << SceneQueryReport();
+    {"aim.world", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
+        out << "aim.world result=0" << ReticleWorldReport() << " scene:" << SceneQueryReport();
     }},
     {"aim.reticlesize", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
         const auto result = Valued(args) ? SetReticleSizePercent(static_cast<unsigned>(Arg(args, 1, 100))) : 0;
         out << "aim.reticlesize result=" << result << ReticleWorldReport();
-    }},
-    // The menus' prompts (ControllerPrompts.h).
-    {"ui.prompts", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        int value = 1;
-        if (args.size() > 1) { ParseInt(args[1], value); }
-        out << "ui.prompts result=" << (Valued(args) ? SetControllerPrompts(static_cast<unsigned>(value)) : 0)
-            << " enabled=" << ControllerPromptsEnabled() << ControllerPromptsReport();
     }},
     // Physical contact (ContactLane.h): its report.
     {"contact", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
@@ -829,9 +810,8 @@ constexpr Verb kVerbs[] = {
         out << "hud.setvar result="
             << (ParseNumber(args[2], value) ? QueueHudVariable(args[1], true, value) : ERROR_INVALID_PARAMETER);
     }},
-    {"hud.layer", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        const auto result=Valued(args)?SetHudLayerEnabled(Arg(args, 1,options::Default(options::HudLayer))):0;
-        out << "hud.layer result=" << result << ' ' << HudLayerReport();
+    {"hud.layer", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
+        out << "hud.layer result=0 " << HudLayerReport();
     }},
     {"input.hotkeys", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
         // **Nothing started this thread.** SetHotkeysEnabled was reachable only
@@ -842,25 +822,6 @@ constexpr Verb kVerbs[] = {
         out << "input.hotkeys result=" << (Valued(args)?SetHotkeysEnabled(Arg(args, 1,1)):0)
             << " consoleToggles=" << HotkeyConsoleToggles();
     }},
-    {"ui.stereo", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        out << "ui.stereo result=" << (Valued(args)?SetInventoryStereoEnabled(Arg(args, 1,0)):0)
-            << ' ' << InventoryStereoReport();
-    }},
-    {"ui.depth", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        out << "ui.depth result=" << (Valued(args)?SetInventoryDepthPercent(Arg(args, 1,25)):0)
-            << ' ' << InventoryStereoReport();
-    }},
-    {"ui.inventory", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        // Opt-in separate inventory layer; native redirection is additionally
-        // gated on a compatible, recently serviced XR swapchain consumer.
-        out << "ui.inventory result=" << (Valued(args)?SetInventoryCaptureEnabled(Arg(args, 1,0)):0)
-            << ' ' << HudLayerReport()
-            // Frames actually submitted through the separate inventory swapchain.
-            // captured= above says the redirect happened; this says the layer
-            // reached xrEndFrame -- the two can differ, and that gap is the
-            // upload-refusal fallback.
-            << " layerFrames=" << InventoryLayerFrameCount();
-    }},
     {"ui.panel", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
         out << "ui.panel result=" << (Valued(args) ? SetUiPanelMode(Arg(args, 1,1)) : 0)
             << " mode=" << UiPanelMode() << ' ' << VrModeReport();
@@ -869,16 +830,9 @@ constexpr Verb kVerbs[] = {
         out << "ui.pointer result=" << (Valued(args)?SetUiPointerHand(Arg(args, 1,1)):0) << ' ' << UiPointerReport();
     }},
     {"ui.scale", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        // The stored percent was already echoed here; `margin` and `guide` join
-        // it because they are what actually decide the panel's size. A wearer
-        // reading "percent=160" while the panel refused to grow had no way to
-        // see that the fit margin was shrinking it straight back off, which is
-        // the whole reason ui.scale looked as though it capped at 130.
         if (Valued(args)) { out << "ui.scale result=" << SetUiScalePercent(Arg(args, 1, 100)); }
         else { out << "ui.scale result=0"; }
-        out << " percent=" << UiScalePercent()
-            << " margin=" << UiFitMarginPercent()
-            << " guide=" << UiGuideEnabled();
+        out << " percent=" << UiScalePercent();
     }},
     {"ui.text", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
         // Text panel distance in cm (100..200, default 140), at the HUD panel's
@@ -905,23 +859,6 @@ constexpr Verb kVerbs[] = {
         }
         out << "ui.offset result=" << result
             << " right=" << UiOffsetRightDegrees() << " up=" << UiOffsetUpDegrees();
-    }},
-    {"ui.margin", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        // The real size ceiling. ui.scale above ~130 was being absorbed by the
-        // fit loops shrinking the panel back inside 72% of the reported frustum.
-        out << "ui.margin result=" << (Valued(args) ? SetUiFitMarginPercent(Arg(args, 1, 72)) : 0)
-            << " percent=" << UiFitMarginPercent();
-    }},
-    {"ui.guide", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        // Reports when given no argument. It used to default the argument to 1,
-        // which was harmless while the card was on by default and would now mean
-        // a bare `ui.guide` silently switched it back on.
-        out << "ui.guide result=" << (Valued(args) ? SetUiGuideEnabled(Arg(args, 1, 0)) : 0)
-            << " enabled=" << UiGuideEnabled();
-    }},
-    {"ui.curve", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        out << "ui.curve result=" << (Valued(args) ? SetUiCurveDegrees(Arg(args, 1,35)) : 0)
-            << " degrees=" << UiCurveDegrees();
     }},
     {"observer", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
         const DWORD status = Valued(args) ? SetFrameObserverEnabled(Arg(args, 1, 1)) : FrameObserverStatus();
@@ -1110,14 +1047,6 @@ constexpr Verb kVerbs[] = {
         // oversight, and a genuinely stereo reticle needs a mod-drawn one.
         out << "aim.reticle result=" << (Valued(args) ? SetReticleFollowEnabled(Arg(args, 1, 1)) : 0) << NoValue(args);
     }},
-    {"aim.reticleconverge", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        // The distance the crosshair marks along the firing ray, in mm, when the
-        // scene query is off or finds nothing within range: the VR option
-        // RETICLE FALLBACK DISTANCE (reticle_fallback_mm).
-        out << "aim.reticleconverge result="
-            << (Valued(args) ? SetReticleConvergenceMillimetres(Arg(args, 1, 10000)) : 0)
-            << " mm=" << ReticleConvergenceMillimetres();
-    }},
     {"aim.reticledispatch", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
         // Separates the two halves of the reticle write. Off writes only the
         // cached field; on also dispatches the movie call the engine's own reset
@@ -1167,9 +1096,6 @@ constexpr Verb kVerbs[] = {
     }},
     {"capture.hud", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
         out << "capture.hud result=" << RequestFrameCapture(static_cast<std::uint32_t>(Arg(args, 1,900)),true);
-    }},
-    {"capture.inventory", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
-        out << "capture.inventory result=" << RequestInventoryPairCapture(static_cast<std::uint32_t>(Arg(args, 1,1000)));
     }},
     {"capture", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
         // A one-shot readback of the backbuffer -- which is exactly the image

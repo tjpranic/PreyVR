@@ -305,9 +305,7 @@ std::string AnimIkWeaponAlignmentReport()
         " refused=" + std::to_string(gAlignRefused) +
         " wideSupport=" + std::to_string(AnimIkWideSupport()) +
         " supportLatch=" + std::to_string(AnimIkSupportLatch()) + "/" + SupportLatched() +
-        " longReach=" + std::to_string(gLongOn.load() ? 1 : 0) + " holdBackMm=" + std::to_string(gHoldBackMm.load()) +
-        " comfortMm=" + std::to_string(gLongComfortMm.load()) + " maxBackMm=" + std::to_string(gLongMaxBackMm.load()) +
-        " supportBackMm=" + std::to_string(gLongSupportBackMm.load()) + " twistDeg=" + std::to_string(gLongTwistDeg.load()) +
+        " holdBackMm=" + std::to_string(gHoldBackMm.load()) +
         " weaponVtable=" + WeaponVtableText() +
         " nativeSupportMm=" + std::to_string(gSupportSocketMm[0].load()) + "," +
         std::to_string(gSupportSocketMm[1].load()) + "," + std::to_string(gSupportSocketMm[2].load());
@@ -678,9 +676,7 @@ std::string HandPoseMarks()
 
 std::string AnimIkLongReachReport()
 {
-    return " longReach=" + std::to_string(gLongOn.load() ? 1 : 0) + " comfortMm=" + std::to_string(gLongComfortMm.load()) +
-        " maxBackMm=" + std::to_string(gLongMaxBackMm.load()) + " supportBackMm=" + std::to_string(gLongSupportBackMm.load()) +
-        " twistDeg=" + std::to_string(gLongTwistDeg.load()) + " holdBackMm=" + std::to_string(gHoldBackMm.load());
+    return " holdBackMm=" + std::to_string(gHoldBackMm.load());
 }
 
 DWORD RequestAnimIkHelperDump()
@@ -710,7 +706,7 @@ DWORD RequestAnimIkSkeletonDump(const std::string& label)
 std::string AnimIkFreeArmsReport()
 {
     std::ostringstream out;
-    out << " free=" << gFreeArms.load() << " freeBound=" << (gFreeBound.load() ? 1 : 0)
+    out << " freeBound=" << (gFreeBound.load() ? 1 : 0)
         << " freeFrames=" << gFreeFrames.load() << " freeGateZero=" << gFreeGateZero.load()
         << " fistMilli=" << gFreeFistMilli[0].load() << "," << gFreeFistMilli[1].load()
         << " ikMatched=" << gMatched.load() << " ikWritten=" << gWritten[0].load() << "," << gWritten[1].load()

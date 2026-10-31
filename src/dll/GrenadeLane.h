@@ -26,9 +26,6 @@ bool EnsureGrenadeLane();
 // hand's velocity (default when VR starts); 0: the game's own throw, exactly.
 DWORD SetGrenadeHand(unsigned enabled);
 unsigned GrenadeHandEnabled();
-// grenade.deploy: with the hand throw, keep the native sticking to a surface.
-DWORD SetGrenadeDeploy(unsigned enabled);
-unsigned GrenadeDeployEnabled();
 // grenade.throw's vrFactor alone, percent 50..400: how hard grenades fly.
 DWORD SetGrenadeThrowStrengthPercent(unsigned percent);
 unsigned GrenadeThrowStrengthPercent();

@@ -8,8 +8,8 @@
 namespace preyvr::dll {
 // XR frame thread owns the menu state. Worker requests are atomic mailboxes.
 bool ProcessVrOptionsInput(const TrackingFrame&);
-UiPointerVisual OptionsPointer(const ui::Surface&);
-void SetVrOptionsSurface(const ui::Surface* surface,std::uint64_t reference);
+UiPointerVisual OptionsPointer(const ui::Panel&);
+void SetVrOptionsSurface(const ui::Panel* surface,std::uint64_t reference);
 // XR frame thread: this frame's controls for the panel (VrOptionsUi), captured
 // by ProcessVrOptionsInput, and what the drawn frame did with them.
 VrOptionsUiInput VrOptionsUiFrameInput();

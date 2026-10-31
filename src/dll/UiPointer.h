@@ -10,7 +10,7 @@ struct UiPointerVisual {
     bool active=false;
 };
 // Frame-service producer; main-thread consumer. No native UI call on the XR thread.
-UiPointerVisual PublishUiPointer(const ui::Surface* surface,unsigned width,unsigned height,
+UiPointerVisual PublishUiPointer(const ui::Panel* surface,unsigned width,unsigned height,
                                 unsigned long long reference);
 void DrainUiPointer();
 void ClearUiPointer();

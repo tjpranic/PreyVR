@@ -84,7 +84,7 @@ VrOptionsLayer::Frame VrOptionsLayer::Update(XrSession session, XrSpace space, I
         const auto& p = *panel_;
         FillQuad(out.layer, space, p.pose, {p.width, p.height}, swapchain_->Handle(),
                  {{0, 0}, {static_cast<std::int32_t>(options::Width), static_cast<std::int32_t>(options::Height)}}, 0);
-        out.surface = {p, 0};
+        out.surface = p;
     }
     return out;
 }
@@ -100,7 +100,7 @@ void VrOptionsLayer::Drag(const ui::MenuAnchor& anchor, const Pose& head, XrTime
         ? std::min(static_cast<float>(displayTime - dragTime_) * 1e-9f, 0.1f) : 0.0f;
     dragTime_ = displayTime;
     if (grab.active && panel_) {
-        const auto laser = OptionsPointer(ui::Surface{*panel_, 0});
+        const auto laser = OptionsPointer(*panel_);
         if (grab.serial != grabSerial_) {
             grabSerial_ = grab.serial;
             grab_.reset();

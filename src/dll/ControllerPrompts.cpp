@@ -195,12 +195,6 @@ DWORD SetControllerPrompts(unsigned enabled)
     return 0;
 }
 
-unsigned ControllerPromptsEnabled()
-{
-    std::lock_guard lock(gMutex);
-    return gGlyphs.wanted == 1 ? 1u : 0u;
-}
-
 void ServiceControllerPrompts() { ServiceLane(GetTickCount64()); }
 
 void ServiceControllerPromptsFrame()

@@ -616,9 +616,8 @@ bool Install()
 DWORD SetShotRay(unsigned enabled)
 {
     if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
-    // Installing is also how `aim.shot 0` measures the native behaviour: the
-    // hooks observe either way and only steer when enabled.
-    if (!Install()) { return ERROR_NOT_SUPPORTED; }
+    // The hooks observe either way and only steer when enabled.
+    if (enabled && !Install()) { return ERROR_NOT_SUPPORTED; }
     gEnabled.store(enabled != 0, std::memory_order_release);
     Log(std::string("result=0 detail=enabled value=") + (enabled ? "1" : "0"));
     return 0;

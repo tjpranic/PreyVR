@@ -47,12 +47,13 @@ constexpr std::uint64_t kSlotAgeNs = 250000000ull;
 constexpr std::size_t kMaxVertices = 60000;
 constexpr float kPointerRange = 3.0f;               // left pointer without a hit, metres
 
-// What is drawn (dd::DrawnLayers), from its two switches; they change together
+// What is drawn (dd::DrawnLayers), from its three switches; they change together
 // under gMaskMutex so a command and a menu change cannot cross.
 std::atomic<unsigned> gMask{0};
 std::mutex gMaskMutex;
 unsigned gDebugLayers = 0;  // dbg.draw, the VR Options debug row
 bool gLasers = false;       // VR Options "Aim lasers"; VR start switches it on
+bool gShotTrail = false;    // VR Options "Shot trail"
 
 struct RayRecord { dd::HandRay ray{}; std::uint64_t ns = 0, reference = 0; };
 struct SlotsRecord { std::array<dd::Slot, 2> slots{}; std::uint64_t ns = 0; };
@@ -561,7 +562,7 @@ DWORD SetDebugOverlay(unsigned mask)
     {
         std::lock_guard lock(gMaskMutex);
         gDebugLayers = mask & dd::kAllLayers;
-        drawn = dd::DrawnLayers(gDebugLayers, gLasers);
+        drawn = dd::DrawnLayers(gDebugLayers, gLasers, gShotTrail);
         gMask.store(drawn);
     }
     lifecycle::Log("preyvr_debug_overlay result=0 mask=" + std::to_string(mask & dd::kAllLayers) +
@@ -580,7 +581,7 @@ DWORD SetAimLasers(unsigned enabled)
     {
         std::lock_guard lock(gMaskMutex);
         gLasers = enabled != 0;
-        drawn = dd::DrawnLayers(gDebugLayers, gLasers);
+        drawn = dd::DrawnLayers(gDebugLayers, gLasers, gShotTrail);
         gMask.store(drawn);
     }
     lifecycle::Log(std::string("preyvr_debug_overlay result=0 lasers=") + (enabled != 0 ? "1" : "0") +
@@ -591,6 +592,25 @@ unsigned AimLasersEnabled()
 {
     std::lock_guard lock(gMaskMutex);
     return gLasers ? 1u : 0u;
+}
+
+DWORD SetShotTrail(unsigned enabled)
+{
+    unsigned drawn = 0;
+    {
+        std::lock_guard lock(gMaskMutex);
+        gShotTrail = enabled != 0;
+        drawn = dd::DrawnLayers(gDebugLayers, gLasers, gShotTrail);
+        gMask.store(drawn);
+    }
+    lifecycle::Log(std::string("preyvr_debug_overlay result=0 shot_trail=") + (enabled != 0 ? "1" : "0") +
+                   " layers=" + std::to_string(drawn));
+    return 0;
+}
+unsigned ShotTrailEnabled()
+{
+    std::lock_guard lock(gMaskMutex);
+    return gShotTrail ? 1u : 0u;
 }
 
 void DebugOverlayAim(const GameplayPoseFrame& frame, const aim::Sample& sample)
@@ -605,7 +625,7 @@ void DebugOverlayAim(const GameplayPoseFrame& frame, const aim::Sample& sample)
     float distance = sample.sceneDistance;
     bool hit = distance >= 0;
     if (!hit) { hit = Hit(frame, sample.origin, sample.direction, mask, distance); }
-    if (!hit) { distance = static_cast<float>(ReticleConvergenceMillimetres()) * .001f; }
+    if (!hit) { distance = kReticleFallbackM; }
     RayRecord record{};
     auto& ray = record.ray;
     ray.valid = true;
@@ -636,9 +656,8 @@ void DebugOverlayAim(const GameplayPoseFrame& frame, const aim::Sample& sample)
 void DebugOverlayGameFrame(const GameplayPoseFrame& frame, bool tracking)
 {
     const unsigned mask = gMask.load(std::memory_order_relaxed);
-    if (!(mask & dd::kRays)) { return; }
     ShotTrace trace{};
-    if (frame.cameraCentreValid && TryGetLastShot(trace) && trace.valid) {
+    if ((mask & dd::kShots) && frame.cameraCentreValid && TryGetLastShot(trace) && trace.valid) {
         ShotRecord record{};
         auto& s = record.shot;
         s.valid = true;
@@ -655,6 +674,7 @@ void DebugOverlayGameFrame(const GameplayPoseFrame& frame, bool tracking)
         record.reference = frame.referenceGeneration;
         gShot.Publish(record);
     }
+    if (!(mask & dd::kRays)) { return; }
     const auto& left = frame.tracking.hands[static_cast<unsigned>(Hand::left)];
     // A hand holding what it carries points at nothing (CarryLane.h).
     if (!tracking || frame.twoHand.held || !IsPoseUsable(left.aimPose, left.aimValidity, kMaxPoseAgeNs) ||
@@ -705,7 +725,7 @@ void DebugOverlayGameFrame(const GameplayPoseFrame& frame, bool tracking)
     const bool psi = PsiTargetMode() == 2;
     float distance = 0;
     const bool hit = Finite(originWorld) && Hit(frame, originWorld, stereo::TrackingDirToEngine(forward, PlaySpaceRotation(frame)), mask, distance);
-    if (!hit) { distance = psi ? static_cast<float>(ReticleConvergenceMillimetres()) * .001f : kPointerRange; }
+    if (!hit) { distance = psi ? kReticleFallbackM : kPointerRange; }
     RayRecord record{};
     auto& ray = record.ray;
     ray.valid = true;
@@ -989,6 +1009,7 @@ std::string DebugOverlayReport()
 {
     std::ostringstream out;
     out << " mask=" << gMask.load() << " debug=" << DebugOverlayMask() << " lasers=" << AimLasersEnabled()
+        << " shotTrail=" << ShotTrailEnabled()
         << " drawn=" << gDrawn.load() << " vertices=" << gVertices.load()
         << " truncated=" << gTruncated.load() << " failures=" << gFailures.load() << " queries=" << gQueries.load()
         << " sceneFault=" << SceneQueryFaulted();

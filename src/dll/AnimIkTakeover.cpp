@@ -36,11 +36,10 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
     EquippedRig owner{};
     const bool haveFrame = stateLock.owns_lock() && TryGetGameplayPoseFrame(frame, gDrive.load());
     bool haveOwner = haveFrame && TryGetEquippedRig(frame.player, owner);
-    // arms.free: no weapon drawn -> the player's own arms. A generation of its
-    // own makes calibration and the hand rig rebind on every switch.
+    // No weapon drawn -> the player's own arms. A generation of its own makes
+    // calibration and the hand rig rebind on every switch.
     bool free = false;
-    if (haveFrame && !haveOwner && gFreeArms.load(std::memory_order_acquire) != 0 &&
-        TryGetFreeArms(frame.player, owner)) {
+    if (haveFrame && !haveOwner && TryGetFreeArms(frame.player, owner)) {
         owner.generation = kFreeGenerationBit | WeaponEquipGeneration();
         haveOwner = free = true;
     }
@@ -538,24 +537,6 @@ DWORD SetAnimIkWideSupport(unsigned enabled)
     return 0;
 }
 
-DWORD SetAnimIkLongReach(int enabled, int comfortMm, int maxBackMm, int supportBackMm, int twistDeg)
-{
-    if (enabled < 0 || enabled > 1 || comfortMm < 100 || comfortMm > 1500 || maxBackMm < 0 || maxBackMm > 400 ||
-        supportBackMm < 0 || supportBackMm > 300 || twistDeg < 0 || twistDeg > 60) { return ERROR_INVALID_PARAMETER; }
-    gLongOn.store(enabled != 0); gLongComfortMm.store(comfortMm); gLongMaxBackMm.store(maxBackMm);
-    gLongSupportBackMm.store(supportBackMm); gLongTwistDeg.store(twistDeg);
-    return 0;
-}
-
-DWORD SetAnimIkLongReachEnabled(unsigned enabled)
-{
-    if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
-    gLongOn.store(enabled != 0);
-    return 0;
-}
-
-unsigned AnimIkLongReachEnabled() { return gLongOn.load() ? 1u : 0u; }
-
 DWORD SetAnimIkSupportLatch(unsigned enabled)
 {
     if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
@@ -575,15 +556,6 @@ unsigned long long AnimIkPoseSequence() { return gUsedSequence.load(); }
 
 unsigned long long AnimIkNoOwner() { return gNoOwner.load(); }
 
-DWORD SetAnimIkFreeArms(unsigned enabled)
-{
-    gFreeArms.store(enabled != 0 ? 1u : 0u, std::memory_order_release);
-    Log(std::string("result=0 detail=free_arms value=") + (enabled != 0 ? "1" : "0"));
-    return 0;
-}
-
-unsigned AnimIkFreeArms() { return gFreeArms.load(); }
-
 DWORD SetAnimIkFingerCurl(unsigned enabled)
 {
     gFingerCurl.store(enabled != 0 ? 1u : 0u, std::memory_order_release);
@@ -593,7 +565,7 @@ DWORD SetAnimIkFingerCurl(unsigned enabled)
 
 unsigned AnimIkFingerCurl() { return gFingerCurl.load(); }
 
-bool AnimIkFreeArmsBound() { return gFreeArms.load() != 0 && gFreeBound.load(); }
+bool AnimIkFreeArmsBound() { return gFreeBound.load(); }
 
 unsigned long long AnimIkBusy() { return gBusy.load(); }
 

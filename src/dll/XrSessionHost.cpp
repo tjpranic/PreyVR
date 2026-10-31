@@ -15,7 +15,6 @@
 #include "HeadTrackingHook.h"
 #include "XrInput.h"
 #include "UiMode.h"
-#include "UiGuide.h"
 #include "UiPointer.h"
 #include "HudLayer.h"
 #include "LayerSwapchain.h"
@@ -84,10 +83,7 @@ void ServiceXrFrame(void* renderer)
     // first: nothing may draw into the held eye once it is being paired.
     gDualOverlayOpen.store(false, std::memory_order_release);
     const bool dualFirstHeld = gDualFirstHeld.exchange(false, std::memory_order_acq_rel);
-    // Take each capture once, even on skipped submissions; never reuse a PDA
-    // image after a dialog or another menu has replaced it.
-    ID3D11Texture2D* inventoryRightTexture=nullptr;
-    ID3D11Texture2D* inventoryTexture = InventoryLayerTexture(&inventoryRightTexture);
+    // Take each capture once, even on skipped submissions.
     ID3D11Texture2D* hudTexture = HudLayerTexture();
     ID3D11Texture2D* textTexture = TextLayerTexture();
     ID3D11Texture2D* noteTexture = NoteLayerTexture();
@@ -95,7 +91,6 @@ void ServiceXrFrame(void* renderer)
     const HudPartImage reticleImage = TakeHudPart(HudPart::reticle);
     ID3D11Texture2D* nativeWristTexture = NativeWristLayerTexture();
     RequestNativeWristCapture(false);
-    SetInventoryConsumerReady(nullptr);
     if (gStatus.load(std::memory_order_acquire) != static_cast<DWORD>(XrSessionStatus::running)) {
         return; // the hot path
     }
@@ -181,7 +176,7 @@ void ServiceXrFrame(void* renderer)
         }
         gHost.eyeImageValid[0]=gHost.eyeImageValid[1]=false;
         gHost.heldValid=false; // its poses are in the old space
-        gHost.menuPanel.reset();gHost.guidePanel.reset();ClearUiPointer();
+        gHost.menuPanel.reset();ClearUiPointer();
         // Poses in the old space mean nothing in the new one; a placement kept
         // relative to the anchor still does, and is put back from the new one.
         gHost.optionsLayer.Close(nullptr);gHost.menuAnchor.reset();
@@ -229,9 +224,6 @@ void ServiceXrFrame(void* renderer)
     // and the eyes describe the same instant.
     Pose inputHead{};
     PoseValidity inputHeadValidity{};
-    // The distance between the two located views; also what the inventory
-    // layer's parallax uses below.
-    float runtimeIpd = 0.0f;
 
     if (haveViews) {
         const Pose left = FromXrPose(views[0].pose);
@@ -239,9 +231,8 @@ void ServiceXrFrame(void* renderer)
         inputHead = stereo::CyclopsPose(left, right);
         const Vec3 separation{right.position.x-left.position.x,
                               right.position.y-left.position.y,right.position.z-left.position.z};
-        runtimeIpd = std::sqrt(separation.x*separation.x + separation.y*separation.y +
-                               separation.z*separation.z);
-        gRuntimeIpd.store(runtimeIpd);
+        gRuntimeIpd.store(std::sqrt(separation.x*separation.x + separation.y*separation.y +
+                                    separation.z*separation.z));
         for (int eye=0;eye<2;++eye) {
             gHost.requestedFov[eye]=views[eye].fov;
             gHost.requestedFovValid[eye]=true;
@@ -276,7 +267,6 @@ void ServiceXrFrame(void* renderer)
     const auto panelSettingsGeneration=gPanelSettingsGeneration.load(std::memory_order_acquire);
     if(panelSettingsGeneration!=gHost.panelSettingsGeneration) {
         gHost.menuPanel.reset();
-        gHost.guidePanel.reset();
         gHost.panelSettingsGeneration=panelSettingsGeneration;
     }
     const auto panelMode=gUiPanelMode.load();
@@ -285,7 +275,6 @@ void ServiceXrFrame(void* renderer)
     const bool wantPanel=ui::WantMenuPanel(panelMode,haveViews,HudMenuStateKnown(),HudMenuIsOpen(),gHost.panelWasActive);
     if (wantPanel != gHost.panelWasActive) {
         gHost.menuPanel.reset();
-        gHost.guidePanel.reset();
         gHost.menuAnchor.reset(); // a game menu opening is placed afresh, in front of the wearer
         gHost.eyeImageValid[0]=gHost.eyeImageValid[1]=false;
         gHost.panelWasActive=wantPanel;
@@ -293,37 +282,10 @@ void ServiceXrFrame(void* renderer)
         Log(std::string("result=0 detail=ui_panel active=")+(wantPanel?"1":"0"));
     }
     const auto reference=HeadTrackingReferenceGeneration();
-    // Stereo inventory uses a planar disparity contract. Include this in the
-    // fit/serial decision so switching modes also cancels an old curved drag.
-    const bool planarInventory=(InventoryStereoEnabled() && HudInventoryIsOpen()) || inventoryRightTexture;
-    const float curve=gHost.cylinderSupported && !planarInventory?
-        static_cast<float>(gUiCurveDegrees.load())*kRadiansPerDegree:0;
-    if (wantPanel && MenuPanelsStale(curve,reference)) PlaceMenuPanels(inputHead,views,reference,curve);
+    if (wantPanel && MenuPanelStale(reference)) PlaceMenuPanel(inputHead,views,reference);
     const bool panelActive=wantPanel && gHost.menuPanel.has_value();
-    if(panelActive && !gHost.guideAttempted) {
-        gHost.guideAttempted=true;
-        const auto api=SessionSwapchainApi();
-        const auto format=FirstListedFormat(api.formats,gHost.session,
-                                            {DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB});
-        if(format!=DXGI_FORMAT_UNKNOWN) {
-            auto pixels=MakeMenuGuide();
-            if(format==DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)
-                for(std::size_t i=0;i<pixels.size();i+=4)std::swap(pixels[i],pixels[i+2]);
-            if(!pixels.empty()) {
-                const auto upload=CreateStaticLayer(api,gHost.session,gHost.device,format,kGuideWidth,kGuideHeight,
-                                                    pixels.data(),gHost.guideSwapchain);
-                if(upload.waitFailed)gStopRequested.store(true);
-                gHost.guideReady=upload.ready;
-            }
-        }
-    }
     bool rendered = false;
     bool stereoPair = false;
-    bool inventorySubmitted = false, inventoryPrepared = false;
-    bool inventoryStereoSubmitted=false,inventoryStereoPrepared=false;
-    D3D11_TEXTURE2D_DESC inventoryDescription{};
-    if (!InventoryCaptureEnabled() && !inventoryTexture) gHost.inventorySwapchain.reset();
-    if (!InventoryStereoEnabled() && !inventoryRightTexture) gHost.inventoryRightSwapchain.reset();
 
     if (gHost.contract.ShouldRenderThisFrame()) {
         if (const auto backBuffer = AcquireBackBuffer(renderer)) {
@@ -350,51 +312,9 @@ void ServiceXrFrame(void* renderer)
             // independently of the wait it exists to set up.
             const std::uint64_t acquireStart =
                 timing ? preyvr::timing::MonotonicNanoseconds() : 0;
-            ID3D11Texture2D* panelSource = backBuffer.Get();
-            // Finish an already redirected draw even if the command channel
-            // disabled capture between the native callback and this boundary.
-            if (matchingSize && panelActive && HudInventoryIsOpen() && (InventoryCaptureEnabled() || inventoryTexture)) {
-                if (!gHost.inventorySwapchain) {
-                    gHost.inventorySwapchain = SessionLayerSwapchain();
-                }
-                inventoryPrepared = gHost.inventorySwapchain->Prepare(gHost.session, backDesc, gHost.colorFormat);
-                if(inventoryPrepared && (InventoryStereoEnabled() || inventoryRightTexture)) {
-                    if(!gHost.inventoryRightSwapchain)gHost.inventoryRightSwapchain=SessionLayerSwapchain();
-                    inventoryStereoPrepared=gHost.inventoryRightSwapchain->Prepare(gHost.session,backDesc,gHost.colorFormat);
-                }
-                inventoryDescription = backDesc;
-                if (inventoryTexture) {
-                    // This draw was redirected already. If XR upload fails,
-                    // retain a complete opaque inventory in the legacy panel.
-                    D3D11_TEXTURE2D_DESC capturedDesc{}; inventoryTexture->GetDesc(&capturedDesc);
-                    if (InventoryTextureCompatible(backDesc, capturedDesc)) panelSource = inventoryTexture;
-                    // Held through both eye uploads.
-                    const auto context = ImmediateContext(gHost.device);
-                    const auto upload = inventoryPrepared ? gHost.inventorySwapchain->Copy(context.Get(), inventoryTexture)
-                                                          : LayerSwapchain::Upload::failed;
-                    inventorySubmitted = upload == LayerSwapchain::Upload::ready;
-                    if(inventorySubmitted && inventoryRightTexture && inventoryStereoPrepared) {
-                        const auto rightUpload=gHost.inventoryRightSwapchain->Copy(context.Get(),inventoryRightTexture);
-                        inventoryStereoSubmitted=rightUpload==LayerSwapchain::Upload::ready;
-                        if(!inventoryStereoSubmitted) {
-                            SetInventoryStereoEnabled(0);
-                            inventoryStereoPrepared=false;
-                            if(rightUpload==LayerSwapchain::Upload::sessionFault)gStopRequested.store(true);
-                            Log("result=refused detail=inventory_right_upload mono_fallback=1");
-                        }
-                    }
-                    rendered = inventorySubmitted;
-                    if (!inventorySubmitted) {
-                        RefuseInventoryCapture("swapchain_upload_failed");
-                        inventoryPrepared = false;
-                        Log("result=refused detail=inventory_swapchain_upload legacy_panel_fallback=1");
-                        if (upload == LayerSwapchain::Upload::sessionFault) gStopRequested.store(true);
-                    }
-                }
-            }
             AcquiredImage image;
             const std::int64_t probeAcquire = ProbeClock();
-            if (matchingSize && !inventorySubmitted) image.Acquire(SessionSwapchainApi(), gHost.swapchain);
+            if (matchingSize) image.Acquire(SessionSwapchainApi(), gHost.swapchain);
             if (probeAcquire != 0) ProbeRecord(ProbeStep::xrAcquire, ProbeMicrosSince(probeAcquire));
             if(image.WaitFailed())gStopRequested.store(true);
             if (timing && matchingSize) {
@@ -418,7 +338,7 @@ void ServiceXrFrame(void* renderer)
                             context->CopySubresourceRegion(
                                 gHost.images[imageIndex],
                                 D3D11CalcSubresource(0, slice, 1),
-                                0, 0, 0, panelSource, 0, nullptr);
+                                0, 0, 0, backBuffer.Get(), 0, nullptr);
                         }
                     }
                     rendered=panelActive || !gStereoSubmission.load() || stereoPair;
@@ -485,24 +405,10 @@ void ServiceXrFrame(void* renderer)
     layer.viewCount = 2;
     layer.views = projViews;
     XrCompositionLayerQuad panelLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
-    XrCompositionLayerQuad rightPanelLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
-    XrCompositionLayerQuad guideLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
-    XrCompositionLayerCylinderKHR cylinderLayer{XR_TYPE_COMPOSITION_LAYER_CYLINDER_KHR};
-    ui::Surface surface{};
+    ui::Panel surface{};
     if(panelActive) {
-        // The prototype's disparity and pointer mapping are defined on a plane.
-        // Do not wrap stereo imagery onto a cylinder with a different geometry
-        // (the curve is 0 while the planar inventory is up).
-        surface={*gHost.menuPanel,gHost.panelAngle};
-        FillMenuLayers(panelLayer,cylinderLayer,surface,
-                       inventorySubmitted?gHost.inventorySwapchain->Handle():gHost.swapchain,
-                       inventorySubmitted?XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT:0);
-        if(inventoryStereoSubmitted) {
-            rightPanelLayer=panelLayer;
-            panelLayer.eyeVisibility=XR_EYE_VISIBILITY_LEFT;
-            rightPanelLayer.eyeVisibility=XR_EYE_VISIBILITY_RIGHT;
-            rightPanelLayer.subImage.swapchain=gHost.inventoryRightSwapchain->Handle();
-        }
+        surface=*gHost.menuPanel;
+        FillMenuLayer(panelLayer,surface,gHost.swapchain,0);
         if(rendered)EnsurePointerTexture();
     }
     // **VR Options** (VrOptionsLayer). Not gated on this frame having an image:
@@ -541,12 +447,6 @@ void ServiceXrFrame(void* renderer)
     XrCompositionLayerQuad cursorLayer{XR_TYPE_COMPOSITION_LAYER_QUAD},beamLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
     bool cursorActive=false,beamActive=false;
     FillPointerLayers(pointer,heldPointer.surface,inputHead.position,cursorLayer,beamLayer,cursorActive,beamActive);
-    const bool guideActive=panelActive && gHost.guideReady && gHost.guidePanel.has_value();
-    if(guideActive) {
-        const auto& p=*gHost.guidePanel;
-        // Opaque instruction card.
-        FillQuad(guideLayer,gHost.space,p.pose,{p.width,p.height},gHost.guideSwapchain,{{0,0},{kGuideWidth,kGuideHeight}},0);
-    }
     const FrameView view{views,inputHead,reference,frameState.predictedDisplayTime,rendered,haveViews,panelActive,
                          optionsActive};
     XrCompositionLayerQuad hudLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
@@ -570,7 +470,7 @@ void ServiceXrFrame(void* renderer)
     // wheel, a menu) draws nothing.
     ReticleTarget reticleTarget{};
     const bool reticleTargetFresh=TryGetReticleTarget(reticleTarget);
-    RequestHudPart(HudPart::reticle,ReticleInWorld() && HudLayerEnabled() && haveViews && !panelActive && reticleTargetFresh);
+    RequestHudPart(HudPart::reticle,HudLayerEnabled() && haveViews && !panelActive && reticleTargetFresh);
     XrCompositionLayerQuad reticleLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
     const bool reticleActive=BuildReticleLayer(view,reticleImage,reticleTargetFresh?&reticleTarget:nullptr,hudPanelWidth,
                                                reticleLayer);
@@ -595,14 +495,14 @@ void ServiceXrFrame(void* renderer)
     // **VR Options is drawn over what is shown**: the game's menu while one is
     // up, else the world -- the running game (ui::ComposeFrame has the order).
     ui::FrameShown shown;
-    shown.menu=panelActive;shown.menuCylinder=panelActive&&surface.angle>0;shown.menuRightEye=inventoryStereoSubmitted;
-    shown.guide=guideActive;shown.hud=hudActive;shown.reticle=reticleActive;shown.wheel=wheelActive;shown.note=noteActive;shown.text=textActive;
+    shown.menu=panelActive;
+    shown.hud=hudActive;shown.reticle=reticleActive;shown.wheel=wheelActive;shown.note=noteActive;shown.text=textActive;
     shown.options=optionsActive;
     shown.beam=beamActive;shown.cursor=cursorActive;shown.wrist=wristActive;shown.slot=slotActive;shown.fade=fadeActive;
     // By value, so a successful frame can be kept for hold frames.
     FrameLayerSet built;
     built.shown=shown;built.views[0]=projViews[0];built.views[1]=projViews[1];built.world=layer;
-    built.menu=panelLayer;built.menuCylinder=cylinderLayer;built.menuRightEye=rightPanelLayer;built.guide=guideLayer;
+    built.menu=panelLayer;
     built.hud=hudLayer;built.reticle=reticleLayer;built.wheel=wheelLayer;built.note=noteLayer;built.text=textLayer;
     built.options=options.layer;built.beam=beamLayer;built.cursor=cursorLayer;built.wrist=wristLayer;
     built.slot=slotLayer;built.fade=fadeLayer;
@@ -617,14 +517,6 @@ void ServiceXrFrame(void* renderer)
     const std::int64_t probeEnd = ProbeClock();
     const auto endResult=xrEndFrame(gHost.session, &endInfo);
     if (probeEnd != 0) ProbeRecord(ProbeStep::xrEnd, ProbeMicrosSince(probeEnd), endInfo.layerCount);
-    // Arm only after a complete successful frame. Until then the native movie
-    // keeps rendering normally and the existing full-menu panel remains usable.
-    // inventoryPrepared needs the menu panel, which needs located views: the
-    // runtime IPD above is this frame's.
-    if (rendered && endResult == XR_SUCCESS && inventoryPrepared && !gStopRequested.load() && InventoryCaptureEnabled()) {
-        SetInventoryConsumerReady(&inventoryDescription,gHost.menuPanel?gHost.menuPanel->width:0,
-            runtimeIpd,inventoryStereoPrepared);
-    }
     if (timing) {
         const std::uint64_t now = preyvr::timing::MonotonicNanoseconds();
         gEndFrame.AddNanoseconds(now - endStart);
@@ -636,11 +528,6 @@ void ServiceXrFrame(void* renderer)
     if (rendered && XR_SUCCEEDED(endResult)) {
         gHost.heldLayers=built;gHost.heldPointer=heldPointer;gHost.heldValid=true;
         if(wristActive)RecordWristLayerFrame();
-        if (inventorySubmitted) {
-            if (gInventoryLayerFrames.fetch_add(1)==0)
-                Log("result=0 detail=first_inventory_layer_submitted separate_swapchain=1 array_size=1 world_copy=0");
-            gHost.submittedWidth=gHost.width;gHost.submittedHeight=gHost.height;
-        }
         if (panelActive) { gUiPanelFrames.fetch_add(1); }
         const unsigned long long count = gSubmitted.fetch_add(1, std::memory_order_relaxed) + 1;
         if (count == 1) {
@@ -671,8 +558,6 @@ bool XrBackbufferReady(unsigned int width,unsigned int height)
         s.frames>=20 && now>=s.changed && now-s.changed>=1000000000ull &&
         (!width || width==s.width) && (!height || height==s.height);
 }
-
-unsigned long long InventoryLayerFrameCount() { return gInventoryLayerFrames.load(); }
 
 float XrRuntimeIpdMetres() { return gRuntimeIpd.load(); }
 

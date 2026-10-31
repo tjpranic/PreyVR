@@ -409,7 +409,7 @@ void UpdateImpl(GameplayPoseFrame& frame, bool allowed)
                             box.reference == frame.referenceGeneration && box.epoch == frame.tracking.epoch;
     BuildHand(frame, Hand::right, haveWeapon ? &box : nullptr, hands[static_cast<unsigned>(Hand::right)]);
     // A left hand on the foregrip is drawn on the weapon, which the right hand carries.
-    if (TwoHandedAimEnabled() && frame.twoHand.snapSupport && frame.twoHand.blend >= .999f) {
+    if (TwoHandedAimEnabled() && frame.twoHand.blend >= .999f) {
         hands[static_cast<unsigned>(Hand::left)].why = "foregrip";
     } else {
         BuildHand(frame, Hand::left, nullptr, hands[static_cast<unsigned>(Hand::left)]);

@@ -61,7 +61,7 @@ float ShoulderYaw(const GameplayPoseFrame& frame)
     // foregrip. Eased by the hold's own blend.
     const std::uint64_t longOwner = gLongGeneration.load(std::memory_order_relaxed);
     const float twist = longOwner != 0 && frame.weaponGeneration == longOwner && frame.twoHand.blend > 0.0f
-        ? gLongTwistDeg.load(std::memory_order_relaxed) * 0.01745329f * frame.twoHand.blend : 0.0f;
+        ? preyvr::twohand::kLongTwistDegrees * 0.01745329f * frame.twoHand.blend : 0.0f;
     const float shoulderYaw = yaw - twist;
     gArmStats.torsoYawDeg = shoulderYaw * kDegreesPerRadian;
     gArmStats.headYawDeg = headYaw * kDegreesPerRadian;

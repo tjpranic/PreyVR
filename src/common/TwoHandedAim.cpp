@@ -77,31 +77,54 @@ bool RegionLatch::Update(std::uint64_t owner,bool candidateValid,Vec3 candidate,
     if(latched_) socket=socket_;
     return latched_;
 }
+// The range auto-snap attaches from: the grab region at the attach distance.
+bool InSnapRange(const Input& i,Vec3& point) {
+    Input near=i;near.region.radius=i.snapAttach;
+    return ClosestGrip(near,point);
+}
 Output Solver::Update(const Input& i) {
     Output out{};out.orientation=i.aim.orientation;
-    const bool changed=i.owner!=owner_||i.reference!=reference_||i.epoch!=epoch_||i.toggleGrip!=toggleGrip_;
+    const bool changed=i.owner!=owner_||i.reference!=reference_||i.epoch!=epoch_||i.toggleGrip!=toggleGrip_||
+        i.autoSnap!=autoSnap_;
     if(changed||!ValidInput(i)) {
         *this={}; owner_=i.owner;reference_=i.reference;epoch_=i.epoch;
-        toggleGrip_=i.toggleGrip;
+        toggleGrip_=i.toggleGrip;autoSnap_=i.autoSnap;
         // A weapon switch, modal transition or tracking loss requires a new squeeze.
         armed_=ValidInput(i)&&i.squeeze<.45f;
         return out;
     }
-    if(i.squeeze<.45f) { if(!i.toggleGrip)held_=false;armed_=true; }
+    const auto attach=[&] {
+        held_=true;
+        handgun_=i.region.grip==Grip::handgun;
+        supportInAim_=Multiply(Conjugate(i.aim.orientation),i.support.orientation);
+    };
+    const bool wasHeld=held_;
+    if(i.squeeze<.45f) { if(!i.toggleGrip&&!byProximity_)held_=false;armed_=true; }
     else if(armed_&&i.squeeze>=.65f) {
         armed_=false;
         if(held_&&i.toggleGrip) held_=false;
-        else if(!held_&&ClosestGrip(i,socket_)) {
-            held_=true;
-            handgun_=i.region.grip==Grip::handgun;
-            supportInAim_=Multiply(Conjugate(i.aim.orientation),i.support.orientation);
-        }
+        else if(held_) byProximity_=false;   // the squeeze takes the hold over
+        else if(ClosestGrip(i,socket_)) attach();
     }
     const Vec3 line=Sub(i.support.position,Add(i.primary,i.visualPrimaryOffset));
     // A handgun's hands sit closer than this; only a steering foregrip spins.
     if(held_&&!handgun_&&Dot(line,line)<.0144f) { held_=false;armed_=false;blend_=0;swing_={}; }
-    // A support hand gone from a handgun lets go, and blends out.
-    if(held_&&handgun_&&Dot(line,line)>kHandgunBreak*kHandgunBreak) { held_=false;armed_=false; }
+    // A support hand gone from a handgun lets go, and blends out. A snapped hold
+    // goes by the break distance instead, on any weapon.
+    if(held_&&handgun_&&!byProximity_&&Dot(line,line)>kHandgunBreak*kHandgunBreak) { held_=false;armed_=false; }
+    if(held_&&byProximity_) {
+        const Vec3 off=Sub(Rotate(Conjugate(i.aim.orientation),line),socket_);
+        const float limit=std::max(i.snapBreak,i.snapAttach+kAutoSnapMargin);
+        if(Dot(off,off)>limit*limit) held_=false;
+    }
+    if(wasHeld&&!held_) { byProximity_=false;waitForExit_=true; }
+    if(i.autoSnap&&!held_) {
+        Vec3 point{};
+        const bool inRange=InSnapRange(i,point);
+        if(!inRange) waitForExit_=false;
+        dwell_=inRange&&!waitForExit_&&i.squeeze<.45f?dwell_+i.dt:0;
+        if(dwell_>=kAutoSnapDwell) { dwell_=0;socket_=point;byProximity_=true;attach(); }
+    }
     if(held_&&!handgun_) {
         // Raw controllers steer. The displayed support hand never feeds back here.
         const Vec3 localLine=Rotate(Conjugate(i.aim.orientation),line);
@@ -114,7 +137,7 @@ Output Solver::Update(const Input& i) {
     out.orientation=Normalize(Multiply(i.aim.orientation,local));
     out.correction=Normalize(Multiply(out.orientation,Conjugate(i.aim.orientation)));
     out.supportOrientation=Mix(i.support.orientation,Normalize(Multiply(out.orientation,supportInAim_)),blend_);
-    out.socket=socket_;out.blend=blend_;out.held=held_;
+    out.socket=socket_;out.blend=blend_;out.held=held_;out.snapped=byProximity_;
     return out;
 }
 } // namespace preyvr::twohand

@@ -71,14 +71,13 @@ bool WriteReticleScreenPosition(void* player, const Vec3& rayOrigin,
                                 const Vec3& worldDirection,
                                 const ReticleAimContext* context = nullptr);
 
-// The distance along the ray that the crosshair marks. A crosshair marks one
-// point, and a muzzle-origin shot reaches a different screen position at every
-// distance, so without a raycast no single symbol is right at all of them. This
-// picks which distance is exact; the error grows toward the near end, which is
-// where the disagreement is largest and therefore where it should be judged.
-// Clamped to [0.5 m, 200 m].
-DWORD SetReticleConvergenceMillimetres(unsigned int millimetres);
-DWORD ReticleConvergenceMillimetres();
+// **The distance at which the crosshair is exact** when the aim hits nothing. A
+// crosshair marks one point, and a muzzle-origin shot reaches a different screen
+// position at every distance, so without a raycast no single symbol is right at
+// all of them. Ten metres is a typical engagement distance; the error grows
+// toward the near end, which is where the disagreement is largest and therefore
+// where it should be judged.
+inline constexpr float kReticleFallbackM = 10.0f;
 
 // How far the ray origin sits from the camera, in millimetres. Zero means the
 // shot starts at the eye, so the origin correction is doing nothing -- which is
@@ -139,18 +138,16 @@ DWORD ReticleFollowLastY();
 // **The world reticle** (XrSessionHost): Prey's crosshair lifted out of the HUD
 // (HudPart::reticle) and shown in the world at the point it marks, instead of
 // on the HUD panel 2 m away, where it doubled whenever the eyes were on the
-// target. On by default; off leaves the crosshair on the HUD panel, where this
-// file's projection keeps placing it. Its depth is the aim's scene hit, so
-// while it is on the scene query runs (SceneQuery: aim.scene or this).
-DWORD SetReticleInWorld(unsigned enabled);
-unsigned ReticleInWorld();
+// target. With no fresh target the crosshair stays on the HUD panel, where this
+// file's projection keeps placing it. Its depth is the aim's scene hit, so the
+// scene query always runs.
 // Its size against the crosshair on the HUD, 50..200 percent.
 DWORD SetReticleSizePercent(unsigned percent);
 unsigned ReticleSizePercent();
 
 struct GameplayPoseFrame;
 // **Where it goes**: the aim ray's scene hit, else the fallback distance
-// (SetReticleConvergenceMillimetres), never nearer than kReticleNearestM, in
+// (kReticleFallbackM), never nearer than kReticleNearestM, in
 // tracking space by the gameplay frame's own mapping (the anchor the ray was
 // built from, the head the frame was built with). `reference` is the recenter
 // generation it belongs to.

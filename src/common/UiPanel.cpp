@@ -4,15 +4,8 @@
 #include <cmath>
 
 namespace preyvr::ui {
-Pose CylinderAxis(const Surface& s) {
-    return s.angle>0 ? Compose(s.panel.pose,Pose{{},{0,0,s.panel.width/s.angle}}) : s.panel.pose;
-}
-Pose SurfacePoint(const Surface& s,float u,float v) {
-    if(s.angle<=0)return Compose(s.panel.pose,Pose{{},{(u-.5f)*s.panel.width,(.5f-v)*s.panel.height,0}});
-    const float a=(u-.5f)*s.angle,r=s.panel.width/s.angle;
-    // The tangent faces the cylinder axis (the viewer is on the inside).
-    return Compose(CylinderAxis(s),Pose{{0,-std::sin(a*.5f),0,std::cos(a*.5f)},
-        {r*std::sin(a),(.5f-v)*s.panel.height,-r*std::cos(a)}});
+Pose SurfacePoint(const Panel& p,float u,float v) {
+    return Compose(p.pose,Pose{{},{(u-.5f)*p.width,(.5f-v)*p.height,0}});
 }
 int PointerButtons::Update(bool active,bool inside,bool pressed) {
     if(!active){armed=false;if(down){down=false;return -1;}return 0;}
@@ -48,7 +41,7 @@ float AngularWidth(float distance, float panelWidth, float panelDistance, float 
     return distance*panelWidth/panelDistance*scale;
 }
 PointerQuads PointerQuadsFor(const Pose& aim, const std::optional<RayHit>& hit, bool pressed,
-                             const Surface& surface, const Vec3& head) {
+                             const Panel& surface, const Vec3& head) {
     PointerQuads quads;
     const bool onSurface=hit&&hit->inside;
     if(onSurface) {
@@ -85,28 +78,16 @@ bool Valid(const Eye& e) {
         e.down < 0 && e.down > -1.55f && e.up > 0 && e.up < 1.55f;
 }
 }
-std::optional<RayHit> Intersect(const Surface& s,const Pose& aim) {
-    if(!Valid(s.panel.pose)||!Valid(aim)||!std::isfinite(s.panel.width)||!std::isfinite(s.panel.height)||
-       s.panel.width<=0||s.panel.height<=0||!std::isfinite(s.angle)||s.angle<0||s.angle>1.2f)return {};
-    const auto axis=CylinderAxis(s);
-    const auto inv=stereo::Conjugate(axis.orientation);
-    const auto o=Rotate(inv,{aim.position.x-axis.position.x,aim.position.y-axis.position.y,aim.position.z-axis.position.z});
+std::optional<RayHit> Intersect(const Panel& p,const Pose& aim) {
+    if(!Valid(p.pose)||!Valid(aim)||!std::isfinite(p.width)||!std::isfinite(p.height)||
+       p.width<=0||p.height<=0)return {};
+    const auto inv=stereo::Conjugate(p.pose.orientation);
+    const auto o=Rotate(inv,{aim.position.x-p.pose.position.x,aim.position.y-p.pose.position.y,aim.position.z-p.pose.position.z});
     const auto d=Rotate(inv,Rotate(aim.orientation,{0,0,-1}));
-    float t=0,u=0;
-    if(s.angle==0) {
-        if(d.z>=-.00001f||o.z<=0)return {};
-        t=-o.z/d.z;u=.5f+(o.x+t*d.x)/s.panel.width;
-    } else {
-        const float r=s.panel.width/s.angle;
-        const float a=d.x*d.x+d.z*d.z,b=o.x*d.x+o.z*d.z,c=o.x*o.x+o.z*o.z-r*r;
-        const float discriminant=b*b-a*c;
-        if(a<.000001f||discriminant<0)return {};
-        // Exit intersection hits the inside face. The entry root is back-facing.
-        t=(-b+std::sqrt(discriminant))/a;
-        u=.5f+std::atan2(o.x+t*d.x,-(o.z+t*d.z))/s.angle;
-    }
+    if(d.z>=-.00001f||o.z<=0)return {};
+    const float t=-o.z/d.z,u=.5f+(o.x+t*d.x)/p.width;
     if(!std::isfinite(t)||t<=.01f||t>10)return {};
-    const float v=.5f-(o.y+t*d.y)/s.panel.height;
+    const float v=.5f-(o.y+t*d.y)/p.height;
     const auto direction=Rotate(aim.orientation,{0,0,-1});
     return RayHit{u,v,t,{aim.position.x+t*direction.x,aim.position.y+t*direction.y,aim.position.z+t*direction.z},
         u>=0&&u<=1&&v>=0&&v<=1};
@@ -116,22 +97,6 @@ std::optional<RayHit> Intersect(const Surface& s,const Pose& aim) {
 bool ClampMargin(float& margin) {
     if(!std::isfinite(margin))return false;
     if(margin>1)margin=1; if(margin<.3f)margin=.3f;
-    return true;
-}
-bool SurfaceVisible(const Surface& s,const std::array<Eye,2>& eyes,float margin) {
-    if(!ClampMargin(margin))return false;
-    if(!Valid(s.panel.pose)||!std::isfinite(s.panel.width)||!std::isfinite(s.panel.height)||
-       s.panel.width<=0||s.panel.height<=0||!std::isfinite(s.angle)||s.angle<0||s.angle>1.2f)return false;
-    for(const auto& eye:eyes) {
-        if(!Valid(eye))return false;
-        for(int i=0;i<=16;++i)for(float v:{0.f,1.f}) {
-            const auto p=SurfacePoint(s,static_cast<float>(i)/16,v).position;
-            const auto q=Rotate(stereo::Conjugate(eye.pose.orientation),{p.x-eye.pose.position.x,p.y-eye.pose.position.y,p.z-eye.pose.position.z});
-            if(q.z>=-.01f)return false;
-            const float x=q.x/-q.z,y=q.y/-q.z;
-            if(x<std::tan(eye.left)*margin||x>std::tan(eye.right)*margin||y<std::tan(eye.down)*margin||y>std::tan(eye.up)*margin)return false;
-        }
-    }
     return true;
 }
 bool CornersVisible(const Panel& panel, const std::array<Eye,2>& eyes, float margin) {
@@ -239,28 +204,6 @@ std::optional<Panel> PlaceMenu(const MenuAnchor& anchor, float aspect, float dis
     if(panel)panel->pose=AroundHead(anchor.upright,panel->pose,right,up);
     return panel;
 }
-std::optional<MenuStack> FitMenuStack(Panel layout, float aspect, float guideRatio, float gapRatio, bool guide,
-                                      float curve, const std::array<Eye,2>& eyes, float margin) {
-    for(int attempt=0;attempt<80;++attempt) {
-        auto menu=layout,card=layout;
-        menu.height=menu.width/aspect;
-        card.height=card.width*guideRatio;
-        const float gap=menu.width*gapRatio;
-        if(guide) {
-            menu.pose=Compose(layout.pose,Pose{{},{0,(card.height+gap)*.5f,0}});
-            card.pose=Compose(layout.pose,Pose{{},{0,-(menu.height+gap)*.5f,0}});
-        } else {
-            menu.pose=layout.pose;
-        }
-        if(SurfaceVisible({menu,curve},eyes,margin)&&(!guide||SurfaceVisible({card,0},eyes,margin))) {
-            MenuStack stack{menu};
-            if(guide)stack.guide=card;
-            return stack;
-        }
-        layout.width*=.95f;layout.height*=.95f;
-    }
-    return std::nullopt;
-}
 bool WantMenuPanel(unsigned mode, bool haveViews, bool menuKnown, bool menuOpen, bool wasShown) {
     return haveViews && (mode==2 || (mode==1 && (menuKnown?menuOpen:wasShown)));
 }
@@ -300,9 +243,8 @@ const PopupAnchor* PopupHold::Update(bool shown, std::uint64_t now, const Pose& 
     }
     return anchor_ ? &*anchor_ : nullptr;
 }
-std::optional<Panel> PlacePopup(const PopupAnchor& anchor, float aspect, float distance, float scale,
-                                float margin) {
-    return FitPanel(anchor.gaze,anchor.eyes,aspect,distance,scale,margin);
+std::optional<Panel> PlacePopup(const PopupAnchor& anchor, float aspect, float distance, float scale) {
+    return FitPanel(anchor.gaze,anchor.eyes,aspect,distance,scale);
 }
 namespace {
 // Upright, its face (+Z) turned toward the vertical line through `axis`.
@@ -386,12 +328,9 @@ FrameLayers ComposeFrame(const FrameShown& s)
 {
     FrameLayers out;
     const auto add=[&](FrameLayer layer){out.layers[out.count++]=layer;};
-    const bool guide=s.menu&&s.guide;
-    add(!s.menu?FrameLayer::world:s.menuCylinder?FrameLayer::menuCylinder:FrameLayer::menu);
-    if(s.menu&&s.menuRightEye)add(FrameLayer::menuRightEye);
-    // The guide card belongs to the game menu; the HUD, reticle, wheel, note and text to the world.
-    if(guide)add(FrameLayer::guide);
-    else if(!s.options&&!s.menu&&s.hud)add(FrameLayer::hud);
+    add(s.menu?FrameLayer::menu:FrameLayer::world);
+    // The HUD, reticle, wheel, note and text belong to the world.
+    if(!s.options&&!s.menu&&s.hud)add(FrameLayer::hud);
     if(!s.options&&!s.menu&&s.reticle)add(FrameLayer::reticle);
     if(!s.options&&!s.menu&&s.wheel)add(FrameLayer::wheel);
     if(!s.options&&!s.menu&&s.note)add(FrameLayer::note);

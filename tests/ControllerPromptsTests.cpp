@@ -63,7 +63,7 @@ void TestBadValueIsRefused()
 {
     Reset();
     Require(SetControllerPrompts(2) == 1, "a value other than 0 or 1 is refused");
-    Require(ControllerPromptsEnabled() == 0 && Reports("wanted=none"), "and changes nothing");
+    Require(Reports("wanted=none"), "and changes nothing");
 }
 
 void TestOffWithNothingSetLeavesPreyAlone()
@@ -78,7 +78,7 @@ void TestOnWaitsForFramesThenVerifies()
 {
     Reset();
     gObserver = static_cast<DWORD>(FrameObserverRuntimeStatus::ready);
-    Require(SetControllerPrompts(1) == 0 && ControllerPromptsEnabled() == 1, "on is accepted and reads back");
+    Require(SetControllerPrompts(1) == 0 && Reports("wanted=1"), "on is accepted and reads back");
     ServiceControllerPrompts();
     Require(gQueued.empty(), "nothing is queued before the console drains on observed frames");
     gObserver = static_cast<DWORD>(FrameObserverRuntimeStatus::enabled);
@@ -113,7 +113,7 @@ void TestOffPutsPreysDefaultBack()
     ServiceControllerPrompts();
     Complete(0);
     ServiceControllerPrompts();
-    Require(SetControllerPrompts(0) == 0 && ControllerPromptsEnabled() == 0, "off reads back as off");
+    Require(SetControllerPrompts(0) == 0 && Reports("wanted=0"), "off reads back as off");
     ServiceControllerPrompts();
     Require(gQueued.size() == 2 && gQueued[1] == "hud_forceControllerGlyphs 0", "Prey's default 0 is put back");
     Complete(0);

@@ -69,7 +69,7 @@ bool Send(int event,int x,int y) {
 unsigned UiPointerHand(){return gFault.load()?2:gHand.load();}
 DWORD SetUiPointerHand(unsigned hand){if(hand>2)return ERROR_INVALID_PARAMETER;gHand.store(hand);ClearUiPointer();return 0;}
 void ClearUiPointer(){gClearGeneration.fetch_add(1);gSample.Clear();}
-UiPointerVisual PublishUiPointer(const ui::Surface* surface,unsigned width,unsigned height,unsigned long long reference) {
+UiPointerVisual PublishUiPointer(const ui::Panel* surface,unsigned width,unsigned height,unsigned long long reference) {
     UiPointerVisual visual;
     Sample sample;sample.stamp=MonotonicNanoseconds();sample.reference=reference;sample.generation=gClearGeneration.load();
     TrackingFrame frame;

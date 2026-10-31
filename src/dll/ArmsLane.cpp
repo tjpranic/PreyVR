@@ -27,7 +27,7 @@ void Log(const std::string& line) { lifecycle::Log("preyvr_arms " + line); }
 //
 // Holding the right grip holds the native use/reload button, and holding that
 // is the game's own holster (UnequipWeapon): no weapon, the arms lowered out of
-// view (the IK's arms.free brings them back to the controllers). The game draws
+// view (the IK's free arms bring them back to the controllers). The game draws
 // again on the trigger, which a VR player would expect to fire, so a right-grip
 // press with nothing drawn draws the last weapon: the native Equip, with the
 // gates Funk's body holsters use (BodyEquipment.cpp, EquipmentNative.h).
@@ -253,9 +253,6 @@ bool ExecuteArmsCommand(const std::vector<std::string>& args, std::ostringstream
             Copy(absolute + static_cast<std::uint64_t>(j) * 28, qt, sizeof(qt));
             out << "\n " << j << " " << name << " t=" << qt[4] << "," << qt[5] << "," << qt[6];
         }
-    } else if (verb == "arms.free") {
-        if (args.size() > 1) { SetAnimIkFreeArms(args[1] != "0"); }
-        out << "arms.free result=0" << ArmsReport();
     } else if (verb == "arms.draw") {
         RequestDrawWeapon();
         out << "arms.draw result=0 (requested)";

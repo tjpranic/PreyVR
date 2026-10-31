@@ -135,7 +135,6 @@ using IsVisibleFn = bool(__fastcall*)(void*);
 // on the XR frame service and must not enter Scaleform there -- the same reason
 // `hud.call` is queued -- so the predicate is a value, not a call.
 std::atomic<bool> gMenuOpen{false};
-std::atomic<bool> gInventoryOpen{false};
 std::atomic<unsigned long long> gMenuEpoch{1};
 std::atomic<unsigned long long> gMenuStateSamples{0};
 std::atomic<std::uint64_t> gMenuStamp{0};
@@ -566,7 +565,6 @@ DWORD HudRefreshMenuOpenState()
 
     bool anyVisible = false;
     bool anyAnswered = false;
-    bool pdaVisible = false, otherVisible = false, exclusiveKnown = true;
     unsigned visibleMask = 0;   // kMenuElements bits, for the log below
     for (const char* const& name : kMenuElements) {
         void* const element = ResolveNamedElement(base, name);
@@ -578,16 +576,14 @@ DWORD HudRefreshMenuOpenState()
         constexpr std::uint8_t getterBytes[] = {0x0F, 0xB6, 0x41, 0x70, 0xC3};
         if (ReadPointer(reinterpret_cast<std::uintptr_t>(element)) != base + 0x1CAB358 ||
             isVisible != base + 0x2FD150 || !BytesMatch(
-                reinterpret_cast<const std::uint8_t*>(isVisible), getterBytes, sizeof(getterBytes))) { exclusiveKnown=false; continue; }
+                reinterpret_cast<const std::uint8_t*>(isVisible), getterBytes, sizeof(getterBytes))) { continue; }
         bool ok = false;
         const bool visible = CallIsVisible(isVisible, element, &ok);
-        if (!ok) { exclusiveKnown=false; continue; }
+        if (!ok) { continue; }
         anyAnswered = true;
         if (visible) {
             anyVisible = true;
             visibleMask |= 1u << (&name - kMenuElements);
-            if (std::strcmp(name,"DaniellePDA")==0) pdaVisible=true;
-            else otherVisible=true;
         }
     }
 
@@ -610,7 +606,6 @@ DWORD HudRefreshMenuOpenState()
                 " elements=" + (names.empty() ? "none" : names));
         }
     }
-    gInventoryOpen.store(exclusiveKnown && pdaVisible && !otherVisible, std::memory_order_release);
     gMenuStamp.store(MonotonicNanoseconds(), std::memory_order_release);
     gMenuStateSamples.fetch_add(1, std::memory_order_relaxed);
     return 0;
@@ -651,7 +646,6 @@ DWORD HudDispatchPointer(int event,int x,int y)
 bool HudMenuIsOpen() { return gMenuOpen.load(std::memory_order_acquire); }
 unsigned long long HudMenuEpoch() { return gMenuEpoch.load(std::memory_order_acquire); }
 bool HudMenuStateKnown() { return FreshSample(MonotonicNanoseconds(), gMenuStamp.load()); }
-bool HudInventoryIsOpen() { return HudMenuStateKnown() && gInventoryOpen.load(std::memory_order_acquire); }
 bool HudGameplayShown() { return HudMenuStateKnown() && !HudMenuIsOpen(); }
 bool HudGameplayInputAllowed() { return !VrOptionsInputOwned() && HudGameplayShown(); }
 unsigned long long HudMenuStateSampleCount()

@@ -198,15 +198,14 @@ void HudShapeAndRefusalReasons() {
     CHECK(owner.LastRefusal()==LayerSwapchain::Refusal::session);
 }
 void SizeFloor() {
-    // The slot card (1024x224) is shorter than the inventory floor: refused by
+    // The slot card (1024x224) is shorter than the default floor: refused by
     // default, created and copied with its own floor. Captures of the game's
-    // targets keep the inventory floor.
+    // targets keep the default floor.
     r.formats={DXGI_FORMAT_R8G8B8A8_UNORM_SRGB};
     auto d=Description(1024);d.Height=224;
-    CHECK(!InventoryTextureCompatible(d,d));
-    LayerSwapchain inventory(Api());
-    CHECK(!inventory.Prepare(session,d,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB));Calls({});
-    CHECK(inventory.LastRefusal()==LayerSwapchain::Refusal::source);
+    LayerSwapchain capture(Api());
+    CHECK(!capture.Prepare(session,d,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB));Calls({});
+    CHECK(capture.LastRefusal()==LayerSwapchain::Refusal::source);
     LayerSwapchain card(Api(),1024,224);
     CHECK(card.Prepare(session,d,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB));Calls({"create"});
     auto source=Texture(d,0x80402010);

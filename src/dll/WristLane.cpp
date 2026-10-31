@@ -31,7 +31,6 @@ std::atomic<int> gAlongMm{75}, gHoverMm{42}, gWidthMm{125}, gTiltDeg{40};
 std::atomic<int> gEnterFacing{500}, gExitFacing{220}, gEnterViewing{820}, gExitViewing{620};  // permille
 std::atomic<int> gDwellMs{80};
 std::atomic<unsigned> gForce{0};           // 1: skip the look test (captures from any pose)
-std::atomic<unsigned> gFace{1};            // move the status meters off the face HUD
 std::atomic<unsigned> gNativeScale{400};   // percent of the movie's own scale
 std::atomic<unsigned> gNativeBackground{0}; // the meters' own backdrop/line (0: the glass instead)
 std::atomic<unsigned> gOcclusion{3};       // 1 scene segments, 2 the right hand and its weapon
@@ -268,14 +267,7 @@ bool WristLegacyAnchor() { return gAnchor.load() == 0; }
 void NoteWristGate(unsigned bits) { gGateBits.store(bits, std::memory_order_relaxed); }
 unsigned WristNativeScalePercent() { return gNativeScale.load(); }
 bool WristNativeBackground() { return gNativeBackground.load() != 0; }
-bool WristMovesStatusOffFace() { return gFace.load() != 0 && WristDisplayEnabled(); }
-DWORD SetWristStatusOnHud(unsigned enabled)
-{
-    if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
-    gFace.store(enabled ? 0u : 1u);
-    return 0;
-}
-unsigned WristStatusOnHud() { return gFace.load() ? 0u : 1u; }
+bool WristMovesStatusOffFace() { return WristDisplayEnabled(); }
 DWORD SetWristTick(unsigned enabled)
 {
     if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
@@ -323,13 +315,13 @@ std::string WristReport()
     }
     char b[1024];
     std::snprintf(b, sizeof(b),
-        " enabled=%d anchor=%u place=%d,%d,%d,%d gate=%d,%d,%d,%d dwell=%d force=%u face=%u nativeScale=%u/%u occlusion=%u"
+        " enabled=%d anchor=%u place=%d,%d,%d,%d gate=%d,%d,%d,%d dwell=%d force=%u nativeScale=%u/%u occlusion=%u"
         " | gate=%u eligible=%d arm=%d card=%d alpha=%.2f facing=%.2f viewing=%.2f dist=%.3f tilt=%.1f roll=%.1f speed=%.2f"
         " sceneOcc=%d handOcc=%d | centre=%.4f,%.4f,%.4f axis=%.3f,%.3f,%.3f dorsal=%.3f,%.3f,%.3f"
         " | armLagMs=%.1f published=%llu exact=%llu older=%llu missing=%llu shown=%llu openings=%llu sceneQ=%llu sceneHits=%llu",
         WristDisplayEnabled() ? 1 : 0, gAnchor.load(), gAlongMm.load(), gHoverMm.load(), gWidthMm.load(), gTiltDeg.load(),
         gEnterFacing.load(), gExitFacing.load(), gEnterViewing.load(), gExitViewing.load(), gDwellMs.load(),
-        gForce.load(), gFace.load(), gNativeScale.load(), gNativeBackground.load(), gOcclusion.load(),
+        gForce.load(), gNativeScale.load(), gNativeBackground.load(), gOcclusion.load(),
         gGateBits.load(), l.eligible ? 1 : 0, l.armValid ? 1 : 0, l.cardValid ? 1 : 0, l.alpha, l.view.facing, l.view.viewing,
         l.view.distance, l.tilt, l.roll, l.speed, l.sceneOccluded ? 1 : 0, l.handOccluded ? 1 : 0,
         l.centre.x, l.centre.y, l.centre.z, l.axis.x, l.axis.y, l.axis.z, l.dorsal.x, l.dorsal.y, l.dorsal.z,
@@ -367,9 +359,6 @@ bool ExecuteWristCommand(const std::vector<std::string>& args, std::ostringstrea
     } else if (verb == "wrist.force") {
         if (args.size() > 1) { gForce = num(1, 1) ? 1u : 0u; }
         out << "wrist.force result=0 force=" << gForce.load();
-    } else if (verb == "wrist.face") {
-        if (args.size() > 1) { gFace = num(1, 1) ? 1u : 0u; }
-        out << "wrist.face result=0 face=" << gFace.load();
     } else if (verb == "wrist.native") {
         // wrist.native <scale % of the movie's own> [background 0/1]
         if (args.size() > 1) {

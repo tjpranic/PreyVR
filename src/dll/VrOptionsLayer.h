@@ -25,7 +25,7 @@ public:
         bool active = false;       // placed and drawn: submit `layer`
         bool sessionFault = false; // a swapchain wait or release failed: the session must stop
         XrCompositionLayerQuad layer{XR_TYPE_COMPOSITION_LAYER_QUAD};
-        ui::Surface surface{};     // where the laser meets it
+        ui::Panel surface{};       // where the laser meets it
     };
     // Placed this opening; until then, the next Update anchors it afresh.
     bool Placed() const { return panel_.has_value(); }

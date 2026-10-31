@@ -9,7 +9,7 @@ using namespace preyvr;
 using preyvr::test::Require;
 int main() {
     const auto near=[](float a,float b){return std::abs(a-b)<.0001f;};
-    const ui::Surface flat{{Pose{{},{0,0,-2}},2,1},0};
+    const ui::Panel flat{Pose{{},{0,0,-2}},2,1};
     auto hit=ui::Intersect(flat,Pose{{},{.4f,.2f,0}});
     Require(hit&&hit->inside&&near(hit->u,.7f)&&near(hit->v,.3f)&&near(hit->distance,2),"translated ray maps to exact screen pixels");
     Require(!ui::Intersect(flat,Pose{{0,1,0,0},{}}),"ray pointing away cannot select");
@@ -17,23 +17,18 @@ int main() {
     Require(!ui::Intersect(flat,Pose{{0,.70710678f,0,.70710678f},{}}),"parallel ray rejected");
     hit=ui::Intersect(flat,Pose{{},{1.2f,0,0}});
     Require(hit&&!hit->inside&&hit->u>1,"dragging offscreen must not clamp onto a button");
-    const ui::Surface curved{flat.panel,.6f};
-    const auto axis=ui::CylinderAxis(curved);
-    Require(near(axis.position.z,2/.6f-2),"cylinder axis differs from visible centre by radius");
-    Require(near(ui::SurfacePoint(curved,.5f,.5f).position.z,-2),"curvature preserves centre distance");
     for(float u:{.02f,.25f,.5f,.75f,.98f})for(float v:{.02f,.5f,.98f}) {
-        const float theta=(u-.5f)*.6f,r=2/.6f;
-        const Vec3 target{r*std::sin(theta),.5f-v,r-2-r*std::cos(theta)};
+        const Vec3 target{2*(u-.5f),.5f-v,-2};
         const Vec3 origin{.25f,-.15f,.1f};
         Vec3 d{target.x-origin.x,target.y-origin.y,target.z-origin.z};
         const float len=std::sqrt(d.x*d.x+d.y*d.y+d.z*d.z);d={d.x/len,d.y/len,d.z/len};
         Pose ray{Normalize({d.y,-d.x,0,1-d.z}),origin};
-        auto h=ui::Intersect(curved,ray);
-        Require(h&&h->inside&&near(h->u,u)&&near(h->v,v),"curved intersection agrees with independent surface points");
+        auto h=ui::Intersect(flat,ray);
+        Require(h&&h->inside&&near(h->u,u)&&near(h->v,v),"intersection agrees with independent surface points");
         const Pose room{{0,.4f,0,std::sqrt(.84f)},{10,1,-3}};
-        auto transformed=curved;transformed.panel.pose=Compose(room,curved.panel.pose);
+        auto transformed=flat;transformed.pose=Compose(room,flat.pose);
         h=ui::Intersect(transformed,Compose(room,ray));
-        Require(h&&near(h->u,u)&&near(h->v,v),"recenter and room transforms preserve curved UVs");
+        Require(h&&near(h->u,u)&&near(h->v,v),"recenter and room transforms preserve UVs");
     }
     ui::PointerButtons buttons;
     Require(buttons.Update(true,true,true)==0,"held trigger on menu entry cannot click");
@@ -62,16 +57,13 @@ int main() {
         const auto panel=ui::FitPanel({},eyes,aspect);
         Require(panel && ui::CornersVisible(*panel,eyes),"both eyes must contain every corner");
         Require(std::abs(panel->width/panel->height-aspect)<.0001f,"no aspect distortion");
-        auto s=ui::Surface{*panel,.6f};
-        for(int n=0;n<80&&!ui::SurfaceVisible(s,eyes);++n){s.panel.width*=.95f;s.panel.height*=.95f;}
-        Require(ui::SurfaceVisible(s,eyes),"curved canvas fits both optical frusta");
     }
     // A narrow asymmetric/canted runtime must shrink the panel, never crop it.
-    auto invalidSurface=curved;
-    invalidSurface.panel.width=std::nanf("");
-    Require(!ui::SurfaceVisible(invalidSurface,eyes)&&!ui::Intersect(invalidSurface,{}),"non-finite surface rejected");
-    invalidSurface=curved;invalidSurface.panel.height=INFINITY;
-    Require(!ui::SurfaceVisible(invalidSurface,eyes)&&!ui::Intersect(invalidSurface,{}),"infinite surface rejected");
+    auto invalidSurface=flat;
+    invalidSurface.width=std::nanf("");
+    Require(!ui::CornersVisible(invalidSurface,eyes)&&!ui::Intersect(invalidSurface,{}),"non-finite surface rejected");
+    invalidSurface=flat;invalidSurface.height=INFINITY;
+    Require(!ui::CornersVisible(invalidSurface,eyes)&&!ui::Intersect(invalidSurface,{}),"infinite surface rejected");
     eyes[0].right=.2f; eyes[1].left=-.23f;
     eyes[0].pose.orientation={0,.05f,0,std::sqrt(1-.05f*.05f)};
     auto narrow=ui::FitPanel({},eyes,16.f/9);
@@ -131,15 +123,16 @@ int main() {
     // about 130 and read that as its maximum. It is not: FitPanel shrinks the
     // panel in 0.95 steps until it sits inside `margin` of the frustum the
     // runtime reports, so once that binds, every further increase in scale is
-    // shrunk straight back off. These eyes reproduce it -- a 40-degree vertical
-    // half-angle, which is the bound that binds at a portrait render aspect.
+    // shrunk straight back off. These eyes reproduce it at the 0.72 the panels
+    // then had -- a 40-degree vertical half-angle, which is the bound that binds
+    // at a portrait render aspect.
     std::array<ui::Eye,2> tight{};
     for(int e=0;e<2;++e){tight[e].pose={{0,0,0,1},{e?.032f:-.032f,0,0}};
         tight[e].left=-.9f;tight[e].right=.9f;tight[e].up=.7f;tight[e].down=-.7f;}
     const float portrait=2688.f/2880;
 
-    auto s18=ui::FitPanel({},tight,portrait,2.0f,1.8f);
-    auto s20=ui::FitPanel({},tight,portrait,2.0f,2.0f);
+    auto s18=ui::FitPanel({},tight,portrait,2.0f,1.8f,.72f);
+    auto s20=ui::FitPanel({},tight,portrait,2.0f,2.0f,.72f);
     Require(s18&&s20,"both scales fit once shrunk");
     // Asking for 11 percent more delivers under 1 percent: the defect itself.
     Require(s20->height/s18->height<1.01f,
@@ -154,9 +147,11 @@ int main() {
 
     // The default must stay the default: passing it explicitly changes nothing.
     auto implicitM=ui::FitPanel({},tight,portrait,2.0f,2.0f);
-    auto explicitM=ui::FitPanel({},tight,portrait,2.0f,2.0f,ui::kDefaultFitMargin);
+    auto explicitM=ui::FitPanel({},tight,portrait,2.0f,2.0f,1.f);
     Require(implicitM&&explicitM&&
-        std::abs(implicitM->height-explicitM->height)<.0001f,"0.72 is the default margin");
+        std::abs(implicitM->height-explicitM->height)<.0001f,"the whole frustum is the default margin");
+    auto scaleOne=ui::FitPanel({},tight,portrait);
+    Require(scaleOne&&std::abs(implicitM->height-scaleOne->height*2)<.0001f,"so there the scale alone sizes a panel");
 
     // Clamped at both ends rather than refused, so a fat-fingered value degrades
     // to the nearest sane panel -- but a non-finite one is refused outright,
@@ -169,7 +164,6 @@ int main() {
     Require(underM&&floorM&&std::abs(underM->height-floorM->height)<.0001f,"margin clamped at 0.3");
     Require(!ui::FitPanel({},tight,portrait,2.0f,2.0f,std::nanf("")),"a non-finite margin is refused");
     Require(!ui::CornersVisible(*atOneM,tight,std::nanf("")),"and refused by the corner test");
-    Require(!ui::SurfaceVisible({*atOneM,0},tight,std::nanf("")),"and by the surface test");
 
     // A tighter margin must never admit what a looser one rejects.
     for(float m:{.3f,.5f,.72f,.9f,1.f}) {
@@ -280,11 +274,6 @@ int main() {
     Require((toRight.position.x-ahead->pose.position.x)*rightOfFace.x+
             (toRight.position.z-ahead->pose.position.z)*rightOfFace.z>0,"positive x is the wearer's right");
     Require(ui::AroundHead(upright,ahead->pose,.2f,-.3f).position.y<1.6f,"negative y is below eye level");
-    // The guide card rides with the menu: both offsets keep their spacing.
-    const Pose above=Compose(ahead->pose,Pose{{},{0,.3f,0}});
-    const auto a=ui::AroundHead(upright,ahead->pose,.6f,.4f),b=ui::AroundHead(upright,above,.6f,.4f);
-    const float gx=b.position.x-a.position.x,gy=b.position.y-a.position.y,gz=b.position.z-a.position.z;
-    Require(near(std::sqrt(gx*gx+gy*gy+gz*gz),.3f),"a stacked card keeps its place beside the menu");
     const auto kept=ui::AroundHead(upright,ahead->pose,std::nanf(""),0);
     Require(near(kept.position.z,ahead->pose.position.z),"a non-finite offset leaves the menu where it was");
     const Pose lost{{std::nanf(""),0,0,1},{}};
@@ -316,7 +305,7 @@ int main() {
 
         // Placed straight ahead of the gaze, tilted back to face the eyes, edges level.
         const auto opened=ui::AnchorPopup(reading,eyesOf(reading,plain));
-        const auto note=ui::PlacePopup(opened,16.f/9,1.4f,1.f,ui::kDefaultFitMargin);
+        const auto note=ui::PlacePopup(opened,16.f/9,1.4f,1.f);
         Require(note.has_value(),"a popup is placed from its anchor");
         const auto f=forwardOf(gaze);
         Require(near(note->pose.position.x,.3f+f.x*1.4f)&&near(note->pose.position.y,1.6f+f.y*1.4f)&&
@@ -324,7 +313,7 @@ int main() {
         const auto normal=Rotate(note->pose.orientation,{0,0,1});
         Require(near(normal.x,-f.x)&&near(normal.y,-f.y)&&near(normal.z,-f.z),"facing the eyes square-on");
         Require(near(Rotate(note->pose.orientation,{1,0,0}).y,0),"its edges level");
-        Require(ui::PlacePopup(ui::AnchorPopup(tilted,eyesOf(tilted,plain)),16.f/9,1.4f,1.f,ui::kDefaultFitMargin).has_value(),
+        Require(ui::PlacePopup(ui::AnchorPopup(tilted,eyesOf(tilted,plain)),16.f/9,1.4f,1.f).has_value(),
             "opened looking steeply down and rolled, it still fits: the eyes are carried with the gaze");
 
         // Held where it opened: turning the head does not carry it.
@@ -337,7 +326,7 @@ int main() {
         const auto* turning=hold.Update(true,1011*ms,turnedAway,eyesOf(turnedAway,plain),2);
         Require(turning&&near(yawOf(turning->gaze),yaw)&&near(pitchOf(turning->gaze),-.3f),
             "turning the head while it is up leaves it where it opened");
-        const auto placedAgain=ui::PlacePopup(*turning,16.f/9,1.4f,1.f,ui::kDefaultFitMargin);
+        const auto placedAgain=ui::PlacePopup(*turning,16.f/9,1.4f,1.f);
         Require(placedAgain&&near(placedAgain->pose.position.x,note->pose.position.x)&&
             near(placedAgain->pose.position.z,note->pose.position.z),"re-placed every frame, it stays still");
         Require(!hold.Update(false,1200*ms,turnedAway,eyesOf(turnedAway,plain),2)&&hold.Held(),
@@ -409,21 +398,20 @@ int main() {
     over.wrist=over.slot=over.fade=true;
     Require(is(ui::ComposeFrame(over),{L::world,L::options,L::beam,L::cursor,L::wrist,L::slot,L::fade}),
         "the wrist, slot and fade are their callers' to gate: what is shown is drawn");
-    ui::FrameShown menu;menu.menu=menu.menuCylinder=menu.menuRightEye=menu.guide=menu.beam=menu.cursor=true;
-    Require(is(ui::ComposeFrame(menu),{L::menuCylinder,L::menuRightEye,L::guide,L::beam,L::cursor}),
-        "a curved game menu with its right eye and guide card, under the laser");
+    ui::FrameShown menu;menu.menu=menu.beam=menu.cursor=true;
+    Require(is(ui::ComposeFrame(menu),{L::menu,L::beam,L::cursor}),"a game menu, under the laser");
     auto options=menu;options.options=true;
-    Require(is(ui::ComposeFrame(options),{L::menuCylinder,L::menuRightEye,L::guide,L::options,L::beam,L::cursor}),
-        "VR Options over a game menu: the whole menu stays under it");
-    ui::FrameShown flatMenu;
-    flatMenu.menu=flatMenu.options=flatMenu.hud=flatMenu.reticle=flatMenu.wheel=flatMenu.note=flatMenu.text=true;
-    Require(is(ui::ComposeFrame(flatMenu),{L::menu,L::options}),
-        "a flat game menu is the quad, VR Options over it, no HUD, wheel, note or text");
+    Require(is(ui::ComposeFrame(options),{L::menu,L::options,L::beam,L::cursor}),
+        "VR Options over a game menu: the menu stays under it");
+    ui::FrameShown overMenu;
+    overMenu.menu=overMenu.options=overMenu.hud=overMenu.reticle=overMenu.wheel=overMenu.note=overMenu.text=true;
+    Require(is(ui::ComposeFrame(overMenu),{L::menu,L::options}),
+        "VR Options over a game menu, no HUD, wheel, note or text");
     ui::FrameShown everything;
-    everything.menuRightEye=everything.guide=everything.hud=everything.text=true;
+    everything.hud=everything.text=true;
     everything.beam=everything.cursor=everything.wrist=everything.slot=everything.fade=true;
     Require(is(ui::ComposeFrame(everything),{L::world,L::hud,L::text,L::beam,L::cursor,L::wrist,L::slot,L::fade}),
-        "the menu's right eye and guide card never show over the world");
+        "with no menu up, the world under everything shown");
 
     // **VR Options dragged by the laser**, round the inside of a cylinder about the head.
     {
@@ -445,7 +433,7 @@ int main() {
         const float dx=spot.x-hand.x,dy=spot.y-hand.y,dz=spot.z-hand.z;
         const float laserYaw=std::atan2(-dx,-dz),laserPitch=std::asin(dy/std::sqrt(dx*dx+dy*dy+dz*dz));
         const auto laser=aim(hand,laserYaw,laserPitch);
-        const auto panelHit=ui::Intersect(ui::Surface{start,0},laser);
+        const auto panelHit=ui::Intersect(start,laser);
         Require(panelHit&&panelHit->inside,"premise: the laser is on the panel, right of and above its centre");
         const auto grab=ui::GrabPanel(start,*panelHit,head);
         Require(grab&&close(grab->x,.3f)&&close(grab->y,.2f)&&close(grab->radius,across(spot,head)),
@@ -517,33 +505,27 @@ int main() {
             Require(near(untouched.pose.position.z,-3)&&near(untouched.width,1.2f),"a non-positive or non-finite ratio changes nothing");
         }
         // Along every ray from the anchor through the VR Options panel that meets
-        // the game menu, the menu is further: the smallest (menu / panel) depth.
+        // the game menu, the menu is further, by the ratio, at every distance and size.
         const Pose head{about(0,1,0,yaw),{.3f,1.6f,-.2f}};
         const auto seen=ui::AnchorMenu(head,eyesOf(head,plain));
         const auto from=seen.upright.position;
-        const auto clearance=[&](float distance,float curve,float scale,float ratio){
-            const auto menu=ui::PlaceMenu(seen,16.f/9,distance,scale,ui::kDefaultFitMargin,0,0);
+        for(float distance:{1.f,2.f,3.f,4.f})for(float scale:{.2f,.4f,.6f,.75f,.8f,1.f,1.4f,2.f}) {
+            const auto game=ui::PlaceMenu(seen,16.f/9,distance,scale,ui::kDefaultFitMargin,0,0);
             const auto fitted=ui::PlaceMenu(seen,1400.f/1100,distance,1,.68f,0,0);
-            Require(menu&&fitted,"both panels are placed");
-            const ui::Surface options{ui::ScaleAbout(*fitted,from,ratio),0},game{*menu,curve};
-            float least=1e9f;
+            Require(game&&fitted,"both panels are placed");
+            const auto panel=ui::ScaleAbout(*fitted,from,ui::kOptionsDepthRatio);
+            bool overlaps=false;
             for(int i=0;i<=24;++i)for(int j=0;j<=24;++j) {
-                const auto p=ui::SurfacePoint(options,i/24.f,j/24.f).position;
+                const auto p=ui::SurfacePoint(panel,i/24.f,j/24.f).position;
                 Vec3 d{p.x-from.x,p.y-from.y,p.z-from.z};
                 const float depth=std::sqrt(d.x*d.x+d.y*d.y+d.z*d.z);d={d.x/depth,d.y/depth,d.z/depth};
-                const auto h=ui::Intersect(game,Pose{Normalize({d.y,-d.x,0,1-d.z}),from});
-                if(h&&h->inside)least=std::min(least,h->distance/depth);
+                const auto h=ui::Intersect(*game,Pose{Normalize({d.y,-d.x,0,1-d.z}),from});
+                if(!h||!h->inside)continue;
+                overlaps=true;
+                Require(std::abs(h->distance/depth-1/ui::kOptionsDepthRatio)<.001f,"the panel stands in front of the menu");
             }
-            Require(least<1e9f,"the panel overlaps the menu");
-            return least;
-        };
-        Require(clearance(2,35*.01745329f,1,1)<1,"premise: at the menu's own depth, its curve comes in front of the panel");
-        Require(clearance(2,35*.01745329f,1,ui::kOptionsDepthRatio)>1.08f,
-            "at the default distance, curve and size, the panel is well in front");
-        for(float distance:{1.f,2.f,3.f,4.f})for(float degrees:{0.f,15.f,35.f,60.f})
-            for(float scale:{.2f,.4f,.6f,.75f,.8f,1.f,1.4f,2.f})
-                Require(clearance(distance,degrees*.01745329f,scale,ui::kOptionsDepthRatio)>1.04f,
-                    "in front at every distance, curve and size the settings allow");
+            Require(overlaps,"the panel overlaps the menu");
+        }
     }
 
     // **The laser's quads** (ui::PointerQuadsFor), as both Prey's frames and hold frames draw them.
@@ -585,60 +567,8 @@ int main() {
         for(float out=0;out<1;out+=.01f)Require(ui::LaserFade(out+.01f)<=ui::LaserFade(out)+1e-6f,"it only fades going out");
     }
 
-    // --- the menu stack, the panel decision and the fade (XrSessionHost's) ---
+    // --- the panel decision and the fade (XrSessionHost's) ---
     {
-        std::array<ui::Eye,2> view{};
-        for(int e=0;e<2;++e){view[e].pose={{0,0,0,1},{e?.032f:-.032f,0,0}};
-            view[e].left=-1;view[e].right=1;view[e].up=.9f;view[e].down=-.9f;}
-        constexpr float guideRatio=270.f/1024,gapRatio=.015f,aspect=16.f/9;
-        const auto identical=[](const ui::Panel& a,const ui::Panel& b){
-            return a.width==b.width&&a.height==b.height&&a.pose.position.x==b.pose.position.x&&
-                a.pose.position.y==b.pose.position.y&&a.pose.position.z==b.pose.position.z&&
-                a.pose.orientation.x==b.pose.orientation.x&&a.pose.orientation.y==b.pose.orientation.y&&
-                a.pose.orientation.z==b.pose.orientation.z&&a.pose.orientation.w==b.pose.orientation.w;};
-        // The loop as PlaceMenuPanels had it, for the bit-for-bit comparison.
-        const auto before=[&](ui::Panel layout,bool wantGuide,float curve,float margin,
-                              std::optional<ui::Panel>& menuOut,std::optional<ui::Panel>& guideOut){
-            for(int attempt=0;attempt<80;++attempt) {
-                auto menu=layout,guide=layout;
-                menu.height=menu.width/aspect;
-                guide.height=guide.width*guideRatio;
-                const float gap=menu.width*gapRatio;
-                if(wantGuide) {
-                    menu.pose=Compose(layout.pose,Pose{{},{0,(guide.height+gap)*.5f,0}});
-                    guide.pose=Compose(layout.pose,Pose{{},{0,-(menu.height+gap)*.5f,0}});
-                } else menu.pose=layout.pose;
-                if(ui::SurfaceVisible({menu,curve},view,margin)&&(!wantGuide||ui::SurfaceVisible({guide,0},view,margin))) {
-                    menuOut=menu;if(wantGuide)guideOut=guide;return;
-                }
-                layout.width*=.95f;layout.height*=.95f;
-            }
-        };
-        const Pose turned{{0,.2f,0,std::sqrt(.96f)},{.3f,-.1f,.2f}};
-        for(const bool wantGuide:{false,true})for(const float curve:{0.f,.6f})for(const float width:{.5f,3.f,9.f,1e6f}){
-            const ui::Panel layout{Compose(turned,Pose{{},{0,0,-2}}),width,width/aspect};
-            const auto stack=ui::FitMenuStack(layout,aspect,guideRatio,gapRatio,wantGuide,curve,view,ui::kDefaultFitMargin);
-            std::optional<ui::Panel> oldMenu,oldGuide;
-            before(layout,wantGuide,curve,ui::kDefaultFitMargin,oldMenu,oldGuide);
-            Require(stack.has_value()==oldMenu.has_value()&&(!stack||(identical(stack->menu,*oldMenu)&&
-                    stack->guide.has_value()==oldGuide.has_value()&&(!oldGuide||identical(*stack->guide,*oldGuide)))),
-                    "the menu stack is the loop it replaced, bit for bit");
-            if(width==1e6f)Require(!stack,"nothing fits after 80 shrinks");
-            if(!stack)continue;
-            Require(stack->guide.has_value()==wantGuide,"the card only with the guide on");
-            Require(stack->menu.height==stack->menu.width/aspect,"the menu at its own aspect");
-            if(width==9.f)Require(stack->menu.width<9.f,"an oversized stack shrinks until it is seen");
-            if(width==.5f)Require(stack->menu.width==.5f,"a stack that is seen keeps its size");
-            if(wantGuide){
-                const auto up=Rotate(turned.orientation,{0,1,0});
-                const auto d=Vec3{stack->menu.pose.position.x-stack->guide->pose.position.x,
-                    stack->menu.pose.position.y-stack->guide->pose.position.y,stack->menu.pose.position.z-stack->guide->pose.position.z};
-                const float apart=(stack->menu.height+stack->guide->height)*.5f+stack->menu.width*gapRatio;
-                Require(near(d.x,up.x*apart)&&near(d.y,up.y*apart)&&near(d.z,up.z*apart),
-                        "the card sits under the menu, a gap apart, in the layout's own up");
-            } else Require(identical(ui::Panel{layout.pose,stack->menu.width,stack->menu.height},stack->menu),
-                           "without the card the menu sits where the layout is");
-        }
         // ui.panel: 0 never, 2 always, 1 with a game menu -- the last answer while its state is unknown.
         for(unsigned mode=0;mode<4;++mode)for(int bits=0;bits<16;++bits){
             const bool views=(bits&1)!=0,known=(bits&2)!=0,open=(bits&4)!=0,was=(bits&8)!=0;
@@ -660,5 +590,5 @@ int main() {
         Require(ui::StepFade(fade,1500000000,true)==0&&fade.time==1500000000,"time going back takes the new time, no step");
     }
 
-    std::cout<<"UI panel geometry, frame layers, panel dragging, laser quads, the menu stack and the fade passed\n";
+    std::cout<<"UI panel geometry, frame layers, panel dragging, laser quads and the fade passed\n";
 }

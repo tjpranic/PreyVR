@@ -34,8 +34,6 @@ LayerSwapchainApi SessionSwapchainApi();
 inline constexpr UINT kLayerMinWidth=640,kLayerMinHeight=480;
 // The largest texture side any layer, capture or panel accepts.
 inline constexpr UINT kMaxLayerExtent=8192;
-bool InventoryTextureCompatible(const D3D11_TEXTURE2D_DESC& a,
-                                const D3D11_TEXTURE2D_DESC& b);
 class LayerSwapchain {
 public:
     enum class Upload { ready, failed, sessionFault };

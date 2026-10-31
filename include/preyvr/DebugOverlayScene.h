@@ -29,17 +29,19 @@ enum Layer : unsigned {
     kHits = 1u << 7,      // scene queries along each ray (otherwise rays end at a fixed range)
     kPhysical = 1u << 8,  // the physical-contact sweep: weapon box, swept paths, last contact
     kArms = 1u << 9,      // the arms against the drawn torso: its capsules, each arm's samples by clearance
+    kShots = 1u << 10,    // the last shot, from where it left to where it was sent
 };
-inline constexpr unsigned kAllLayers = 0x3FFu;
+inline constexpr unsigned kAllLayers = 0x7FFu;
 // **The aim lasers** (VR Options "Aim lasers"): each hand's ray to what it
 // points at, ended on the scene -- what the game drew in every session from
 // 2026-10-06 to 10-13, a player's aid rather than a test's.
 inline constexpr unsigned kLaserLayers = kRays | kHits;
-// What is drawn: the debug layers (`dbg.draw`, the VR Options debug row) and
-// the lasers, each switched on its own, so one's "off" never takes the other.
-inline constexpr unsigned DrawnLayers(unsigned debugLayers, bool lasers)
+// What is drawn: the debug layers (`dbg.draw`, the VR Options debug row), the
+// lasers and the shot trail (VR Options "Shot trail"), each switched on its own,
+// so one's "off" never takes another.
+inline constexpr unsigned DrawnLayers(unsigned debugLayers, bool lasers, bool shotTrail)
 {
-    return (debugLayers & kAllLayers) | (lasers ? kLaserLayers : 0u);
+    return (debugLayers & kAllLayers) | (lasers ? kLaserLayers : 0u) | (shotTrail ? kShots : 0u);
 }
 
 // Colours, shared with documentation: amber = right, cyan = left, violet = psi.

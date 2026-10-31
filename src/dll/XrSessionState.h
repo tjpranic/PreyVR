@@ -30,7 +30,6 @@
 #include "HeadTrackingHook.h"
 #include "XrInput.h"
 #include "UiMode.h"
-#include "UiGuide.h"
 #include "UiPointer.h"
 #include "HudLayer.h"
 #include "LayerSwapchain.h"
@@ -116,10 +115,6 @@ inline std::atomic<unsigned int> gUiPanelMode{0};
 
 inline std::atomic<unsigned long long> gUiPanelFrames{0};
 
-inline std::atomic<unsigned long long> gInventoryLayerFrames{0};
-
-inline std::atomic<unsigned int> gUiCurveDegrees{35};
-
 inline std::atomic<float> gRuntimeIpd{0};
 
 inline std::atomic<XrReferenceSpaceType> gTrackingSpaceType{XR_REFERENCE_SPACE_TYPE_MAX_ENUM};
@@ -186,9 +181,8 @@ struct FrameLayerSet {
     ui::FrameShown shown{};
     XrCompositionLayerProjectionView views[2]{};
     XrCompositionLayerProjection world{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
-    XrCompositionLayerCylinderKHR menuCylinder{XR_TYPE_COMPOSITION_LAYER_CYLINDER_KHR};
-    XrCompositionLayerQuad menu{XR_TYPE_COMPOSITION_LAYER_QUAD}, menuRightEye{XR_TYPE_COMPOSITION_LAYER_QUAD},
-        guide{XR_TYPE_COMPOSITION_LAYER_QUAD}, hud{XR_TYPE_COMPOSITION_LAYER_QUAD}, reticle{XR_TYPE_COMPOSITION_LAYER_QUAD},
+    XrCompositionLayerQuad menu{XR_TYPE_COMPOSITION_LAYER_QUAD},
+        hud{XR_TYPE_COMPOSITION_LAYER_QUAD}, reticle{XR_TYPE_COMPOSITION_LAYER_QUAD},
         wheel{XR_TYPE_COMPOSITION_LAYER_QUAD}, note{XR_TYPE_COMPOSITION_LAYER_QUAD}, text{XR_TYPE_COMPOSITION_LAYER_QUAD},
         options{XR_TYPE_COMPOSITION_LAYER_QUAD}, beam{XR_TYPE_COMPOSITION_LAYER_QUAD}, cursor{XR_TYPE_COMPOSITION_LAYER_QUAD},
         wrist{XR_TYPE_COMPOSITION_LAYER_QUAD}, slot{XR_TYPE_COMPOSITION_LAYER_QUAD}, fade{XR_TYPE_COMPOSITION_LAYER_QUAD};
@@ -207,9 +201,6 @@ private:
         switch(which) {
         case ui::FrameLayer::world:return as(world);
         case ui::FrameLayer::menu:return as(menu);
-        case ui::FrameLayer::menuCylinder:return as(menuCylinder);
-        case ui::FrameLayer::menuRightEye:return as(menuRightEye);
-        case ui::FrameLayer::guide:return as(guide);
         case ui::FrameLayer::hud:return as(hud);
         case ui::FrameLayer::reticle:return as(reticle);
         case ui::FrameLayer::wheel:return as(wheel);
@@ -229,7 +220,7 @@ private:
 // Where the laser points: the surface it is tested against and its cursor drawn
 // on. VR Options' while it is up, else the game menu's. Kept with the held frame
 // so a hold frame points where Prey's frame did.
-struct HeldPointer { bool active=false; ui::Surface surface{}; };
+struct HeldPointer { bool active=false; ui::Panel surface{}; };
 
 struct Host {
     XrInstance instance = XR_NULL_HANDLE;
@@ -244,9 +235,8 @@ struct Host {
     std::vector<XrEventDataReferenceSpaceChangePending> spaceChanges;
     XrSwapchain swapchain = XR_NULL_HANDLE;
     DXGI_FORMAT colorFormat = DXGI_FORMAT_UNKNOWN;
-    XrSwapchain guideSwapchain = XR_NULL_HANDLE;
     XrSwapchain pointerSwapchain = XR_NULL_HANDLE;
-    bool pointerReady=false,pointerAttempted=false,cylinderSupported=false;
+    bool pointerReady=false,pointerAttempted=false;
     std::unique_ptr<LayerSwapchain> hudSwapchain;
     bool hudSwapchainLogged=false;
     // The text panel: subtitle and tutorial movies, lifted out of the scene
@@ -272,8 +262,6 @@ struct Host {
     ID3D11Texture2D* heldTargetImage=nullptr;
     DXGI_FORMAT heldTargetFormat=DXGI_FORMAT_UNKNOWN;
     std::uintptr_t heldBackBuffer=0;
-    std::unique_ptr<LayerSwapchain> inventorySwapchain;
-    std::unique_ptr<LayerSwapchain> inventoryRightSwapchain;
     VrOptionsLayer optionsLayer; // the VR Options panel: placed, dragged and drawn (XR frame thread)
     std::unique_ptr<LayerSwapchain> wristSwapchain;
     std::unique_ptr<NativeWristTexture> wristFitter;
@@ -295,7 +283,6 @@ struct Host {
     PaintedLayer fadeImage{"fade_swapchain",kFadeWidth,kFadeHeight};
     int fadePainted=-1;
     ui::Fade fade{};
-    bool guideReady = false, guideAttempted = false;
     std::vector<ID3D11Texture2D*> images;
 
     ID3D11Device* device = nullptr;   // Prey's, borrowed -- never released here
@@ -320,11 +307,9 @@ struct Host {
     bool sessionBegun = false;
     bool started = false;
     std::optional<ui::Panel> menuPanel;
-    std::optional<ui::Panel> guidePanel;
     unsigned long long panelReference = 0;
     unsigned long long panelSettingsGeneration = 0;
     bool panelWasActive = false;
-    float panelAngle=0;
     unsigned long long surfaceSerial=0;
 
     // Stereo submission: one held image per eye.
@@ -496,32 +481,6 @@ inline std::atomic<int> gUiOffsetRight{0},gUiOffsetUp{0};
 // thread under gMutex; touching their optionals from a setter is a data race.
 inline std::atomic<unsigned long long> gPanelSettingsGeneration{0};
 
-// **The two things that actually cap panel size, both reported as `ui.scale`
-// doing nothing above ~130.**
-//
-// gUiFitMargin: the fraction of the reported frustum a panel must stay inside.
-// Once it binds, the fit loops shrink away every further increase in scale, so
-// the dial appears to have a maximum it does not have. See kDefaultFitMargin.
-//
-// gUiGuide: the instruction card stacked under the menu. It is ours, added for
-// onboarding -- not a native Prey element -- and it is charged to the same
-// vertical budget, so the menu above it is roughly a sixth smaller than it
-// would be alone.
-//
-// **Off by default from 2026-09-11**, at the wearer's request after measuring
-// what it costs: the card is read once and then paid for on every menu, and a
-// wearer who already knows the controls was giving up a sixth of the panel to
-// keep it. `ui.guide 1` brings it back for the session, and the VR Options
-// menu's CONTROLS GUIDE (ui_guide) brings it back for good -- which is what to
-// set when handing the package to someone who has not seen the controls before.
-inline std::atomic<unsigned int> gUiFitMarginPercent{72};
-
-inline std::atomic<bool> gUiGuide{false};
-
-inline float UiFitMargin() {
-    return static_cast<float>(gUiFitMarginPercent.load(std::memory_order_relaxed))*.01f;
-}
-
 // The runtime's OWN display period, from XrFrameState, reported beside the
 // configured budget so nobody has to assume the two agree. `xr.timing 1 90`
 // configures 11111 us; if the runtime is at 72 Hz that budget is simply wrong,
@@ -585,12 +544,12 @@ bool SubmitStereoPair(
 void EnsurePointerTexture();
 std::array<ui::Eye,2> OpticalEyes(const XrView (&views)[2]);
 const ui::MenuAnchor& MenuAnchorFor(const Pose& head, const XrView (&views)[2], std::uint64_t reference);
-void FillPointerLayers(const UiPointerVisual& pointer, const ui::Surface& surface, const Vec3& head,
+void FillPointerLayers(const UiPointerVisual& pointer, const ui::Panel& surface, const Vec3& head,
                        XrCompositionLayerQuad& cursor, XrCompositionLayerQuad& beam, bool& cursorActive, bool& beamActive);
-bool MenuPanelsStale(float curve, unsigned long long reference);
-void PlaceMenuPanels(const Pose& head, const XrView (&views)[2], unsigned long long reference, float curve);
-void FillMenuLayers(XrCompositionLayerQuad& quad, XrCompositionLayerCylinderKHR& cylinder, const ui::Surface& surface,
-                    XrSwapchain swapchain, XrCompositionLayerFlags flags);
+bool MenuPanelStale(unsigned long long reference);
+void PlaceMenuPanel(const Pose& head, const XrView (&views)[2], unsigned long long reference);
+void FillMenuLayer(XrCompositionLayerQuad& quad, const ui::Panel& panel, XrSwapchain swapchain,
+                   XrCompositionLayerFlags flags);
 // XrOverlayLayers.cpp
 bool BuildHudLayer(const FrameView& view, ID3D11Texture2D* hudTexture, XrCompositionLayerQuad& layer, float& panelWidth);
 bool BuildReticleLayer(const FrameView& view, const HudPartImage& image, const ReticleTarget* target,

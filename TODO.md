@@ -6,6 +6,8 @@
 - DLSS (?)
 - Upscaling (?)
 - Foveated rendering (?)
+- Temporal AA seems to have a strange astigmatism; one eye (right) is sharper than the other
+    Looks like an environmental reflection texturing issue, possibly a depth issue.
 
 ### UX/Immersion
 - Rotate to face direction (?)
@@ -35,6 +37,10 @@
 - The Earth and Moon are very obviously rendered way too close
     Having them rendered at a more realisitic depth would be nice but challenging.
     Technically everything is working game wise, it would just be an improvement.
+- Can't grab when two-handing weapons
+    Grabs are only allowed with the left hand, will need to rethink how this works
+- Remove Q-Beam equip animation (?)
+- Body IK seems to cause the body to twist a bit when leaning down
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -58,30 +64,20 @@
 - Psi energy shows on wrist before installing first neuromod
 - Some UI elements still only display at the periphery of vision
     It makes them hard to see. They need to be moved a little closer in.
-- Left hand laser doesn't hit at surface of objects unlike the right hand aim laser
+- Left hand laser doesn't hit at surface of objects unlike the right hand aim laser (?)
     Only sometimes? This might be intentional? Will need to investigate.
 - Disable aim laser on loading screen
 - Will need to adjust UI element depths
 - 2D marker (objective, repair etc.) position jitter a lot
     They need some smoothing
+- Psychoscope zoom is broken
 
 ### VR Options Menu
 - Have bindings section let you change your bindings
 - Group related options in the tabs into sections
-- Audit every option and rework and/or remove and/or consolidate as many as needed
-    Audit findings:
-    - Comfort should be renamed to Movement
-    - The arms length option doesn't affect the whole arm, just the forearm
-    - Having the support hand option set to Free is pointless as far as I can tell, it should be removed and Snapped should be the default
-    - Hands Without a Weapon should be removed and always on
-    - Need to add an option to auto-snap when in range
-    - Aim lasers causes a ray to be drawn when firing a weapon
-    - Can't grab when two-handing weapons
-        Grabs are only allowed with the left hand, will need to rethink how this works
-    - Setup tab should be first
-    - ...
 - Development tab
     This tab will be used to run input tuning commands because sending commands through the "Tune Prey VR.cmd" script is way too annoying to use properly.
+- The arms length option doesn't affect the whole arm, just the forearm
 
 ## IN PROGRESS
 
@@ -157,8 +153,6 @@
 - The player body renders over the top of everything
     > Prey drew the body, arms and weapon in its near pass, which is always in front of the world. PreyVR-91/92 drew the body in the world instead, which left the stun gun's charge sparks showing through the gun and its charge meter frozen. Since PreyVR-101 the body stays in the near pass and that pass gets the world's depth (`body.depth 1`; the old way is `body.depth 2`), so the weapon's effects, its display and the PDA stay with it. Setup's Near Clip Distance (3 cm) stops the view cutting into the body when you look down. Worn OK 2026-10-25 and 2026-10-28. See docs/BODY-FOLLOW.md, "How the body is drawn".
 - Temporal anti-aliasing
-- Temporal AA seems to have a strange astigmatism; one eye is sharper than the other
-    Looks like an environmental reflection texturing issue
 
 ---
 

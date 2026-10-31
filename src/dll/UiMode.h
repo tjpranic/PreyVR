@@ -20,8 +20,6 @@ namespace preyvr::dll {
 
 bool HudMenuIsOpen();
 bool HudMenuStateKnown();
-// PDA is visible without another known modal screen/dialog covering it.
-bool HudInventoryIsOpen();
 unsigned long long HudMenuEpoch();
 // The game is showing gameplay: the menu state is known and no native menu is
 // up. What the HUD, text and note captures gate on (HudLayer). Unlike the input

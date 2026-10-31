@@ -15,7 +15,6 @@
 #include "preyvr/EngineMap.h"
 #include "preyvr/LatestSnapshot.h"
 #include "preyvr/UiPanel.h"
-#include "preyvr/InventoryDepth.h"
 #include "preyvr/NativeHudIsolation.h"
 #include "preyvr/StereoCamera.h"
 #include "NativeHudValue.h"
@@ -42,39 +41,19 @@ SetTargets originalTargets=nullptr;
 std::mutex installMutex;
 bool installed=false;
 std::atomic<bool> enabled{false};
-// Opt-in pending headset acceptance. Redirection consumes the movie's native
-// draw, so it also requires a live, compatible swapchain consumer lease.
-std::atomic<bool> inventoryCapture{false};
-struct InventoryConsumer {D3D11_TEXTURE2D_DESC description{};std::uint64_t stamp=0;
-    float panelWidth=0,eyeSeparation=0;bool stereo=false;};
-LatestSnapshot<InventoryConsumer> inventoryConsumer;
 std::atomic<unsigned long long> refused{0};
 
-// **Generalised by purpose, not by widening a name check.**
-//
-// This captured only DanielleHUD, and only while gameplay input was allowed --
-// which is precisely when the inventory is NOT up, so the inventory could never
-// be extracted (INVENTORY-HOLOGRAM-READINESS-2026-09-11, "Already available").
-// The two movies want opposite gates and must not share a texture, so identity,
-// target lifetime and capture freshness are kept separate per movie rather than
-// one being made to stand in for the other.
-enum class Movie:unsigned {hud=0,pda=1};
-constexpr unsigned kMovies=2;
-constexpr const char* kMovieNames[kMovies]={"DanielleHUD","DaniellePDA"};
+constexpr const char* kHudMovie="DanielleHUD";
 
 struct Identity {std::uintptr_t proxy=0;std::uint64_t stamp=0;};
 struct Presentation {float width=0,height=0,distance=2;bool active=false;std::uint64_t stamp=0;};
-LatestSnapshot<Identity> seen[kMovies];
+LatestSnapshot<Identity> seenHud;
 LatestSnapshot<Presentation> presentation;
-std::atomic<unsigned long long> captured[kMovies]{};
-std::atomic<unsigned long long> identified[kMovies]{};
+std::atomic<unsigned long long> hudCaptured{0};
+std::atomic<unsigned long long> hudIdentified{0};
 // **The observed proxy vtable when it did not match**, kept because it is the
-// one value that turns a silent "the inventory never captures" into a fix.
-// RE-INVENTORY-DEPTH-2026-09-11 confirmed the PDA shares the element vtable
-// 0x1CAB358 and player vtable 0x1DB56D8 with the HUD, but nothing has yet
-// proved its render proxy at player+8 carries 0x1DB58B8 as the HUD's does. If
-// it does not, this reports the real RVA instead of leaving us to guess.
-std::atomic<std::uintptr_t> proxyMismatch[kMovies]{};
+// one value that turns a silent "the HUD never captures" into a fix.
+std::atomic<std::uintptr_t> hudProxyMismatch{0};
 
 struct Capture {
     ComPtr<ID3D11Texture2D> texture,depth;
@@ -85,7 +64,7 @@ struct Capture {
 };
 // The captures, here and below, are never destroyed: their D3D objects are not
 // released at exit (NeverDestroyed.h).
-Capture (&captures)[kMovies]=NeverDestroyed<Capture[kMovies]>();
+Capture& hudCapture=NeverDestroyed<Capture>();
 
 // **The text movies.** Notes and books, subtitles and tutorial cards are
 // separate elements from the gameplay HUD, so they stayed in the scene -- and
@@ -145,7 +124,6 @@ thread_local bool redrawn=false;
 // The movie being redrawn is DanielleMarkers: its markers move per eye (MarkerStereo.h).
 thread_local bool redrawMarkers=false;
 Capture& redrawDepth=NeverDestroyed<Capture>(); // the stencil the native draw started from; depth fields only
-Capture& inventoryRight=NeverDestroyed<Capture>();
 Capture& nativeWrist=NeverDestroyed<Capture>();
 std::atomic<std::uint64_t> wristRequest{0};
 std::atomic<unsigned long long> wristCaptured{0},wristRefused{0};
@@ -216,19 +194,8 @@ bool WantPart(const PartState& part){
     return !part.fault.load() && FreshSample(MonotonicNanoseconds(),part.request.load());
 }
 bool WantAnyPart(){for(const auto& part:parts)if(WantPart(part))return true;return false;}
-std::atomic<bool> inventoryStereo{false};
-std::atomic<unsigned> inventoryDepthPercent{25};
-std::atomic<unsigned long long> stereoPairs{0},stereoMatrices{0},stereoRefused{0};
 using MovieDisplay=void(__fastcall*)(void*);
-using CalcMatrix=void(__fastcall*)(void*,const void*,float*);
 MovieDisplay originalDisplay=nullptr;
-CalcMatrix originalCalc=nullptr;
-bool stereoInstalled=false;
-thread_local void* stereoRoot=nullptr;
-thread_local int stereoEye=-1;
-thread_local bool stereoProduced=false;
-thread_local InventoryConsumer stereoConsumer{};
-thread_local float stereoScale=0;
 
 // The redirection is scoped to the native callback on this thread. Offscreen
 // Scaleform filter targets stay native; only its original destination changes.
@@ -323,7 +290,7 @@ struct StatusOverride {
     }
 };
 
-// **The status meters leave the face** when the wrist shows them (wrist.face):
+// **The status meters leave the face** when the wrist shows them:
 // excluded from the gameplay HUD's normal draw, the rest of it unchanged.
 constexpr const char* kFaceExcluded[]={
     "_root.safe.quadrant_SW.health_mc","_root.safe.quadrant_SW.psi_mc","_root.safe.quadrant_SW.armor_mc",
@@ -599,24 +566,6 @@ void DrawHudCapture(void* root,bool face){
     }
 }
 
-void __fastcall StereoMatrix(void* renderer,const void* source,float* output) {
-    originalCalc(renderer,source,output);
-    if(stereoEye<0 || !activeContext || !output)return;
-    // CalcTransMat3D on the supported Steam image consumes view at +0x1F8.
-    // The recorded view has m22=-1 and translation Z=-36882.855; retain the
-    // native viewpoint and use its actual homogeneous reference depth.
-    const auto view=reinterpret_cast<const float*>(static_cast<const char*>(renderer)+0x1F8);
-    if(std::abs(view[10]+1.f)>.001f || std::abs(view[11])>.001f ||
-       std::abs(view[15]-1.f)>.001f || !std::isfinite(view[14]) || view[14]>=-1.f) {
-        stereoRefused.fetch_add(1,std::memory_order_relaxed);return;
-    }
-    std::array<float,16> matrix;std::memcpy(matrix.data(),output,sizeof(matrix));
-    const float eye=stereo::EyeSign(stereoEye)*.5f*stereoConsumer.eyeSeparation;
-    if(inventory::ApplyStereoParallax(matrix,-view[14],stereoConsumer.panelWidth,eye,stereoScale)) {
-        std::memcpy(output,matrix.data(),sizeof(matrix));
-        stereoMatrices.fetch_add(1,std::memory_order_relaxed);
-    } else stereoRefused.fetch_add(1,std::memory_order_relaxed);
-}
 // The native draw, into the frame being finished (the second eye), then
 // the same movie, same frame, into the held first eye -- starting from the
 // stencil the native draw started from, which Flash clips its viewport with.
@@ -646,19 +595,7 @@ void __fastcall StereoDisplay(void* root) {
         // ONE native proxy callback and its locks; no extra Advance or release.
         DrawHudCapture(root,face);return;
     }
-    if(root!=stereoRoot || !activeContext || stereoEye>=0) {originalDisplay(root);return;}
-    // Entered from the ONE native Flash callback, inside both native locks.
-    // Each Display builds/destroys its own draw context. No Advance, input,
-    // outer callback replay, or extra release of the player occurs here.
-    for(int eye=0;eye<2;++eye) {
-        auto& target=eye==0?captures[1]:inventoryRight;
-        CopyStencil(activeContext,originalDepth,target);
-        const float clear[4]{};activeContext->ClearRenderTargetView(target.target.Get(),clear);
-        activeTarget=target.target.Get();activeDepthView=target.depthView.Get();
-        originalTargets(activeContext,1,&activeTarget,activeDepthView);
-        stereoEye=eye;originalDisplay(root);stereoEye=-1;
-    }
-    stereoProduced=true;
+    originalDisplay(root);
 }
 
 // Any Flash UI element: its name, and its player's render proxy. 0 when it is
@@ -684,12 +621,11 @@ void __fastcall ObserveElement(void* element) {
     const int found=Inspect(element,PreyBase(),&proxy,name);
     if(found!=0) {
         const auto now=MonotonicNanoseconds();
-        for(unsigned i=0;i<kMovies;++i) {
-            if(std::strcmp(name,kMovieNames[i])!=0)continue;
+        if(std::strcmp(name,kHudMovie)==0) {
             // Fail closed, but say what was actually there. Recorded as an RVA
             // so it can be read straight against the module.
-            if(found==2)proxyMismatch[i].store(proxy,std::memory_order_relaxed);
-            else {identified[i].fetch_add(1,std::memory_order_relaxed);seen[i].Publish({proxy,now});}
+            if(found==2)hudProxyMismatch.store(proxy,std::memory_order_relaxed);
+            else {hudIdentified.fetch_add(1,std::memory_order_relaxed);seenHud.Publish({proxy,now});}
         }
         if(found==1) {
             for(unsigned i=0;i<kTextMovieCount;++i) {
@@ -737,21 +673,14 @@ bool EnsureTexture(ID3D11Device* device,ID3D11RenderTargetView* original,
     capture.depth.Reset();capture.depthView.Reset();
     return true;
 }
-// **The gate differs by movie, and that is the whole point.** The gameplay HUD
-// is only meaningful while the game shows gameplay; the PDA is only on screen
-// while it does not. Sharing one gate is what kept the inventory uncapturable.
-// Gameplay *shown*, not gameplay input: VR Options owns the controllers over the
-// running game, and gating on that dropped the HUD into the world behind it.
-bool WantMovie(Movie movie) {
-    switch(movie) {
-        case Movie::hud: return (enabled.load()||WantWrist()||(spriteInstalled&&WristMovesStatusOffFace())||
-                                 (spriteInstalled&&WantAnyPart())) && HudGameplayShown();
-        case Movie::pda: return inventoryCapture.load(std::memory_order_acquire) &&
-                                HudInventoryIsOpen();
-    }
-    return false;
+// The gameplay HUD is only meaningful while the game shows gameplay. Gameplay
+// *shown*, not gameplay input: VR Options owns the controllers over the running
+// game, and gating on that dropped the HUD into the world behind it.
+bool WantHud() {
+    return (enabled.load()||WantWrist()||(spriteInstalled&&WristMovesStatusOffFace())||
+            (spriteInstalled&&WantAnyPart())) && HudGameplayShown();
 }
-void* InventoryRoot(void* proxy,std::uintptr_t base) {
+void* MovieRoot(void* proxy,std::uintptr_t base) {
     __try {
         auto root=*reinterpret_cast<void**>(static_cast<char*>(proxy)+0xA8);
         return root && *reinterpret_cast<std::uintptr_t*>(root)==base+0x1EB4B60?root:nullptr;
@@ -792,7 +721,7 @@ struct NativeTargets {
 // into its panel's shared texture. The first movie of a frame on a panel clears
 // it; the frame-boundary drain (TakeText) is what makes the next frame's first
 // movie first again. False leaves the movie to draw natively. Gated as the HUD
-// is (WantMovie): under VR Options a book stays captured and held, not drawn
+// is (WantHud): under VR Options a book stays captured and held, not drawn
 // into the game's image behind the panel.
 bool CaptureText(void* proxy,bool release,std::uintptr_t address,std::uint64_t now) {
     if(!enabled.load() || activeContext || XrSessionStatusValue()!=1 || !HudGameplayShown())return false;
@@ -838,7 +767,7 @@ void RefuseText(TextPanel which,const char* reason) {
 // A movie still drawing into the frame's backbuffer while a both-eyes frame
 // holds its first eye: its one native callback runs with the movie marked,
 // and StereoDisplay draws it twice -- natively, then into the held eye.
-// The stereo inventory's pattern: no extra outer callback, no extra Advance.
+// No extra outer callback, no extra Advance.
 // False leaves the movie to draw natively (and says why in the census).
 bool RedrawIntoHeldEye(void* proxy,bool release,std::uintptr_t address) {
     if(!DualOverlayRedrawEnabled() || !DualOverlayWindowOpen() || activeContext || !displayInstalled)return false;
@@ -846,7 +775,7 @@ bool RedrawIntoHeldEye(void* proxy,bool release,std::uintptr_t address) {
     const char* refusal=nullptr;
     ID3D11RenderTargetView* held=native.single?HeldFirstEyeTarget(native.saved[0],&refusal):nullptr;
     if(!native.single)refusal="multiple_targets";
-    void* root=held?InventoryRoot(proxy,PreyBase()):nullptr;
+    void* root=held?MovieRoot(proxy,PreyBase()):nullptr;
     if(held && !root)refusal="movie_root";
     if(root && native.ds && !EnsureDepthCopy(native.device,native.ds,redrawDepth)){root=nullptr;refusal="depth_copy";}
     const std::string name=NameOf(address);
@@ -866,31 +795,22 @@ bool RedrawIntoHeldEye(void* proxy,bool release,std::uintptr_t address) {
 void __fastcall CaptureFlash(void* proxy,bool release) {
     const auto address=reinterpret_cast<std::uintptr_t>(proxy);
     const auto now=MonotonicNanoseconds();
-    unsigned which=kMovies;
-    if((enabled.load() || inventoryCapture.load() || WantWrist() || (spriteInstalled&&WristMovesStatusOffFace()) ||
+    bool wanted=false;
+    if((enabled.load() || WantWrist() || (spriteInstalled&&WristMovesStatusOffFace()) ||
         (spriteInstalled&&WantAnyPart())) && XrSessionStatusValue()==1 && !activeContext) {
-        for(unsigned i=0;i<kMovies;++i) {
-            Identity id{};
-            if(seen[i].TryRead(id) && id.proxy==address && FreshSample(now,id.stamp)) {
-                captures[i].stamp=0; // This callback supersedes any older capture, including on refusal.
-                if(i==1)inventoryRight.stamp=0;
-                if(i==0&&WantWrist())nativeWrist.stamp=0;
-                if(i==0)for(auto& part:parts)part.capture.stamp=0;
-                if(WantMovie(static_cast<Movie>(i))) {which=i;break;}
-            }
+        Identity id{};
+        if(seenHud.TryRead(id) && id.proxy==address && FreshSample(now,id.stamp)) {
+            hudCapture.stamp=0; // This callback supersedes any older capture, including on refusal.
+            if(WantWrist())nativeWrist.stamp=0;
+            for(auto& part:parts)part.capture.stamp=0;
+            wanted=WantHud();
         }
     }
-    if(which==kMovies) {
+    if(!wanted) {
         if(CaptureText(proxy,release,address,now) || RedrawIntoHeldEye(proxy,release,address))return;
         originalFlash(proxy,release);return;
     }
-    InventoryConsumer consumer{};
-    if(which==static_cast<unsigned>(Movie::pda) &&
-       (!inventoryConsumer.TryRead(consumer) || !FreshSample(now,consumer.stamp))) {
-        originalFlash(proxy,release);return;
-    }
-    Capture& capture=captures[which];
-    const bool captureNormal=which!=0||enabled.load();
+    const bool captureNormal=enabled.load();
     NativeTargets native; // released when this callback returns
     const auto base=PreyBase();
     auto* const device=native.device;
@@ -898,49 +818,33 @@ void __fastcall CaptureFlash(void* proxy,bool release) {
     auto& saved=native.saved;
     auto* const ds=native.ds;
     const bool single=native.single;
-    bool ready=single && (!captureNormal||EnsureTexture(device,saved[0],ds,capture));
-    if(ready&&which==0&&WantWrist()){
+    bool ready=single && (!captureNormal||EnsureTexture(device,saved[0],ds,hudCapture));
+    if(ready&&WantWrist()){
         wristRequest=0; // At most one extra HUD draw per XR consumer request.
         if(EnsureTexture(device,saved[0],ds,nativeWrist)){
-            wristRoot=InventoryRoot(proxy,base);
+            wristRoot=MovieRoot(proxy,base);
             CopyStencil(context.Get(),ds,nativeWrist);
         }
         if(!wristRoot)++wristRefused;
     }
-    if(ready&&which==0)hudRoot=InventoryRoot(proxy,base);
-    if(ready && which==static_cast<unsigned>(Movie::pda)) {
-        D3D11_TEXTURE2D_DESC d{};capture.texture->GetDesc(&d);
-        ready=InventoryTextureCompatible(consumer.description,d);
-    }
-    stereoProduced=false;
-    if(ready && which==1 && inventoryStereo.load() && consumer.stereo &&
-       consumer.panelWidth>=.1f && consumer.eyeSeparation>=.04f && consumer.eyeSeparation<=.09f &&
-       EnsureTexture(device,saved[0],ds,inventoryRight)) {
-        stereoRoot=InventoryRoot(proxy,base);
-        stereoConsumer=consumer;
-        stereoScale=inventoryDepthPercent.load()*.01f;
-    }
     if(ready) {
+        hudRoot=MovieRoot(proxy,base);
         if(captureNormal){
-            CopyStencil(context.Get(),ds,capture);
-            const float clear[4]={0,0,0,0};context->ClearRenderTargetView(capture.target.Get(),clear);
+            CopyStencil(context.Get(),ds,hudCapture);
+            const float clear[4]={0,0,0,0};context->ClearRenderTargetView(hudCapture.target.Get(),clear);
         }
         originalDestination=saved[0];originalDepth=ds;activeContext=context.Get();
-        activeTarget=captureNormal?capture.target.Get():saved[0];activeDepthView=captureNormal?capture.depthView.Get():ds;
+        activeTarget=captureNormal?hudCapture.target.Get():saved[0];activeDepthView=captureNormal?hudCapture.depthView.Get():ds;
         originalTargets(context.Get(),1,&activeTarget,activeDepthView);
     } else refused.fetch_add(1);
     // Exactly one outer call. The opt-in Display hook draws inside its locks.
     originalFlash(proxy,release);
-    stereoRoot=nullptr;wristRoot=nullptr;hudRoot=nullptr;
+    wristRoot=nullptr;hudRoot=nullptr;
     if(ready) {
         activeContext=nullptr;originalDestination=nullptr;originalDepth=nullptr;
         activeTarget=nullptr;activeDepthView=nullptr;
         originalTargets(context.Get(),8,saved.data(),ds);
-        if(captureNormal){capture.stamp=MonotonicNanoseconds();capture.thread=GetCurrentThreadId();captured[which].fetch_add(1);}
-        if(which==1 && stereoProduced) {
-            inventoryRight.stamp=capture.stamp;inventoryRight.thread=capture.thread;
-            stereoPairs.fetch_add(1);
-        }
+        if(captureNormal){hudCapture.stamp=MonotonicNanoseconds();hudCapture.thread=GetCurrentThreadId();hudCaptured.fetch_add(1);}
     }
 }
 bool Install() {
@@ -976,16 +880,6 @@ bool InstallDisplay() {
     if(!hook::Install(display,reinterpret_cast<void*>(StereoDisplay),originalDisplay))return false;
     displayInstalled=true;return true;
 }
-bool InstallStereo() {
-    if(stereoInstalled)return true;
-    if(!InstallDisplay())return false;
-    const auto base=PreyBase();
-    constexpr unsigned char calcBytes[]={0x48,0x8B,0xC4,0x55,0x53,0x56,0x57,0x48,0x8D,0xA8,0x48,0xFF,0xFF,0xFF};
-    const auto calc=reinterpret_cast<void*>(base+0xDB9620);
-    if(std::memcmp(calc,calcBytes,sizeof(calcBytes)))return false;
-    if(!hook::Install(calc,reinterpret_cast<void*>(StereoMatrix),originalCalc))return false;
-    stereoInstalled=true;return true;
-}
 bool InstallStatus(){
     if(spriteInstalled)return true;
     if(!InstallDisplay())return false;
@@ -996,11 +890,6 @@ bool InstallStatus(){
     if(!hook::Install(at,reinterpret_cast<void*>(FilterStatusSprite),originalSpriteDisplay))return false;
     spriteInstalled=true;return true;
 }
-ID3D11Texture2D* BorrowTexture(Movie movie) {
-    Capture& capture=captures[static_cast<unsigned>(movie)];
-    return capture.thread==GetCurrentThreadId() && FreshSample(MonotonicNanoseconds(),capture.stamp)
-        ? capture.texture.Get() : nullptr;
-}
 }
 DWORD SetHudLayerEnabled(unsigned value) {
     if(value>1)return 1;
@@ -1010,33 +899,11 @@ DWORD SetHudLayerEnabled(unsigned value) {
     enabled.store(value!=0);return 0;
 }
 bool HudLayerEnabled(){return enabled.load();}
-DWORD SetInventoryCaptureEnabled(unsigned value) {
-    if(value>1)return 1;
-    std::lock_guard lock(installMutex);
-    if(value && !Install())return 2;
-    if(!value)inventoryConsumer.Clear();
-    inventoryCapture.store(value!=0,std::memory_order_release);
-    lifecycle::Log(std::string("preyvr_hud_layer inventory_capture=")+(value?"1":"0")+
-                   (value?" note=waiting_for_inventory_swapchain_consumer":""));
-    return 0;
-}
-bool InventoryCaptureEnabled(){return inventoryCapture.load(std::memory_order_acquire);}
-void RefuseInventoryCapture(const char* reason){
-    inventoryConsumer.Clear();
-    if(inventoryCapture.exchange(false))lifecycle::Log(std::string("preyvr_hud_layer inventory_disabled reason=")+reason);
-}
 void RefuseHudLayer(const char* reason){
     if(enabled.exchange(false))lifecycle::Log(std::string("preyvr_hud_layer disabled reason=")+reason);
 }
 std::string HudLayerReport(){
-    // Per movie, because "captured=0" on its own never said which movie was
-    // missing, nor whether identification or the gate was the reason.
-    InventoryConsumer consumer{};
-    const bool consumerReady=inventoryConsumer.TryRead(consumer) && FreshSample(MonotonicNanoseconds(),consumer.stamp);
     std::string out="hudLayer="+std::to_string(enabled.load())+
-        " inventoryCapture="+std::to_string(inventoryCapture.load())+
-        " inventoryConsumer="+std::to_string(consumerReady)+
-        " inventoryLayerFrames="+std::to_string(InventoryLayerFrameCount())+
         " refused="+std::to_string(refused.load());
     out+=" nativeWrist={captured="+std::to_string(wristCaptured.load())+" refused="+
         std::to_string(wristRefused.load())+" fault="+std::to_string(wristFault.load())+
@@ -1068,14 +935,13 @@ std::string HudLayerReport(){
         out+="}}";
     }
     out+="}";
-    for(unsigned i=0;i<kMovies;++i) {
-        out+=std::string(" ")+kMovieNames[i]+"={identified="+std::to_string(identified[i].load())+
-             " captured="+std::to_string(captured[i].load());
-        const auto mismatch=proxyMismatch[i].load();
-        if(mismatch)out+=" proxyVtableRva=0x"+[&]{char b[32];std::snprintf(b,sizeof(b),"%llX",
-            static_cast<unsigned long long>(mismatch));return std::string(b);}();
-        out+="}";
-    }
+    // Identified as well as captured, because "captured=0" on its own never said
+    // whether identification or the gate was the reason.
+    out+=std::string(" ")+kHudMovie+"={identified="+std::to_string(hudIdentified.load())+
+         " captured="+std::to_string(hudCaptured.load());
+    if(const auto mismatch=hudProxyMismatch.load())out+=" proxyVtableRva=0x"+[&]{char b[32];std::snprintf(b,sizeof(b),"%llX",
+        static_cast<unsigned long long>(mismatch));return std::string(b);}();
+    out+="}";
     for(unsigned p=0;p<kTextPanels;++p) {
         const auto& panel=textPanels[p];
         out+=std::string(" ")+kTextPanelNames[p]+"={captured="+std::to_string(panel.captured.load())+
@@ -1088,9 +954,9 @@ std::string HudLayerReport(){
     return out;
 }
 ID3D11Texture2D* HudLayerTexture(){
-    auto texture=BorrowTexture(Movie::hud);
-    captures[static_cast<unsigned>(Movie::hud)].stamp=0;
-    return texture;
+    const bool fresh=hudCapture.thread==GetCurrentThreadId() && FreshSample(MonotonicNanoseconds(),hudCapture.stamp);
+    hudCapture.stamp=0;
+    return fresh?hudCapture.texture.Get():nullptr;
 }
 ID3D11Texture2D* TextLayerTexture(){return TakeText(TextPanel::text);}
 void RefuseTextLayer(const char* reason){RefuseText(TextPanel::text,reason);}
@@ -1187,42 +1053,6 @@ void ResetHudParts(){
         part.sampleCounter=0;
     }
     partsInstallAttempted=false;
-}
-ID3D11Texture2D* InventoryLayerTexture(ID3D11Texture2D** rightEye){
-    auto texture=BorrowTexture(Movie::pda);
-    if(rightEye)*rightEye=texture && inventoryRight.stamp==captures[1].stamp &&
-        inventoryRight.thread==GetCurrentThreadId()?inventoryRight.texture.Get():nullptr;
-    // The host drains this at every render-frame boundary, including skips.
-    captures[static_cast<unsigned>(Movie::pda)].stamp=0;
-    inventoryRight.stamp=0;
-    return texture;
-}
-bool PeekInventoryPair(ID3D11Texture2D** left,ID3D11Texture2D** right) {
-    *left=BorrowTexture(Movie::pda);
-    *right=*left && inventoryRight.stamp==captures[1].stamp &&
-        inventoryRight.thread==GetCurrentThreadId()?inventoryRight.texture.Get():nullptr;
-    return *left && *right;
-}
-void SetInventoryConsumerReady(const D3D11_TEXTURE2D_DESC* description,float width,float separation,bool stereo){
-    if(description)inventoryConsumer.Publish({*description,MonotonicNanoseconds(),width,separation,stereo});
-    else inventoryConsumer.Clear();
-}
-DWORD SetInventoryStereoEnabled(unsigned value) {
-    if(value>1)return 1;
-    std::lock_guard lock(installMutex);
-    if(value && !InstallStereo())return 2;
-    inventoryStereo.store(value!=0);return 0;
-}
-bool InventoryStereoEnabled(){return inventoryStereo.load();}
-DWORD SetInventoryDepthPercent(unsigned value) {
-    if(value>100)return 1;
-    inventoryDepthPercent.store(value);return 0;
-}
-unsigned InventoryDepthPercent(){return inventoryDepthPercent.load();}
-std::string InventoryStereoReport() {
-    return "enabled="+std::to_string(inventoryStereo.load())+" depthPercent="+std::to_string(inventoryDepthPercent.load())+
-        " capturedPairs="+std::to_string(stereoPairs.load())+" matrices="+std::to_string(stereoMatrices.load())+
-        " refusedMatrices="+std::to_string(stereoRefused.load());
 }
 void SetHudLayerPresentation(bool active,float width,float height,float distance){presentation.Publish({width,height,distance,active,MonotonicNanoseconds()});}
 bool HudLayerReticle(float tanX,float tanY,float& x,float& y){

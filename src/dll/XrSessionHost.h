@@ -34,8 +34,6 @@
 // Never starts on load. Like every other capability here, it is reached only
 // through an explicit export.
 namespace preyvr::dll {
-DWORD SetUiCurveDegrees(unsigned int degrees);
-
 enum class XrSessionStatus : DWORD {
     idle = 0,             // never started
     running = 1,          // session live and submitting
@@ -86,7 +84,6 @@ DWORD XrSessionStatusValue();
 DWORD SetUiPanelMode(unsigned int mode);
 unsigned int UiPanelMode();
 unsigned long long UiPanelFrameCount();
-unsigned long long InventoryLayerFrameCount();
 float XrRuntimeIpdMetres();
 void ObserveXrBackbuffer(void* renderer);
 bool XrBackbufferReady(unsigned int width=0,unsigned int height=0);
@@ -202,7 +199,6 @@ void ServiceXrFrame(void* renderer);
 // usable edge is cannot be derived, only worn. Applies to the menu panel and
 // the HUD together.
 DWORD SetUiScalePercent(unsigned int percent);
-unsigned UiCurveDegrees();
 DWORD UiScalePercent();
 // The text panel's distance (books/notes, subtitles, tutorial cards), 100..200 cm,
 // default 140. It keeps the HUD panel's physical size, so nearer is larger in
@@ -228,16 +224,6 @@ DWORD UiDistanceCm();
 DWORD SetUiOffsetDegrees(int right, int up);
 int UiOffsetRightDegrees();
 int UiOffsetUpDegrees();
-// The fraction of the RUNTIME-REPORTED frustum a panel must stay inside, 30..100.
-// This, not ui.scale, is what caps panel size: the fit loops shrink the panel
-// until it satisfies this, so past the point where it binds, raising the scale
-// does nothing. Default 72. Raising it trades edge visibility for size.
-DWORD SetUiFitMarginPercent(unsigned int percent);
-DWORD UiFitMarginPercent();
-// The onboarding card stacked under the menu -- ours, not Prey's. It shares the
-// menu's vertical budget, so turning it off also makes the menu bigger.
-DWORD SetUiGuideEnabled(unsigned int enabled);
-DWORD UiGuideEnabled();
 // Frames the head-in-wall fade was drawn (RoomScaleLane.h BodyHeadOut).
 unsigned long long XrFadeFrames();
 

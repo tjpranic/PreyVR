@@ -72,15 +72,9 @@ constexpr std::array<std::uint8_t, 15> kCreatePrologue{
 constexpr std::uintptr_t kReleaseRva = 0x16A6040;
 constexpr std::array<std::uint8_t, 17> kReleasePrologue{
     0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0x48, 0x83, 0xEC, 0x20, 0x80, 0xB9, 0x21, 0x05, 0x00, 0x00, 0x00};
-// The per-frame update 0x16A67B0 (secondary vtable at weapon+8, slot +0x98;
-// RCX = weapon+8): with [weapon+0x4C0] > 0 it raycasts that far along the VIEW
-// and, on a surface, sets [weapon+0x4F9] -- "deploy": the press then sticks the
-// charge there instead of charging a throw. A head-gaze decision in VR; with
-// the range 0 during the call the raycast is skipped and the flag stays clear
-// (it is cleared only by a raycast that misses, so a set flag is left to that).
-constexpr std::uintptr_t kUpdateRva = 0x16A67B0;
-constexpr std::array<std::uint8_t, 18> kUpdatePrologue{
-    0x48, 0x8B, 0xC4, 0x55, 0x56, 0x57, 0x48, 0x8D, 0x6C, 0x24, 0x90, 0x48, 0x81, 0xEC, 0x70, 0x01, 0x00, 0x00};
+// The per-frame update 0x16A67B0: with [weapon+0x4C0] > 0 it raycasts that far
+// along the VIEW and, on a surface, sets [weapon+0x4F9] -- "deploy": the press
+// then sticks the charge there instead of charging a throw.
 constexpr std::uintptr_t kDeployRange = 0x4C0;
 constexpr std::size_t kThrowSlot = 0x118;
 constexpr std::uintptr_t kFiringPositionRva = 0x1694BC0;   // (weapon, out16, flags, overrideEntity)
@@ -116,14 +110,12 @@ using CreateFn = std::uintptr_t(__fastcall*)(std::uintptr_t archetype, float* po
                                              std::uint64_t owner, std::uint64_t a5, std::uint64_t a6,
                                              std::uint64_t a7, std::uint64_t a8, std::uint64_t a9, std::uint64_t a10);
 using ReleaseFn = bool(__fastcall*)(std::uintptr_t weapon);
-using UpdateFn = void(__fastcall*)(std::uintptr_t weaponPlus8, std::uintptr_t context);
 using FiringPositionFn = void*(__fastcall*)(std::uintptr_t weapon, void* out16, std::uint32_t flags, void* entity);
 
 std::uintptr_t gBase = 0;
 std::atomic<ThrowFn> gThrow{nullptr};
 std::atomic<CreateFn> gCreate{nullptr};
 std::atomic<ReleaseFn> gRelease{nullptr};
-std::atomic<UpdateFn> gUpdate{nullptr};
 std::mutex gInstallMutex;
 bool gInstallTried = false, gInstalled = false, gGiveOk = false;
 
@@ -134,9 +126,6 @@ std::atomic<bool> gHand{false}, gEarly{true}, gTrace{false};
 // if that is unreadable or off the hand); 1: the fist; 2: the native firing
 // position (the camera when the game falls back to it).
 std::atomic<int> gSpawnMode{0};
-// grenade.deploy 0 (default with grenade.hand): no sticking to what the view
-// is on; 1: the native deploy stays.
-std::atomic<bool> gDeploy{false};
 
 std::mutex gSettingsMutex;
 grenade::ThrowSettings gSettings{};
@@ -225,7 +214,7 @@ struct PendingEquip {
 };
 PendingEquip gPendingEquip;
 
-std::atomic<unsigned long long> gDeploySuppressed{0}, gThrows{0}, gSteered{0}, gEarlyThrows{0}, gEventThrows{0}, gEventsSkipped{0},
+std::atomic<unsigned long long> gThrows{0}, gSteered{0}, gEarlyThrows{0}, gEventThrows{0}, gEventsSkipped{0},
     gNativeThrows{0}, gReleases{0}, gCreates{0}, gVelocitySets{0}, gFaults{0}, gNoRelease{0}, gPulledBack{0};
 
 // --- SEH helpers (POD only) ---------------------------------------------------------
@@ -641,24 +630,6 @@ void __fastcall ThrowHook(std::uintptr_t weapon)
         Fixed(s.damping, 3));
 }
 
-void __fastcall UpdateHook(std::uintptr_t weaponPlus8, std::uintptr_t context)
-{
-    const auto original = gUpdate.load(std::memory_order_acquire);
-    const std::uintptr_t weapon = weaponPlus8 - 8;
-    std::uint8_t ready = 1;
-    float range = 0;
-    if (!gHand.load() || gDeploy.load() || !Read(weapon + kDeployReady, ready) || ready ||
-        !Read(weapon + kDeployRange, range) || !(range > 0.0f) || !IsPlayerGrenade(weapon)) {
-        original(weaponPlus8, context);
-        return;
-    }
-    float* const field = reinterpret_cast<float*>(weapon + kDeployRange);
-    *field = 0.0f;
-    original(weaponPlus8, context);
-    *field = range;
-    gDeploySuppressed.fetch_add(1, std::memory_order_relaxed);
-}
-
 bool __fastcall ReleaseHook(std::uintptr_t weapon)
 {
     const auto original = gRelease.load(std::memory_order_acquire);
@@ -843,8 +814,7 @@ bool EnsureGrenadeLane()
     EnsureMinHook();
     gInstalled = HookAt(kThrowRva, kThrowPrologue, reinterpret_cast<void*>(&ThrowHook), gThrow, "throw") &&
                  HookAt(kCreateRva, kCreatePrologue, reinterpret_cast<void*>(&CreateHook), gCreate, "create") &&
-                 HookAt(kReleaseRva, kReleasePrologue, reinterpret_cast<void*>(&ReleaseHook), gRelease, "release") &&
-                 HookAt(kUpdateRva, kUpdatePrologue, reinterpret_cast<void*>(&UpdateHook), gUpdate, "update");
+                 HookAt(kReleaseRva, kReleasePrologue, reinterpret_cast<void*>(&ReleaseHook), gRelease, "release");
     Log(std::string("result=") + (gInstalled ? "0" : "unavailable") + " give=" + std::to_string(gGiveOk));
     return gInstalled;
 }
@@ -858,13 +828,6 @@ DWORD SetGrenadeHand(unsigned enabled)
     return 0;
 }
 unsigned GrenadeHandEnabled() { return gHand.load() ? 1u : 0u; }
-DWORD SetGrenadeDeploy(unsigned enabled)
-{
-    if (enabled > 1) { return ERROR_INVALID_PARAMETER; }
-    gDeploy.store(enabled != 0);
-    return 0;
-}
-unsigned GrenadeDeployEnabled() { return gDeploy.load() ? 1u : 0u; }
 DWORD SetGrenadeThrowStrengthPercent(unsigned percent)
 {
     if (percent < 50 || percent > 400) { return ERROR_INVALID_PARAMETER; }
@@ -916,7 +879,6 @@ std::string GrenadeReport()
     std::ostringstream out;
     const auto s = Settings();
     out << " installed=" << gInstalled << " hand=" << gHand.load() << " early=" << gEarly.load()
-        << " deploy=" << gDeploy.load() << " deploySuppressedFrames=" << gDeploySuppressed.load()
         << " spawnMode=" << gSpawnMode.load() << " giveOk=" << gGiveOk << " throws=" << gThrows.load()
         << " steered=" << gSteered.load() << " earlyThrows=" << gEarlyThrows.load()
         << " eventThrows=" << gEventThrows.load() << " otherThrows=" << gNativeThrows.load()
@@ -963,8 +925,6 @@ bool ExecuteGrenadeCommand(const std::vector<std::string>& args, std::ostringstr
         if (args.size() > 1) { gEarly.store(arg(1, 1) != 0); }
     } else if (verb == "grenade.spawn") {
         if (args.size() > 1) { gSpawnMode.store(std::clamp(arg(1, 0), 0, 2)); }
-    } else if (verb == "grenade.deploy") {
-        if (args.size() > 1) { gDeploy.store(arg(1, 0) != 0); }
     } else if (verb == "grenade.trace") {
         if (args.size() > 1) { gTrace.store(arg(1, 1) != 0); }
     } else if (verb == "grenade.throw") {

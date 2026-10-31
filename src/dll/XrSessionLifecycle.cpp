@@ -15,7 +15,6 @@
 #include "HeadTrackingHook.h"
 #include "XrInput.h"
 #include "UiMode.h"
-#include "UiGuide.h"
 #include "UiPointer.h"
 #include "HudLayer.h"
 #include "LayerSwapchain.h"
@@ -181,9 +180,6 @@ bool CreateInstanceAndSystem()
                 if(std::strcmp(extension.extensionName,XR_EXT_LOCAL_FLOOR_EXTENSION_NAME)==0) {
                     enabled.push_back(XR_EXT_LOCAL_FLOOR_EXTENSION_NAME);gHost.localFloorSupported=true;
                 }
-                if(std::strcmp(extension.extensionName,XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME)==0) {
-                    enabled.push_back(XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME);gHost.cylinderSupported=true;
-                }
                 for(const char* wanted:controllerExtensions) {
                     if(std::strcmp(extension.extensionName,wanted)==0) {
                         enabled.push_back(wanted);inputExtensions.emplace_back(wanted);
@@ -196,7 +192,6 @@ bool CreateInstanceAndSystem()
         const bool on=std::find(inputExtensions.begin(),inputExtensions.end(),wanted)!=inputExtensions.end();
         Log(std::string("xr_input_extension name=")+wanted+" enabled="+(on?"1":"0"));
     }
-    Log(std::string("ui_cylinder supported=")+(gHost.cylinderSupported?"1":"0 flat_fallback=1"));
     // Newest-first with a fallback: xr-sim accepts 1.1, VirtualDesktopXR does not
     // (F-010). One build has to work against both.
     const XrVersion candidates[] = {XR_CURRENT_API_VERSION, XR_API_VERSION_1_0};
@@ -465,10 +460,7 @@ void Teardown()
     gResolution.Clear();
     gOptics.Clear();
     SetHudLayerPresentation(false);
-    SetInventoryConsumerReady(nullptr);
-    gHost.inventorySwapchain.reset(); // XR images die before their session.
-    gHost.inventoryRightSwapchain.reset();
-    gHost.hudSwapchain.reset();
+    gHost.hudSwapchain.reset(); // XR images die before their session.
     gHost.textSwapchain.reset();
     gHost.noteSwapchain.reset();
     gHost.noteHold.Reset();
@@ -500,7 +492,6 @@ void Teardown()
             image = nullptr;
         }
     }
-    if (gHost.guideSwapchain) xrDestroySwapchain(gHost.guideSwapchain);
     if (gHost.pointerSwapchain) xrDestroySwapchain(gHost.pointerSwapchain);
     ClearUiPointer();
     if (gHost.swapchain) xrDestroySwapchain(gHost.swapchain);
@@ -555,9 +546,8 @@ void PumpEvents()
 
 } // namespace xrsession
 
-// Every mid-session destruction -- a refused HUD, a capture resized, inventory
-// stereo switched off -- comes through here, and is followed by a frame of
-// Prey's that may not be submitted. Until one is, nothing is held.
+// Every mid-session destruction -- a refused HUD, a capture resized -- comes
+// through here, and is followed by a frame of Prey's that may not be submitted. Until one is, nothing is held.
 XrResult XRAPI_CALL DestroyUnheldSwapchain(XrSwapchain swapchain)
 {
     gHost.heldValid = false;

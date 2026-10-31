@@ -258,7 +258,6 @@ int main()
     // --- a left hand on the foregrip rides on the weapon ---
     twoHanded = true;
     f.twoHand.blend = 1;
-    f.twoHand.snapSupport = true;
     Place(f, Hand::left, {1.1f, .1f, 1.2f});   // in the wall, but drawn on the weapon
     rayCalls = 0;
     tick();

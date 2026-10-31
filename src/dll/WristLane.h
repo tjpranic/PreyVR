@@ -63,12 +63,8 @@ void NoteWristGate(unsigned bits);
 unsigned WristNativeScalePercent();
 // Keep the native meters' backdrop and top line on the wrist (else the glass).
 bool WristNativeBackground();
-// The gameplay HUD keeps its status meters (0) or they move to the wrist (1).
+// The status meters leave the gameplay HUD while the wrist shows them.
 bool WristMovesStatusOffFace();
-// wrist.face inverted, as the menu asks it: 1 keeps the status meters on the
-// face HUD as well as on the wrist.
-DWORD SetWristStatusOnHud(unsigned enabled);
-unsigned WristStatusOnHud();
 // wrist.haptic: the faint tick as the display unfolds.
 DWORD SetWristTick(unsigned enabled);
 unsigned WristTickEnabled();

@@ -128,7 +128,6 @@ add_library(preyvr_core STATIC
     src/common/WristHolo.cpp
     src/common/Locomotion.cpp
     src/common/MenuNavigator.cpp
-    src/common/InventoryDepth.cpp
     src/common/UiPanel.cpp
     src/common/MotionController.cpp
     src/common/TwoHandedAim.cpp
@@ -242,7 +241,6 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/dll/Bootstrap.cpp
         src/dll/Exports.cpp
         src/dll/VrMode.cpp
-        src/dll/UiGuide.cpp
         src/dll/ActionMaps.cpp
         src/dll/VrOptionsLayer.cpp
         src/dll/VrOptionsUi.cpp
@@ -494,7 +492,6 @@ if(PREYVR_BUILD_TESTS)
     preyvr_add_test(menu_navigator tests/MenuNavigatorTests.cpp)
     preyvr_add_test(menu_hold tests/MenuHoldTests.cpp)
     preyvr_add_test(render_contract tests/RenderContractTests.cpp)
-    preyvr_add_test(inventory_depth tests/InventoryDepthTests.cpp)
     preyvr_add_test(ui_panel tests/UiPanelTests.cpp)
     preyvr_add_test(position_ring tests/PositionRingTests.cpp)
     preyvr_add_test(xr_hold tests/XrHoldTests.cpp)

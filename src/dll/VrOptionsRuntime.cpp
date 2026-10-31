@@ -10,7 +10,6 @@
 #include "MarkerStereo.h"
 #include "AimTakeover.h"
 #include "BodyEquipment.h"
-#include "ControllerPrompts.h"
 #include "HeadTrackingHook.h"
 #include "Helmet.h"
 #include "ExamineCamera.h"
@@ -21,7 +20,6 @@
 #include "preyvr/LatestSnapshot.h"
 #include "XrSessionHost.h"
 #include "DebugOverlay.h"
-#include "ShotRay.h"
 #include "AnimIkTakeover.h"
 #include "CarryLane.h"
 #include "GrenadeLane.h"
@@ -71,7 +69,7 @@ void QueueViewRequest(int action,std::uint64_t epoch){
  viewPending=ViewRequest{action,epoch,MonotonicNanoseconds()+1000000000ull,++viewGeneration};
  viewResult=-2;
 }
-std::optional<ui::Surface> pointerSurface;
+std::optional<ui::Panel> pointerSurface;
 std::uint64_t surfaceReference=0;
 long long previousTime=0;
 // The panel (VrOptionsUi) draws and navigates; the menu state machine opens,
@@ -159,19 +157,16 @@ constexpr Wiring wiring[]={
  {options::TurnSpeed,Set<SetTurnLaneScale>,Get<TurnLaneScalePercent>},
  {options::TwoHand,Set<SetTwoHandedAim>,Get<TwoHandedAimEnabled>},
  {options::GripToggle,Set<SetTwoHandGripToggle>,Get<TwoHandGripToggle>},
- {options::SupportSnap,Set<SetTwoHandSupportSnap>,Get<TwoHandSupportSnap>},
+ {options::AutoSnap,Set<SetTwoHandAutoSnap>,Get<TwoHandAutoSnap>},
+ {options::AutoSnapAttach,Set<SetTwoHandSnapAttachCm>,Get<TwoHandSnapAttachCm>},
+ {options::AutoSnapBreak,Set<SetTwoHandSnapBreakCm>,Get<TwoHandSnapBreakCm>},
  {options::Psychoscope,[](int v){scope.store(v!=0);},[]{return static_cast<int>(scope.load());}},
  {options::UiScale,Set<SetUiScalePercent>,Get<UiScalePercent>},
- {options::UiMargin,Set<SetUiFitMarginPercent>,Get<UiFitMarginPercent>},
- {options::UiCurve,Set<SetUiCurveDegrees>,Get<UiCurveDegrees>},
- {options::UiGuide,Set<SetUiGuideEnabled>,Get<UiGuideEnabled>},
  // A change of mind clears the slots, so no weapon is left in a disabled one.
  {options::Holsters,[](int v){holsters.store(v!=0);ClearHolsters();},[]{return static_cast<int>(holsters.load());}},
  {options::Wrist,[](int v){wrist.store(v!=0);},[]{return static_cast<int>(wrist.load());}},
  {options::WristSize,[](int v){wristSize=static_cast<unsigned>(v);},[]{return static_cast<int>(wristSize.load());}},
- {options::ReticleWorld,Set<SetReticleInWorld>,Get<ReticleInWorld>},
  {options::ReticleSize,Set<SetReticleSizePercent>,Get<ReticleSizePercent>},
- {options::ReticleFallback,Set<SetReticleConvergenceMillimetres>,Get<ReticleConvergenceMillimetres>},
  {options::MarkerSize,Set<SetMarkerSizePercent>,Get<MarkerSizePercent>},
  {options::Haptics,Set<SetHapticsEnabled>,Get<HapticsEnabled>},
  {options::HapticStrength,Set<SetHapticStrength>,Get<HapticStrength>},
@@ -186,14 +181,12 @@ constexpr Wiring wiring[]={
  // On is every layer; the menu's row cannot pick layers (dbg.draw can).
  {options::DebugOverlay,[](int v){SetDebugOverlay(v?debugdraw::kAllLayers:0u);},
   []{return static_cast<int>(DebugOverlayMask()!=0);}},
- {options::MuzzleAim,Set<SetShotRay>,Get<ShotRayEnabled>},
  {options::UiDistance,Set<SetUiDistanceCm>,Get<UiDistanceCm>},
  // The offsets are set as a pair: each keeps the other's current value.
  {options::UiOffsetRight,[](int v){SetUiOffsetDegrees(v,UiOffsetUpDegrees());},Get<UiOffsetRightDegrees>},
  {options::UiOffsetUp,[](int v){SetUiOffsetDegrees(UiOffsetRightDegrees(),v);},Get<UiOffsetUpDegrees>},
  {options::UiText,Set<SetTextPanelDistanceCm>,Get<TextPanelDistanceCm>},
  {options::PointerHand,Set<SetUiPointerHand>,Get<UiPointerHand>},
- {options::HudLayer,Set<SetHudLayerEnabled>,Get<HudLayerEnabled>},
  {options::MoveDeadzone,Set<SetMoveLaneDeadzone>,Get<MoveLaneDeadzone>},
  {options::TurnDeadzone,Set<SetTurnLaneDeadzone>,Get<TurnLaneDeadzone>},
  // Sideways and backward speed are set as a pair, like the offsets.
@@ -201,26 +194,19 @@ constexpr Wiring wiring[]={
   Get<MovementStrafePercent>},
  {options::BackwardSpeed,[](int v){SetMovementAxisScales(MovementStrafePercent(),static_cast<unsigned>(v));},
   Get<MovementBackwardPercent>},
- {options::ArmsFree,Set<SetAnimIkFreeArms>,Get<AnimIkFreeArms>},
  {options::CarryHold,Set<SetCarryHoldToHold>,Get<CarryHoldPreference>},
  {options::GrenadeHand,Set<SetGrenadeHand>,Get<GrenadeHandEnabled>},
  {options::CarryThrowStrength,Set<SetCarryThrowGainPercent>,Get<CarryThrowGainPercent>},
  {options::GrenadeThrowStrength,Set<SetGrenadeThrowStrengthPercent>,Get<GrenadeThrowStrengthPercent>},
- {options::WristOnHud,Set<SetWristStatusOnHud>,Get<WristStatusOnHud>},
  {options::WristTick,Set<SetWristTick>,Get<WristTickEnabled>},
  {options::WristAlong,Set<SetWristAlongMm>,Get<WristAlongMm>},
  {options::WristHover,Set<SetWristHoverMm>,Get<WristHoverMm>},
  {options::WristTilt,Set<SetWristTiltDegrees>,Get<WristTiltDegrees>},
  // Carrying in the hand rides on the left hand's use, as VR start arms it.
  {options::CarryHand,[](int v){if(!v||UseHandLeft())SetCarryHand(static_cast<unsigned>(v));},Get<CarryHandEnabled>},
- {options::GrenadeDeploy,Set<SetGrenadeDeploy>,Get<GrenadeDeployEnabled>},
- {options::LongReach,Set<SetAnimIkLongReachEnabled>,Get<AnimIkLongReachEnabled>},
- {options::InventoryLayer,Set<SetInventoryCaptureEnabled>,Get<InventoryCaptureEnabled>},
- {options::InventoryStereo,Set<SetInventoryStereoEnabled>,Get<InventoryStereoEnabled>},
- {options::InventoryDepth,Set<SetInventoryDepthPercent>,Get<InventoryDepthPercent>},
  {options::FingerCurl,Set<SetAnimIkFingerCurl>,Get<AnimIkFingerCurl>},
  {options::AimLasers,Set<SetAimLasers>,Get<AimLasersEnabled>},
- {options::ControllerPrompts,Set<SetControllerPrompts>,Get<ControllerPromptsEnabled>},
+ {options::ShotTrail,Set<SetShotTrail>,Get<ShotTrailEnabled>},
  {options::ArmLength,Set<SetArmLengthCm>,Get<ArmLengthCm>},
  {options::SurfaceStop,Set<SetSurfaceStop>,Get<SurfaceStopEnabled>},
  {options::HeavyMass,Set<SetSurfaceHeavyMass>,Get<SurfaceHeavyMass>},
@@ -288,13 +274,12 @@ template<class Ids> void ApplySaved(const Ids& ids,const char* counter){
  lifecycle::Log(std::string("preyvr_options ")+counter+"="+std::to_string(count));
 }
 void ApplySavedVrOptions(){ApplySaved(std::views::iota(0u,static_cast<unsigned>(options::Count)),"applied");}
-// What the menu panel looks like: its size, fit, curvature, guide card,
-// distance and place, the text panel's distance and the laser's hand. VR start
-// sets none of them itself, and each setter only stores a value (a panel refit
-// waits for the frame thread), so they are safe before the session exists.
-constexpr options::Setting kPanelSettings[]={options::UiScale,options::UiMargin,options::UiCurve,
- options::UiGuide,options::UiDistance,options::UiOffsetRight,options::UiOffsetUp,options::UiText,
- options::PointerHand};
+// What the menu panel looks like: its size, distance and place, the text panel's
+// distance and the laser's hand. VR start sets none of them itself, and each
+// setter only stores a value (a panel refit waits for the frame thread), so they
+// are safe before the session exists.
+constexpr options::Setting kPanelSettings[]={options::UiScale,options::UiDistance,options::UiOffsetRight,
+ options::UiOffsetUp,options::UiText,options::PointerHand};
 void ApplySavedPanelOptions(){ApplySaved(kPanelSettings,"panel_applied");}
 constexpr options::Setting kRendererSettings[]={options::Antialiasing};
 void ApplySavedRendererOptions(){ApplySaved(kRendererSettings,"renderer_applied");}
@@ -355,7 +340,7 @@ bool ProcessVrOptionsInput(const TrackingFrame& f){
  if(wasOwned!=menu.OwnsInput())ClearUiPointer();
  return wasOwned||menu.OwnsInput(); // closing frame belongs to this menu too
 }
-UiPointerVisual OptionsPointer(const ui::Surface& surface){
+UiPointerVisual OptionsPointer(const ui::Panel& surface){
  UiPointerVisual visual;TrackingFrame f{};const auto hand=UiPointerHand();
  if(!open.load()||hand>=2||!TryGetTrackingFrame(f)||!FreshSample(MonotonicNanoseconds(),f.publishedNs))return visual;
  const auto& state=f.hands[hand];
@@ -364,7 +349,7 @@ UiPointerVisual OptionsPointer(const ui::Surface& surface){
  visual.hit=ui::Intersect(surface,state.aimPose);
  return visual;
 }
-void SetVrOptionsSurface(const ui::Surface* surface,std::uint64_t reference){
+void SetVrOptionsSurface(const ui::Panel* surface,std::uint64_t reference){
  if(surface)pointerSurface=*surface;else pointerSurface.reset();
  surfaceReference=reference;
 }

@@ -1,13 +1,13 @@
 // VR Options' wiring against the real lanes (vr_options_runtime has stubs in
-// their place): each of the 67 settings' lanes starts at its Spec default, and
+// their place): each setting's lane starts at its Spec default, and
 // takes the Spec's whole range -- its minimum, maximum and default each read
 // back as applied. A lane writes its default and range again in its own terms
 // (a bool, milli-degrees, metres), so this is what keeps them the menu's.
 //
 // Two lists say where that does not hold offline, and why:
-//  - kStartOff: six lanes start off, and VR start sets them to their defaults
+//  - kStartOff: three lanes start off, and VR start sets them to their defaults
 //    (VrMode.cpp, options::Default).
-//  - kNeedsPrey: eight setters install a hook or reach Prey to turn on, so here,
+//  - kNeedsPrey: four setters install a hook or reach Prey to turn on, so here,
 //    with no Prey, they take off and refuse anything else.
 //
 // Offline and inert, like command_channel: PreyDll is never loaded, MinHook is
@@ -35,11 +35,9 @@ using namespace preyvr;
 using namespace preyvr::dll;
 using preyvr::test::Require;
 
-constexpr options::Setting kStartOff[] = {options::HudLayer, options::ArmsFree, options::GrenadeHand,
-                                          options::CarryHand, options::AimLasers, options::ControllerPrompts};
-constexpr options::Setting kNeedsPrey[] = {options::PsiTarget, options::Medkit, options::MuzzleAim,
-                                           options::HudLayer, options::GrenadeHand, options::CarryHand,
-                                           options::InventoryLayer, options::InventoryStereo};
+constexpr options::Setting kStartOff[] = {options::GrenadeHand, options::CarryHand, options::AimLasers};
+constexpr options::Setting kNeedsPrey[] = {options::PsiTarget, options::Medkit, options::GrenadeHand,
+                                           options::CarryHand};
 
 template <std::size_t N>
 bool In(const options::Setting (&list)[N], unsigned id)
@@ -69,7 +67,7 @@ void TestLanesStartAtTheirDefaults()
                       << (startsOff ? " (listed as starting off)" : "") << '\n';
         }
     }
-    Require(failures == 0, "every lane starts at its Spec default, but the six VR start turns on");
+    Require(failures == 0, "every lane starts at its Spec default, but the three VR start turns on");
 }
 
 void TestLanesTakeTheWholeRange()

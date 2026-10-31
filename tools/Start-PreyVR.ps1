@@ -7,9 +7,8 @@ param(
     [int]$Width=2016,
     [int]$Height=2160,
     # **Launch settings only.** Everything the VR Options menu shows -- turning,
-    # movement direction, interface size, curvature, the controls guide, laser
-    # hand, HUD style, the debug overlay, shots from the muzzle -- is the menu's,
-    # saved in %LOCALAPPDATA%\PreyVR\vr-options.ini.
+    # movement direction, interface size, laser hand, the debug overlay -- is the
+    # menu's, saved in %LOCALAPPDATA%\PreyVR\vr-options.ini.
     # auto prefers LOCAL_FLOOR, then STAGE, with LOCAL fallback.
     [string]$ReferenceSpace='auto',
     # **Both eyes from one game frame (1) or alternate eyes (0).** 1 is the

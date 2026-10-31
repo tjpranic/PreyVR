@@ -25,11 +25,10 @@ namespace preyvr::dll {
 // mouse or Steam Controller scheme back on the pad through Prey's own setter
 // (ServiceControllerPromptsFrame).
 //
-// ui.prompts / VR Options' Force Controller Prompts: 1 sets it through the verified
-// console path; 0 puts Prey's 0 back, only if this lane may have changed it. On
-// at VR start, put back when VR stops. Returns 0, or 1 for a bad value.
+// 1 sets it through the verified console path; 0 puts Prey's 0 back, only if this
+// lane may have changed it. On at VR start, put back when VR stops. Returns 0, or
+// 1 for a bad value.
 DWORD SetControllerPrompts(unsigned enabled);
-unsigned ControllerPromptsEnabled();
 // Command worker, beside the focus hold: they share the verified console slot,
 // so the next completion after a queue is ours. Queues the wanted value, logs
 // its readback, sets it again if anything else clears it, and logs the

@@ -7,7 +7,7 @@ headless OpenXR mock (1280 × 1440 per eye, Quest 3 field of view), **not yet in
 
 **2026-10-17:** two of its layers, the rays and their scene hits (mask 129), are now the player's
 **aim lasers**, a switch of their own (VR Options > Hands > Aim lasers, `dbg.lasers`, on at VR start).
-What is drawn is the debug layers and the lasers together (`debugdraw::DrawnLayers`), so `dbg.draw off`
+What is drawn is the debug layers, the lasers and the shot trail together (`debugdraw::DrawnLayers`), so `dbg.draw off`
 or the Setup row's off leaves the lasers. From 10-06 to 10-13 VR start forced mask 129 on and a saved
 "off" was skipped; the 10-15 options rewrite removed that, which left no lasers at all.
 
@@ -46,8 +46,10 @@ GDI-rasterised Consolas atlas; lines, discs and glyphs are anti-aliased in one p
 | Hits (128) | One extra scene query per hand and frame on the input-drain thread (`QueryDebugRay`), sharing the scene query's gates and its process-wide fault latch. Never changes the reticle. |
 | Physical (256) | Physical contact (2026-10-18): the box the contact lane queries when the wrench is not drawing one, and each contact this frame -- an overlap as a filled cyan dot, a sweep as a yellow ring, a body violet -- with its normal and `OVERLAP`/`SWEEP` and distance in mm, a push as a green line along the velocity change (10 cm per m/s), each pushing hand's palm box in cyan, and the footprint of the feet's samples (orange over what they stand on, which is never pushed; grey over nothing), drawn while something is touched; status line `Contact` (with the active `boxes`; `push N (props only)` when bodies cannot be pushed). And the free-swing wrench: the wrench's box, its swing's paths in the last second while the head moves fast, and the most notable decision for 3 s (green `struck`, red otherwise, labelled with the surface and speed); status line `swing on|off` with the gate, strikes, live passes and the last decision. Added 2026-10-18. |
 
-With `aim.shot 1` the right ray starts at the weapon's muzzle (label `MUZZLE`) and the last shot
-is traced in green for 4 s; gameplay rays are hidden in menus. See
+The right ray starts at the weapon's muzzle (label `MUZZLE`). The last shot is traced in green for
+4 s on a layer of its own (1024): every session with the rays drew it until 2026-10-31, so the lasers
+showed it on firing. Now it is Shots, a switch of its own (VR Options > Hands > Shot trail, `dbg.shots`,
+off by default), which the Setup row's every-layer overlay also shows. Gameplay rays are hidden in menus. See
 [the shot note](SHOT-RAY-2026-10-06.md).
 
 ## Controls

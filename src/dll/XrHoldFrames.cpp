@@ -16,7 +16,6 @@
 #include "HeadTrackingHook.h"
 #include "XrInput.h"
 #include "UiMode.h"
-#include "UiGuide.h"
 #include "UiPointer.h"
 #include "HudLayer.h"
 #include "LayerSwapchain.h"
@@ -89,14 +88,13 @@ bool LoadingScreenWaiting()
 bool PlaceLoadingPanel(const XrView (&views)[2])
 {
     if(!gHost.panelWasActive) {
-        gHost.menuPanel.reset();gHost.guidePanel.reset();gHost.menuAnchor.reset();
+        gHost.menuPanel.reset();gHost.menuAnchor.reset();
         gHost.panelWasActive=true;
         Log("result=0 detail=ui_panel active=1 reason=loading_screen");
     }
     const auto reference=HeadTrackingReferenceGeneration();
-    const float curve=gHost.cylinderSupported?static_cast<float>(gUiCurveDegrees.load())*kRadiansPerDegree:0;
-    if(MenuPanelsStale(curve,reference))
-        PlaceMenuPanels(stereo::CyclopsPose(FromXrPose(views[0].pose),FromXrPose(views[1].pose)),views,reference,curve);
+    if(MenuPanelStale(reference))
+        PlaceMenuPanel(stereo::CyclopsPose(FromXrPose(views[0].pose),FromXrPose(views[1].pose)),views,reference);
     return gHost.menuPanel.has_value();
 }
 
@@ -180,10 +178,9 @@ bool ServiceHoldFrame()
     FrameLayerSet set=loading?FrameLayerSet{}:gHost.heldLayers;
     HeldPointer heldPointer=gHost.heldPointer;
     if(loading) {
-        heldPointer={true,ui::Surface{*gHost.menuPanel,gHost.panelAngle}};
-        FillMenuLayers(set.menu,set.menuCylinder,heldPointer.surface,gHost.swapchain,0);
+        heldPointer={true,*gHost.menuPanel};
+        FillMenuLayer(set.menu,heldPointer.surface,gHost.swapchain,0);
         set.shown.menu=true;
-        set.shown.menuCylinder=heldPointer.surface.angle>0;
     }
     set.shown.beam=set.shown.cursor=false;
     const auto hand=UiPointerHand();
@@ -217,8 +214,7 @@ bool ServiceHoldFrame()
     if(!begun || gHost.contract.OnSubmitted(thread)!=xrframe::Result::ok)gHost.contract.Reset();
     const bool submitted=XR_SUCCEEDED(endResult) && show;
     if(submitted && loading) {
-        if(gHost.loadingFrames++==0)Log("loading_screen shown captures="+std::to_string(gLoadingCaptured.load())+
-            " curved="+(set.shown.menuCylinder?"1":"0"));
+        if(gHost.loadingFrames++==0)Log("loading_screen shown captures="+std::to_string(gLoadingCaptured.load()));
         gLoadingFrames.fetch_add(1,std::memory_order_relaxed);
     }
     return submitted;

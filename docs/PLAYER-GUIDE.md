@@ -68,7 +68,7 @@ charged throw along the view.
 
 With no weapon drawn -- holstered, or while carrying something -- both hands stay visible at the controllers
 (open; the left one closes around what it carries). Hold the right grip to holster the weapon, squeeze it again
-to draw it. `arms.free 0` lets the game lower the arms out of view again. Grab does nothing while the left hand holds the foregrip, at the left-hip medkit slot (whose trigger is the
+to draw it. Grab does nothing while the left hand holds the foregrip, at the left-hip medkit slot (whose trigger is the
 medkit's) or with Menu held for the recenter chord. `use.hand 0` restores the previous layout (right grip uses and reloads along the weapon's aim).
 `aim.twohand 0` disables support aiming; `aim.twohand 1` enables it (default).
 
@@ -76,7 +76,7 @@ To equip a weapon, open inventory with **View** (Touch: **left stick click**), h
 
 The Touch profile has been tested in the injected game through xr-sim; physical controller acceptance remains. Index bindings are included: left A/B correspond to X/Y, pressing the **left trackpad** opens inventory, and **left stick click** opens pause. **Steam Frame** controllers get their own profile when SteamVR offers it (`xr_input_extension name=XR_VALVE_frame_controller_interaction enabled=1`, `detail=bindings profile=frame path=...`, and `interaction_profile ... valve/frame_controller` in the log). Each button then does what a gamepad's does in Prey, so the game's prompts name the button to press: right **X** and **Y** are Prey's X (grab and use; reload with nothing to use) and Y (search, special use; tap to swap weapon), **View** opens the inventory and closes menus, **Menu** pauses, the stick clicks sprint (left) and toggle the psychoscope (right), and the left **D-pad** is Prey's quick slots in play (up: torch) and navigates the game's menus and VR Options (left/right adjust there, up/down move). Inside Prey's weapon wheel (hold **Y**) the **bumpers** are Prey's LB and RB, a suit repair kit and food; outside it they do nothing in play, and in menus they change tabs. Without the profile SteamVR presents them as Touch: right X and Y act as B, the D-pad arrives as left X (down) and Y (the rest), and View is the menu button. To rebind any action, use SteamVR's controller bindings for Prey. Other controller profiles do not yet have dedicated mappings. Headset rendering uses OpenXR; the panel fits both runtime eye frusta, including their asymmetry.
 
-## Comfort settings
+## Settings
 
 ### In-headset VR options (integration build)
 
@@ -90,7 +90,7 @@ menu you opened it from), VR Options closes.
 F10 is a desktop shortcut; `vr.options 1` is the diagnostic equivalent. Both
 work in play and in menus.
 
-Each setting is a checkbox, a choice list or a slider, on nine tabs (listed
+Each setting is a checkbox, a choice list or a slider, on eight tabs (listed
 below). The panel opens 2 metres straight ahead of where you faced, over the
 game menu if one is up. **To move it, hold the trigger with the laser on any blank part of it** --
 a setting's name or help text, empty space, not a control (the hint line says
@@ -107,7 +107,21 @@ long list; a **bumper** (Steam Frame) or **grip** changes tab when let go (both 
 game menu. Releasing the controls is required before they can operate what is
 behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
 
-- **Comfort:** snap angle / smooth turning, head-relative movement, smooth-turn
+- **Setup:** calibrate posture, reset VR view, **Lean Zone** (how far you can
+  lean before the body steps after you; 25 cm by default, off follows you at
+  once), **Hips and Legs Back** (how far behind your eyes the drawn hips and legs
+  stand; 8 cm by default, raise it if the body seems to lean back when you look
+  down), **Near Clip Distance** (how close to your eyes things are still drawn;
+  3 cm by default, lower it if you can see through your own body when you look
+  down, raise it if distant surfaces flicker; Prey's own is 10 cm),
+  **Anti-Aliasing** (Temporal by default: blends each eye's recent frames so
+  distant edges stop crawling as you move, at some cost in frame rate; SMAA is
+  faster but distant edges shimmer), and **Debug Overlay (Testing)**,
+  which draws each hand's ray and target, the body slots, the wrist test and the
+  foregrip region in the world. Off by default, and separate from the aim
+  lasers: switching it off leaves them as they are. See
+  [the overlay note](DEBUG-OVERLAY-2026-10-06.md).
+- **Movement:** snap angle / smooth turning, head-relative movement, smooth-turn
   speed, the move and turn stick deadzones, and sideways and backward walking
   speed. The character's body turns to face where you face: with the stick,
   with each snap turn, and as you turn round in the room (looking over your
@@ -121,13 +135,23 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   Reset VR view is on the Setup page.
 - **Hands:** **aim lasers** (on by default: a laser from each hand to what it
   points at -- where the right hand aims, faint with no weapon drawn, and what
-  the left hand can grab or use), two-hand aim on/off, hold/toggle foregrip, snapped/free support hand,
-  the optional psychoscope gesture, the hands without a weapon, **fingers follow
+  the left hand can grab or use), **shot trail** (off by default: a green line from
+  your weapon's muzzle to where each shot went, fading after a few seconds),
+  two-hand aim on/off, hold/toggle foregrip, **auto-snap support hand** (off by
+  default: your left hand attaches to the weapon on its own when you hold it close
+  for a moment, within **Attach Distance** (10 cm by default), and lets go when you
+  move it away, at **Break Distance** (25 cm by default); a squeeze still works
+  as Foregrip Input says, and after a release the hand must move away before it
+  snaps again. While attached, as in any two-hand hold, the left hand can't grab or
+  use and you can't reload or holster),
+  the optional psychoscope gesture, **fingers follow
   the controller** (on by default: a free hand's thumb rests on a button or
   lifts, the index points or curls on the trigger, the other three close with
   the grip), **arm length** (shoulder to wrist, 56 cm by default: lower it if
   your arms look bent when yours are straight, raise it if your hands stop short
-  of the controllers), the carry grip (hold, or press to toggle), hand or game grenade
+  of the controllers), **physical carrying** (on by default: carried objects sit in
+  your left hand and are thrown with its motion; off, the game's carry in front of
+  you), the carry grip (hold, or press to toggle), hand or game grenade
   throwing, how hard thrown objects and grenades fly, **Hands Stop at Surfaces**
   (on by default: your drawn hands and weapon stop against walls, floors, desks,
   doors and glass and slide along them, though your real hands go on; shots,
@@ -145,54 +169,43 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   stamina apply; out of stamina it pushes but does not strike, and you cannot hit
   through walls. Each hit buzzes the controller. The attack button does nothing
   while the wrench is out).
-- **Interface:** size, visible-area limit, panel curvature, controls guide, where
+- **Interface:** size, where
   the game's menus float (distance, left/right, up/down), the text panel's
   distance, **Screen Distance** (how far your view stays back when you use a
   keypad, terminal, security station or fabricator; 30 cm by default, never
   further back than you were standing; Prey's own camera puts the screen a hand's
   width from your eyes; on a screen, zoomed or not, what highlights is what the
-  crosshair sits on), which hand's laser points at menus, **controller prompts** (on by
-  default: menus show your controller's buttons, not the keyboard's, while the
-  laser points at them), the HUD style (floating
-  panel, or in the world as Prey draws it), and the reticle: in the world or on
-  the HUD, its size, and how far it sits when your aim hits nothing.
+  crosshair sits on), which hand's laser points at menus, the reticle's size, and
+  **Marker Size** (the markers in the world: objectives, repair and danger icons,
+  enemy awareness and points of interest).
 - **Equipment:** optional body holsters, clear holster assignments, wrist status,
-  wrist-hologram size, keeping health, suit and psi on the HUD too, the wrist
-  tick, and the display's position along the forearm, height and tilt. Holsters
+  wrist-hologram size, the wrist tick, and the display's position along the
+  forearm, height and tilt. Health, suit and psi leave the HUD while the wrist
+  status is on. Holsters
   default off; the wrist status defaults on.
 - **Feedback:** controller feedback and its strength.
 - **Abilities:** psychic targeting (Original / Head / Left Controller), the
   optional left-hip medkit slot, and body slot feedback. Original targeting and
   slot off are the defaults.
-- **Setup:** calibrate posture, reset VR view, **Lean Zone** (how far you can
-  lean before the body steps after you; 25 cm by default, off follows you at
-  once), **Hips and Legs Back** (how far behind your eyes the drawn hips and legs
-  stand; 8 cm by default, raise it if the body seems to lean back when you look
-  down), **Near Clip Distance** (how close to your eyes things are still drawn;
-  3 cm by default, lower it if you can see through your own body when you look
-  down, raise it if distant surfaces flicker; Prey's own is 10 cm),
-  **Anti-Aliasing** (Temporal by default: blends each eye's recent frames so
-  distant edges stop crawling as you move, at some cost in frame rate; SMAA is
-  faster but distant edges shimmer), and **Debug Overlay (Testing)**,
-  which draws each hand's ray and target, the body slots, the wrist test and the
-  foregrip region in the world. Off by default, and separate from the aim
-  lasers: switching it off leaves them as they are. See
-  [the overlay note](DEBUG-OVERLAY-2026-10-06.md).
 - **Controls:** what every button does on the controller you hold, by the names
   SteamVR gives them: play, menus and any time. It follows SteamVR: rebind an
   action there (Settings > Controllers > Manage Controller Bindings > Prey) and the
   tab shows the new button. Read only.
-- **Experimental**, features still being proven: physical carrying in the left
-  hand (on by default; off restores the game's carry in front of you), sticking
-  charges to the surface you look at, long weapons held back toward the body,
-  **Shots from the Muzzle**, **Scene Reticle**, and the inventory on a layer of its
-  own, with optional depth.
-  **Shots from the Muzzle** makes every shot leave the weapon's muzzle along
-  your controller's aim, so it lands where the barrel points at any distance,
-  also from the hip or around a corner (otherwise the shot is aimed from your
-  eyes and misses by up to several degrees close by). Off by default;
-  `aim.shot 1` in **Tune Prey VR.cmd** turns it on for a session. See
-  [the shot note](SHOT-RAY-2026-10-06.md).
+
+**Always on, with no setting:**
+
+- The HUD floats on a panel in front of you, and the reticle sits in the world on
+  what you aim at, or 10 m along your aim when it hits nothing.
+- Every shot leaves the weapon's muzzle along your controller's aim, so it lands
+  where the barrel points at any distance, also from the hip or around a corner.
+  See [the shot note](SHOT-RAY-2026-10-06.md).
+- Long weapons are held back toward the body, with a wider foregrip region, and
+  your torso turns as you hold one two-handed. Your support hand snaps to the
+  weapon.
+- Your hands stay at the controllers with no weapon drawn: holstered or carrying.
+- Menus show your controller's buttons, not the keyboard's, while the laser points
+  at them.
+- Charges stick to the surface you look at, as in the game.
 
 **Psi powers:** equip a power using Prey's normal quick wheel. The **left trigger** is Prey's own psi button
 (Original targeting): hold it to use the power, aimed as Prey aims it. It does nothing at the left-hip medkit
@@ -264,7 +277,7 @@ them all. `PreyVR.json` keeps only the launch settings below. Every tuning
 command, and what the menu saves, is in [the tuning reference](TUNING-COMMANDS.md).
 
 The panel has been worn in a headset (2026-10-13 and 2026-10-14); this build's
-tidy-up -- one panel, the nine tabs above, each controller's own bindings --
+tidy-up -- one panel, the eight tabs above, each controller's own bindings --
 has offline tests only. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md)
 and, for the original card, [its validation](VR-OPTIONS-2026-09-27.md).
 
@@ -287,15 +300,9 @@ notification or a click elsewhere does not pause the game or mute it. The keyboa
 shortcuts (F10, F11, F12) only work while the window has focus. See
 [the desktop window notes](DESKTOP-WINDOW-2026-10-17.md).
 
-Everything else is a VR Options setting. An older `PreyVR.json` may still hold
-`SnapTurnDegrees`, `HeadRelativeMovement`, `UiScalePercent`, `UiCurveDegrees`,
-`UiGuide`, `PointerHand` or `HudLayer`: the launcher moves any you had changed
-into `vr-options.ini` once (unless the menu already holds that setting, which
-wins), removes them from `PreyVR.json`, and says what it moved. It also drops
-`NewVROptionsUI`, which chose between two VR Options panels before there was
-one.
+Everything else is a VR Options setting.
 
-Turning and movement direction are on the Comfort tab. For this session only,
+Turning and movement direction are on the Movement tab. For this session only,
 use `move.snap 30` or `move.headrelative 0` in **Tune Prey VR.cmd**. A command
 typed without a value reports the current setting and changes nothing. Return
 the stick to neutral after changing modes.
@@ -320,7 +327,7 @@ Objective markers stay in the world view, in both eyes, at no particular depth: 
 
 The default render size is **2016 × 2160 per eye**, independent of monitor DPI. This restores the tall aspect used in earlier headset testing; **2688 × 2880** offers more detail at the same aspect and higher GPU cost. Edit `Width` and `Height` in `PreyVR.json`, then restart Prey. Menus can have unused space within their floating panel; do not switch the world render to 16:9 just to fill that panel. This is a starting preset, not automatic headset-resolution detection or a guarantee of complete FOV coverage on every headset.
 
-The launcher migrates the old, unversioned **2560 × 1440** default once, backing up `PreyVR.json` first. Custom sizes remain unchanged. To intentionally retain that old size, add `"ResolutionDefaultsVersion": 1` to the JSON, or launch with both `-Width 2560 -Height 1440`. A single command-line dimension is rejected. The HUD style -- a floating panel, or drawn in the world as Prey draws it -- is on VR Options' Interface tab.
+The launcher migrates the old, unversioned **2560 × 1440** default once, backing up `PreyVR.json` first. Custom sizes remain unchanged. To intentionally retain that old size, add `"ResolutionDefaultsVersion": 1` to the JSON, or launch with both `-Width 2560 -Height 1440`. A single command-line dimension is rejected.
 
 Both eyes are rendered from the same game frame by default (`DualStereo: 1`). `DualStereo: 0` (or launching with `-DualStereo 0`, which is also saved) returns to the earlier method that renders one eye per frame; it shows doubled edges when you or the scene move. Use it only to check whether a problem belongs to the both-eyes method, and report what you find. Fades, markers and anything else Prey draws over the world are drawn into both eyes; `dual.overlay 0` in **Tune Prey VR.cmd** leaves them in the right eye only, for comparison, and `dual.overlay 1` restores them. Once VR is ready, the launcher prints which method is running. If the both-eyes method is unavailable, it says so and Prey continues with alternate eyes.
 

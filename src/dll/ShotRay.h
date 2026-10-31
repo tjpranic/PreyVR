@@ -8,8 +8,8 @@
 #include <cstdint>
 #include <string>
 
-// `aim.shot`: the weapon's ray starts at the muzzle the shot leaves from, so
-// the projectile flies along the direction the player points and lands where
+// Shots from the muzzle: the weapon's ray starts at the muzzle the shot leaves
+// from, so the projectile flies along the direction the player points and lands where
 // the drawn ray, the scene reticle and the HUD reticle say it will. The why and
 // the native routes are in preyvr/ShotRay.h; measurements in
 // docs/SHOT-RAY-2026-10-06.md.
@@ -31,6 +31,7 @@
 namespace preyvr::dll {
 struct GameplayPoseFrame;
 
+// On at VR start, off when VR stops. `aim.shot` reports.
 DWORD SetShotRay(unsigned enabled);
 unsigned ShotRayEnabled();
 

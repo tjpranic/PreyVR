@@ -545,8 +545,8 @@ void AddShot(Scene& scene, const ShotMark& shot, unsigned mask)
 void BuildOverlayScene(const OverlayFrame& frame, unsigned mask, Scene& scene)
 {
     scene.Clear();
+    if (mask & kShots) { AddShot(scene, frame.shot, mask); }
     if (mask & kRays) {
-        AddShot(scene, frame.shot, mask);
         AddRay(scene, frame.rays[1], kRight, mask, true);
         AddRay(scene, frame.rays[0], frame.rays[0].role == RayRole::Psi ? kPsi : kLeft, mask, false);
     }
