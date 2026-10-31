@@ -474,7 +474,7 @@ Left:
   - the unused functions and the FOV-divergence leftovers;
   - the bring-up copies in Invoke-PreyVRStartup and the harness's `startVr`;
   - Publish-PreyVR051.
-- **Kept:** DualSceneStereo modes 1 and 2; the AimState, InteractionQuery and WrenchQuery leftovers; run-graphify.
+- **Kept:** DualSceneStereo modes 1 and 2; the AimState, InteractionQuery and WrenchQuery leftovers; run-graphify. **Reversed 2026-10-31:** those three leftovers were cut as unused, with `preyvr_ray_probe`, whose only use was AimState.
 
 **Status 2026-10-18: all signed-off items cut.** PreyVR-17 passed in the headset; committed as `1d8bae9`. About 3,300 lines net. Build passes with no new warnings, and 78/78 ctest pass (three tests went with their code: frame_clock, wrist_panel and depth_submission).
 - **CameraEditHook:** 2,134 → 850 lines, header 502 → 264.

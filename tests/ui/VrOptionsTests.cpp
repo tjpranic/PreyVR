@@ -1,0 +1,329 @@
+#include "ui/options/VrOptions.h"
+#include "equipment/psi/PsychoscopeGesture.h"
+#include "TestSupport.h"
+#include <algorithm>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <limits>
+using namespace preyvr;
+using namespace preyvr::options;
+using preyvr::test::Check;
+Input Base(){Input i;i.valid=i.modal=true;i.dt=.01f;i.epoch=1;return i;}
+void Ready(Menu& m,Input& i){m.Update(i);m.Update(i);}
+void Open(Menu& m,Input& i){Ready(m,i);m.RequestOpen();m.Update(i);m.Update(i);Check(m.Open()&&m.Armed(),"open on modal");}
+bool Has(std::span<const int> entries,int e){return std::find(entries.begin(),entries.end(),e)!=entries.end();}
+void MenuChecks(){
+ Input i=Base();Menu m;Ready(m,i);
+ i.start=true;m.Update(i);Check(!m.PauseTap(),"pause deferred until tap or hold");
+ i.start=false;m.Update(i);Check(m.PauseTap()&&!m.Open(),"short tap goes to native pause once");
+ m.Update(i);Check(!m.PauseTap(),"no repeated pause");
+ i.start=true;for(int n=0;n<70;++n)m.Update(i);
+ Check(m.Open()&&m.OwnsInput()&&!m.PauseTap()&&!m.Armed(),"long hold on a game menu opens options over it, unarmed while held");
+ i.start=false;i.accept=true;m.Update(i);Check(!m.Armed(),"a press carried from the hold does not arm it");
+ i.accept=false;m.Update(i);Check(m.Armed()&&m.OwnsInput(),"at rest it arms, keeping the controls");
+ // Only B acts on the state machine; the panel (VrOptionsUi) takes the rest.
+ i.accept=i.next=i.previous=i.trigger=true;i.x=1;i.y=-1;m.Update(i);
+ Check(m.Open()&&m.Armed(),"accept, grips, stick and trigger leave it open");
+ i.accept=i.next=i.previous=i.trigger=false;i.x=i.y=0;
+ i.cancel=true;m.Update(i);Check(!m.Open()&&m.OwnsInput(),"closing press remains quarantined");
+ m.Update(i);Check(m.OwnsInput(),"held close never leaks");
+ i.cancel=false;m.Update(i);Check(!m.OwnsInput(),"neutral gives input back");
+ // In play the same long hold opens it over the running game: no pause.
+ m={};i=Base();i.modal=false;Ready(m,i);i.start=true;
+ int pauses=0;for(int n=0;n<70;++n){m.Update(i);pauses+=m.PauseTap();}
+ Check(pauses==0&&m.Open()&&!m.OverMenu()&&m.OwnsInput(),"long hold from play opens over the game, posting no pause");
+ i.start=false;m.Update(i);Check(!m.PauseTap()&&m.Open(),"letting the hold go posts no pause either");
+ i.modal=true;m.Update(i);Check(!m.Open(),"a game menu opening under it closes it");
+ m={};i=Base();i.modal=false;Ready(m,i);m.RequestOpen();m.Update(i);
+ Check(m.Open()&&!m.OverMenu(),"a request (F10, vr.options 1) opens it over the game too");
+ m={};i=Base();i.modal=false;Ready(m,i);i.start=true;m.Update(i);i.start=false;m.Update(i);
+ Check(m.PauseTap()&&!m.Open(),"a short tap in play is still the game's pause");
+ // **Menu with both grips is the recenter chord**, in either order: no pause
+ // tap on its release and no VR Options however long it is held.
+ m={};i=Base();i.modal=false;Ready(m,i);i.chord=true;i.start=true;
+ for(int n=0;n<70;++n){m.Update(i);Check(!m.PauseTap()&&!m.Open(),"grips then Menu: the chord neither pauses nor opens");}
+ i.start=false;m.Update(i);Check(!m.PauseTap(),"nor does its release pause");
+ i.chord=false;m.Update(i);i.start=true;m.Update(i);i.chord=true;m.Update(i);i.chord=false;
+ for(int n=0;n<70;++n)m.Update(i);
+ Check(!m.Open(),"Menu then both grips: the chord, so the hold never opens it");
+ i.start=false;m.Update(i);Check(!m.PauseTap(),"and its release is no pause");
+ i.start=true;m.Update(i);i.start=false;m.Update(i);
+ Check(m.PauseTap(),"the next tap alone is the game's pause again");
+ m={};i=Base();Open(m,i);Check(m.OverMenu(),"opened in a game menu, it is over that menu");
+ m={};i=Base();Open(m,i);i.modal=false;m.Update(i);Check(!m.Open(),"native modal ends closes overlay");
+ m={};i=Base();Open(m,i);i.valid=false;m.Update(i);Check(!m.Open(),"tracking loss closes");
+ i.valid=true;i.accept=true;m.Update(i);Check(!m.Open(),"regained held input cannot open");
+ m={};i=Base();Open(m,i);i.epoch++;m.Update(i);Check(!m.Open(),"session transition closes");
+ m={};i=Base();Open(m,i);i.dt=NAN;m.Update(i);Check(!m.Open(),"a nonfinite frame closes");
+ // A trigger held while it opens (the laser already on the panel) must not click.
+ m={};i=Base();Ready(m,i);
+ i.trigger=true;m.RequestOpen();m.Update(i);
+ Check(m.Open()&&!m.Armed(),"a press held while opening does not arm it");
+ m.Update(i);Check(!m.Armed(),"nor while it stays held");
+ i.trigger=false;i.x=.5f;m.Update(i);Check(!m.Armed(),"a deflected stick is not at rest");
+ i.x=.1f;m.Update(i);Check(m.Armed()&&m.OwnsInput(),"inside the deadzone is: it arms and keeps input");
+ i.x=0;i.cancel=true;m.Update(i);Check(!m.Open()&&m.OwnsInput(),"B closes it, quarantined");
+ i.cancel=false;i.trigger=true;m.Update(i);Check(m.OwnsInput(),"a trigger pressed before rest after closing never leaks");
+ i.trigger=false;m.Update(i);Check(!m.OwnsInput(),"neutral gives input back");
+}
+void SettingsChecks(){
+ auto v=Defaults(),parsed=v;
+ v[Psychoscope]=1;v[GripToggle]=1;v[UiScale]=130;
+ Check(Parse(Serialize(v),parsed)&&parsed==v,"settings roundtrip");
+ const auto original=parsed;
+ for(auto s:{"version=2\n","version=1\nturn=10\n","version=1\npsychoscope=2\n","version=1\nui_scale=500\n","version=1\nx=3\n","version=1\nturn=45oops\n","version=1\nturn=45\nturn=30\n"}){
+  Check(!Parse(s,parsed)&&parsed==original,"invalid file has no partial effects");
+ }
+ // Turning: smooth, or any step from 15 to 90 -- a command can set 75, which no
+ // menu choice is -- while 1..14 is no angle at all.
+ Check(Valid(Turn,0)&&!Valid(Turn,1)&&!Valid(Turn,14)&&Valid(Turn,15)&&Valid(Turn,75)&&Valid(Turn,90)&&!Valid(Turn,91),
+       "turning takes smooth or a step of 15..90");
+ Check(KindOf(Turn)==Kind::choice&&Choices(Turn)==std::vector<int>{0,15,30,45,60,90},"the menu offers the six turn choices");
+ Check(Display(Turn,0)==L"SMOOTH"&&Display(Turn,75)==L"75 DEGREES","a command's angle reads as itself");
+ Check(Defaults()[Psychoscope]==0,"gesture opt in");
+ Check(Defaults()[Holsters]==0&&Defaults()[Wrist]==1,"holsters opt in; the wrist hologram is on (2026-10-07)");
+ Check(Parse("version=1\nturn=45\n",parsed)&&parsed[Holsters]==0&&parsed[WristSize]==100,"old settings upgrade safely");
+ Check(Defaults()[PsiTarget]==0&&Defaults()[Medkit]==0,"abilities preserve original behavior by default");
+ Check(Valid(PsiTarget,2)&&!Valid(PsiTarget,3)&&!Valid(Medkit,2),"ability ranges");
+ Check(Defaults()[DebugOverlay]==0,"the debug overlay is opt in");
+ Check(Defaults()[AimLasers]==1&&KindOf(AimLasers)==Kind::toggle,"the aim lasers are on by default, on/off");
+ Check(Defaults()[ShotTrail]==0&&KindOf(ShotTrail)==Kind::toggle&&std::string(Describe(ShotTrail).key)=="shot_trail",
+       "the shot trail is opt in, on/off");
+ Check(Defaults()[AutoSnap]==0&&KindOf(AutoSnap)==Kind::toggle&&std::string(Describe(AutoSnap).key)=="support_auto",
+       "auto-snap is opt in, on/off");
+ {Present marked{};
+  Check(Parse("version=1\naim_lasers=0\n",parsed,&marked)&&parsed[AimLasers]==0&&marked[AimLasers],"aim lasers persist as off");
+  Check(Parse("version=1\ndebug_overlay=0\n",parsed,&marked)&&parsed[AimLasers]==1&&!marked[AimLasers],
+        "a file saved before the lasers, debug overlay off, leaves them to VR start");}
+ // Body Follows You and its settings are retired (2026-10-24): a file saved
+ // with them still loads, their values are dropped, and a save leaves them out.
+ Check(Parse("version=1\nbody_follow=2\nbody_turn_deadzone=35\nbody_step=30\nbody_glide=50\nturn=45\n",parsed)&&
+       parsed[Turn]==45,"a file saved with body following still loads");
+ Check(Serialize(Defaults()).find("body_")==std::string::npos,"and no body following setting is written");
+ Check(Parse("version=1\ndebug_overlay=1\n",parsed)&&parsed[DebugOverlay]==1&&!Valid(DebugOverlay,2),"debug overlay persists as on/off");
+ // The scene reticle toggle is retired: a file saved with it still loads, its
+ // other settings intact.
+ Present seen{};
+ Check(Parse("version=1\nscene_reticle=0\nui_scale=150\n",parsed,&seen)&&parsed[UiScale]==150&&seen[UiScale],
+       "a retired key is skipped, not a reason to lose the file");
+ Check(Serialize(parsed).find("scene_reticle")==std::string::npos,"and the next save leaves it out");
+ Check(!Parse("version=1\nscene_reticle=x\n",parsed),"a retired key still needs a number");
+ // The options audit, 2026-10-31: each of these is now fixed, and a file saved
+ // with all of them, at any value they took, keeps everything else. Zoom Limit
+ // came and went the same day.
+ {constexpr const char* retired[]={"support_snap=0","arms_free=0","controller_prompts=0","hud_layer=0","reticle_world=0",
+   "reticle_fallback_mm=200000","wrist_on_hud=1","grenade_deploy=0","long_reach=0","muzzle_aim=0",
+   "ui_margin=72","ui_curve=35","ui_guide=1","inventory_layer=1","inventory_stereo=1","inventory_depth=25",
+   "zoom_limit=30"};
+  std::string text="version=1\nhaptic_strength=35\n";
+  for(const char* line:retired)text+=std::string(line)+"\n";
+  Check(Parse(text,parsed)&&parsed[HapticStrength]==35,"a file saved before the audit still loads, its choices kept");
+  const auto saved=Serialize(parsed);
+  for(const char* line:retired){
+   const std::string key(line,std::strchr(line,'=')-line);
+   Check(saved.find(key)==std::string::npos,"and the next save leaves the removed settings out");
+  }}
+ Check(Defaults()[PushStrength]==100&&Valid(PushStrength,25)&&Valid(PushStrength,200)&&!Valid(PushStrength,250),
+       "push strength, 25..200 percent");
+ // Object Nudges, removed 2026-10-18: a file saved with them keeps everything else.
+ Check(Parse("version=1\nphysical_melee=1\nphysical_contacts=1\nswing_speed=150\ncontact_strength=50\n",parsed,&seen)&&
+       !seen[FreeSwing]&&parsed[SwingSpeed]==150,"the nudge keys and the Physical Wrench's are retired, the swing speed kept");
+ Check(Valid(SwingSpeed,100)&&Valid(SwingSpeed,700)&&!Valid(SwingSpeed,90)&&!Valid(SwingSpeed,710)&&Defaults()[SwingSpeed]==120,
+       "the minimum swing speed: 1 to 7 m/s, 1.2 by default");
+ Check(Parse("version=1\nswing_speed=80\nhaptic_strength=35\n",parsed,&seen)&&parsed[SwingSpeed]==100&&parsed[HapticStrength]==35,
+       "a file saved at the old 80 still loads, the speed at the new minimum");
+ Check(Defaults()[FreeSwing]==1,"the free-swing wrench is on by default");
+ {const auto text=Serialize(parsed);
+  Check(text.find("physical_contacts")==std::string::npos&&text.find("contact_strength")==std::string::npos,
+        "and the next save leaves them out");}
+ Check(Defaults()[ReticleSize]==100&&Valid(ReticleSize,50)&&Valid(ReticleSize,200)&&!Valid(ReticleSize,40),
+       "the reticle's size, 50..200 percent");
+}
+void KindChecks(){
+ // Each setting is edited as what its Spec says it is.
+ Check(KindOf(TwoHand)==Kind::toggle&&KindOf(DebugOverlay)==Kind::toggle&&KindOf(Holsters)==Kind::toggle,
+       "a bare 0..1 is on/off");
+ Check(KindOf(HeadRelative)==Kind::choice&&KindOf(PointerHand)==Kind::choice&&KindOf(GripToggle)==Kind::choice,
+       "named values are a choice, two of them included");
+ Check(KindOf(UiScale)==Kind::range&&KindOf(UiOffsetRight)==Kind::range&&
+       KindOf(HapticStrength)==Kind::range,"the rest are ranges, those with a named zero included");
+ Check(Choices(PointerHand)==std::vector<int>{0,1,2}&&Choices(UiScale).empty()&&Choices(TwoHand).empty(),
+       "only a choice offers a list");
+ for(unsigned id=0;id<Count;++id){
+  const auto values=Choices(id);
+  for(const int value:values)Check(Valid(id,value),"every choice is valid");
+  Check((KindOf(id)==Kind::choice)==(values.size()>=2),"a choice, and only a choice, offers two or more values");
+  if(!Describe(id).names.empty())for(const int value:values)Check(Display(id,value)!=std::to_wstring(value),"every named value reads as its name");
+ }
+ Check(Display(TwoHand,1)==L"ON"&&Display(TwoHand,0)==L"OFF","on/off");
+ Check(Display(LeanZone,0)==L"OFF"&&Display(LeanZone,25)==L"25 CM","a named zero, otherwise the unit");
+ Check(Display(UiScale,130)==L"130%"&&Display(SwingSpeed,120)==L"120 CM/S","percent and speed");
+ Check(Display(UiOffsetUp,-10)==L"10 DEGREES DOWN"&&Display(UiOffsetRight,25)==L"25 DEGREES RIGHT","directions name the side");
+ Check(Display(PointerHand,7)==L"7","a value without a name reads as its number");
+}
+void LayoutChecks(){
+ // The panel's tabs (MenuEntries): any number of rows, every setting on
+ // exactly one tab, each button once, the last tab CONTROLS.
+ Check(MenuPages()==8&&ControlsPage()==7,"eight tabs, the last the controls");
+ {constexpr const wchar_t* names[]={L"SETUP",L"MOVEMENT",L"HANDS",L"INTERFACE",L"EQUIPMENT",L"FEEDBACK",L"ABILITIES"};
+  for(unsigned p=0;p<std::size(names);++p)Check(std::wstring(MenuPageName(p))==names[p],"setup first, then movement");}
+ Check(std::wstring(MenuPageName(ControlsPage()))==L"CONTROLS"&&MenuEntries(ControlsPage()).empty(),
+       "the Controls tab holds no setting: the panel lists the bindings there");
+ std::array<int,Count> seen{};int recenter=0,clear=0,calibrate=0;
+ for(unsigned p=0;p<MenuPages();++p)for(const int e:MenuEntries(p)){
+  if(e==RecenterView)++recenter;else if(e==ClearHolsterSlots)++clear;else if(e==CalibratePosture)++calibrate;
+  else{Check(e>=0&&e<static_cast<int>(Count),"entries are settings or buttons");++seen[e];}
+ }
+ for(unsigned i=0;i<Count;++i)Check(seen[i]==1,"every setting appears on exactly one tab");
+ Check(recenter==1&&clear==1&&calibrate==1,"each button appears once");
+ Check(MenuEntries(MenuPages()).empty(),"past the last tab there is nothing");
+ {const auto page=MenuEntries(2);const auto grip=std::find(page.begin(),page.end(),GripToggle);
+  Check(page.end()-grip>=4&&grip[1]==AutoSnap&&grip[2]==AutoSnapAttach&&grip[3]==AutoSnapBreak,
+        "auto-snap and its two distances sit under foregrip input");}
+ Check(Defaults()[AutoSnapAttach]==10&&Valid(AutoSnapAttach,5)&&Valid(AutoSnapAttach,25)&&!Valid(AutoSnapAttach,4)&&
+       !Valid(AutoSnapAttach,26)&&KindOf(AutoSnapAttach)==Kind::range&&Display(AutoSnapAttach,10)==L"10 CM"&&
+       std::string(Describe(AutoSnapAttach).key)=="support_auto_attach",
+       "auto-snap attach distance: 10 cm by default, 5 to 25");
+ Check(Defaults()[AutoSnapBreak]==25&&Valid(AutoSnapBreak,10)&&Valid(AutoSnapBreak,60)&&!Valid(AutoSnapBreak,9)&&
+       !Valid(AutoSnapBreak,61)&&KindOf(AutoSnapBreak)==Kind::range&&Display(AutoSnapBreak,25)==L"25 CM"&&
+       std::string(Describe(AutoSnapBreak).key)=="support_auto_break",
+       "auto-snap break distance: 25 cm by default, 10 to 60");
+ {const auto page=MenuEntries(2);const auto carry=std::find(page.begin(),page.end(),static_cast<int>(CarryHand));
+  Check(carry!=page.end()&&carry+1!=page.end()&&carry[1]==CarryHold&&Defaults()[CarryHand]==1,
+        "physical carrying, on by default, sits on the hands tab above the carry grip");}
+ Check(Has(MenuEntries(2),PhysicalContact)&&Has(MenuEntries(2),PushStrength)&&Defaults()[PhysicalContact]==1,
+       "physical contact, proven, is on by default on the hands tab with its strength");
+ Check(Has(MenuEntries(2),SurfaceStop)&&Defaults()[SurfaceStop]==1&&KindOf(SurfaceStop)==Kind::toggle&&
+       std::string(Describe(SurfaceStop).key)=="surface_stop",
+       "hands stop at surfaces: an on/off on the hands tab, on by default");
+ {const auto page=MenuEntries(2);const auto stop=std::find(page.begin(),page.end(),static_cast<int>(SurfaceStop));
+  Check(stop!=page.end()&&stop+1!=page.end()&&stop[1]==HeavyMass,"heavy objects sits under hands stop at surfaces");}
+ Check(Defaults()[HeavyMass]==10&&Valid(HeavyMass,1)&&Valid(HeavyMass,100)&&!Valid(HeavyMass,0)&&!Valid(HeavyMass,101)&&
+       Display(HeavyMass,10)==L"10 KG"&&std::string(Describe(HeavyMass).key)=="heavy_mass",
+       "heavy objects: above 10 kg by default, 1 to 100 kg");
+ Check(Has(MenuEntries(2),FreeSwing)&&Has(MenuEntries(2),SwingSpeed)&&Has(MenuEntries(2),HeavySwingSpeed)&&
+       Defaults()[FreeSwing]==1,
+       "the free-swing wrench, proven, is on by default on the hands tab with its two speeds");
+ Check(Defaults()[HeavySwingSpeed]==700&&Valid(HeavySwingSpeed,300)&&Valid(HeavySwingSpeed,1500)&&!Valid(HeavySwingSpeed,1550)&&
+       !Valid(HeavySwingSpeed,250)&&Display(HeavySwingSpeed,700)==L"700 CM/S",
+       "heavy swings from 7 m/s by default, 3 to 15 m/s");
+ Check(MenuEntries(1)[0]==Turn&&Has(MenuEntries(1),BackwardSpeed),"movement: turning first, then walking");
+ Check(MenuEntries(1).size()>=2&&MenuEntries(1).end()[-2]==ZeroGRoll&&MenuEntries(1).end()[-1]==ZeroGPitch,
+       "movement: zero-G's roll and pitch last");
+ for(const int z:{ZeroGRoll,ZeroGPitch})
+  Check(Defaults()[z]==0&&KindOf(static_cast<unsigned>(z))==Kind::choice&&Display(static_cast<unsigned>(z),0)==L"SMOOTH"&&
+        Display(static_cast<unsigned>(z),45)==L"45 DEGREES"&&Valid(static_cast<unsigned>(z),90)&&
+        !Valid(static_cast<unsigned>(z),10),
+        "zero-G roll and pitch: smooth by default, or Turning's steps");
+ Check(std::string(Describe(ZeroGRoll).key)=="zerog_roll"&&std::string(Describe(ZeroGPitch).key)=="zerog_pitch",
+       "zero-G roll and pitch: saved by their keys");
+ for(const int e:{UiDistance,UiOffsetRight,UiOffsetUp,UiText,PointerHand,ReticleSize,MarkerSize})
+  Check(Has(MenuEntries(3),e),"menu placement, the reticle and the markers on the interface tab");
+ {const auto page=MenuEntries(3);const auto text=std::find(page.begin(),page.end(),static_cast<int>(UiText));
+  Check(text!=page.end()&&text+1!=page.end()&&text[1]==ScreenPullback,"the screen distance sits under the text panel's");}
+ Check(Defaults()[ScreenPullback]==30&&Valid(ScreenPullback,0)&&Valid(ScreenPullback,100)&&!Valid(ScreenPullback,101)&&
+       !Valid(ScreenPullback,-5)&&KindOf(ScreenPullback)==Kind::range&&Display(ScreenPullback,30)==L"30 CM"&&
+       Display(ScreenPullback,0)==L"PREY'S OWN"&&std::string(Describe(ScreenPullback).key)=="screen_pullback",
+       "screen distance: 30 cm back by default, Prey's own (0) to 100 cm");
+ Check(Defaults()[MarkerSize]==100&&Valid(MarkerSize,50)&&Valid(MarkerSize,200)&&!Valid(MarkerSize,40)&&!Valid(MarkerSize,210)&&
+       std::string(Describe(MarkerSize).key)=="marker_size"&&Display(MarkerSize,150)==L"150%",
+       "marker size: Prey's size by default, half to double");
+ Check(std::wstring(MenuPageName(2))==L"HANDS"&&MenuEntries(2)[0]==AimLasers&&MenuEntries(2)[1]==ShotTrail,
+       "hands: the aim lasers first, apart from the interface tab's menu laser");
+ {const auto page=MenuEntries(2);const auto fingers=std::find(page.begin(),page.end(),FingerCurl);
+  Check(fingers!=page.end()&&fingers+1!=page.end()&&fingers[1]==ArmLength,"hands: the arm's length beside the fingers");}
+ Check(Defaults()[ArmLength]==56&&Valid(ArmLength,40)&&Valid(ArmLength,70)&&!Valid(ArmLength,39)&&!Valid(ArmLength,71)&&
+       Display(ArmLength,56)==L"56 CM",
+       "the arm is 56 cm by default, shoulder to wrist, 40 to 70");
+ Check(MenuEntries(4)[0]==Holsters&&MenuEntries(4)[1]==ClearHolsterSlots&&MenuEntries(4)[2]==Wrist,
+       "equipment: holsters, clearing them, then the wrist");
+ Check(MenuEntries(0).size()==7&&MenuEntries(0)[0]==CalibratePosture&&MenuEntries(0)[1]==RecenterView&&
+       MenuEntries(0)[2]==LeanZone&&MenuEntries(0)[3]==HipsBack&&MenuEntries(0)[4]==NearClip&&
+       MenuEntries(0)[5]==Antialiasing&&MenuEntries(0)[6]==DebugOverlay,
+       "setup: its two buttons, the body's lean zone and hips, the near clip, anti-aliasing and the debug overlay");
+ Check(Defaults()[Antialiasing]==1&&KindOf(Antialiasing)==Kind::choice&&Display(Antialiasing,0)==L"SMAA"&&
+       Display(Antialiasing,1)==L"TEMPORAL"&&!Valid(Antialiasing,2)&&std::string(Describe(Antialiasing).key)=="antialiasing",
+       "anti-aliasing: SMAA or temporal, temporal by default");
+ {Values parsed{};Present marked{};
+  Check(Parse("version=1\nantialiasing=0\n",parsed,&marked)&&parsed[Antialiasing]==0&&marked[Antialiasing],
+        "SMAA persists");}
+ Check(Defaults()[Helmet]==1&&KindOf(Helmet)==Kind::choice&&Display(Helmet,1)==L"SHOWN"&&Display(Helmet,0)==L"HIDDEN"&&
+       !Valid(Helmet,2)&&std::string(Describe(Helmet).key)=="helmet"&&Has(MenuEntries(3),Helmet),
+       "space helmet: shown on the head by default, or hidden, on the interface tab");
+ {const auto page=MenuEntries(3);const auto shown=std::find(page.begin(),page.end(),static_cast<int>(Helmet));
+  Check(shown!=page.end()&&page.end()-shown>=4&&shown[1]==HelmetHeight&&shown[2]==HelmetForward&&shown[3]==HelmetSize,
+        "the helmet's height, forward / back and size sit under it");}
+ Check(Defaults()[HelmetHeight]==0&&Valid(HelmetHeight,-100)&&Valid(HelmetHeight,100)&&!Valid(HelmetHeight,105)&&
+       Display(HelmetHeight,0)==L"PREY'S OWN"&&Display(HelmetHeight,-20)==L"20 MM DOWN"&&Display(HelmetHeight,15)==L"15 MM UP"&&
+       std::string(Describe(HelmetHeight).key)=="helmet_height",
+       "helmet height: Prey's own by default, 10 cm up or down in 5 mm steps");
+ Check(Defaults()[HelmetForward]==0&&Valid(HelmetForward,-100)&&!Valid(HelmetForward,-105)&&
+       Display(HelmetForward,-35)==L"35 MM BACK"&&Display(HelmetForward,10)==L"10 MM FORWARD"&&
+       std::string(Describe(HelmetForward).key)=="helmet_forward",
+       "helmet forward / back: 10 cm either way");
+ Check(Defaults()[HelmetSize]==100&&Valid(HelmetSize,50)&&Valid(HelmetSize,200)&&!Valid(HelmetSize,45)&&
+       Display(HelmetSize,120)==L"120%"&&std::string(Describe(HelmetSize).key)=="helmet_size",
+       "helmet size: Prey's by default, half to double");
+ Check(Defaults()[NearClip]==3&&Valid(NearClip,1)&&Valid(NearClip,10)&&!Valid(NearClip,0)&&!Valid(NearClip,11)&&
+       KindOf(NearClip)==Kind::range&&Display(NearClip,3)==L"3 CM"&&Display(NearClip,10)==L"10 CM"&&
+       std::string(Describe(NearClip).key)=="near_clip",
+       "the near clip: 3 cm by default, from the engine's 1 cm floor to Prey's own 10 cm");
+ Check(Defaults()[LeanZone]==25&&Valid(LeanZone,0)&&Valid(LeanZone,50)&&!Valid(LeanZone,51)&&!Valid(LeanZone,-5)&&
+       KindOf(LeanZone)==Kind::range&&Display(LeanZone,25)==L"25 CM"&&Display(LeanZone,0)==L"OFF"&&
+       std::string(Describe(LeanZone).key)=="lean_zone",
+       "the lean zone: 25 cm by default, off to 50 cm");
+ Check(Defaults()[HipsBack]==8&&Valid(HipsBack,0)&&Valid(HipsBack,20)&&!Valid(HipsBack,21)&&!Valid(HipsBack,-1)&&
+       KindOf(HipsBack)==Kind::range&&Display(HipsBack,8)==L"8 CM"&&Display(HipsBack,0)==L"0 CM"&&
+       std::string(Describe(HipsBack).key)=="hips_back",
+       "hips and legs back: 8 cm by default, Prey's own (0) to 20 cm");
+ for(unsigned i=0;i<Count;++i){
+  const Spec& s=Describe(i);
+  Check(Valid(i,s.initial)&&s.min<s.max&&s.step>0,"each spec's default is valid and it can step");
+  for(unsigned j=0;j<i;++j)Check(std::string_view(Describe(j).key)!=s.key,"keys are unique");
+ }
+}
+void PresenceChecks(){
+ // Only settings chosen in the menu, or read from the file, are written back:
+ // a tuner command's session value never reaches the file by riding along.
+ Present present{};present[DebugOverlay]=present[UiDistance]=true;
+ auto v=Defaults();v[UiDistance]=250;v[UiScale]=150;
+ const auto text=Serialize(v,&present);
+ Check(text=="version=1\ndebug_overlay=0\nui_distance=250\n","only present settings are written, explicit defaults included");
+ Present back{};Values parsed{};
+ Check(Parse(text,parsed,&back)&&back==present&&parsed[UiDistance]==250&&parsed[UiScale]==Defaults()[UiScale],
+       "presence roundtrips; the rest read as defaults");
+ Check(Parse("version=1\n",parsed,&back)&&back==Present{},"a file of no settings holds none");
+ back[Turn]=true;
+ Check(!Parse("version=1\nturn=7\n",parsed,&back)&&back[Turn],"a refused file leaves presence as it was");
+ Check(Serialize(Defaults()).find("wrist_tilt=40\n")!=std::string::npos,"without presence, every setting is written");
+ Check(Parse("version=1\nui_offset_right=-90\nui_offset_up=45\nui_distance=400\n",parsed)&&
+       parsed[UiOffsetRight]==-90&&parsed[UiOffsetUp]==45&&parsed[UiDistance]==400,
+       "new settings persist at their limits");
+ for(auto s:{"version=1\nui_offset_up=46\n","version=1\nui_distance=99\n","version=1\npointer_hand=3\n",
+             "version=1\nwrist_along=-51\n","version=1\nui_text=99\n"})
+  Check(!Parse(s,parsed),"out-of-range new settings are refused");
+ Check(Display(UiOffsetRight,-10)==L"10 DEGREES LEFT"&&Display(UiOffsetUp,0)==L"CENTRE"&&
+       Display(PointerHand,2)==L"BUTTONS ONLY"&&
+       Display(WristHover,42)==L"42 MM"&&Display(UiText,140)==L"140 CM","new settings read as what they do");
+}
+void GestureChecks(){
+ PsychoscopeGesture g;const Vec3 high{-.12f,.18f,-.12f},low{-.12f,-.02f,-.12f};
+ auto tick=[&](Vec3 p,bool grip,bool usable=true,float dt=.02f,std::uint64_t epoch=1){return g.Update(p,grip,usable,dt,epoch);};
+ tick(high,false);tick(high,false);tick(high,true);
+ for(int n=0;n<8;++n)Check(!tick(high,true),"grip near head without travel never toggles");
+ Check(tick(low,true),"downward pull toggles once");
+ for(int n=0;n<10;++n)Check(!tick(low,true),"held stroke cannot retrigger");
+ tick(low,false);tick(low,true);for(int n=0;n<7;++n)tick(low,true);
+ Check(tick(high,true),"upward lift toggles");
+ g={};tick(high,true);for(int n=0;n<12;++n)Check(!tick(low,true),"held on entry disarmed");
+ tick(high,false);tick(high,true);tick(high,true,false);tick(high,true);
+ for(int n=0;n<10;++n)Check(!tick(low,true),"tracking loss needs release");
+ tick(high,false);tick(high,true);tick(low,true,true,.4f);
+ for(int n=0;n<10;++n)Check(!tick(low,true),"stall invalidates stroke");
+ tick(high,false);tick(high,true);tick(low,true,true,.02f,2);
+ for(int n=0;n<10;++n)Check(!tick(low,true,true,.02f,2),"epoch transition invalidates stroke");
+ g={};tick(high,false);tick(high,false);tick(high,true);
+ Check(!tick({NAN,0,0},true),"nonfinite pose refuses");
+}
+int main(){MenuChecks();SettingsChecks();KindChecks();LayoutChecks();PresenceChecks();GestureChecks();std::cout<<"VR options ownership, settings, layout, persistence and gesture contracts passed\n";}

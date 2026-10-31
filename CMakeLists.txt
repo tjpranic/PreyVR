@@ -90,60 +90,58 @@ configure_file(
 )
 
 # Engine-specific state remains in small typed contracts. The game-facing
-# target is PreyVR.dll (src/dll), which stays off unless every landmark matches.
+# target is PreyVR.dll, which stays off unless every landmark matches. src is
+# the one include root: every include names its file from there.
 add_library(preyvr_headers INTERFACE)
-target_include_directories(preyvr_headers INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(preyvr_headers INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 add_library(preyvr_core STATIC
-    src/common/AimState.cpp
-    src/common/AnimIk.cpp
-    src/common/HandPose.cpp
-    src/common/ArmPose.cpp
-    src/common/BodyRig.cpp
-    src/common/RoomScale.cpp
-    src/common/BodyTurn.cpp
-    src/common/ContactQuery.cpp
-    src/common/SurfaceStop.cpp
-    src/common/SwingStrike.cpp
-    src/common/DebugDraw.cpp
-    src/common/DebugOverlayScene.cpp
-    src/common/ShotRay.cpp
-    src/common/NearParticles.cpp
-    src/common/MarkerDepth.cpp
-    src/common/WeaponRigAlignment.cpp
-    src/common/CameraEdit.cpp
-    src/common/ConsolePolicy.cpp
-    src/common/DebugRegisters.cpp
-    src/common/ControllerProfiles.cpp
-    src/common/ActionMapWalk.cpp
-    src/common/EngineMap.cpp
-    src/common/FrameDump.cpp
-    src/common/FrameObserver.cpp
-    src/common/InputEvent.cpp
-    src/common/InputQueue.cpp
-    src/common/InteractionQuery.cpp
-    src/common/InteractionUse.cpp
-    src/common/HandCarry.cpp
-    src/common/GrenadeThrow.cpp
-    src/common/WristHolo.cpp
-    src/common/Locomotion.cpp
-    src/common/MenuNavigator.cpp
-    src/common/UiPanel.cpp
-    src/common/MotionController.cpp
-    src/common/TwoHandedAim.cpp
-    src/common/VrOptions.cpp
-    src/common/OpenXRBootstrap.cpp
-    src/common/RuntimeSnapshot.cpp
-    src/common/StereoCamera.cpp
-    src/common/StereoFrame.cpp
-    src/common/VrMath.cpp
-    src/common/FrameTiming.cpp
-    src/common/FrustumCoverage.cpp
-    src/common/WeaponAim.cpp
-    src/common/WrenchQuery.cpp
-    src/common/XrFrameContract.cpp
-    src/common/XrHold.cpp
-    src/common/XrSwapchainFormat.cpp
+    src/body/ik/AnimIk.cpp
+    src/body/HandPose.cpp
+    src/body/ArmPose.cpp
+    src/body/BodyRig.cpp
+    src/body/RoomScale.cpp
+    src/body/BodyTurn.cpp
+    src/physics/contact/ContactQuery.cpp
+    src/physics/contact/SurfaceStop.cpp
+    src/physics/swing/SwingStrike.cpp
+    src/diagnostics/overlay/DebugDraw.cpp
+    src/diagnostics/overlay/DebugOverlayScene.cpp
+    src/aim/ShotRay.cpp
+    src/render/stereo/NearParticles.cpp
+    src/render/stereo/MarkerDepth.cpp
+    src/aim/WeaponRigAlignment.cpp
+    src/render/camera/CameraEdit.cpp
+    src/engine/console/ConsolePolicy.cpp
+    src/diagnostics/capture/DebugRegisters.cpp
+    src/controls/input/ControllerProfiles.cpp
+    src/controls/input/ActionMapWalk.cpp
+    src/engine/EngineMap.cpp
+    src/diagnostics/capture/FrameDump.cpp
+    src/engine/hooks/FrameObserver.cpp
+    src/controls/input/InputEvent.cpp
+    src/controls/input/InputQueue.cpp
+    src/physics/hands/InteractionUse.cpp
+    src/physics/hands/HandCarry.cpp
+    src/physics/hands/GrenadeThrow.cpp
+    src/ui/hud/WristHolo.cpp
+    src/controls/locomotion/Locomotion.cpp
+    src/controls/menus/MenuNavigator.cpp
+    src/ui/screens/UiPanel.cpp
+    src/aim/MotionController.cpp
+    src/aim/TwoHandedAim.cpp
+    src/ui/options/VrOptions.cpp
+    src/xr/OpenXRBootstrap.cpp
+    src/diagnostics/probes/RuntimeSnapshot.cpp
+    src/render/camera/StereoCamera.cpp
+    src/render/camera/StereoFrame.cpp
+    src/base/VrMath.cpp
+    src/xr/FrameTiming.cpp
+    src/xr/FrustumCoverage.cpp
+    src/aim/WeaponAim.cpp
+    src/xr/XrFrameContract.cpp
+    src/xr/XrHold.cpp
+    src/xr/XrSwapchainFormat.cpp
 )
 target_link_libraries(preyvr_core PUBLIC preyvr_headers)
 
@@ -182,19 +180,18 @@ function(preyvr_add_test name source)
     if(arg_TARGET)
         set(target ${arg_TARGET})
     endif()
-    # DLL: the test compiles DLL sources, so it gets the DLL's lifecycle include
-    # and defines and builds the same translation unit the DLL ships.
+    # DLL: the test compiles DLL sources, so it gets the include root and defines
+    # and builds the same translation unit the DLL ships.
     if(arg_DLL)
-        list(APPEND arg_INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle")
+        list(APPEND arg_INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src")
         list(APPEND arg_DEFS WIN32_LEAN_AND_MEAN NOMINMAX)
     endif()
     if(NOT DEFINED arg_LIBS)
         set(arg_LIBS preyvr_core)
     endif()
     add_executable(${target} ${source} ${arg_SOURCES})
-    if(arg_INCLUDES)
-        target_include_directories(${target} PRIVATE ${arg_INCLUDES})
-    endif()
+    # Tests sit in a folder per category; their shared helpers are in tests/.
+    target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests" ${arg_INCLUDES})
     if(arg_DEFS)
         target_compile_definitions(${target} PRIVATE ${arg_DEFS})
     endif()
@@ -215,10 +212,9 @@ endif()
 
 if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
     add_library(preyvr_win32_bootstrap STATIC
-        src/dll/OpenXRPreflightWin32.cpp
-        src/dll/RuntimeSnapshotWin32.cpp
+        src/xr/OpenXRPreflightWin32.cpp
+        src/diagnostics/probes/RuntimeSnapshotWin32.cpp
     )
-    target_include_directories(preyvr_win32_bootstrap PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/dll")
     target_compile_definitions(preyvr_win32_bootstrap PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_link_libraries(preyvr_win32_bootstrap PUBLIC preyvr_core advapi32)
     preyvr_enable_warnings(preyvr_win32_bootstrap)
@@ -228,108 +224,104 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
     # command_channel below). They are compiled as the SHARED target compiled
     # them, its export symbol and _WINDLL included, so the objects are the same.
     add_library(preyvr_dll_objects OBJECT
-        src/dll/AimTakeover.cpp
-        src/dll/GameplayFrame.cpp
-        src/dll/TwoHandHold.cpp
-        src/dll/PsiMedkit.cpp
-        src/dll/AnimIkTakeover.cpp
-        src/dll/AnimIkRig.cpp
-        src/dll/AnimIkHand.cpp
-        src/dll/AnimIkArms.cpp
-        src/dll/AnimIkBody.cpp
-        src/dll/AnimIkReports.cpp
-        src/dll/Bootstrap.cpp
-        src/dll/Exports.cpp
-        src/dll/VrMode.cpp
-        src/dll/ActionMaps.cpp
-        src/dll/VrOptionsLayer.cpp
-        src/dll/VrOptionsUi.cpp
-        src/dll/VrOptionsRuntime.cpp
-        src/dll/Psychoscope.cpp
-        src/dll/BodyEquipment.cpp
-        src/dll/TorsoLane.cpp
-        src/dll/RoomScaleLane.cpp
-        src/dll/DebugOverlay.cpp
-        src/dll/ShotRay.cpp
-        src/dll/ReticleRayHook.cpp
-        src/dll/InteractionLane.cpp
-        src/dll/CarryLane.cpp
-        src/dll/ContactLane.cpp
-        src/dll/SurfaceStopLane.cpp
-        src/dll/SwingLane.cpp
-        src/dll/WrenchDraw.cpp
-        src/dll/WrenchSound.cpp
-        src/dll/GrenadeLane.cpp
-        src/dll/ArmsLane.cpp
-        src/dll/MemoryCommands.cpp
-        src/dll/SlotFeedback.cpp
-        src/dll/NativeWristTexture.cpp
-        src/dll/WristLane.cpp
-        src/dll/HudLayer.cpp
-        src/dll/LayerSwapchain.cpp
-        src/dll/UiPointer.cpp
-        src/dll/InventoryPointerCapture.cpp
-        src/dll/MainRenderHook.cpp
-        src/dll/StereoEyeCamera.cpp
-        src/dll/EyeRecords.cpp
-        src/dll/ConsoleBridgeWin32.cpp
-        src/dll/CullPrepareGuard.cpp
-        src/dll/FrameProbe.cpp
-        src/dll/OverflowCapture.cpp
-        src/dll/FocusHold.cpp
-        src/dll/LoadingScreen.cpp
-        src/dll/ControllerPrompts.cpp
-        src/dll/DebugWatch.cpp
-        src/dll/DllMain.cpp
-        src/dll/FrameCaptureWin32.cpp
-        src/dll/FrameObserverHook.cpp
-        src/dll/FrameSchedule.cpp
-        src/dll/HeadTrackingHook.cpp
-        src/dll/HudBridge.cpp
-        src/dll/ResearchHotkeys.cpp
-        src/dll/IkTargetProbe.cpp
-        src/dll/InputPath.cpp
-        src/dll/InputPost.cpp
-        src/dll/MinHookInit.cpp
-        src/dll/MoveLane.cpp
-        src/dll/StickReread.cpp
-        src/dll/CommandChannel.cpp
-        src/dll/WorkerThread.cpp
-        src/dll/NearFovOverride.cpp
-        src/dll/NearViewStereo.cpp
-        src/dll/NearParticleStereo.cpp
-        src/dll/MarkerStereo.cpp
-        src/dll/StarfieldStereo.cpp
-        src/dll/ExamineCamera.cpp
-        src/dll/ZoomLane.cpp
-        src/dll/HeadLamp.cpp
-        src/dll/Helmet.cpp
-        src/dll/BodyDepthHook.cpp
-        src/dll/DualSceneStereo.cpp
-        src/dll/TemporalAaProbe.cpp
-        src/dll/TemporalAaLane.cpp
-        src/dll/DualOverlay.cpp
-        src/dll/VideoOverlay.cpp
-        src/dll/WeaponAttachment.cpp
-        src/dll/ReticleFollow.cpp
-        src/dll/XrInput.cpp
-        src/dll/Haptics.cpp
-        src/dll/SceneQuery.cpp
-        src/dll/PhysicalInteractions.cpp
-        src/dll/XrSessionHost.cpp
-        src/dll/XrSessionLifecycle.cpp
-        src/dll/XrEyePair.cpp
-        src/dll/XrMenuPanel.cpp
-        src/dll/XrOverlayLayers.cpp
-        src/dll/XrHoldFrames.cpp
-        src/dll/XrSessionReports.cpp
-        src/lifecycle/Logger.cpp
+        src/aim/AimTakeover.cpp
+        src/aim/GameplayFrame.cpp
+        src/aim/TwoHandHold.cpp
+        src/equipment/psi/PsiMedkit.cpp
+        src/body/ik/AnimIkTakeover.cpp
+        src/body/ik/AnimIkRig.cpp
+        src/body/ik/AnimIkHand.cpp
+        src/body/ik/AnimIkArms.cpp
+        src/body/ik/AnimIkBody.cpp
+        src/body/ik/AnimIkReports.cpp
+        src/app/Bootstrap.cpp
+        src/app/Exports.cpp
+        src/app/VrMode.cpp
+        src/controls/input/ActionMaps.cpp
+        src/ui/options/VrOptionsLayer.cpp
+        src/ui/options/VrOptionsUi.cpp
+        src/ui/options/VrOptionsRuntime.cpp
+        src/equipment/psi/Psychoscope.cpp
+        src/equipment/body/BodyEquipmentLane.cpp
+        src/body/TorsoLane.cpp
+        src/body/RoomScaleLane.cpp
+        src/diagnostics/overlay/DebugOverlay.cpp
+        src/aim/ShotRayLane.cpp
+        src/aim/ReticleRayHook.cpp
+        src/physics/hands/InteractionLane.cpp
+        src/physics/hands/CarryLane.cpp
+        src/physics/contact/ContactLane.cpp
+        src/physics/contact/SurfaceStopLane.cpp
+        src/physics/swing/SwingLane.cpp
+        src/equipment/wrench/WrenchDraw.cpp
+        src/equipment/wrench/WrenchSound.cpp
+        src/physics/hands/GrenadeLane.cpp
+        src/body/ArmsLane.cpp
+        src/diagnostics/commands/MemoryCommands.cpp
+        src/equipment/body/SlotFeedbackLane.cpp
+        src/ui/hud/NativeWristTexture.cpp
+        src/ui/hud/WristLane.cpp
+        src/ui/hud/HudLayer.cpp
+        src/xr/LayerSwapchain.cpp
+        src/ui/screens/UiPointer.cpp
+        src/ui/screens/InventoryPointerCapture.cpp
+        src/engine/hooks/MainRenderHook.cpp
+        src/render/camera/StereoEyeCamera.cpp
+        src/render/camera/EyeRecords.cpp
+        src/engine/console/ConsoleBridgeWin32.cpp
+        src/engine/fixes/CullPrepareGuard.cpp
+        src/diagnostics/probes/FrameProbe.cpp
+        src/diagnostics/capture/OverflowCapture.cpp
+        src/engine/fixes/FocusHold.cpp
+        src/ui/screens/LoadingScreen.cpp
+        src/controls/input/ControllerPrompts.cpp
+        src/diagnostics/capture/DebugWatch.cpp
+        src/app/DllMain.cpp
+        src/diagnostics/capture/FrameCaptureWin32.cpp
+        src/engine/hooks/FrameObserverHook.cpp
+        src/app/FrameSchedule.cpp
+        src/render/camera/HeadTrackingHook.cpp
+        src/ui/hud/HudBridge.cpp
+        src/diagnostics/commands/ResearchHotkeys.cpp
+        src/diagnostics/probes/IkTargetProbe.cpp
+        src/controls/input/InputPath.cpp
+        src/controls/input/InputPost.cpp
+        src/engine/hooks/MinHookInit.cpp
+        src/controls/locomotion/MoveLane.cpp
+        src/controls/input/StickReread.cpp
+        src/diagnostics/commands/CommandChannel.cpp
+        src/app/WorkerThread.cpp
+        src/render/stereo/NearFovOverride.cpp
+        src/render/stereo/NearViewStereo.cpp
+        src/render/stereo/NearParticleStereo.cpp
+        src/render/stereo/MarkerStereo.cpp
+        src/render/stereo/StarfieldStereo.cpp
+        src/ui/screens/ExamineCamera.cpp
+        src/render/camera/ZoomLane.cpp
+        src/equipment/head/HeadLampLane.cpp
+        src/equipment/head/HelmetLane.cpp
+        src/render/stereo/BodyDepthHook.cpp
+        src/render/stereo/DualSceneStereo.cpp
+        src/diagnostics/probes/TemporalAaProbe.cpp
+        src/render/taa/TemporalAaLane.cpp
+        src/render/stereo/DualOverlay.cpp
+        src/render/stereo/VideoOverlay.cpp
+        src/aim/WeaponAttachment.cpp
+        src/ui/hud/ReticleFollow.cpp
+        src/controls/input/XrInput.cpp
+        src/controls/input/Haptics.cpp
+        src/physics/contact/SceneQueryLane.cpp
+        src/physics/contact/PhysicalInteractionsLane.cpp
+        src/xr/XrSessionHost.cpp
+        src/xr/XrSessionLifecycle.cpp
+        src/xr/XrEyePair.cpp
+        src/xr/XrMenuPanel.cpp
+        src/xr/XrOverlayLayers.cpp
+        src/xr/XrHoldFrames.cpp
+        src/xr/XrSessionReports.cpp
+        src/base/Logger.cpp
     )
-    target_include_directories(preyvr_dll_objects PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/dll"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle"
-        "${CMAKE_CURRENT_BINARY_DIR}/generated"
-    )
+    target_include_directories(preyvr_dll_objects PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
     target_compile_definitions(preyvr_dll_objects PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX
         preyvr_EXPORTS ${CMAKE_CXX_SHARED_LIBRARY_COMPILE_DEFINITIONS})
     # For their headers and definitions; PreyVR.dll names the libraries it links.
@@ -402,10 +394,6 @@ if(PREYVR_BUILD_TOOLS AND WIN32)
     target_link_libraries(preyvr_dxgi_probe PRIVATE d3d11 dxgi user32)
     preyvr_enable_warnings(preyvr_dxgi_probe)
 
-    add_executable(preyvr_ray_probe tools/ray_probe/main.cpp)
-    target_link_libraries(preyvr_ray_probe PRIVATE preyvr_core)
-    preyvr_enable_warnings(preyvr_ray_probe)
-
     add_executable(preyvr_frame_diff tools/frame_diff/main.cpp)
     target_link_libraries(preyvr_frame_diff PRIVATE preyvr_core)
     preyvr_enable_warnings(preyvr_frame_diff)
@@ -436,169 +424,165 @@ endif()
 if(PREYVR_BUILD_TESTS)
     enable_testing()
 
-    preyvr_add_test(vr_math tests/VrMathTests.cpp)
-    preyvr_add_test(engine_map tests/EngineMapTests.cpp)
-    preyvr_add_test(aim_state_fixture tests/AimStateTests.cpp TARGET preyvr_aim_state_tests)
-    preyvr_add_test(wrench_query_fixture tests/WrenchQueryTests.cpp TARGET preyvr_wrench_query_tests)
-    preyvr_add_test(interaction_query_fixture tests/InteractionQueryTests.cpp TARGET preyvr_interaction_query_tests)
-    preyvr_add_test(runtime_snapshot tests/RuntimeSnapshotTests.cpp)
-    preyvr_add_test(xr_swapchain_format tests/XrSwapchainFormatTests.cpp)
-    preyvr_add_test(xr_frame_contract tests/XrFrameContractTests.cpp)
-    preyvr_add_test(stereo_frame tests/StereoFrameTests.cpp)
-    preyvr_add_test(comfort_controls tests/ComfortControlsTests.cpp)
-    preyvr_add_test(motion_controller tests/MotionControllerTests.cpp)
-    preyvr_add_test(two_handed_aim tests/TwoHandedAimTests.cpp)
-    preyvr_add_test(vr_options_contracts tests/VrOptionsTests.cpp TARGET preyvr_vr_options_tests)
-    preyvr_add_test(controller_profiles tests/ControllerProfilesTests.cpp)
-    preyvr_add_test(action_map_walk tests/ActionMapWalkTests.cpp)
-    preyvr_add_test(release_gate tests/ReleaseGateTests.cpp)
-    preyvr_add_test(body_equipment_contracts tests/BodyEquipmentTests.cpp TARGET preyvr_body_equipment_tests)
-    preyvr_add_test(anim_ik tests/AnimIkTests.cpp)
-    preyvr_add_test(hand_pose tests/HandPoseTests.cpp)
-    preyvr_add_test(arm_pose tests/ArmPoseTests.cpp)
-    preyvr_add_test(body_turn tests/BodyTurnTests.cpp)
-    preyvr_add_test(zero_g tests/ZeroGTests.cpp)
-    preyvr_add_test(body_rig tests/BodyRigTests.cpp)
-    preyvr_add_test(room_scale tests/RoomScaleTests.cpp)
-    preyvr_add_test(debug_draw tests/DebugDrawTests.cpp)
-    preyvr_add_test(shot_ray tests/ShotRayTests.cpp)
-    preyvr_add_test(near_particles tests/NearParticlesTests.cpp)
-    preyvr_add_test(marker_depth tests/MarkerDepthTests.cpp)
-    preyvr_add_test(starfield_depth tests/StarfieldDepthTests.cpp)
-    preyvr_add_test(body_depth tests/BodyDepthTests.cpp)
-    preyvr_add_test(near_motion tests/NearMotionTests.cpp)
-    preyvr_add_test(world_motion tests/WorldMotionTests.cpp)
-    preyvr_add_test(near_clip tests/NearClipTests.cpp)
-    preyvr_add_test(view_zoom tests/ViewZoomTests.cpp)
-    preyvr_add_test(examine_pullback tests/ExaminePullbackTests.cpp)
-    preyvr_add_test(examine_ray tests/ExamineRayTests.cpp)
-    preyvr_add_test(video_letterbox tests/VideoLetterboxTests.cpp)
-    preyvr_add_test(hand_carry tests/HandCarryTests.cpp)
-    preyvr_add_test(grenade_throw tests/GrenadeThrowTests.cpp)
-    preyvr_add_test(wrist_holo tests/WristHoloTests.cpp)
-    preyvr_add_test(interaction_use tests/InteractionUseTests.cpp)
-    preyvr_add_test(weapon_rig_alignment tests/WeaponRigAlignmentTests.cpp)
-    preyvr_add_test(weapon_aim tests/WeaponAimTests.cpp)
-    preyvr_add_test(scene_query_contracts tests/SceneQueryTests.cpp TARGET preyvr_scene_query_tests)
-    preyvr_add_test(physical_interactions tests/PhysicalInteractionsTests.cpp)
-    preyvr_add_test(contact_native tests/ContactNativeTests.cpp)
-    preyvr_add_test(swing_native tests/SwingNativeTests.cpp)
-    preyvr_add_test(swing_strike tests/SwingStrikeTests.cpp)
-    preyvr_add_test(wrench_draw_native tests/WrenchDrawNativeTests.cpp)
-    preyvr_add_test(contact_query tests/ContactQueryTests.cpp)
-    preyvr_add_test(surface_stop tests/SurfaceStopTests.cpp)
-    preyvr_add_test(psi_medkit_contracts tests/PsiMedkitTests.cpp TARGET preyvr_psi_medkit_tests)
-    preyvr_add_test(frustum_coverage tests/FrustumCoverageTests.cpp)
-    preyvr_add_test(frame_timing tests/FrameTimingTests.cpp)
-    preyvr_add_test(input_event tests/InputEventTests.cpp)
-    preyvr_add_test(input_queue tests/InputQueueTests.cpp)
-    preyvr_add_test(menu_navigator tests/MenuNavigatorTests.cpp)
-    preyvr_add_test(menu_hold tests/MenuHoldTests.cpp)
-    preyvr_add_test(render_contract tests/RenderContractTests.cpp)
-    preyvr_add_test(ui_panel tests/UiPanelTests.cpp)
-    preyvr_add_test(position_ring tests/PositionRingTests.cpp)
-    preyvr_add_test(xr_hold tests/XrHoldTests.cpp)
-    preyvr_add_test(hud_parts tests/HudPartsTests.cpp)
-    preyvr_add_test(locomotion tests/LocomotionTests.cpp)
-    preyvr_add_test(stereo_camera tests/StereoCameraTests.cpp)
-    preyvr_add_test(camera_edit tests/CameraEditTests.cpp)
-    preyvr_add_test(frame_dump tests/FrameDumpTests.cpp)
-    preyvr_add_test(debug_registers tests/DebugRegistersTests.cpp)
-    preyvr_add_test(console_policy tests/ConsolePolicyTests.cpp)
-    preyvr_add_test(runtime_bootstrap tests/RuntimeBootstrapTests.cpp)
+    preyvr_add_test(vr_math tests/base/VrMathTests.cpp)
+    preyvr_add_test(engine_map tests/engine/EngineMapTests.cpp)
+    preyvr_add_test(runtime_snapshot tests/diagnostics/RuntimeSnapshotTests.cpp)
+    preyvr_add_test(xr_swapchain_format tests/xr/XrSwapchainFormatTests.cpp)
+    preyvr_add_test(xr_frame_contract tests/xr/XrFrameContractTests.cpp)
+    preyvr_add_test(stereo_frame tests/render/StereoFrameTests.cpp)
+    preyvr_add_test(comfort_controls tests/controls/ComfortControlsTests.cpp)
+    preyvr_add_test(motion_controller tests/aim/MotionControllerTests.cpp)
+    preyvr_add_test(two_handed_aim tests/aim/TwoHandedAimTests.cpp)
+    preyvr_add_test(vr_options_contracts tests/ui/VrOptionsTests.cpp TARGET preyvr_vr_options_tests)
+    preyvr_add_test(controller_profiles tests/controls/ControllerProfilesTests.cpp)
+    preyvr_add_test(action_map_walk tests/controls/ActionMapWalkTests.cpp)
+    preyvr_add_test(release_gate tests/controls/ReleaseGateTests.cpp)
+    preyvr_add_test(body_equipment_contracts tests/equipment/BodyEquipmentTests.cpp TARGET preyvr_body_equipment_tests)
+    preyvr_add_test(anim_ik tests/body/AnimIkTests.cpp)
+    preyvr_add_test(hand_pose tests/body/HandPoseTests.cpp)
+    preyvr_add_test(arm_pose tests/body/ArmPoseTests.cpp)
+    preyvr_add_test(body_turn tests/body/BodyTurnTests.cpp)
+    preyvr_add_test(zero_g tests/controls/ZeroGTests.cpp)
+    preyvr_add_test(body_rig tests/body/BodyRigTests.cpp)
+    preyvr_add_test(room_scale tests/body/RoomScaleTests.cpp)
+    preyvr_add_test(debug_draw tests/diagnostics/DebugDrawTests.cpp)
+    preyvr_add_test(shot_ray tests/aim/ShotRayTests.cpp)
+    preyvr_add_test(near_particles tests/render/NearParticlesTests.cpp)
+    preyvr_add_test(marker_depth tests/render/MarkerDepthTests.cpp)
+    preyvr_add_test(starfield_depth tests/render/StarfieldDepthTests.cpp)
+    preyvr_add_test(body_depth tests/render/BodyDepthTests.cpp)
+    preyvr_add_test(near_motion tests/render/NearMotionTests.cpp)
+    preyvr_add_test(world_motion tests/render/WorldMotionTests.cpp)
+    preyvr_add_test(near_clip tests/render/NearClipTests.cpp)
+    preyvr_add_test(view_zoom tests/render/ViewZoomTests.cpp)
+    preyvr_add_test(examine_pullback tests/ui/ExaminePullbackTests.cpp)
+    preyvr_add_test(examine_ray tests/aim/ExamineRayTests.cpp)
+    preyvr_add_test(video_letterbox tests/render/VideoLetterboxTests.cpp)
+    preyvr_add_test(hand_carry tests/physics/HandCarryTests.cpp)
+    preyvr_add_test(grenade_throw tests/physics/GrenadeThrowTests.cpp)
+    preyvr_add_test(wrist_holo tests/ui/WristHoloTests.cpp)
+    preyvr_add_test(interaction_use tests/physics/InteractionUseTests.cpp)
+    preyvr_add_test(weapon_rig_alignment tests/aim/WeaponRigAlignmentTests.cpp)
+    preyvr_add_test(weapon_aim tests/aim/WeaponAimTests.cpp)
+    preyvr_add_test(scene_query_contracts tests/physics/SceneQueryTests.cpp TARGET preyvr_scene_query_tests)
+    preyvr_add_test(physical_interactions tests/physics/PhysicalInteractionsTests.cpp)
+    preyvr_add_test(contact_native tests/physics/ContactNativeTests.cpp)
+    preyvr_add_test(swing_native tests/physics/SwingNativeTests.cpp)
+    preyvr_add_test(swing_strike tests/physics/SwingStrikeTests.cpp)
+    preyvr_add_test(wrench_draw_native tests/equipment/WrenchDrawNativeTests.cpp)
+    preyvr_add_test(contact_query tests/physics/ContactQueryTests.cpp)
+    preyvr_add_test(surface_stop tests/physics/SurfaceStopTests.cpp)
+    preyvr_add_test(psi_medkit_contracts tests/equipment/PsiMedkitTests.cpp TARGET preyvr_psi_medkit_tests)
+    preyvr_add_test(frustum_coverage tests/xr/FrustumCoverageTests.cpp)
+    preyvr_add_test(frame_timing tests/xr/FrameTimingTests.cpp)
+    preyvr_add_test(input_event tests/controls/InputEventTests.cpp)
+    preyvr_add_test(input_queue tests/controls/InputQueueTests.cpp)
+    preyvr_add_test(menu_navigator tests/controls/MenuNavigatorTests.cpp)
+    preyvr_add_test(menu_hold tests/controls/MenuHoldTests.cpp)
+    preyvr_add_test(render_contract tests/render/RenderContractTests.cpp)
+    preyvr_add_test(ui_panel tests/ui/UiPanelTests.cpp)
+    preyvr_add_test(position_ring tests/render/PositionRingTests.cpp)
+    preyvr_add_test(xr_hold tests/xr/XrHoldTests.cpp)
+    preyvr_add_test(hud_parts tests/ui/HudPartsTests.cpp)
+    preyvr_add_test(locomotion tests/controls/LocomotionTests.cpp)
+    preyvr_add_test(stereo_camera tests/render/StereoCameraTests.cpp)
+    preyvr_add_test(camera_edit tests/render/CameraEditTests.cpp)
+    preyvr_add_test(frame_dump tests/diagnostics/FrameDumpTests.cpp)
+    preyvr_add_test(debug_registers tests/diagnostics/DebugRegistersTests.cpp)
+    preyvr_add_test(console_policy tests/engine/ConsolePolicyTests.cpp)
+    preyvr_add_test(runtime_bootstrap tests/engine/RuntimeBootstrapTests.cpp)
 
     if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
-        preyvr_add_test(slot_feedback tests/SlotFeedbackTests.cpp
+        preyvr_add_test(slot_feedback tests/equipment/SlotFeedbackTests.cpp
             DLL
             LIBS preyvr_core gdi32 user32)
-        preyvr_add_test(psi_medkit_runtime tests/PsiMedkitRuntimeTests.cpp
+        preyvr_add_test(psi_medkit_runtime tests/equipment/PsiMedkitRuntimeTests.cpp
             DLL
             LIBS preyvr_core minhook)
-        preyvr_add_test(physical_runtime tests/PhysicalRuntimeTests.cpp
+        preyvr_add_test(physical_runtime tests/physics/PhysicalRuntimeTests.cpp
             DLL
             LIBS preyvr_core minhook)
-        preyvr_add_test(contact_lane tests/ContactLaneTests.cpp
+        preyvr_add_test(contact_lane tests/physics/ContactLaneTests.cpp
             DLL
             LIBS preyvr_core)
-        preyvr_add_test(surface_stop_lane tests/SurfaceStopLaneTests.cpp
+        preyvr_add_test(surface_stop_lane tests/physics/SurfaceStopLaneTests.cpp
             DLL
             LIBS preyvr_core)
-        preyvr_add_test(hand_world tests/HandWorldTests.cpp
+        preyvr_add_test(hand_world tests/body/HandWorldTests.cpp
             DLL
             LIBS preyvr_core)
-        preyvr_add_test(swing_lane tests/SwingLaneTests.cpp
+        preyvr_add_test(swing_lane tests/physics/SwingLaneTests.cpp
             DLL
             LIBS preyvr_core minhook)
-        preyvr_add_test(wrench_draw tests/WrenchDrawTests.cpp
+        preyvr_add_test(wrench_draw tests/equipment/WrenchDrawTests.cpp
             DLL
             LIBS preyvr_core minhook)
-        preyvr_add_test(wrench_sound tests/WrenchSoundTests.cpp
+        preyvr_add_test(wrench_sound tests/equipment/WrenchSoundTests.cpp
             DLL
             LIBS preyvr_core minhook)
-        preyvr_add_test(starfield_stereo tests/StarfieldStereoTests.cpp
+        preyvr_add_test(starfield_stereo tests/render/StarfieldStereoTests.cpp
             DLL
             LIBS preyvr_core minhook)
-        preyvr_add_test(examine_camera tests/ExamineCameraTests.cpp
+        preyvr_add_test(examine_camera tests/ui/ExamineCameraTests.cpp
             DLL
             LIBS preyvr_core minhook)
-        preyvr_add_test(zoom_lane tests/ZoomLaneTests.cpp
+        preyvr_add_test(zoom_lane tests/render/ZoomLaneTests.cpp
             DLL
             LIBS preyvr_core)
-        preyvr_add_test(head_lamp tests/HeadLampTests.cpp
+        preyvr_add_test(head_lamp tests/equipment/HeadLampTests.cpp
             DLL
             LIBS preyvr_core minhook)
-        preyvr_add_test(helmet tests/HelmetTests.cpp
+        preyvr_add_test(helmet tests/equipment/HelmetTests.cpp
             DLL
             LIBS preyvr_core minhook)
-        preyvr_add_test(temporal_aa_probe tests/TemporalAaProbeTests.cpp
+        preyvr_add_test(temporal_aa_probe tests/diagnostics/TemporalAaProbeTests.cpp
             DLL
             LIBS preyvr_core d3d11)
-        preyvr_add_test(temporal_aa tests/TemporalAaTests.cpp)
-        preyvr_add_test(temporal_aa_lane tests/TemporalAaLaneTests.cpp
+        preyvr_add_test(temporal_aa tests/render/TemporalAaTests.cpp)
+        preyvr_add_test(temporal_aa_lane tests/render/TemporalAaLaneTests.cpp
             DLL
             LIBS preyvr_core d3d11)
-        preyvr_add_test(body_depth_hook tests/BodyDepthHookTests.cpp
+        preyvr_add_test(body_depth_hook tests/render/BodyDepthHookTests.cpp
             DLL
             LIBS preyvr_core minhook)
-        preyvr_add_test(video_overlay tests/VideoOverlayTests.cpp
+        preyvr_add_test(video_overlay tests/render/VideoOverlayTests.cpp
             DLL
             LIBS preyvr_core minhook)
-        preyvr_add_test(ui_pointer_dispatch tests/UiPointerTests.cpp TARGET preyvr_ui_pointer_tests
+        preyvr_add_test(ui_pointer_dispatch tests/ui/UiPointerTests.cpp TARGET preyvr_ui_pointer_tests
             DLL)
         # The VR Options panel, drawn by the real ImGui backend on WARP.
-        preyvr_add_test(vr_options_ui tests/VrOptionsUiTests.cpp SOURCES src/dll/VrOptionsUi.cpp
-            INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/dll"
+        preyvr_add_test(vr_options_ui tests/ui/VrOptionsUiTests.cpp SOURCES src/ui/options/VrOptionsUi.cpp
             DLL
             LIBS preyvr_core preyvr_imgui d3d11)
-        preyvr_add_test(native_wrist tests/NativeWristTests.cpp SOURCES src/dll/NativeWristTexture.cpp
+        preyvr_add_test(native_wrist tests/ui/NativeWristTests.cpp SOURCES src/ui/hud/NativeWristTexture.cpp
             DLL
             LIBS preyvr_core d3d11 d3dcompiler)
-        preyvr_add_test(vr_options_runtime tests/VrOptionsRuntimeTests.cpp
+        preyvr_add_test(vr_options_runtime tests/ui/VrOptionsRuntimeTests.cpp
             DLL)
 
-        preyvr_add_test(inventory_pointer_capture tests/InventoryPointerCaptureTests.cpp
+        preyvr_add_test(inventory_pointer_capture tests/ui/InventoryPointerCaptureTests.cpp
             TARGET preyvr_inventory_capture_tests
             DLL
             LIBS minhook)
-        preyvr_add_test(near_fov_override tests/NearFovOverrideTests.cpp TARGET preyvr_near_fov_tests
+        preyvr_add_test(near_fov_override tests/render/NearFovOverrideTests.cpp TARGET preyvr_near_fov_tests
             DLL
             LIBS minhook)
-        preyvr_add_test(frame_probe tests/FrameProbeTests.cpp
+        preyvr_add_test(frame_probe tests/diagnostics/FrameProbeTests.cpp
             DLL
             LIBS preyvr_headers)
-        preyvr_add_test(cull_prepare_guard tests/CullPrepareGuardTests.cpp
+        preyvr_add_test(cull_prepare_guard tests/engine/CullPrepareGuardTests.cpp
             DLL
             LIBS preyvr_headers)
         # Overflows a thread of its own child process and reads what was written.
-        preyvr_add_test(overflow_capture tests/OverflowCaptureTests.cpp
+        preyvr_add_test(overflow_capture tests/diagnostics/OverflowCaptureTests.cpp
             DLL
             LIBS preyvr_headers)
-        preyvr_add_test(focus_hold tests/FocusHoldTests.cpp
+        preyvr_add_test(focus_hold tests/engine/FocusHoldTests.cpp
             DLL
             LIBS preyvr_headers minhook user32)
-        preyvr_add_test(controller_prompts tests/ControllerPromptsTests.cpp
+        preyvr_add_test(controller_prompts tests/controls/ControllerPromptsTests.cpp
             DLL)
-        preyvr_add_test(hook_install tests/HookInstallTests.cpp
+        preyvr_add_test(hook_install tests/engine/HookInstallTests.cpp
             DLL
             LIBS minhook)
         # The offline VR scheme replays: the real MoveLane, AimTakeover, HudBridge and
@@ -621,14 +605,13 @@ if(PREYVR_BUILD_TESTS)
         )
 
         if(PREYVR_BUILD_OPENXR_LOADER)
-            preyvr_add_test(haptics_contracts tests/HapticsTests.cpp TARGET preyvr_haptics_tests
-                SOURCES src/dll/Haptics.cpp
+            preyvr_add_test(haptics_contracts tests/controls/HapticsTests.cpp TARGET preyvr_haptics_tests
+                SOURCES src/controls/input/Haptics.cpp
                 INCLUDES $<TARGET_PROPERTY:openxr_loader,INTERFACE_INCLUDE_DIRECTORIES>
                 DLL)
-            preyvr_add_test(layer_swapchain tests/LayerSwapchainTests.cpp
-                SOURCES src/dll/LayerSwapchain.cpp
-                INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/dll"
-                    $<TARGET_PROPERTY:openxr_loader,INTERFACE_INCLUDE_DIRECTORIES>
+            preyvr_add_test(layer_swapchain tests/xr/LayerSwapchainTests.cpp
+                SOURCES src/xr/LayerSwapchain.cpp
+                INCLUDES $<TARGET_PROPERTY:openxr_loader,INTERFACE_INCLUDE_DIRECTORIES>
                 DLL
                 DEFS XR_USE_PLATFORM_WIN32 XR_USE_GRAPHICS_API_D3D11
                 LIBS preyvr_headers d3d11)
@@ -636,9 +619,9 @@ if(PREYVR_BUILD_TESTS)
             # and links the DLL's other objects but DllMain, with the logger and
             # MinHook's initialiser stubbed. Built apart from the copied loader, so
             # a stray OpenXR call fails to delay-load instead of finding a runtime.
-            preyvr_add_test(command_channel tests/CommandChannelTests.cpp
+            preyvr_add_test(command_channel tests/diagnostics/CommandChannelTests.cpp
                 SOURCES "$<FILTER:$<TARGET_OBJECTS:preyvr_dll_objects>,EXCLUDE,/(CommandChannel|DllMain|Logger|MinHookInit)[.]obj$>"
-                INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/dll" "${CMAKE_CURRENT_BINARY_DIR}/generated"
+                INCLUDES "${CMAKE_CURRENT_BINARY_DIR}/generated"
                 DLL
                 DEFS XR_USE_PLATFORM_WIN32 XR_USE_GRAPHICS_API_D3D11
                 LIBS preyvr_core preyvr_win32_bootstrap preyvr_imgui minhook bcrypt psapi shell32 d3d11 dxgi
@@ -650,9 +633,9 @@ if(PREYVR_BUILD_TESTS)
                 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/command_channel")
             # VR Options' wiring against the real lanes, linked the same way: the
             # test includes VrOptionsRuntime and links the DLL's other objects.
-            preyvr_add_test(vr_options_wiring tests/VrOptionsWiringTests.cpp
+            preyvr_add_test(vr_options_wiring tests/ui/VrOptionsWiringTests.cpp
                 SOURCES "$<FILTER:$<TARGET_OBJECTS:preyvr_dll_objects>,EXCLUDE,/(VrOptionsRuntime|DllMain|Logger|MinHookInit)[.]obj$>"
-                INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/dll" "${CMAKE_CURRENT_BINARY_DIR}/generated"
+                INCLUDES "${CMAKE_CURRENT_BINARY_DIR}/generated"
                 DLL
                 DEFS XR_USE_PLATFORM_WIN32 XR_USE_GRAPHICS_API_D3D11
                 LIBS preyvr_core preyvr_win32_bootstrap preyvr_imgui minhook bcrypt psapi shell32 d3d11 dxgi
@@ -661,9 +644,8 @@ if(PREYVR_BUILD_TESTS)
             set_target_properties(preyvr_vr_options_wiring_tests PROPERTIES
                 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/command_channel")
 
-            preyvr_add_test(openxr_preflight_files tests/OpenXRPreflightWin32Tests.cpp
+            preyvr_add_test(openxr_preflight_files tests/xr/OpenXRPreflightWin32Tests.cpp
                 TARGET preyvr_openxr_preflight_tests
-                INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/dll"
                 LIBS preyvr_win32_bootstrap
                 ARGS $<TARGET_FILE:openxr_loader> $<TARGET_FILE:preyvr>)
         endif()
@@ -692,6 +674,9 @@ if(PREYVR_BUILD_TESTS)
     if(Python3_Interpreter_FOUND)
         add_test(NAME re_verifiers COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/re/run_verifiers.py")
         set_tests_properties(re_verifiers PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
+        # Pure code and DLL code share folders, so nothing about a path keeps them
+        # apart: this does (src/README.md).
+        add_test(NAME pure_boundary COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/check_pure_boundary.py")
     endif()
     if(PREYVR_POWERSHELL_EXECUTABLE AND PREYVR_BUILD_SMOKE_DLL AND WIN32)
         add_test(

@@ -13,7 +13,7 @@ The graph is for hypothesis generation, not proof. It helps surface recurring so
 | Group | Contents |
 | --- | --- |
 | markdown (recursive) | every `.md` in the repo — `docs/`, the `captures/traces/` evidence records, root `README`/`AGENTS`/`CLAUDE`, and per-directory READMEs |
-| C++ source and headers | `src/`, `include/`, `tests/` — the layout headers carry the same verified offsets the documents describe, so they are the join between research notes and code |
+| C++ source and headers | `src/`, `tests/` — the layout headers carry the same verified offsets the documents describe, so they are the join between research notes and code |
 | build and tooling | `CMakeLists.txt`, the research helper `.ps1` scripts, the ReGenny `.genny` notebook |
 
 Files are flattened with their path encoded in the name (`docs/FOO.md` → `docs__FOO.md`) so two `README.md` files from different directories cannot collide and provenance stays visible in the graph.

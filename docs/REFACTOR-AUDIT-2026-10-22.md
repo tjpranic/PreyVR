@@ -468,7 +468,7 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
    - StereoCamera's `ReferenceFrameForHeadTracking`, `ComposeHeadOntoGameRotation`, `MakeRecenterReference`, `RightOf`, `UpOf`
    - `StereoFrame::BuildStereoPlan`, InventoryDepth's `MapDepth`/`PlaneMetres`
    - MotionController's `SmoothTurn`, `Mount*`, `WeaponPoseFromController`, `TwoHandedWeaponPose`
-   - InteractionQuery/WrenchQuery, which you chose to keep on 10-18.
+   - InteractionQuery/WrenchQuery, which you chose to keep on 10-18. **Cut 2026-10-31,** with AimState and `preyvr_ray_probe`.
    - **Done 10-23.** A comment-stripping scan over every header found the full set; each name was re-checked with `git grep` and ripgrep before it was cut.
      - **Cut, with their tests:**
        - ArmPose `WristDeviationDeg`
@@ -486,7 +486,7 @@ Every lane is wired into these by hand, and their order matters. Nothing in the 
        - WeaponAim `ProjectToScreen`
        - RenderFrame `TryGetRenderMatrix`
      - **Kept because live code calls them:** `WrapAngle` (SnapTurn), `RightOf`/`UpOf` (PoseFromMatrix), `RotationIsOrthonormal`/`RotationIsDegenerate`, and `ControllerPoseInWorld`/`MountRotationFromControllerDelta`, which tools/xr_session_probe uses.
-     - **Kept as test oracles or accessors for live code:** ControllerProfiles `ActionOf`, DebugRegisters `Dr7SlotEnabled`, FrameTiming `BudgetMicroseconds`, ShotRay `ConvergenceErrorMetres`, and the lanes' `*EventLog` getters.
+     - **Kept as test oracles or accessors for live code:** ControllerProfiles `ActionOf`, DebugRegisters `Dr7SlotEnabled`, FrameTiming `BudgetMicroseconds`, ShotRay `ConvergenceErrorMetres`, and the lanes' `*EventLog` getters. **`ConvergenceErrorMetres` was cut 2026-10-31:** its test only ever passed it constants, and the `Measure` checks beside it prove the same results.
      - **Left:** RenderFrame's matrix capture (`frame.*`, research) is now never read back in production; it goes with the instrumentation cleanup.
 6. **Torso settings: give them one owner (T2/T3).** They are stored twice, in AnimIk `PoseSettings` and BodyFollow `gDeadzoneMilliDeg/gRelaxPerMille`. `arm.torso` writes both, `body.torso` writes only BodyFollow, and the Body Turn Deadzone option goes to AnimIk.
    - **Decided 10-23: (a).** BodyFollow owns the settings and AnimIk's fallback filter reads them; it goes in the Hands batch.

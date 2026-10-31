@@ -1,0 +1,173 @@
+#include "aim/MotionController.h"
+#include "TestSupport.h"
+
+#include <cmath>
+#include <cstdlib>
+#include <iostream>
+
+namespace {
+
+using namespace preyvr;
+using namespace preyvr::controller;
+
+using preyvr::test::Require;
+
+bool Near(float a, float b, float epsilon = 1e-5f)
+{
+    return std::fabs(a - b) <= epsilon;
+}
+
+// Quaternions double-cover rotations: q and -q are the same orientation, so a
+// comparison that ignores that reports a false mismatch on half its inputs.
+bool NearQuat(Quaternion a, Quaternion b, float epsilon = 1e-4f)
+{
+    const float dot = a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w;
+    const float sign = dot < 0.0f ? -1.0f : 1.0f;
+    return std::fabs(a.x - sign*b.x) < epsilon && std::fabs(a.y - sign*b.y) < epsilon &&
+           std::fabs(a.z - sign*b.z) < epsilon && std::fabs(a.w - sign*b.w) < epsilon;
+}
+
+bool NearVec(Vec3 a, Vec3 b, float epsilon = 1e-5f)
+{
+    return Near(a.x, b.x, epsilon) && Near(a.y, b.y, epsilon) && Near(a.z, b.z, epsilon);
+}
+
+PoseValidity GoodTracking()
+{
+    PoseValidity validity{};
+    validity.orientationValid = true;
+    validity.positionValid = true;
+    validity.orientationTracked = true;
+    validity.positionTracked = true;
+    validity.ageNanoseconds = 1000;
+    return validity;
+}
+
+void TestAimRayFromController()
+{
+    // An identity OpenXR controller pose points along -Z, which is engine +Y.
+    const Pose openXrPose{Quaternion{}, Vec3{0.2f, -0.1f, -0.3f}};
+    const auto ray = AimFromController(
+        stereo::ReferenceFrame{}, openXrPose, GoodTracking(), 100'000'000);
+
+    Require(ray.has_value(), "a well-tracked controller yields a ray");
+    Require(NearVec(ray->direction, Vec3{0.0f, 1.0f, 0.0f}),
+        "an identity controller aims along engine forward (+Y)");
+    Require(Near(std::sqrt(ray->direction.x * ray->direction.x +
+                           ray->direction.y * ray->direction.y +
+                           ray->direction.z * ray->direction.z), 1.0f),
+        "the direction is unit length");
+
+    // OpenXR (0.2, -0.1, -0.3) -> engine (0.2, 0.3, -0.1).
+    Require(NearVec(ray->origin, Vec3{0.2f, 0.3f, -0.1f}),
+        "the origin is the converted controller position");
+}
+
+void TestAimFailsClosed()
+{
+    const Pose pose{Quaternion{}, Vec3{}};
+
+    PoseValidity untracked = GoodTracking();
+    untracked.positionTracked = false;
+    Require(!AimFromController(stereo::ReferenceFrame{}, pose, untracked, 100'000'000),
+        "an untracked position produces no ray");
+
+    PoseValidity invalid = GoodTracking();
+    invalid.orientationValid = false;
+    Require(!AimFromController(stereo::ReferenceFrame{}, pose, invalid, 100'000'000),
+        "an invalid orientation produces no ray");
+
+    PoseValidity stale = GoodTracking();
+    stale.ageNanoseconds = 500'000'000;
+    Require(!AimFromController(stereo::ReferenceFrame{}, pose, stale, 100'000'000),
+        "a stale pose produces no ray rather than a plausible wrong one");
+}
+
+void TestHandAndEyeShareAReferenceFrame()
+{
+    // If the hand and the view were composed through different frames they would
+    // separate on a snap turn, which reads as the weapon lagging the world.
+    stereo::ReferenceFrame reference{};
+    reference.yawRadians = 1.57079632679f;
+    reference.worldPosition = Vec3{50.0f, 60.0f, 70.0f};
+
+    const Pose openXrPose{Quaternion{}, Vec3{0.5f, 0.0f, 0.0f}};
+    const Pose hand = ControllerPoseInWorld(reference, openXrPose);
+    const Pose eye = stereo::EyePoseInWorld(reference, openXrPose);
+
+    Require(NearVec(hand.position, eye.position),
+        "the hand and the eye are composed through the same reference frame");
+    Require(NearVec(hand.position, Vec3{50.0f, 60.5f, 70.0f}, 1e-4f),
+        "a 90-degree reference yaw swings a rightward hand offset onto +Y");
+}
+
+// The composition-order test, written because this failure is silent and a
+// project on another engine lost real time to it.
+void TestMountCompositionOrder()
+{
+    // A 90-degree yaw authored mount, and no controller movement since
+    // calibration: the mount must come back unchanged.
+    const float halfPi = 3.14159265358979f * 0.25f;
+    const Quaternion mount{0.0f, 0.0f, std::sin(halfPi), std::cos(halfPi)};
+    const Quaternion aim{0.0f, 0.0f, 0.0f, 1.0f};
+    const auto still = MountRotationFromControllerDelta(mount, aim, aim);
+    Require(still.has_value(), "a zero delta is composable");
+    Require(NearQuat(*still, mount),
+        "with no controller movement the authored mount survives unchanged");
+
+    // Now rotate the controller by 90 degrees about Z. Composed correctly the
+    // result is delta * mount = 180 degrees; composed the WRONG way round it is
+    // also 180 here, so a symmetric case cannot tell them apart -- which is
+    // exactly why the real symptom is so confusing. Use an asymmetric axis.
+    const Quaternion pitch{std::sin(halfPi), 0.0f, 0.0f, std::cos(halfPi)};
+    const auto turned = MountRotationFromControllerDelta(mount, aim, pitch);
+    Require(turned.has_value(), "a real delta is composable");
+    const Quaternion right = Normalize(Multiply(pitch, mount));
+    const Quaternion wrong = Normalize(Multiply(mount, pitch));
+    Require(NearQuat(*turned, right), "the authored mount composes on the RIGHT");
+    Require(!NearQuat(right, wrong),
+        "the two orders differ on this input, so the test can actually fail");
+}
+
+// Fail closed: a degenerate rotation must not produce a plausible mount.
+void TestMountCompositionFailsClosed()
+{
+    const Quaternion good{0.0f, 0.0f, 0.0f, 1.0f};
+    const Quaternion zero{0.0f, 0.0f, 0.0f, 0.0f};
+    Require(!MountRotationFromControllerDelta(zero, good, good).has_value(),
+        "a zero-length authored mount is refused");
+    Require(!MountRotationFromControllerDelta(good, zero, good).has_value(),
+        "a zero-length calibration reference is refused");
+    Require(!MountRotationFromControllerDelta(good, good, zero).has_value(),
+        "a zero-length live aim is refused, so an untracked controller writes nothing");
+}
+
+void TestTurning()
+{
+    const float step = 0.5235987756f; // 30 degrees
+    Require(Near(SnapTurn(0.0f, 1, step), step), "one snap step turns by the step");
+    Require(Near(SnapTurn(0.0f, -2, step), -2.0f * step), "negative steps turn the other way");
+
+    // A long session must not accumulate an unbounded angle and lose precision.
+    float yaw = 0.0f;
+    for (int i = 0; i < 1000; ++i) {
+        yaw = SnapTurn(yaw, 1, step);
+    }
+    Require(std::fabs(yaw) <= 3.14159265f + 1e-4f, "repeated snapping stays wrapped");
+
+    Require(Near(WrapAngle(3.14159265f * 3.0f), 3.14159265f, 1e-4f), "wrapping folds to (-pi, pi]");
+}
+
+} // namespace
+
+int main()
+{
+    TestAimRayFromController();
+    TestAimFailsClosed();
+    TestHandAndEyeShareAReferenceFrame();
+    TestMountCompositionOrder();
+    TestMountCompositionFailsClosed();
+    TestTurning();
+    std::cout << "PreyVR motion controller tests passed\n";
+    return 0;
+}

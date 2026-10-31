@@ -14,9 +14,9 @@ Place small, reproducible helpers here: log parsers, capture-index generators, b
 
 `preyvr_engine_map_probe` maps an on-disk PE with `SEC_IMAGE_NO_EXECUTE` and validates it through the same compiled C++ landmark table used by the DLL. The build manifest queries `--count`, and the doctor invokes it against `PreyDll.dll`; no second PowerShell signature list exists.
 
-## Detached-ray probe helper
+## Pure boundary check
 
-`preyvr_ray_probe` accepts a normalized live direction and bounded Z-up yaw, then prints the rotated direction and exactly twelve little-endian bytes. It uses the same tested pure policy as the wrench and interaction stack-local protocols.
+`check_pure_boundary.py` keeps pure code free of DLL code and platform headers, now that the two share folders under `src/`. It runs in ctest as `pure_boundary`; [src/README.md](../src/README.md) has the rule.
 
 ## OpenXR adapter probe
 

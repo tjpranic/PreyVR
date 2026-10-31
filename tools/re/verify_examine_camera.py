@@ -21,7 +21,7 @@ def branches_to(image,target):
 
 def header_constant(name):
     """`inline constexpr ... name=0x...` from ExamineNative.h."""
-    text=(ROOT/'include/preyvr/ExamineNative.h').read_text(encoding='utf-8')
+    text=(ROOT/'src/ui/screens/ExamineNative.h').read_text(encoding='utf-8')
     for part in text.replace(';',',').split(','):
         part=part.strip()
         if part.split('=')[0].split()[-1:]==[name]:return int(part.split('=')[1],0)
@@ -29,7 +29,7 @@ def header_constant(name):
 
 def verify():
     image=Image(DEFAULT_MODULE);at=image.at
-    entries=native_rows(ROOT/'include/preyvr/ExamineNative.h')
+    entries=native_rows(ROOT/'src/ui/screens/ExamineNative.h')
     assert [rva for rva,_,_,_ in entries]==[FIT,BEGIN,FRAME],entries
     relocs=image.relocations();checks=[]
     for rva,size,expected,name in entries:
@@ -41,7 +41,7 @@ def verify():
         assert at(rva+size,1)==b'\xcc',name+' is the whole function'
         checks.append(name+': complete body (padding after it), no base relocations, mutation refused')
     mine={rva for rva,_,_,_ in entries}
-    for header in sorted((ROOT/'include/preyvr').glob('*Native.h')):
+    for header in sorted((ROOT/'src').rglob('*Native.h')):
         if header.name!='ExamineNative.h':assert not mine&{rva for rva,_,_,_ in native_rows(header)},header.name
     checks.append('no row in another *Native.h table')
     for name,value in {'FitView':FIT,'BeginReturn':0x15ab5eb,'FrameReturn':0x15abdaa,'PlayerExamination':0x9b0,

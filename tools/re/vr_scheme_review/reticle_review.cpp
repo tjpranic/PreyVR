@@ -1,6 +1,6 @@
 // Execute production projection, field writes, reporting and dispatch with a
 // synthetic CCamera and a HUD boundary stub. No game module or runtime is used.
-#include "../../../src/dll/ReticleFollow.cpp"
+#include "ui/hud/ReticleFollow.cpp"
 #include <iostream>
 #include <vector>
 

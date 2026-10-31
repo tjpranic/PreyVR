@@ -3,7 +3,7 @@
 // Rotations the geometry tests build their fixtures from. Kept separate from
 // the production builders (e.g. handpose::AxisAngle) so a test never derives
 // its expected values from the code it checks.
-#include "preyvr/VrMath.h"
+#include "base/VrMath.h"
 
 #include <cmath>
 

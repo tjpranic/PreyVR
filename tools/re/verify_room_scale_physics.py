@@ -10,9 +10,9 @@ BASE=0x180000000
 
 def verify():
     image=Image(DEFAULT_MODULE);at=image.at
-    rows=native_rows(ROOT/'include/preyvr/RoomScaleNative.h')
+    rows=native_rows(ROOT/'src/body/RoomScaleNative.h')
     assert len(rows)==5
-    contact={name:(rva,size,value) for rva,size,value,name in native_rows(ROOT/'include/preyvr/ContactNative.h')}
+    contact={name:(rva,size,value) for rva,size,value,name in native_rows(ROOT/'src/physics/contact/ContactNative.h')}
     assert contact['LivingGetStatus'][0]==0xb475d0 and contact['StaticGetStatus'][0]==0xb83040
     relocs=image.relocations()
     checks=[]

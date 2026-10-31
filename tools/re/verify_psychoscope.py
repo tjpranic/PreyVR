@@ -31,7 +31,7 @@ def verify():
     def check(label, rva, expected):
         assert at(rva, len(expected)) == expected, label
         checks.append(label)
-    header = (ROOT/"include/preyvr/PsychoscopeNative.h").read_text()
+    header = (ROOT/"src/equipment/psi/PsychoscopeNative.h").read_text()
     table = header.split("HandlerBytes{", 1)[1].split("}", 1)[0]
     expected = bytes(int(x, 16) for x in re.findall(r"0x([0-9a-fA-F]{2})", table))
     assert len(expected) == 208

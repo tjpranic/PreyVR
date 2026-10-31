@@ -35,7 +35,7 @@ def jmp_target(image,rva):
 
 def verify():
     image=Image(DEFAULT_MODULE);at=image.at
-    entries=native_rows(ROOT/'include/preyvr/FullscreenVideoNative.h')
+    entries=native_rows(ROOT/'src/render/stereo/FullscreenVideoNative.h')
     assert [(rva,name) for rva,_,_,name in entries]==[(DRAW,'FullscreenDraw'),(GET_VIEWPORT,'GetViewport')]
     relocs=image.relocations();checks=[]
     for rva,size,expected,name in entries:
@@ -47,7 +47,7 @@ def verify():
         assert at(rva+size,1)==b'\xcc',name+' is the whole function'
         checks.append(name+': complete body (padding after it), no base relocations, mutation refused')
     mine={rva for rva,_,_,_ in entries}
-    for header in sorted((ROOT/'include/preyvr').glob('*Native.h')):
+    for header in sorted((ROOT/'src').rglob('*Native.h')):
         if header.name!='FullscreenVideoNative.h':assert not mine&{rva for rva,_,_,_ in native_rows(header)},header.name
     checks.append('no row in another *Native.h table')
 

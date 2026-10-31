@@ -35,7 +35,7 @@ def verify():
             h = ((h ^ byte)*1099511628211) & ((1 << 64)-1)
         return h
 
-    text = (ROOT/'include/preyvr/NativeWristNative.h').read_text()
+    text = (ROOT/'src/ui/hud/NativeWristNative.h').read_text()
     entries = re.findall(r'\{0x([0-9A-F]+),(\d+),0x([0-9A-F]+)ull\}, // (\w+)', text)
     assert len(entries) == 9
     checks = []

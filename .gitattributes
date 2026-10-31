@@ -8,11 +8,11 @@ docs/evidence/comfort-controls-20260919/** -text
 
 # Keep the static scope receipt reproducible across Windows checkouts.
 docs/evidence/vr-options-2026-09-27/** -text
-include/preyvr/PsychoscopeNative.h text eol=lf
+src/equipment/psi/PsychoscopeNative.h text eol=lf
 tools/re/verify_psychoscope.py text eol=lf
 receipts/20260927-psychoscope-static.json -text
 docs/evidence/body-equipment-2026-09-27/** text eol=lf
-include/preyvr/EquipmentNative.h text eol=lf
+src/equipment/body/EquipmentNative.h text eol=lf
 tools/re/verify_body_equipment.py text eol=lf
 receipts/20260927-equipment-static.json text eol=lf
 
@@ -24,12 +24,12 @@ docs/evidence/native-hud-2026-09-27/** text eol=lf
 receipts/20260927-native-hud-extraction.json text eol=lf
 
 # Native wrist implementation receipts use stable bytes across checkouts.
-include/preyvr/NativeHudIsolation.h text eol=lf
-include/preyvr/NativeWristNative.h text eol=lf
-src/dll/NativeHudValue.h text eol=lf
-src/dll/NativeWristTexture.h text eol=lf
-src/dll/NativeWristTexture.cpp text eol=lf
-tests/NativeWristTests.cpp text eol=lf
+src/ui/hud/NativeHudIsolation.h text eol=lf
+src/ui/hud/NativeWristNative.h text eol=lf
+src/ui/hud/NativeHudValue.h text eol=lf
+src/ui/hud/NativeWristTexture.h text eol=lf
+src/ui/hud/NativeWristTexture.cpp text eol=lf
+tests/ui/NativeWristTests.cpp text eol=lf
 tools/re/verify_native_wrist.py text eol=lf
 docs/evidence/native-wrist-2026-09-28/** text eol=lf
 receipts/20260928-native-wrist-candidate.json text eol=lf
@@ -38,16 +38,16 @@ receipts/20260928-native-wrist-candidate.json text eol=lf
 docs/PHYSICAL-MELEE-2026-09-30.md -text
 docs/evidence/physical-melee-2026-09-30/** -text
 receipts/20260930-physical-melee-static.json text eol=lf
-include/preyvr/PhysicalNative.h text eol=lf
+src/physics/contact/PhysicalNative.h text eol=lf
 tools/re/verify_physical_interactions.py text eol=lf
 
 # Keep this static/harness receipt's frozen evidence byte-stable on Windows.
 docs/PSI-MEDKIT-2026-09-30.md -text
 docs/evidence/psi-medkit-2026-09-30/** -text
 receipts/20260930-psi-medkit-static.json -text whitespace=cr-at-eol
-include/preyvr/PsiMedkitNative.h text eol=lf
-src/dll/PsiMedkit.cpp text eol=lf
-tests/PsiMedkitRuntimeTests.cpp text eol=lf
+src/equipment/psi/PsiMedkitNative.h text eol=lf
+src/equipment/psi/PsiMedkit.cpp text eol=lf
+tests/equipment/PsiMedkitRuntimeTests.cpp text eol=lf
 tools/re/verify_psi_medkit.py text eol=lf
 # Ghidra's exact text includes spaces on blank lines and a final blank line.
 docs/evidence/psi-medkit-2026-09-30/steam-decompiles.txt whitespace=-blank-at-eol,-blank-at-eof

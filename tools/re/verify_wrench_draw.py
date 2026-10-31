@@ -9,7 +9,7 @@ BASE=0x180000000
 
 def verify():
     image=Image(DEFAULT_MODULE);digest,at=image.sha256,image.at
-    entries=native_rows(ROOT/'include/preyvr/WrenchDrawNative.h')
+    entries=native_rows(ROOT/'src/equipment/wrench/WrenchDrawNative.h')
     assert len(entries)==14
     relocs=image.relocations()
     checks=[]
@@ -21,16 +21,16 @@ def verify():
         assert fnv(corrupt)!=expected,name+' mutation control'
         checks.append(name+': complete body, no base relocations, mutation refused')
     # SelectItem and the weapon lookup are EquipmentNative.h's (pinned by a receipt); no body in two tables.
-    tables={h:{rva for rva,_,_,_ in native_rows(ROOT/'include/preyvr'/h)}
+    tables={h:{rva for rva,_,_,_ in native_rows(next((ROOT/'src').rglob(h)))}
             for h in ('EquipmentNative.h','PhysicalNative.h','SwingNative.h','ContactNative.h','SceneQueryNative.h')}
     assert {0x12748d0,0x16a5650}<=tables['EquipmentNative.h']
-    for rva,size,expected,name in native_rows(ROOT/'include/preyvr/EquipmentNative.h'):
+    for rva,size,expected,name in native_rows(ROOT/'src/equipment/body/EquipmentNative.h'):
         if rva in (0x12748d0,0x16a5650):assert fnv(at(rva,size))==expected,name
     mine={rva for rva,_,_,_ in entries}
     assert not any(mine&t for t in tables.values())
     checks.append('SelectItem 0x12748D0 and the weapon lookup 0x16A5650 hashed by EquipmentNative.h (their rows hold); '
                   'no row in two tables')
-    assert 'WrenchVtable=0x1E92F00' in (ROOT/'include/preyvr/PhysicalNative.h').read_text()
+    assert 'WrenchVtable=0x1E92F00' in (ROOT/'src/physics/contact/PhysicalNative.h').read_text()
     slots=[('wrench',0x1e92f00,0x08,0x1699800),('wrench',0x1e92f00,0x100,0x1692e60),
            ('wrench',0x1e92f00,0x108,0x1692e70),('wrench',0x1e92f00,0x110,0x1692f50),
            ('weapon base',0x1e6c640,0x08,0x1699800),('weapon base',0x1e6c640,0x100,0x1692e60),
@@ -155,7 +155,7 @@ def verify_stow(image,rel):
 def verify_sound(image,relocs,rel,drawRows,tables):
     """WrenchSoundNative.h: what plays the draw's sound, for the capture and a replay."""
     at=image.at;checks=[]
-    entries=native_rows(ROOT/'include/preyvr/WrenchSoundNative.h')
+    entries=native_rows(ROOT/'src/equipment/wrench/WrenchSoundNative.h')
     assert len(entries)==4
     for rva,size,expected,name in entries:
         b=at(rva,size)
@@ -230,7 +230,7 @@ def verify_sound(image,relocs,rel,drawRows,tables):
     checks.append('the entity system is the global 0x224DA38 (gEnv+0xB8)')
     # The draw's triggers (the capture, player-20261020-203533) and their ids, from the header.
     import re,zlib
-    text=(ROOT/'include/preyvr/WrenchSoundNative.h').read_text()
+    text=(ROOT/'src/equipment/wrench/WrenchSoundNative.h').read_text()
     names=re.findall(r'"(\w+)"',re.search(r'DrawTriggers\[\]=\{([^}]*)\}',text).group(1))
     ids=[int(v,16) for v in re.findall(r'0x([0-9A-F]+)',re.search(r'DrawTriggerIds\[\]=\{([^}]*)\}',text).group(1))]
     assert names==['Play_Player_Arm_Wrench','Play_switch_weapon'] and len(ids)==len(names)

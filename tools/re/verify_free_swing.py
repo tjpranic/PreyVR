@@ -8,7 +8,7 @@ BASE=0x180000000
 
 def verify():
     image=Image(DEFAULT_MODULE);digest,at=image.sha256,image.at
-    entries=native_rows(ROOT/'include/preyvr/SwingNative.h')
+    entries=native_rows(ROOT/'src/physics/swing/SwingNative.h')
     assert len(entries)==7
     relocs=image.relocations()
     checks=[]
@@ -20,7 +20,7 @@ def verify():
         assert fnv(corrupt)!=expected,name+' mutation control'
         checks.append(name+': complete body, no base relocations, mutation refused')
     # What it calls or hooks that other tables already hash, and no body in two tables.
-    tables={h:{rva for rva,_,_,_ in native_rows(ROOT/'include/preyvr'/h)}
+    tables={h:{rva for rva,_,_,_ in native_rows(next((ROOT/'src').rglob(h)))}
             for h in ('PhysicalNative.h','SceneQueryNative.h','ContactNative.h')}
     assert {0x13bf730,0x13bd620,0x13bd250,0x16ae410,0x16b1fd0,0x16b2bc0}<=tables['PhysicalNative.h']
     assert 0x157c990 in tables['SceneQueryNative.h'] and {0xba8560,0xba1d80}<=tables['ContactNative.h']

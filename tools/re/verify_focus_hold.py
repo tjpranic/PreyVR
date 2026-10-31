@@ -1,6 +1,6 @@
 """Offline check of FocusHold's gate and everything it relies on, in the supported PreyDll.
 
-Reads the gate arrays out of src/dll/FocusHold.cpp, so the C++ stays the one
+Reads the gate arrays out of src/engine/fixes/FocusHold.cpp, so the C++ stays the one
 definition, then confirms in the image:
 - both throttle spans, and that the call's rel32 lands on the import slot;
 - the slot is USER32!GetActiveWindow, and nothing else in .text reads it;
@@ -18,7 +18,7 @@ from pathlib import Path
 
 from preydll import DEFAULT_MODULE, Image, byte_arrays
 
-SOURCE = Path(__file__).resolve().parents[2] / "src" / "dll" / "FocusHold.cpp"
+SOURCE = Path(__file__).resolve().parents[2] / "src" / "engine" / "fixes" / "FocusHold.cpp"
 THROTTLE_CALL_RVA, SLOT_RVA = 0xDF58F0, 0x1C73A10
 RENDERER_VTABLE_RVA, GET_HWND_SLOT, GET_HWND_RVA = 0x1DD2E08, 0x6C0, 0xF50A50
 REGISTER_RVA = 0x18281D4  # lea rdx, help ... call [rax+0x38]

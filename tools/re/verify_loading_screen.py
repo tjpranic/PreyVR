@@ -1,6 +1,6 @@
 """Offline check of LoadingScreen's gate and everything it relies on, in the supported PreyDll.
 
-Reads the gate arrays out of src/dll/LoadingScreen.cpp, so the C++ stays the one
+Reads the gate arrays out of src/ui/screens/LoadingScreen.cpp, so the C++ stays the one
 definition, then confirms in the image:
 - both gate spans: the loadtime present's entry through its swapchain Present,
   and the loading loop's lock, render and present;
@@ -23,8 +23,8 @@ from pathlib import Path
 
 from preydll import DEFAULT_MODULE, Image, byte_arrays
 
-SOURCE = Path(__file__).resolve().parents[2] / "src" / "dll" / "LoadingScreen.cpp"
-HUD_SOURCE = Path(__file__).resolve().parents[2] / "src" / "dll" / "HudBridge.cpp"
+SOURCE = Path(__file__).resolve().parents[2] / "src" / "ui" / "screens" / "LoadingScreen.cpp"
+HUD_SOURCE = Path(__file__).resolve().parents[2] / "src" / "ui" / "hud" / "HudBridge.cpp"
 PRESENT_RVA, VTABLE_RVA, PRESENT_SLOT, END_FRAME_SLOT = 0xF7E820, 0x1DD2E08, 0x8E0, 0x8D0
 END_FRAME_RVA = 0xF7E210
 # RT_EndFrame's Present: mov rcx,[rdi+0xAE88] ... call [r9+0x40].

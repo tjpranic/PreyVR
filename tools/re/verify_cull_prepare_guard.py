@@ -1,7 +1,7 @@
 """Offline check of the occlusion-prepare guard's code gate against the supported
 PreyDll (docs/ENGINE-INSTABILITY.md, "The guard").
 
-Reads the gate arrays out of src/dll/CullPrepareGuard.cpp, so the C++ stays the
+Reads the gate arrays out of src/engine/fixes/CullPrepareGuard.cpp, so the C++ stays the
 one definition. Confirms each span, the C3DEngine +0x40 and +0x48 vtable slots,
 and the handshake wiring the spans only imply: what PrepareOcclusion reads and
 jumps to, both CCullThread thunks, RenderWorld's call into CullStart, and the
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 from preydll import DEFAULT_MODULE as MODULE, Image, byte_arrays
-GUARD = Path(__file__).resolve().parents[2] / "src" / "dll" / "CullPrepareGuard.cpp"
+GUARD = Path(__file__).resolve().parents[2] / "src" / "engine" / "fixes" / "CullPrepareGuard.cpp"
 ENGINE_VTABLE_RVA = 0x1C912A0
 PREPARE_RVA, PREPARE_SLOT, END_OCCLUSION_SLOT = 0x20DA10, 0x40, 0x48
 PREPARE_THUNK_RVA, CULL_START_THUNK_RVA, END_THUNK_RVA = 0x281E40, 0x281E20, 0x281E30

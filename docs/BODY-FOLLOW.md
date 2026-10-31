@@ -65,23 +65,23 @@ hips stand in VR Options (Setup → **Lean Zone**, **Hips and Legs Back**).
   2026-10-28). The view's near plane is 3 cm (Setup → **Near Clip Distance**), so looking down
   does not cut into the neck.
 - **Code:**
-  - Turning: `src/dll/TorsoLane.{h,cpp}` (the lane and the shared torso), `include/preyvr/BodyTurn.h`
-    and `src/common/BodyTurn.cpp` (the arithmetic and `NativeTurnWatch`); in `HeadTrackingHook`,
+  - Turning: `src/body/TorsoLane.{h,cpp}` (the lane and the shared torso), `src/body/BodyTurn.h`
+    and `src/body/BodyTurn.cpp` (the arithmetic and `NativeTurnWatch`); in `HeadTrackingHook`,
     `TurnHeadTrackingReferenceWithNative`, `SetSnapTurnsAboutBody` and `UseNativeViewYawOnce`.
-  - Room-scale: `src/dll/RoomScaleLane.{h,cpp}`, `include/preyvr/RoomScale.h` and
-    `src/common/RoomScale.cpp` (the follower, the fit), `include/preyvr/RoomScaleNative.h` (the
+  - Room-scale: `src/body/RoomScaleLane.{h,cpp}`, `src/body/RoomScale.h` and
+    `src/body/RoomScale.cpp` (the follower, the fit), `src/body/RoomScaleNative.h` (the
     living body's calls); in `HeadTrackingHook`, `MoveHeadTrackingOriginWithNative` and
     `HeadDropBelowCalibrated`; the fade layer, `BuildFadeLayer` in `XrOverlayLayers.cpp`.
     `FrameSchedule::AfterEngineRender` calls `ServiceBodyFollow`, which turns, then moves.
-  - The body pin: `include/preyvr/BodyRig.h` and `src/common/BodyRig.cpp` (`bodyrig::SolvePin`), and
-    `src/dll/AnimIkBody.cpp` (`BuildBodyRig`, `PlanBody`, `ApplyBody`).
-  - The shoulders: `armpose::ShoulderFromHead` and `armpose::LevelEye` (`include/preyvr/ArmPose.h`)
-    and `bodyrig::ShoulderFromAtlas`, placed by `PrepareArms` (`src/dll/AnimIkArms.cpp`).
-  - How it is drawn: `src/dll/BodyDepthHook.{h,cpp}` with `include/preyvr/BodyDepth.h` (the modes,
+  - The body pin: `src/body/BodyRig.h` and `src/body/BodyRig.cpp` (`bodyrig::SolvePin`), and
+    `src/body/ik/AnimIkBody.cpp` (`BuildBodyRig`, `PlanBody`, `ApplyBody`).
+  - The shoulders: `armpose::ShoulderFromHead` and `armpose::LevelEye` (`src/body/ArmPose.h`)
+    and `bodyrig::ShoulderFromAtlas`, placed by `PrepareArms` (`src/body/ik/AnimIkArms.cpp`).
+  - How it is drawn: `src/render/stereo/BodyDepthHook.{h,cpp}` with `src/render/stereo/BodyDepth.h` (the modes,
     `DepthMap`) and `BodyDepthNative.h` (the slot render, the two depth-slice writers); the near
     projection's depth in `NearViewStereo.cpp`'s packer hook (`RemapNearDepth`); the near plane in
-    `HeadTrackingHook.cpp`'s `ApplyNearClip`, with `include/preyvr/NearClip.h`.
-- **Tests:** `body_turn` (`tests/BodyTurnTests.cpp`, with `TestSnapKeepsTheCameraOnTheBody` and
+    `HeadTrackingHook.cpp`'s `ApplyNearClip`, with `src/render/stereo/NearClip.h`.
+- **Tests:** `body_turn` (`tests/body/BodyTurnTests.cpp`, with `TestSnapKeepsTheCameraOnTheBody` and
   `TestSmoothTurnPausesTheBody`), `room_scale`, `body_rig` (against the rig PreyVR-84 measured) and
   `arm_pose`; `scheme_review` drives `MoveLane.cpp`'s walk start; `body_depth`, `body_depth_hook`
   and `near_clip` for how it is drawn. **Static contracts**, run by `ctest re_verifiers`:
@@ -110,7 +110,7 @@ hips stand in VR Options (Setup → **Lean Zone**, **Hips and Legs Back**).
 - **Write the camera joint** (`camera_jnt`, 98) or what hangs from it in the drawn pose. `#camera`,
   the flashlight and the psychoscope's light ride it; the view ignores the drawn pose (PreyVR-85),
   so leaving it alone costs nothing. The two lights go on the headset's eye at their entity's
-  placement instead ([HeadLamp.h](../src/dll/HeadLamp.h),
+  placement instead ([HeadLampLane.h](../src/equipment/head/HeadLampLane.h),
   [the flashlight](FLASHLIGHT-HEAD-SCOPE-2026-10-29.md)).
 - **Bump the reference generation for a turn or a move that keeps P** ([why](#the-four-yaws)).
 
@@ -326,7 +326,7 @@ applied, so the view never moves.
 
 ### How it works (2026-10-25)
 
-`RoomScaleLane.cpp`, with the pure half in `preyvr/RoomScale.h`:
+`RoomScaleLane.cpp`, with the pure half in `body/RoomScale.h`:
 - **When:** after the frame's render, right after the follow's turn (`ServiceBodyFollow`). The
   render has taken the body's transform and the next frame's animation starts posed for the moved
   body. Physics is idle there on 99.97% of frames, against 94.5% at `ArkPlayer::Update`'s entry,

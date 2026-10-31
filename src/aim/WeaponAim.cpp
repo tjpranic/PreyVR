@@ -1,0 +1,94 @@
+#include "aim/WeaponAim.h"
+
+#include <algorithm>
+#include <cmath>
+
+namespace preyvr::aim {
+
+namespace {
+
+
+} // namespace
+
+bool Usable(const Sample& sample,
+            std::uint64_t currentEquipGeneration,
+            std::uint64_t currentReferenceGeneration,
+            std::uint64_t nowNs,
+            std::uint64_t maximumAgeNs)
+{
+    if (sample.confidence == Confidence::none) { return false; }
+    if (sample.publishedNs == 0 || nowNs < sample.publishedNs) { return false; }
+    if (nowNs - sample.publishedNs > maximumAgeNs) { return false; }
+    // A weapon change invalidates the whole sample, not just its rotation: the
+    // muzzle moved, the grip moved, and the rig itself is a different object.
+    if (sample.equipGeneration != currentEquipGeneration) { return false; }
+    // A recentre changes the play-space yaw, so a world direction computed
+    // before it is expressed in a frame that no longer exists.
+    if (sample.referenceGeneration != currentReferenceGeneration) { return false; }
+    return Finite(sample.origin) && Finite(sample.direction);
+}
+
+Sample Compose(const Pose& gripWorld,
+               const Quaternion& gripToBarrel,
+               bool haveBarrelCalibration)
+{
+    Sample out;
+    out.origin = gripWorld.position;
+    const Quaternion grip = Normalize(gripWorld.orientation);
+    out.orientation = haveBarrelCalibration
+                          ? Normalize(Multiply(grip, Normalize(gripToBarrel)))
+                          : grip;
+    // Engine forward is +Y.
+    out.direction = Rotate(out.orientation, Vec3{0.0f, 1.0f, 0.0f});
+    const float length = std::sqrt(out.direction.x * out.direction.x +
+                                   out.direction.y * out.direction.y +
+                                   out.direction.z * out.direction.z);
+    if (!std::isfinite(length) || length < 0.9f || length > 1.1f) {
+        out.confidence = Confidence::none;
+        return out;
+    }
+    out.direction = Vec3{out.direction.x / length, out.direction.y / length,
+                         out.direction.z / length};
+    // Without a calibration this is the controller's pointing axis, which is a
+    // usable origin and an honest direction, but it is NOT the barrel. Saying so
+    // in the type is what stops a consumer treating the two as equivalent.
+    out.confidence = haveBarrelCalibration ? Confidence::barrel : Confidence::origin;
+    return out;
+}
+
+CanvasPoint ViewportToHudCanvas(float viewportX, float viewportY,
+                                float frameWidth, float frameHeight)
+{
+    CanvasPoint out{viewportX, viewportY};
+    if (!std::isfinite(viewportX) || !std::isfinite(viewportY) ||
+        !std::isfinite(frameWidth) || !std::isfinite(frameHeight) ||
+        frameWidth <= 0.0f || frameHeight <= 0.0f) {
+        // A bad frame size cannot produce a better answer than the input, and a
+        // corrected value derived from nonsense is worse than none.
+        return out;
+    }
+
+    // The 16:9 canvas scaled to COVER the frame: whichever axis needs the larger
+    // scale sets it, and the other axis overflows.
+    constexpr float kCanvasAspectW = 16.0f;
+    constexpr float kCanvasAspectH = 9.0f;
+    const float scale = std::max(frameWidth / kCanvasAspectW, frameHeight / kCanvasAspectH);
+    const float canvasWidth = kCanvasAspectW * scale;
+    const float canvasHeight = kCanvasAspectH * scale;
+    if (!(canvasWidth > 0.0f) || !(canvasHeight > 0.0f)) {
+        return out;
+    }
+
+    // The canvas is centred, so a viewport fraction maps to a canvas fraction by
+    // shrinking its distance from the centre in the ratio the frame occupies.
+    // Exactly 1.0 in the axis that set the scale, which is why 16:9 is the
+    // identity in both.
+    out.x = 0.5f + (viewportX - 0.5f) * (frameWidth / canvasWidth);
+    out.y = 0.5f + (viewportY - 0.5f) * (frameHeight / canvasHeight);
+    if (!std::isfinite(out.x) || !std::isfinite(out.y)) {
+        return CanvasPoint{viewportX, viewportY};
+    }
+    return out;
+}
+
+} // namespace preyvr::aim

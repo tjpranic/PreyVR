@@ -1,8 +1,8 @@
 // Offline integration review: compile the REAL lane, replace only its external
 // input, logger and hook-install boundaries. No game, injection or native calls.
 // Exit 1 reports requirements violated by the current production implementation.
-#include "../../../src/dll/MoveLane.cpp"
-#include "preyvr/XrFrameContract.h"
+#include "controls/locomotion/MoveLane.cpp"
+#include "xr/XrFrameContract.h"
 #include <iostream>
 #include <type_traits>
 #include <vector>

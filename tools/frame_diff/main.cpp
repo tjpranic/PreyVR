@@ -9,7 +9,7 @@
 // yet, and inventing one before the separation table has been measured would
 // produce something that looks like evidence without being any.
 
-#include "preyvr/FrameDump.h"
+#include "diagnostics/capture/FrameDump.h"
 
 #include <cstdio>
 #include <cstdlib>

@@ -1,4 +1,4 @@
-"""Read-only Steam helmet contracts (include/preyvr/HelmetNative.h, docs/ZERO-G-SCOPE-2026-10-30.md): the bone
+"""Read-only Steam helmet contracts (src/equipment/head/HelmetNative.h, docs/ZERO-G-SCOPE-2026-10-30.md): the bone
 attachment's model transform at +0x130, its relative default at +0xF8 (where Prey's HUD helmet writes the sway), its
 hide bits, the player entity's world matrix, the character render the size hook rescales (the helmet's character is
 drawn by a character attachment whose RenderAttachment passes an identity QuatTS), and the slots that reach them.
@@ -7,7 +7,7 @@ import json,sys
 from pathlib import Path
 from preydll import DEFAULT_MODULE,Image,fnv1a64 as fnv,native_rows
 ROOT=Path(__file__).resolve().parents[2]
-HEADER=ROOT/'include/preyvr/HelmetNative.h'
+HEADER=ROOT/'src/equipment/head/HelmetNative.h'
 MODEL,RELATIVE,HIDE,WORLD_TM,RENDER,RENDER_ATTACHMENT=0x822c80,0x828dc0,0x7b2b40,0x10ea260,0x81bcb0,0x334df0
 BONE_VTABLE,ENTITY_VTABLE,CHR_ATTACHMENT_VTABLE,CHARACTER_VTABLE=0x1d212b8,0x1d30bd0,0x1cb1328,0x1d22200
 
@@ -33,7 +33,7 @@ def verify():
         assert at(rva+size,1)==b'\xcc',name+' is the whole function'
         checks.append(name+': complete body (padding after it), no base relocations, mutation refused')
     mine={rva for rva,_,_,_ in entries}
-    for header in sorted((ROOT/'include/preyvr').glob('*Native.h')):
+    for header in sorted((ROOT/'src').rglob('*Native.h')):
         if header.name!=HEADER.name:assert not mine&{rva for rva,_,_,_ in native_rows(header)},header.name
     checks.append('no row in another *Native.h table')
     for name,value in {'ModelRelative':MODEL,'RelativeDefault':RELATIVE,'Hide':HIDE,'EntityGetWorldTm':WORLD_TM,

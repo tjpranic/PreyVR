@@ -22,7 +22,7 @@ This is the first mutation-capable runtime rung. It is deliberately smaller than
 | `PreyVR_SetFrameObserverEnabled` | Argument `1` installs/enables; `0` disables/removes. Returns the resulting observer status. |
 | `PreyVR_GetFrameObserverStatus` | `0` unavailable, `1` ready/off, `2` enabled, `3` failed. |
 | `PreyVR_GetObservedFrameCount` | Monotonic 64-bit callback count for the current enable interval. |
-| `PreyVR_GetOpenXRPreflightStatus` | Pure readiness status; see `OpenXRBootstrapStatus` in `include/preyvr/OpenXRBootstrap.h`. |
+| `PreyVR_GetOpenXRPreflightStatus` | Pure readiness status; see `OpenXRBootstrapStatus` in `src/xr/OpenXRBootstrap.h`. |
 | `PreyVR_GetModulePinStatus` | `0` before/without supported-host promotion; `1` after the module is pinned until process exit. |
 
 ## Supported-host proof

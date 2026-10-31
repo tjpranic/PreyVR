@@ -6,7 +6,7 @@ ROOT=Path(__file__).resolve().parents[2]
 
 def verify():
     image=Image(DEFAULT_MODULE);digest,at=image.sha256,image.at
-    entries=native_rows(ROOT/'include/preyvr/SceneQueryNative.h')
+    entries=native_rows(ROOT/'src/physics/contact/SceneQueryNative.h')
     assert len(entries)==7
     checks=[]
     for rva,size,expected,name in entries:

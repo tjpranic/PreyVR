@@ -25,16 +25,16 @@
 #ifndef XR_USE_GRAPHICS_API_D3D11
 #define XR_USE_GRAPHICS_API_D3D11
 #endif
-#include "preyvr/Locomotion.h"
+#include "controls/locomotion/Locomotion.h"
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
-#include "preyvr/MotionController.h"
-#include "preyvr/StereoCamera.h"
-#include "preyvr/StereoFrame.h"
-#include "preyvr/XrFrameContract.h"
-#include "preyvr/XrSwapchainFormat.h"
+#include "aim/MotionController.h"
+#include "render/camera/StereoCamera.h"
+#include "render/camera/StereoFrame.h"
+#include "xr/XrFrameContract.h"
+#include "xr/XrSwapchainFormat.h"
 
 #include <cmath>
 #include <cstdarg>

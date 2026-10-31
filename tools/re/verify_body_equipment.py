@@ -22,7 +22,7 @@ def verify():
   for value in b:h=((h^value)*1099511628211)&((1<<64)-1)
   return h
  checks=[]
- text=(ROOT/'include/preyvr/EquipmentNative.h').read_text()
+ text=(ROOT/'src/equipment/body/EquipmentNative.h').read_text()
  entries=re.findall(r'\{0x([0-9A-F]+),(\d+),0x([0-9A-F]+)ull\}, // (\w+)',text)
  assert len(entries)==22
  for rva,size,expected,name in entries:

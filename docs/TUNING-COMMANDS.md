@@ -315,7 +315,7 @@ worn OK (2026-10-25), as Body Follows You's commands had on 2026-10-24.
 | `arms.draw` | action | | Asks the game to draw the last weapon. |
 | `arms.report` / `arms.att` / `arms.joints [name]` | report | | Holster state; the arms' attachments; joint positions. |
 | `arms.hide <index> <0\|1>` | | | Test: hides one attachment. |
-| `ik.longreach` | report | | `holdBackMm`, how far back the held weapon sits now. A foregrip more than 45 cm ahead of the trigger hand brings the weapon back by the difference, at most 20 cm, the foregrip region reaches 10 cm further behind it, and the drawn torso turns 30 degrees while it is held two-handed (`preyvr/TwoHandedAim.h`). |
+| `ik.longreach` | report | | `holdBackMm`, how far back the held weapon sits now. A foregrip more than 45 cm ahead of the trigger hand brings the weapon back by the difference, at most 20 cm, the foregrip region reaches 10 cm further behind it, and the drawn torso turns 30 degrees while it is held two-handed (`aim/TwoHandedAim.h`). |
 | `ik.widesupport` | 0/1 | 1 | Foregrip grab region up to 45 cm beside, 80 cm ahead (0: 25/70 cm). |
 | `ik.supportlatch` | 0/1 | 1 | One settled support-hand socket per weapon. |
 | `ik.mode` | 0 off, 1 observe, 2 apply | 0 → VR 2 | The IK arms lane. |
@@ -368,7 +368,7 @@ worn OK (2026-10-25), as Body Follows You's commands had on 2026-10-24.
 | `wrist.gate` / `wrist.native` / `wrist.occlusion` | see above | | When the card shows, the game status's scale, what hides it. |
 | `wrist.anchor` | 0/1 | 1 | On the drawn forearm (0: the old grip-anchored card). |
 | `wrist.force` | 0/1 | 0 | Shows the card from any pose, for captures. |
-| `wrist.report` | report | | Gate, look test, counters. `gate=` adds up the conditions that hold: 1 the option, 2 views, 4 rendered, 8 no menu panel, 16 VR Options closed, 32 gameplay input, 64 no two-hand aim, 128 not recentering, 256 tracking. 511 is open (`wrist::Gate`, preyvr/WristHolo.h). |
+| `wrist.report` | report | | Gate, look test, counters. `gate=` adds up the conditions that hold: 1 the option, 2 views, 4 rendered, 8 no menu panel, 16 VR Options closed, 32 gameplay input, 64 no two-hand aim, 128 not recentering, 256 tracking. 511 is open (`wrist::Gate`, ui/hud/WristHolo.h). |
 
 ### Aim, reticle and shots
 

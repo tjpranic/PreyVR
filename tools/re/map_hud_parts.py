@@ -19,7 +19,7 @@ import zlib
 from pathlib import Path
 
 MOVIE_SHA256 = "35974883f152e345834ca690c8f6cb280152cee0ae724280e3cc98f75fb9c9dc"
-HEADER = Path(__file__).resolve().parents[2] / "include" / "preyvr" / "NativeHudIsolation.h"
+HEADER = Path(__file__).resolve().parents[2] / "src" / "ui" / "hud" / "NativeHudIsolation.h"
 
 
 class Movie:

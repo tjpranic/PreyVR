@@ -6,7 +6,7 @@ ROOT=Path(__file__).resolve().parents[2]
 
 def verify():
     image=Image(DEFAULT_MODULE);digest,at=image.sha256,image.at
-    entries=native_rows(ROOT/'include/preyvr/PhysicalNative.h')
+    entries=native_rows(ROOT/'src/physics/contact/PhysicalNative.h')
     assert len(entries)==15
     relocs=image.relocations()
     checks=[]

@@ -40,7 +40,7 @@ if ((Get-PreyVRStereoStatus 'preyvr_vr state=active') -ne 'unknown') {throw 'A l
 
 # The launcher and the DLL must agree on the variable and the log lines.
 $launcher=Get-Content -LiteralPath $scriptPath -Raw
-$vrMode=Get-Content -LiteralPath (Join-Path $PSScriptRoot '../src/dll/VrMode.cpp') -Raw
+$vrMode=Get-Content -LiteralPath (Join-Path $PSScriptRoot '../src/app/VrMode.cpp') -Raw
 if ($launcher -notmatch [regex]::Escape("EnvironmentVariables['PREYVR_DUAL_STEREO']")) {throw 'Launcher no longer passes PREYVR_DUAL_STEREO'}
 if ($vrMode -notmatch [regex]::Escape('L"PREYVR_DUAL_STEREO"')) {throw 'VrMode no longer reads PREYVR_DUAL_STEREO'}
 foreach ($line in @('dual_stereo=on','dual_stereo=off','dual_stereo=unavailable')) {

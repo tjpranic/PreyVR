@@ -9,7 +9,7 @@ BASE=0x180000000
 
 def verify():
     image=Image(DEFAULT_MODULE);at=image.at
-    rows=native_rows(ROOT/'include/preyvr/StickRereadNative.h')
+    rows=native_rows(ROOT/'src/controls/input/StickRereadNative.h')
     assert len(rows)==7
     relocs=image.relocations()
     checks=[]

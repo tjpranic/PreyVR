@@ -8,7 +8,7 @@
     two readers is a format contract that drifts, and the drift shows up as
     plausible-looking wrong images.
 
-    Must match include/preyvr/FrameDump.h.
+    Must match src/diagnostics/capture/FrameDump.h.
 #>
 
 Set-StrictMode -Version Latest

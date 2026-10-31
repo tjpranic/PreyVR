@@ -31,8 +31,8 @@ No R-number. Static only (Ghidra over the supported Steam hash); nothing built o
 
 No R-number. Worn OK in PreyVR-93 (2026-10-25, run `player-20261025-192638`): the neuromod install
 cutscene in both eyes, 243 draws copied, 0 refused. Supported Steam hash;
-`tools/re/verify_fullscreen_video.py` checks every row, and `src/dll/VideoOverlay.cpp` compares the
-two bodies of `include/preyvr/FullscreenVideoNative.h` in memory before hooking. Why and how in
+`tools/re/verify_fullscreen_video.py` checks every row, and `src/render/stereo/VideoOverlay.cpp` compares the
+two bodies of `src/render/stereo/FullscreenVideoNative.h` in memory before hooking. Why and how in
 [the both-eyes notes](STEREO-DUAL-SUBMISSION-2026-10-10.md#fullscreen-videos-in-both-eyes-2026-10-25).
 
 | RVA / field | Purpose and constraint |
@@ -50,8 +50,8 @@ two bodies of `include/preyvr/FullscreenVideoNative.h` in memory before hooking.
 
 No R-number. Worn OK in PreyVR-72 (2026-10-24, run `player-20261024-171806`): 128 re-reads that
 would have stopped the player were kept, mostly the `ArkPlayerInteraction` filter. Supported Steam hash;
-`tools/re/verify_stick_reread.py` checks every row (61 checks), and `src/dll/StickReread.cpp`
-compares the six bodies of `include/preyvr/StickRereadNative.h` and two vtable slots in memory
+`tools/re/verify_stick_reread.py` checks every row (61 checks), and `src/controls/input/StickReread.cpp`
+compares the six bodies of `src/controls/input/StickRereadNative.h` and two vtable slots in memory
 before hooking. Why and how in [the movement-stop notes](MOVE-STOP-2026-10-24.md).
 
 | RVA / field | Purpose and constraint |
@@ -71,7 +71,7 @@ before hooking. Why and how in [the movement-stop notes](MOVE-STOP-2026-10-24.md
 No R-number. The skip is worn OK (PreyVR-49, 2026-10-20); the sound capture ran (PreyVR-50); the
 draw sound replay is worn OK (PreyVR-51); the stow skip is worn OK (PreyVR-52). Supported Steam hash;
 `tools/re/verify_wrench_draw.py` checks every row (130 checks).
-`src/dll/WrenchDraw.cpp` compares its nine bodies, EquipmentNative.h's SelectItem
+`src/equipment/wrench/WrenchDraw.cpp` compares its nine bodies, EquipmentNative.h's SelectItem
 and lookup, and five vtable slots in memory before hooking. Why and how in
 [the wrench draw notes](WRENCH-DRAW-ANIMATION-2026-10-20.md).
 
@@ -95,7 +95,7 @@ and lookup, and five vtable slots in memory before hooking. Why and how in
 No R-number. Static, plus one runtime observation: run `player-20261020-181530`
 logged a 10.4 s stall with no `RT_EndFrame` while the desktop showed the loading
 screen. The hook has not run in a headset yet. Supported Steam hash;
-`tools/re/verify_loading_screen.py` checks every row. `src/dll/LoadingScreen.cpp`
+`tools/re/verify_loading_screen.py` checks every row. `src/ui/screens/LoadingScreen.cpp`
 compares its two spans and the vtable slot in memory before hooking. Why and how
 in [the loading-screen notes](LOADING-SCREEN-2026-10-20.md).
 
@@ -111,7 +111,7 @@ in [the loading-screen notes](LOADING-SCREEN-2026-10-20.md).
 
 No R-number. Static only: the guard has not run in a headset yet. Supported
 Steam hash; `tools/re/verify_controller_prompts.py` checks every row.
-`src/dll/ControllerPrompts.cpp` compares its four spans in memory before its
+`src/controls/input/ControllerPrompts.cpp` compares its four spans in memory before its
 first read. Why and how in
 [controller prompts](CONTROLLER-PROMPTS-2026-10-18.md#scheme-guard-2026-10-19).
 
@@ -131,7 +131,7 @@ No R-number. All of it ran in the accepted headset run (`player-20261017-101027`
 every throttle call answered, the cvar verified, two lose-focus requests held off and
 sound kept. Supported Steam hash;
 `tools/re/verify_focus_hold.py` checks every row. Purpose and design in
-[the desktop window notes](DESKTOP-WINDOW-2026-10-17.md); `src/dll/FocusHold.cpp`
+[the desktop window notes](DESKTOP-WINDOW-2026-10-17.md); `src/engine/fixes/FocusHold.cpp`
 compares the same bytes in memory before it touches the slot.
 
 | RVA / field | Purpose and constraint |
@@ -154,8 +154,8 @@ No R-number: static only, nothing called live yet. Supported Steam hash;
 `tools/re/verify_view_rotation.py`: 27 exact-byte/vtable checks. Purpose and design
 in [the body document](BODY-FOLLOW.md). `src/dll/BodyFollow.cpp`
 compared the same bytes in memory before its first call, until body following and room-scale
-were removed on 2026-10-24. `src/dll/TorsoLane.cpp` hooks slot 19 and calls the setter to turn the
-body, after each snap turn and as the player turns round in the room; `src/dll/RoomScaleLane.cpp`
+were removed on 2026-10-24. `src/body/TorsoLane.cpp` hooks slot 19 and calls the setter to turn the
+body, after each snap turn and as the player turns round in the room; `src/body/RoomScaleLane.cpp`
 (room-scale, back on 2026-10-25) calls the entity's `SetPos` and `GetPos`. Both compare the same
 bytes first.
 
@@ -770,7 +770,7 @@ an error.
 
 1. **A misaligned data breakpoint never fires.** `ArmWatch` refuses an address not
    aligned to its own length instead of arming a watch that would report zero
-   writes. Pinned by `tests/DebugRegistersTests.cpp`.
+   writes. Pinned by `tests/diagnostics/DebugRegistersTests.cpp`.
 2. **`Dr6` and `Dr7` edits inside a vectored handler are dropped** unless the
    resumed context asks for debug registers, which it does not by default. Without
    that flag the status bits never clear, every later trap is misattributed, and

@@ -10,7 +10,7 @@ import struct,sys
 from pathlib import Path
 from preydll import DEFAULT_MODULE,Image,fnv1a64 as fnv,native_rows
 ROOT=Path(__file__).resolve().parents[2]
-HEADER=ROOT/'include/preyvr/TemporalAaNative.h'
+HEADER=ROOT/'src/render/taa/TemporalAaNative.h'
 
 def header_constant(name):
     """`inline constexpr ... name=0x...` from TemporalAaNative.h."""
@@ -242,7 +242,7 @@ def verify():
         assert at(rva+size,1)==b'\xcc',name+' is the whole function'
         checks.append(name+': complete body (padding after it), no base relocations, mutation refused')
     mine={rva for rva,_,_,_ in entries}
-    for header in sorted((ROOT/'include/preyvr').glob('*Native.h')):
+    for header in sorted((ROOT/'src').rglob('*Native.h')):
         if header.name!=HEADER.name:assert not mine&{rva for rva,_,_,_ in native_rows(header)},header.name
     checks.append('no row in another *Native.h table')
     for name,value in {'FrameCounter':COUNTER,'ModeCvar':MODE_CVAR,'ModeEffective':MODE_EFFECTIVE,

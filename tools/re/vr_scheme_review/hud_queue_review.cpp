@@ -1,6 +1,6 @@
 // Use the real queue/dispatcher. A missing Prey module is the positive control:
 // resolution must be attempted only by the drain, never by the producer thread.
-#include "../../../src/dll/HudBridge.cpp"
+#include "ui/hud/HudBridge.cpp"
 #include <iostream>
 #include <thread>
 

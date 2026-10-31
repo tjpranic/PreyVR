@@ -4,7 +4,7 @@
     reports the session it reached.
 
 .DESCRIPTION
-    `vr.enable` (src/dll/VrMode.cpp) owns the bring-up and the one order that
+    `vr.enable` (src/app/VrMode.cpp) owns the bring-up and the one order that
     works:
     - gamma before the session, because it is a swapchain format fixed at
       creation, not a cvar;

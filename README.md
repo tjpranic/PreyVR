@@ -24,7 +24,7 @@ See [options](docs/VR-OPTIONS-2026-09-27.md) and
 | `docs/` | Evidence, decisions, RE notes, build identity, and test plans. |
 | `captures/` | Local RenderDoc captures, eye dumps, screenshots, and traces. Large/generated evidence is ignored by Git. |
 | `graphify/` | A reproducible, local knowledge-graph corpus joining PreyVR with the cross-engine VR-mod research corpus. |
-| `src/`, `include/`, `tests/` | Implementation lanes for lifecycle, signature-gated frame observation, OpenXR preflight, engine integration, input, and deterministic tests. |
+| `src/`, `tests/` | The mod, grouped by feature ([src/README.md](src/README.md)), and its deterministic tests. |
 | `config/` | Versioned default/configuration schemas; machine-local settings stay ignored. |
 | `tools/` | One-off utilities and capture/research helpers. |
 

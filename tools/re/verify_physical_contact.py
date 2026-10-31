@@ -9,7 +9,7 @@ BASE=0x180000000
 
 def verify():
     image=Image(DEFAULT_MODULE);digest,at=image.sha256,image.at
-    entries=native_rows(ROOT/'include/preyvr/ContactNative.h')
+    entries=native_rows(ROOT/'src/physics/contact/ContactNative.h')
     assert len(entries)==19
     relocs=image.relocations()
     checks=[]
@@ -21,7 +21,7 @@ def verify():
         assert fnv(corrupt)!=expected,name+' mutation control'
         checks.append(name+': complete body, no base relocations, mutation refused')
     # The rigid Action (set_velocity, impulse) and GetType are PhysicalNative.h's rows.
-    rigid={rva for rva,_,_,_ in native_rows(ROOT/'include/preyvr/PhysicalNative.h')}
+    rigid={rva for rva,_,_,_ in native_rows(ROOT/'src/physics/contact/PhysicalNative.h')}
     assert {0xbcf990,0x13d1b90}<=rigid
     checks.append('rigid Action 0xBCF990 and GetType 0x13D1B90 hashed by PhysicalNative.h')
     slots=[('world',0x1d82e70,0x110,0xba8560),('world',0x1d82e70,0x1d0,0xba1d80),('world',0x1d82e70,0xd0,0xba9810),

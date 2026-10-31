@@ -117,7 +117,7 @@ if ($floors.Count -eq 0) {
     }
     Write-Output ""
     Write-Output "No threshold is applied. Compare the ratio against the separation table in"
-    Write-Output "include/preyvr/FrameDump.h - and if it is marginal, investigate rather than"
+    Write-Output "src/diagnostics/capture/FrameDump.h - and if it is marginal, investigate rather than"
     Write-Output "widening anything."
 }
 

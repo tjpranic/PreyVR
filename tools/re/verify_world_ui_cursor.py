@@ -13,7 +13,7 @@ IARKPLAYER_VTABLE=0x1e56eb8
 
 def header_constant(name):
     """`inline constexpr ... name=0x...` from WorldUiNative.h (comments skipped)."""
-    text=(ROOT/'include/preyvr/WorldUiNative.h').read_text(encoding='utf-8')
+    text=(ROOT/'src/aim/WorldUiNative.h').read_text(encoding='utf-8')
     for line in text.splitlines():
         if line.lstrip().startswith('inline constexpr'):
             for found,value in re.findall(r'\b(\w+)=(0x[0-9A-Fa-f]+|\d+)\b',line):
@@ -22,7 +22,7 @@ def header_constant(name):
 
 def verify():
     image=Image(DEFAULT_MODULE);at=image.at
-    entries=native_rows(ROOT/'include/preyvr/WorldUiNative.h')
+    entries=native_rows(ROOT/'src/aim/WorldUiNative.h')
     assert [rva for rva,_,_,_ in entries]==[CURSOR_RAY],entries
     relocs=image.relocations();checks=[]
     for rva,size,expected,name in entries:
@@ -33,7 +33,7 @@ def verify():
         assert fnv(corrupt)!=expected,name+' mutation control'
         assert at(rva+size,1)==b'\xcc',name+' is the whole function'
         checks.append(name+': complete body (padding after it), no base relocations, mutation refused')
-    for header in sorted((ROOT/'include/preyvr').glob('*Native.h')):
+    for header in sorted((ROOT/'src').rglob('*Native.h')):
         if header.name!='WorldUiNative.h':assert CURSOR_RAY not in {rva for rva,_,_,_ in native_rows(header)},header.name
     checks.append('no row in another *Native.h table')
     for name,value in {'CursorRay':CURSOR_RAY,'RayReadReturn':READ_RETURN}.items():

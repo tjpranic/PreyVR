@@ -1,0 +1,298 @@
+#include "app/Bootstrap.h"
+#include "base/WideText.h"
+
+#include "engine/hooks/FrameObserverHook.h"
+#include "base/Logger.h"
+#include "xr/OpenXRPreflightWin32.h"
+#include "diagnostics/probes/RuntimeSnapshotWin32.h"
+#include "Version.h"
+#include "app/WorkerThread.h"
+#include "diagnostics/capture/OverflowCapture.h"
+#include "engine/EngineMap.h"
+
+#include <bcrypt.h>
+#include <Psapi.h>
+
+#include <array>
+#include <atomic>
+#include <exception>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+#include <vector>
+
+namespace preyvr::dll {
+namespace {
+
+std::atomic<DWORD> gSmokeStatus{0};
+std::atomic<DWORD> gOpenXRPreflightStatus{
+    static_cast<DWORD>(OpenXRBootstrapStatus::disabled)};
+std::atomic<DWORD> gModulePinned{0};
+
+std::filesystem::path ModulePath(HMODULE module)
+{
+    std::wstring buffer(32768, L'\0');
+    const DWORD length = GetModuleFileNameW(module, buffer.data(), static_cast<DWORD>(buffer.size()));
+    if (length == 0 || length >= buffer.size()) {
+        return {};
+    }
+    buffer.resize(length);
+    return std::filesystem::path(buffer);
+}
+
+std::string Sha256File(const std::filesystem::path& path)
+{
+    BCRYPT_ALG_HANDLE algorithm = nullptr;
+    BCRYPT_HASH_HANDLE hash = nullptr;
+    DWORD objectBytes = 0;
+    DWORD hashBytes = 0;
+    DWORD copied = 0;
+    std::vector<UCHAR> object;
+    std::vector<UCHAR> digest;
+
+    const auto cleanup = [&] {
+        if (hash != nullptr) {
+            BCryptDestroyHash(hash);
+        }
+        if (algorithm != nullptr) {
+            BCryptCloseAlgorithmProvider(algorithm, 0);
+        }
+    };
+
+    if (BCryptOpenAlgorithmProvider(
+            &algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0) < 0 ||
+        BCryptGetProperty(
+            algorithm,
+            BCRYPT_OBJECT_LENGTH,
+            reinterpret_cast<PUCHAR>(&objectBytes),
+            sizeof(objectBytes),
+            &copied,
+            0) < 0 ||
+        BCryptGetProperty(
+            algorithm,
+            BCRYPT_HASH_LENGTH,
+            reinterpret_cast<PUCHAR>(&hashBytes),
+            sizeof(hashBytes),
+            &copied,
+            0) < 0 ||
+        hashBytes == 0) {
+        cleanup();
+        return "unavailable";
+    }
+
+    object.resize(objectBytes);
+    digest.resize(hashBytes);
+    if (BCryptCreateHash(
+            algorithm,
+            &hash,
+            object.data(),
+            static_cast<ULONG>(object.size()),
+            nullptr,
+            0,
+            0) < 0) {
+        cleanup();
+        return "unavailable";
+    }
+
+    std::ifstream input(path, std::ios::binary);
+    std::array<char, 64 * 1024> buffer{};
+    while (input) {
+        input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+        const auto count = input.gcount();
+        if (count > 0 && BCryptHashData(
+                hash,
+                reinterpret_cast<PUCHAR>(buffer.data()),
+                static_cast<ULONG>(count),
+                0) < 0) {
+            cleanup();
+            return "unavailable";
+        }
+    }
+    if (!input.eof() || BCryptFinishHash(
+            hash, digest.data(), static_cast<ULONG>(digest.size()), 0) < 0) {
+        cleanup();
+        return "unavailable";
+    }
+
+    std::ostringstream output;
+    output << std::hex << std::uppercase << std::setfill('0');
+    for (const UCHAR value : digest) {
+        output << std::setw(2) << static_cast<unsigned int>(value);
+    }
+    cleanup();
+    return output.str();
+}
+
+bool PinCurrentModule()
+{
+    HMODULE pinned = nullptr;
+    if (!GetModuleHandleExW(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+            reinterpret_cast<LPCWSTR>(&BootstrapMain),
+            &pinned)) {
+        return false;
+    }
+    gModulePinned.store(1, std::memory_order_release);
+    return true;
+}
+
+DWORD RunBootstrap(HMODULE self)
+{
+    lifecycle::ResetLog();
+
+    const auto selfPath = ModulePath(self);
+    std::ostringstream identity;
+    identity << "preyvr_smoke_start version=" << PREYVR_VERSION
+             << " dll=\"" << Utf8(selfPath.wstring()) << "\""
+             << " dllSha256=" << Sha256File(selfPath)
+             << " host=\"" << Utf8(ModulePath(nullptr).wstring()) << "\""
+             << " expectedLandmarks=" << engine::Landmarks().size()
+             << " hooks=compiled_default_off openxr=preflight_only";
+    lifecycle::Log(identity.str());
+
+    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
+    if (preyDll == nullptr) {
+        lifecycle::Log("preyvr_smoke_result status=unsupported reason=PreyDll.dll_not_loaded");
+        gSmokeStatus.store(1, std::memory_order_release);
+        return 0;
+    }
+
+    MODULEINFO moduleInfo{};
+    if (!GetModuleInformation(
+            GetCurrentProcess(), preyDll, &moduleInfo, static_cast<DWORD>(sizeof(moduleInfo))) ||
+        moduleInfo.lpBaseOfDll == nullptr || moduleInfo.SizeOfImage == 0) {
+        lifecycle::Log("preyvr_smoke_result status=unsupported reason=module_info_unavailable");
+        gSmokeStatus.store(1, std::memory_order_release);
+        return 0;
+    }
+
+    const auto image = std::span<const std::uint8_t>(
+        static_cast<const std::uint8_t*>(moduleInfo.lpBaseOfDll),
+        static_cast<std::size_t>(moduleInfo.SizeOfImage));
+    const auto results = engine::ValidateLandmarks(image);
+    for (const auto& result : results) {
+        std::ostringstream line;
+        line << "preyvr_landmark id=" << result.landmark->id
+             << " rva=0x" << std::hex << std::uppercase << result.landmark->rva
+             << " status=" << engine::ToString(result.status);
+        if (result.status == engine::LandmarkStatus::mismatch) {
+            line << " mismatchOffset=0x" << result.mismatchOffset;
+        }
+        lifecycle::Log(line.str());
+    }
+
+    if (!engine::AllLandmarksMatch(results)) {
+        lifecycle::Log("preyvr_smoke_result status=unsupported reason=engine_landmark_mismatch hooks=disabled");
+        gSmokeStatus.store(1, std::memory_order_release);
+        return 0;
+    }
+
+    if (!ConfigureFrameObserver(preyDll, image)) {
+        lifecycle::Log("preyvr_smoke_result status=unsupported reason=frame_observer_plan_failed hooks=disabled");
+        gSmokeStatus.store(1, std::memory_order_release);
+        return 0;
+    }
+    // Read-only capture of the engine facts that only a running Prey can supply.
+    // It runs here, after the landmark gate has proved the image is the supported
+    // build and before any hook is armed, so the values recorded are the engine's
+    // own undisturbed state. Failure is never fatal: a partial snapshot still
+    // localises the first bad pointer, and the mod proceeds exactly as before.
+    // See docs/LIVE_CAPTURE_PLAN.md for what each field is for.
+    {
+        const auto captured = CaptureRuntimeSnapshot(reinterpret_cast<std::uintptr_t>(preyDll));
+        snapshot::Report(
+            captured,
+            [](std::string_view line, void*) { lifecycle::Log(line); },
+            nullptr);
+    }
+
+    const auto openxr = CollectOpenXRPreflight(selfPath);
+    gOpenXRPreflightStatus.store(
+        static_cast<DWORD>(openxr.status),
+        std::memory_order_release);
+    std::ostringstream openxrLine;
+    openxrLine << "preyvr_openxr_preflight status=" << ToString(openxr.status)
+               << " runtimeSource=" << openxr.runtimeSource
+               << " runtimeManifest=\"" << Utf8(openxr.runtimeManifest.wstring()) << "\""
+               << " loader=\"" << Utf8(openxr.loader.wstring()) << "\""
+               << " action=none";
+    lifecycle::Log(openxrLine.str());
+
+    // A dump that survives a stack overflow (OverflowCapture.h): after the gate,
+    // so an unsupported build is left untouched, and before any hook.
+    ArmOverflowCapture();
+
+    // The worker thread, and with it the command channel, starts only after the
+    // landmark gate has passed, so an unsupported build never gets one. The
+    // channel then does nothing until someone writes a command file, which is
+    // what keeps "always started" acceptable.
+    if (StartWorkerThread() == 0) {
+        lifecycle::Log("preyvr_channel result=0 detail=armed");
+    }
+
+    if (!PinCurrentModule()) {
+        lifecycle::Log("preyvr_smoke_result status=unsupported reason=module_pin_failed hooks=disabled");
+        gSmokeStatus.store(1, std::memory_order_release);
+        return 0;
+    }
+    lifecycle::Log("preyvr_lifecycle module=pinned unload=process_exit_only");
+
+    std::ostringstream success;
+    success << "preyvr_smoke_result status=verified landmarks=" << results.size()
+            << " hooks=compiled_default_off observer=ready"
+            << " module=pinned"
+            << " openxr=preflight_only openxrStatus=" << ToString(openxr.status)
+            << " next=supported_host_smoke";
+    lifecycle::Log(success.str());
+    gSmokeStatus.store(2, std::memory_order_release);
+    return 0;
+}
+
+} // namespace
+
+DWORD WINAPI BootstrapMain(void* moduleParameter)
+{
+    const auto self = static_cast<HMODULE>(moduleParameter);
+    HMODULE workerReference = nullptr;
+    const bool workerPinned = GetModuleHandleExW(
+        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+        reinterpret_cast<LPCWSTR>(&BootstrapMain),
+        &workerReference) != FALSE;
+
+    DWORD result = 1;
+    try {
+        result = RunBootstrap(self);
+    }
+    catch (const std::exception& error) {
+        lifecycle::Log(std::string("preyvr_smoke_result status=unsupported reason=exception detail=\"") +
+            error.what() + "\"");
+        gSmokeStatus.store(1, std::memory_order_release);
+    }
+    catch (...) {
+        lifecycle::Log("preyvr_smoke_result status=unsupported reason=unknown_exception");
+        gSmokeStatus.store(1, std::memory_order_release);
+    }
+
+    if (workerPinned) {
+        FreeLibraryAndExitThread(workerReference, result);
+    }
+    return result;
+}
+
+DWORD SmokeStatus()
+{
+    return gSmokeStatus.load(std::memory_order_acquire);
+}
+
+DWORD OpenXRPreflightStatus()
+{
+    return gOpenXRPreflightStatus.load(std::memory_order_acquire);
+}
+
+DWORD ModulePinStatus()
+{
+    return gModulePinned.load(std::memory_order_acquire);
+}
+
+} // namespace preyvr::dll

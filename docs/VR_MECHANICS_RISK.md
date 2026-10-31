@@ -65,8 +65,8 @@ CanBeUsedInZeroG        ShotgunDispersionRateZeroG
 3. Three separate zero-G camera offsets exist, so the camera system already branches on zero-G
    state. Any pose injection must handle both branches rather than one.
 
-**Direct consequence for existing PreyVR code.** `MakeBoundedYawProbe` in
-[`../src/common/AimState.cpp`](../src/common/AimState.cpp) constructs a **Z-up yaw** and bounds it to
+**Direct consequence for existing PreyVR code.** `MakeBoundedYawProbe`, in `src/common/AimState.cpp`
+until it was cut as unused on 2026-10-31, constructed a **Z-up yaw** and bounded it to
 15 degrees. That is correct only while world up is meaningful. In zero-G the player basis is
 arbitrary, so the detached-aim math the wrench and interaction proofs rest on is not valid there.
 This does not invalidate those proofs — both were captured in normal gravity — but it does mean the

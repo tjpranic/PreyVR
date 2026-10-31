@@ -6,7 +6,7 @@ ROOT=Path(__file__).resolve().parents[2]
 
 def verify():
     image=Image(DEFAULT_MODULE);digest,at=image.sha256,image.at
-    entries=native_rows(ROOT/'include/preyvr/PsiMedkitNative.h')
+    entries=native_rows(ROOT/'src/equipment/psi/PsiMedkitNative.h')
     assert len(entries)==18
     relocs=image.relocations()
     checks=[]

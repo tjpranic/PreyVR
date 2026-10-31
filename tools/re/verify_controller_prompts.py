@@ -1,6 +1,6 @@
 """Offline check of ControllerPrompts' frame check and everything it relies on, in the supported PreyDll.
 
-Reads the spans and field offsets out of src/dll/ControllerPrompts.cpp, so the
+Reads the spans and field offsets out of src/controls/input/ControllerPrompts.cpp, so the
 C++ stays the one definition, then confirms in the image:
 - the four spans, each at its RVA;
 - the setter: reads and stores [rcx+0x28] = edx, returning early when equal;
@@ -21,7 +21,7 @@ from pathlib import Path
 
 from preydll import DEFAULT_MODULE, Image, byte_arrays
 
-SOURCE = Path(__file__).resolve().parents[2] / "src" / "dll" / "ControllerPrompts.cpp"
+SOURCE = Path(__file__).resolve().parents[2] / "src" / "controls" / "input" / "ControllerPrompts.cpp"
 INPUT_GLOBAL_RVA = 0x224D9D8  # gEnv->pInput, gEnv+0x58 (R-080)
 REGISTER_RVA = 0x1720516      # mov rax,[rcx]; lea rdx,callback ... call [rax+0x38]
 CGAME_INIT_RVA = 0x16FE5F7    # call CUIManager ctor; ...; mov [rdi+0x1A8],rax; call CUIManager::Init

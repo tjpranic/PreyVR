@@ -6,7 +6,7 @@ import json,struct,sys
 from pathlib import Path
 from preydll import DEFAULT_MODULE,Image,fnv1a64 as fnv,native_rows
 ROOT=Path(__file__).resolve().parents[2]
-HEADER=ROOT/'include/preyvr/HeadLampNative.h'
+HEADER=ROOT/'src/equipment/head/HeadLampNative.h'
 PLACE,WORLD,UPDATE=0x335010,0x7a2250,0x7a3390
 BINDING_VTABLE,BONE_VTABLE=0x1cb13b0,0x1d212b8
 ENTITY_SYSTEM=0x224da38
@@ -33,7 +33,7 @@ def verify():
         assert at(rva+size,1)==b'\xcc',name+' is the whole function'
         checks.append(name+': complete body (padding after it), no base relocations, mutation refused')
     mine={rva for rva,_,_,_ in entries}
-    for header in sorted((ROOT/'include/preyvr').glob('*Native.h')):
+    for header in sorted((ROOT/'src').rglob('*Native.h')):
         if header.name!=HEADER.name:assert not mine&{rva for rva,_,_,_ in native_rows(header)},header.name
     checks.append('no row in another *Native.h table')
     for name,value in {'ProcessAttachment':PLACE,'BindingVtable':BINDING_VTABLE,'VtableProcessAttachment':0x10,

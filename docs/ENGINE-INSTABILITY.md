@@ -130,7 +130,7 @@ previous frame's camera and drawn with the current one. What just came into view
 is missing for a frame: a sliver on a head turn, a wedge on a snap turn. No
 flashing has been seen with the guard on.
 
-### The guard (`src/dll/CullPrepareGuard.{h,cpp}`)
+### The guard (`src/engine/fixes/CullPrepareGuard.{h,cpp}`)
 **What it does.** On the main thread, in `CSystem::Render`'s detour, just before
 the original: if no prepare is in flight (state not 1 or 2) and
 `PrepareOcclusion`'s own tests pass for `m_ViewCamera`, it calls
@@ -237,7 +237,7 @@ during `ExitProcess`, after Windows had stopped SteamVR's threads.
 - `gHost`'s swapchains called `xrDestroySwapchain`.
 - ResearchHotkeys' thread was still joinable, so its destructor aborted.
 
-**Fix.** `src/dll/NeverDestroyed.h` keeps every global that owns XR handles, D3D
+**Fix.** `src/base/NeverDestroyed.h` keeps every global that owns XR handles, D3D
 objects or a thread, and never destroys it:
 - `gHost`, ResearchHotkeys' `gThread` and DebugOverlay's `gRenderer`;
 - HudLayer's captures, text panels, parts, `redrawDepth`, `inventoryRight` and
@@ -281,7 +281,7 @@ PreyVR's own large frames (functions reserving over 4 KB, PreyVR-97):
 None is known to have been involved. Prey's own `error.dmp` files cannot show
 stack sizes: they carry no TEBs or memory-region information.
 
-### The overflow capture (`src/dll/OverflowCapture.{h,cpp}`)
+### The overflow capture (`src/diagnostics/capture/OverflowCapture.{h,cpp}`)
 **How it works.**
 - **Armed** at bootstrap, after the landmark gate: a first vectored exception
   handler and a capture thread with its own 256 KB stack.
@@ -367,7 +367,7 @@ the hold layer re-shows the last frame.
     over 200 ms old, so those lines were the stalls themselves.
   - The line now says why: `why=menu`, `why=vr_options` or `why=stale`.
 
-### The frame probe (`src/dll/FrameProbe.{h,cpp}`)
+### The frame probe (`src/diagnostics/probes/FrameProbe.{h,cpp}`)
 A flight recorder for the stall.
 - **What it keeps:** the main, render and hold threads' frame steps, in a
   lock-free ring of 8192 events. It has no hook of its own: it records from seams
