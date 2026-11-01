@@ -1,0 +1,37 @@
+# Headset log lines the geometry in finger_geometry.py is built from. Copied 2026-11-01 from %LOCALAPPDATA%\PreyVR\runs.
+# Profile on these runs: /interaction_profiles/valve/frame_controller (both hands).
+
+## player-20261025-161415: ik.skel, the hand joints (name, rel=quat|translation)
+l_hand_jnt 0.4626,0.1243,-0.1917,0.8566|0.2832,-0.0156,0.0009
+l_index1_jnt 0.0000,0.0000,-0.0175,0.9998|0.0578,-0.0034,0.0002
+l_index2_jnt 0.0000,0.0000,-0.0305,0.9995|0.0389,-0.0023,0.0002
+l_index3_jnt 0.0000,0.0000,-0.0175,0.9998|0.0275,-0.0016,-0.0001
+l_indexBase_jnt 0.0522,-0.0170,0.0482,0.9973|0.0351,-0.0015,0.0259
+l_middle1_jnt 0.0000,0.0000,-0.1045,0.9945|0.0595,-0.0032,0.0001
+l_middleBase_jnt -0.0149,0.0216,0.0393,0.9989|0.0345,0.0032,0.0027
+l_pinky1_jnt 0.0000,0.0000,-0.1736,0.9848|0.0499,-0.0022,-0.0006
+l_pinkyBase_jnt -0.1240,0.0845,0.0121,0.9886|0.0279,-0.0024,-0.0361
+l_ring1_jnt 0.0000,0.0000,-0.1392,0.9903|0.0542,-0.0027,-0.0006
+l_ringBase_jnt -0.0716,0.0452,-0.0018,0.9964|0.0318,0.0056,-0.0211
+r_hand_jnt 0.0901,-0.0067,0.1590,0.9831|0.2837,-0.0000,-0.0000
+r_index1_jnt 0.0605,-0.0082,-0.1331,0.9892|0.0579,-0.0000,0.0000
+r_index2_jnt 0.0000,0.0000,-0.3910,0.9204|0.0390,0.0000,-0.0000
+r_index3_jnt 0.0000,0.0000,-0.3910,0.9204|0.0276,-0.0000,0.0000
+r_indexBase_jnt -0.0530,0.0118,0.0067,0.9985|0.0351,0.0024,-0.0259
+r_middle1_jnt 0.0000,0.0000,-0.4873,0.8732|0.0596,-0.0000,0.0000
+r_middleBase_jnt 0.0480,-0.0547,0.0406,0.9965|0.0343,0.0054,-0.0024
+r_pinky1_jnt 0.0000,0.0000,-0.3163,0.9486|0.0500,0.0000,-0.0000
+r_pinkyBase_jnt 0.0871,-0.0814,-0.0026,0.9929|0.0281,-0.0034,0.0359
+r_ring1_jnt 0.0061,-0.0308,-0.3814,0.9239|0.0543,-0.0000,-0.0000
+r_ringBase_jnt 0.0716,-0.0452,-0.0018,0.9964|0.0315,0.0059,0.0215
+
+## player-20261031-221542: hand_rig and pose_report
+2026-10-31T11:34:25.012Z preyvr_anim_ik result=0 detail=hand_rig right=1 left=1 knuckleR=0.0881 knuckleL=0.0881 lenL=0.993,0.009,-0.121 palmL=0.017,-0.998,0.066
+2026-10-31T11:34:41.733Z preyvr_anim_ik pose_report poseMode=1 curl=100.0 along=550.0 outOfPalmMm=35.0 thumbMm=0.0 leanDeg=15.0 reachMode=1 knee=85.0 weaponRoll=1 stretch=120.0 rollDeg=0.6 rigR=1 rigL=1 marks=fresh support=0.0 palmErrCmR=0.0 lenErrDegR=0.0 palmNormErrDegR=0.0 wristToGripCmR=6.0 lenInGripR=-0.00,-0.97,-0.26 palmInGripR=-1.00,0.00,0.00 gripInAimR=q0.365,0.000,0.000,0.931|deg42.8|cm1.6,-3.5,7.4 propInGripCmR=-1.6,-1.8,-0.7 propXInGripR=0.99,-0.02,-0.15 propYInGripR=-0.07,-0.93,-0.37 propZInGripR=-0.14,0.37,-0.92 palmErrCmL=0.0 lenErrDegL=0.0 palmNormErrDegL=0.0 wristToGripCmL=6.0 lenInGripL=0.00,-0.97,-0.26 palmInGripL=1.00,-0.00,0.00 gripInAimL=q-0.365,0.000,-0.000,-0.931|deg42.8|cm-1.6,-3.5,7.4 propInGripCmL=1.7,-3.2,-1.1 propXInGripL=1.00,-0.01,0.07 propYInGripL=0.02,-0.93,-0.37 propZInGripL=0.07,0.37,-0.93
+
+## gripInAim across all runs on disk: count of each distinct reading (right hand)
+   1532 deg42.8|cm1.6,-3.5,7.4
+
+## palmErr in one-hand reports (support=0.0), newest 40 runs: exact <0.05 cm, then bands
+L n=538 exact=506 <3cm=9 3-10cm=5 >=10cm=18
+R n=538 exact=490 <3cm=6 3-10cm=14 >=10cm=28

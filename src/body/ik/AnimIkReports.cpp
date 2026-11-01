@@ -172,9 +172,8 @@ void CaptureMarks(const GameplayPoseFrame& frame, std::uint8_t* absolute, unsign
             const bool distal = j == handpose::kThumb3 || j == handpose::kIndex3 || j == handpose::kMiddle3 ||
                                 j == handpose::kRing3 || j == handpose::kPinky3;
             if (distal) {
-                // No tip joint in the rig: the distal phalanx, ~2.2 cm along its bone.
                 marks.tip[s][j] = toXr(Add(at, Rotate(Quaternion{a.q[0], a.q[1], a.q[2], a.q[3]},
-                                                       Vec3{0.022f, 0.0f, 0.0f})));
+                                                       Vec3{handpose::kFingertipLength, 0.0f, 0.0f})));
             }
         }
         const Vec3 point = handpose::GripPointInWrist(rig.frame[s], rig.knuckle[s], settings.point);
@@ -504,6 +503,8 @@ std::string HandPoseReport()
     out << " marks=" << (marks.valid ? "fresh" : "none");
     if (!marks.valid) { return out.str(); }
     out << " support=" << marks.support;
+    handpose::FingerGrip finger{};
+    TryGetFingerGrip(finger);
     for (int s = 0; s < 2; ++s) {
         const char* tag = s == 0 ? "R" : "L";
         const auto side = s == 1 ? handpose::Side::left : handpose::Side::right;
@@ -538,6 +539,19 @@ std::string HandPoseReport()
         out << " gripInAim" << tag << "=q" << rel.x << ',' << rel.y << ',' << rel.z << ',' << rel.w;
         out.precision(1);
         out << "|deg" << angle << "|cm" << off.x * 100.0f << ',' << off.y * 100.0f << ',' << off.z * 100.0f;
+        // The finger pose the lasers leave from and the fingertip as drawn, in the
+        // grip frame, cm: they meet with a free hand's finger held off the trigger.
+        // fingerAimDeg: the finger's line against the controller's aim.
+        const unsigned byHand = static_cast<unsigned>(s == 1 ? Hand::left : Hand::right);
+        if (finger.known[byHand]) {
+            const Pose& pose = finger.pose[byHand];
+            const Vec3 tip = Rotate(Conjugate(grip.orientation), Sub(marks.tip[s][handpose::kIndex3], grip.position));
+            const Vec3 aimInGrip = Rotate(Conjugate(grip.orientation), Rotate(aim.orientation, Vec3{0.0f, 0.0f, -1.0f}));
+            out << " fingerCm" << tag << '=' << pose.position.x * 100.0f << ',' << pose.position.y * 100.0f << ','
+                << pose.position.z * 100.0f << " tipCm" << tag << '=' << tip.x * 100.0f << ',' << tip.y * 100.0f << ','
+                << tip.z * 100.0f << " tipErrCm" << tag << '=' << Length(Sub(tip, pose.position)) * 100.0f
+                << " fingerAimDeg" << tag << '=' << AngleDeg(Rotate(pose.orientation, Vec3{0.0f, 0.0f, -1.0f}), aimInGrip);
+        }
         // The prop joint (a held grenade's) in the grip frame: cm, and its axes (unit).
         if (marks.propValid[s]) {
             const Vec3 at = Rotate(Conjugate(grip.orientation), Sub(marks.prop[s], grip.position));

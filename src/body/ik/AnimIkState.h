@@ -13,6 +13,7 @@
 // The constants, types and state, moved from AnimIkTakeover.cpp as they were;
 // one instance of each (`inline`). Include it from those six files only.
 #include "body/ik/AnimIkTakeover.h"
+#include "base/LatestSnapshot.h"
 #include "engine/SafeMemory.h"
 #include "engine/hooks/HookInstall.h"
 #include "engine/EngineAccess.h"
@@ -176,6 +177,10 @@ inline bool gFingerShapeValid[2]{};
 
 inline std::uint64_t gFreeSinceNs = 0;     // when the free owner bound (fingers ease in), under gIkMutex
 
+// **Where the aim lasers leave a hand** (handpose::FingerInGrip), published for the
+// next frame's lanes (GameplayFrame.h).
+inline LatestSnapshot<handpose::FingerGrip> gFingerGrip;
+
 constexpr std::uint64_t kFreeGenerationBit = 1ull << 62;
 
 constexpr std::size_t kPlayerAnimatedCharacter = engine::ArkPlayerLayout::animatedCharacter;
@@ -307,7 +312,7 @@ struct QuatT {
 struct PoseSettings {
     unsigned mode = 1;          // 0 original, 1 hand pose
     float curl = 1.0f;          // relaxed flexion scale
-    float tubeLean = 15.0f * 3.14159265f / 180.0f;
+    float tubeLean = handpose::kTubeLeanDegrees * 3.14159265f / 180.0f;
     handpose::GripPoint point{};
     unsigned reachMode = 1;     // 0 linear percent (original), 1 exact to the knee then soft
     float knee = 0.85f;
@@ -355,6 +360,7 @@ struct HandRig {
     int joint[2][handpose::kJointCount]{};
     handpose::Frame frame[2]{};
     float knuckle[2]{};
+    handpose::IndexBones index[2]{};
     // For pose.marks only: the arm and head the IK does not drive (-1 if absent).
     int clavicle[2]{-1, -1}, upperArm[2]{-1, -1}, lowerArm[2]{-1, -1};
     int neck = -1, head = -1, headEnd = -1;
@@ -686,6 +692,7 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
 bool ApplyRelaxedFingers(std::uint8_t* relative, unsigned count, float weight, const handpose::FingerShape& shape,
                          int side, float carryFist);
 void PropagateFingers(std::uint8_t* relative, std::uint8_t* absolute, unsigned count, const HandRig& rig, int side = 1);
+void PublishFingerPose(const PoseSettings& settings, float scale);
 // AnimIkArms.cpp
 float ShoulderYaw(const GameplayPoseFrame& frame);
 void PrepareArms(const GameplayPoseFrame& frame, const animik::Location& location, std::uint8_t* absolute,

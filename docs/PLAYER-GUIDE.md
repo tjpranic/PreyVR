@@ -138,7 +138,9 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   Reset VR view is on the Setup page.
 - **Hands:** **aim lasers** (on by default: a laser from each hand to what it
   points at -- where the right hand aims, faint with no weapon drawn, and what
-  the left hand can grab or use), **shot trail** (off by default: a green line from
+  the left hand can grab or use; with a gun the right one leaves the muzzle, and
+  an empty hand's leaves the tip of the index finger, aiming as a gun would),
+  **shot trail** (off by default: a green line from
   your weapon's muzzle to where each shot went, fading after a few seconds),
   two-hand aim on/off, hold/toggle foregrip, **auto-snap support hand** (off by
   default: your left hand attaches to the weapon on its own when you hold it close

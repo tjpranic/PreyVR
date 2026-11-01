@@ -48,10 +48,13 @@ struct Sample {
     // The origin is the equipped weapon's muzzle (aim.shot), a real world point,
     // rather than the eye or a controller point.
     bool muzzleOrigin = false;
+    // The origin is the fingertip of a right hand with no weapon (AimTakeover), a
+    // real world point in the same way.
+    bool fingerOrigin = false;
     // The origin is a world point placed against the view camera's centre --
-    // the muzzle, or the right hand's line while a screen is examined
-    // (AimTakeover) -- so what is drawn from the sample converts with that
-    // centre, not with Prey's cached reticle origin.
+    // the muzzle, the fingertip, or the right hand's line while a screen is
+    // examined (AimTakeover) -- so what is drawn from the sample converts with
+    // that centre, not with Prey's cached reticle origin.
     bool cameraAnchored = false;
 
     // --- provenance -------------------------------------------------------

@@ -479,7 +479,7 @@ constexpr Verb kVerbs[] = {
     }},
     {"pose.grip", Audience::tuning, 0, [](const Args& args, std::ostringstream& out) {
         out << "pose.grip result="
-            << (args.size() > 4 ? SetHandPoseGrip(Arg(args, 1, 550), Arg(args, 2, 35), Arg(args, 3, 0), Arg(args, 4, 150))
+            << (args.size() > 4 ? SetHandPoseGrip(Arg(args, 1, 550), Arg(args, 2, 35), Arg(args, 3, 0), Arg(args, 4, 390))
                                 : TooFewValues(args))
             << HandPoseReport();
     }},

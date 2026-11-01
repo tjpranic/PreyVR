@@ -1,6 +1,7 @@
 #include "body/HandPose.h"
 #include "TestSupport.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -282,9 +283,104 @@ void TestFingerShape()
     Require(ShapeFromController(0, false, 0, false, 0.5f).curl[kFingerMiddle] == 0.5f, "the relaxed scale carries through");
 }
 
+// The index finger's bones on the rig (ik.skel, run player-20261025-161415).
+const IndexBones kLeftIndex{kLeftBase[0], kLeftFirst[0], {0.0389f, -0.0023f, 0.0002f}, {0.0275f, -0.0016f, -0.0001f}};
+const Vec3 kRightBase[4] = {{0.0351f, 0.0024f, -0.0259f}, {0.0343f, 0.0054f, -0.0024f},
+                            {0.0315f, 0.0059f, 0.0215f}, {0.0281f, -0.0034f, 0.0359f}};
+const Vec3 kRightFirst[4] = {{0.0579f, 0, 0}, {0.0596f, 0, 0}, {0.0543f, 0, 0}, {0.0500f, 0, 0}};
+const IndexBones kRightIndex{kRightBase[0], kRightFirst[0], {0.0390f, 0, 0}, {0.0276f, 0, 0}};
+constexpr float kLean = 15.0f * kRadiansPerDegree;
+
+// The Frame's aim direction in its grip frame: gripInAim, logged 1532 times as 42.8
+// degrees about X (docs/FINGER-LASER-SCOPE-2026-11-01.md).
+Vec3 AimInGrip() { return Rotate(Conjugate(Normalize(Quaternion{0.365f, 0, 0, 0.931f})), Vec3{0, 0, -1}); }
+
+float DegreesBetween(Vec3 a, Vec3 b)
+{
+    return std::acos(std::clamp(Dot(a, b) / (Length(a) * Length(b)), -1.0f, 1.0f)) / kRadiansPerDegree;
+}
+
+void TestFingerInGrip()
+{
+    float knuckle = 0.0f;
+    const Frame left = MeasuredLeft(knuckle);
+    const GripPoint point{};
+    const float pointing = PointingCurl(1.0f);
+    Require(std::fabs(pointing - 0.25f) < 1e-6f, "a finger off the trigger keeps a quarter of its flexion");
+    Pose pose{};
+    Require(FingerInGrip(Side::left, left, knuckle, point, kLean, kLeftIndex, pointing, 1.0f, pose), "left finger");
+    // finger_geometry.py, the numbers the scope was written from.
+    Require(NearVec(pose.position, {-0.028f, -0.110f, -0.083f}, 0.001f), "the left tip, measured");
+    const Vec3 along = Rotate(pose.orientation, Vec3{0, 0, -1});
+    Require(NearVec(along, {0.045f, -0.917f, -0.396f}, 0.002f), "-Z along the finger, as an aim pose's ray");
+    Require(std::fabs(DegreesBetween(along, AimInGrip()) - 24.0f) < 0.3f, "24 degrees from the controller's aim");
+
+    Frame right{};
+    float rightKnuckle = 0.0f;
+    Quaternion rotation[4];
+    const int bases[4] = {kIndexBase, kMiddleBase, kRingBase, kPinkyBase};
+    for (int f = 0; f < 4; ++f) { rotation[f] = RelaxedRelative(Side::right, bases[f], 1.0f); }
+    Require(MeasureHandFrame(Side::right, kRightBase, rotation, kRightFirst, right, rightKnuckle), "right frame");
+    Pose mirrored{};
+    Require(FingerInGrip(Side::right, right, rightKnuckle, point, kLean, kRightIndex, pointing, 1.0f, mirrored), "right finger");
+    Require(NearVec(mirrored.position, {0.027f, -0.110f, -0.083f}, 0.001f), "the right tip, across the grip's X");
+    Require(DegreesBetween(Rotate(mirrored.orientation, Vec3{0, 0, -1}), AimInGrip()) < 25.0f, "the same way on that hand");
+
+    // **Seated as the hands are**, the finger lies along the controller's aim on
+    // both hands, which is why the lasers can take that aim and a weapon's wrist
+    // angle. The wearer's reading on PreyVR-127 with pose.grip: 3.5 and 2.6 degrees.
+    constexpr float kSeated = kTubeLeanDegrees * kRadiansPerDegree;
+    Pose seatedLeft{}, seatedRight{};
+    Require(FingerInGrip(Side::left, left, knuckle, point, kSeated, kLeftIndex, pointing, 1.0f, seatedLeft) &&
+                FingerInGrip(Side::right, right, rightKnuckle, point, kSeated, kRightIndex, pointing, 1.0f, seatedRight),
+            "both fingers, seated");
+    Require(DegreesBetween(Rotate(seatedLeft.orientation, Vec3{0, 0, -1}), AimInGrip()) < 3.0f &&
+                DegreesBetween(Rotate(seatedRight.orientation, Vec3{0, 0, -1}), AimInGrip()) < 4.0f,
+            "the finger on the aim, within the logged angle");
+    Require(NearVec(seatedRight.position, {0.027f, -0.067f, -0.121f}, 0.001f), "the tip, seated");
+
+    // The thumb side is +Y, as it is up the handle of an aim pose.
+    const Vec3 up = Rotate(pose.orientation, Vec3{0, 1, 0});
+    const Vec3 thumb = Rotate(FrameToFrame(left, GripHandFrame(Side::left, kLean)), left.thumb);
+    Require(Dot(up, thumb) > 0.9f && std::fabs(Dot(up, along)) < 1e-4f, "+Y to the thumb, across the finger");
+
+    // By another road: place the wrist on the grip, then walk the joints down as
+    // the IK propagates them. It has to land on the same tip.
+    const Quaternion handInGrip = FrameToFrame(left, GripHandFrame(Side::left, kLean));
+    Pose joint{handInGrip, Scale(Rotate(handInGrip, GripPointInWrist(left, knuckle, point)), -1.0f)};
+    const Vec3 offsets[4] = {kLeftIndex.base, kLeftIndex.first, kLeftIndex.second, kLeftIndex.third};
+    for (int j = 0; j < 4; ++j) {
+        joint = Compose(joint, Pose{ShapeRelative(Side::left, kIndexBase + j, pointing, 0.0f), offsets[j]});
+    }
+    joint = Compose(joint, Pose{Quaternion{}, Vec3{kFingertipLength, 0, 0}});
+    Require(NearVec(joint.position, pose.position, 1e-5f), "the tip the drawn joints reach");
+
+    // What moves it, and what does not.
+    Pose twice{};
+    Require(FingerInGrip(Side::left, left, knuckle, point, kLean, kLeftIndex, pointing, 2.0f, twice) &&
+                NearVec(twice.position, Scale(pose.position, 2.0f), 1e-5f),
+            "scale takes model units to metres");
+    Pose relaxed{};
+    Require(FingerInGrip(Side::left, left, knuckle, point, kLean, kLeftIndex, 1.0f, 1.0f, relaxed) &&
+                !NearVec(relaxed.position, pose.position, 0.01f),
+            "Fingers Follow off: the finger as it is drawn then, relaxed");
+    GripPoint moved{};
+    moved.outOfPalm = 0.05f;
+    Pose seated{};
+    // The grip point further out of the palm puts the whole hand further behind it.
+    Require(FingerInGrip(Side::left, left, knuckle, moved, kLean, kLeftIndex, pointing, 1.0f, seated) &&
+                std::fabs(seated.position.x - (pose.position.x - 0.015f)) < 0.001f,
+            "it follows how the hand sits on the controller (pose.grip)");
+
+    // No length between knuckle and tip: no direction to point in.
+    Require(!FingerInGrip(Side::left, left, knuckle, point, kLean, IndexBones{{}, {}, {}, {-kFingertipLength, 0, 0}}, 0.0f, 1.0f, seated),
+            "a degenerate finger is refused");
+}
+
 int main()
 {
     TestNames();
+    TestFingerInGrip();
     TestFingerShape();
     TestGripHandFrame();
     TestMeasuredHandFrame();

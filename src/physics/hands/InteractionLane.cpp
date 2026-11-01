@@ -84,7 +84,7 @@ bool gInstallTried = false, gInstalled = false, gObserversInstalled = false;
 std::atomic<bool> gLeftHand{false}, gHold{true}, gTrace{false};
 std::atomic<bool> gFilterOn{true};
 std::atomic<float> gMinCutoff{1.0f}, gBeta{2.0f}, gBacklash{use::FilterSettings{}.backlashDegrees};
-std::atomic<unsigned> gBackMm{100};
+std::atomic<unsigned> gBackMm{170};
 std::atomic<bool> gSuppress{false};
 
 // The ray this frame. Produced by the aim hook (R-011) and consumed by the
@@ -553,7 +553,7 @@ void UpdateInteractionLane(const GameplayPoseFrame& frame, bool tracking)
     UsePointer pointer{};
     if (gLeftHand.load() && tracking && frame.cameraCentreValid && frame.headYawUsable && !stereo::Recentering(frame.referenceGeneration)) {
         auto ray = psi::BuildRay(psi::Mode::LeftController, PlaySpaceRotation(frame), frame.cameraCentre, frame.tracking.head,
-                                 left.aimPose, left.aimValidity);
+                                 FingerPose(frame, Hand::left), left.aimValidity);
         // From where the hand is drawn: a hand held back by glass or a wall
         // (SurfaceStopLane.h) does not reach what is behind it.
         if (ray) { ray->origin = Add(ray->origin, SurfaceOffset(frame, Hand::left)); }
@@ -571,13 +571,15 @@ void UpdateInteractionLane(const GameplayPoseFrame& frame, bool tracking)
             next.player = frame.player;
             next.hand = filtered.origin;
             next.direction = filtered.direction;
-            // Started behind the controller so a prop the hand touches is still
-            // in front of the ray, where the native cone can see it.
+            // Started behind the palm, the finger's length and more back from
+            // the fingertip, so a prop the hand touches is still in front of the
+            // ray, where the native cone can see it.
             next.origin = Sub(filtered.origin, Scale(filtered.direction, back));
             next.ns = now;
             next.valid = true;
             pointer.valid = true;
             pointer.hand = filtered.origin;
+            pointer.start = next.origin;
             pointer.direction = filtered.direction;
         }
     } else {

@@ -100,11 +100,46 @@ void TestAnchors()
             "and the hand is placed on it");
 }
 
+// The pose a hand with no weapon points with: the controller's aim until a rig has
+// been read, then the finger on the grip, by Hand.
+void TestFinger()
+{
+    GameplayPoseFrame f = Frame();
+    const auto left = static_cast<unsigned>(Hand::left), right = static_cast<unsigned>(Hand::right);
+    Require(Same(FingerPose(f, Hand::right), f.tracking.hands[right].aimPose) &&
+                Same(FingerPose(f, Hand::left), f.tracking.hands[left].aimPose),
+            "no rig read yet: the aim pose, unchanged");
+    Pose out{};
+    Require(HandWorld(f, Hand::right, ControllerPose::finger, Anchor::camera, Placement::drawn, out) &&
+                Same(out, ByHand(f, Hand::right, ControllerPose::aim, f.cameraCentre, Placement::drawn)),
+            "and placed as the aim pose is");
+
+    const Quaternion turned = Normalize(Quaternion{0.2f, -0.1f, 0.05f, 0.97f});
+    f.finger.pose[right] = {turned, {0.027f, -0.11f, -0.083f}};
+    f.finger.pose[left] = {Conjugate(turned), {-0.028f, -0.11f, -0.083f}};
+    f.finger.known[right] = f.finger.known[left] = true;
+    for (const Hand hand : {Hand::right, Hand::left}) {
+        const auto i = static_cast<unsigned>(hand);
+        const Pose wanted{f.tracking.hands[i].aimPose.orientation,
+                          Compose(f.tracking.hands[i].gripPose, f.finger.pose[i]).position};
+        Require(Same(FingerPose(f, hand), wanted), "the fingertip on that hand's grip, along the controller's aim");
+        const Pose world = animik::ControllerWorldFromHead(f.yaw, f.cameraCentre, f.tracking.head, wanted);
+        Require(HandWorld(f, hand, ControllerPose::finger, Anchor::camera, Placement::controller, out) && Same(out, world),
+                "in the world like any other pose");
+        Pose drawn = world;
+        drawn.position = Add(drawn.position, SurfaceOffset(f, hand));
+        Require(HandWorld(f, hand, ControllerPose::finger, Anchor::camera, Placement::drawn, out) && Same(out, drawn),
+                "and held back with the drawn hand");
+    }
+    Require(!Same(FingerPose(f, Hand::right), FingerPose(f, Hand::left)), "each hand its own");
+}
+
 } // namespace
 
 int main()
 {
     TestComposition();
     TestAnchors();
+    TestFinger();
     return 0;
 }

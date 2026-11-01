@@ -1,0 +1,47 @@
+# Headset readings behind the 39 degree lean. Copied 2026-11-01 from %LOCALAPPDATA%\PreyVR\runs.
+# hand_turn.py takes data/evidence/finger-laser-2026-11-01/finger_geometry.py as its argument.
+# None of this says how it feels: the wearer chose it, on player-20261101-120455.
+
+## player-20261101-120455, the preview: the command, the setting, then each report's readings
+pose.grip result=0 poseMode=1 curl=100.0 along=550.0 outOfPalmMm=35.0 thumbMm=0.0 leanDeg=39.0 reachMode=1 knee=85.0 weaponRoll=1 stretch=120.0 rollDeg=0.0 rigR=1 rigL=1 marks=fresh support=0.0 laserA
+2026-11-01T01:05:34.238Z preyvr_anim_ik result=0 detail=laser_along_finger value=1
+2026-11-01T01:05:55.633Z preyvr_anim_ik result=0 detail=laser_along_finger value=0
+
+## player-20261101-120455: lean, roll, palmErr R/L, tipErr R/L, fingerAimDeg R/L
+lean=15.0 roll=0.0 palmR=0.0 palmL=0.0 tipR=4.6 tipL=5.1 aimR=24.1 aimL=24.0
+lean=39.0 roll=0.0 palmR=0.0 palmL=0.0 tipR=0.0 tipL=0.0 aimR=3.5 aimL=2.6
+lean=39.0 roll=0.0 palmR=0.0 palmL=0.0 tipR=0.0 tipL=0.0 aimR=3.5 aimL=2.6
+lean=39.0 roll=-8.1 palmR=46.6 palmL=44.4 tipR=46.7 tipL=44.7 aimR=3.5 aimL=2.6
+lean=39.0 roll=0.6 palmR=0.0 palmL=0.0 tipR=6.6 tipL=5.5 aimR=3.5 aimL=2.6
+lean=39.0 roll=0.6 palmR=0.0 palmL=4.2 tipR=6.6 tipL=15.6 aimR=3.5 aimL=2.6
+lean=39.0 roll=-2.3 palmR=0.0 palmL=0.0 tipR=11.5 tipL=0.0 aimR=3.5 aimL=2.6
+lean=39.0 roll=0.6 palmR=0.0 palmL=4.7 tipR=8.3 tipL=14.3 aimR=3.5 aimL=2.6
+lean=39.0 roll=0.6 palmR=0.0 palmL=0.0 tipR=6.6 tipL=5.5 aimR=3.5 aimL=2.6
+lean=39.0 roll=174.1 palmR=0.0 palmL=0.0 tipR=5.6 tipL=5.5 aimR=3.5 aimL=2.6
+
+## player-20261101-113517: lean, roll, palmErr R/L, tipErr R/L, fingerAimDeg R/L
+lean=15.0 roll=0.0 palmR=0.0 palmL=0.0 tipR=4.6 tipL=5.1 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.0 palmR=0.0 palmL=0.0 tipR=5.5 tipL=0.0 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.0 palmR=0.0 palmL=0.0 tipR=5.5 tipL=0.0 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.0 palmR=0.0 palmL=0.0 tipR=0.0 tipL=0.0 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.0 palmR=0.0 palmL=0.0 tipR=0.0 tipL=5.5 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.2 palmR=0.0 palmL=0.0 tipR=9.9 tipL=0.0 aimR=24.1 aimL=24.0
+lean=15.0 roll=-8.1 palmR=0.0 palmL=0.0 tipR=6.2 tipL=4.8 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.6 palmR=0.0 palmL=0.0 tipR=8.4 tipL=5.5 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.6 palmR=0.0 palmL=5.0 tipR=8.4 tipL=14.8 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.6 palmR=0.0 palmL=0.0 tipR=8.4 tipL=0.0 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.6 palmR=0.0 palmL=0.0 tipR=8.4 tipL=5.5 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.6 palmR=0.0 palmL=0.0 tipR=10.0 tipL=5.5 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.6 palmR=0.0 palmL=0.0 tipR=8.4 tipL=5.5 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.6 palmR=0.0 palmL=19.5 tipR=10.0 tipL=29.0 aimR=24.1 aimL=24.0
+lean=15.0 roll=174.4 palmR=0.0 palmL=0.0 tipR=3.2 tipL=5.5 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.6 palmR=0.0 palmL=0.0 tipR=8.4 tipL=5.5 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.6 palmR=0.0 palmL=0.0 tipR=8.4 tipL=5.5 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.6 palmR=0.0 palmL=0.0 tipR=8.4 tipL=5.5 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.6 palmR=0.0 palmL=0.0 tipR=10.0 tipL=5.5 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.6 palmR=0.0 palmL=21.0 tipR=10.0 tipL=27.2 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.6 palmR=0.0 palmL=0.0 tipR=8.4 tipL=5.5 aimR=24.1 aimL=24.0
+lean=15.0 roll=0.6 palmR=0.0 palmL=0.0 tipR=0.0 tipL=5.5 aimR=24.1 aimL=24.0
+
+## one full report at lean 39
+2026-11-01T01:10:20.797Z preyvr_anim_ik pose_report poseMode=1 curl=100.0 along=550.0 outOfPalmMm=35.0 thumbMm=0.0 leanDeg=39.0 reachMode=1 knee=85.0 weaponRoll=1 stretch=120.0 rollDeg=174.1 rigR=1 rigL=1 marks=fresh support=0.0 laserAlongFinger=0 palmErrCmR=0.0 lenErrDegR=0.0 palmNormErrDegR=0.0 wristToGripCmR=6.0 lenInGripR=-0.00,-0.78,-0.63 palmInGripR=-1.00,-0.00,-0.00 gripInAimR=q0.365,0.000,-0.000,0.931|deg42.8|cm1.6,-3.5,7.4 fingerCmR=2.7,-6.7,-12.1 tipCmR=-1.6,-7.2,-8.6 tipErrCmR=5.6 fingerAimDegR=3.5 propInGripCmR=0.4,-4.5,-2.6 propXInGripR=0.97,-0.05,-0.23 propYInGripR=-0.23,-0.41,-0.88 propZInGripR=-0.05,0.91,-0.41 palmErrCmL=0.0 lenErrDegL=0.0 palmNormErrDegL=0.0 wristToGripCmL=6.0 lenInGripL=0.00,-0.78,-0.63 palmInGripL=1.00,-0.00,-0.00 gripInAimL=q0.365,-0.000,-0.000,0.931|deg42.8|cm-1.6,-3.5,7.4 fingerCmL=-2.8,-6.7,-12.1 tipCmL=2.1,-5.7,-9.8 tipErrCmL=5.5 fingerAimDegL=2.6 propInGripCmL=1.7,-2.5,-2.4 propXInGripL=1.00,-0.03,0.06 propYInGripL=0.02,-0.70,-0.72 propZInGripL=0.06,0.72,-0.69

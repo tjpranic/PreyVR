@@ -4,6 +4,7 @@
 // plus the engine's own camera and play-space yaw for the same frame. The aim
 // hook (AimTakeover.cpp) builds it (GameplayFrame.cpp) and publishes it, then
 // hands it to the gameplay schedule (FrameSchedule.h), which runs the lanes on it.
+#include "body/HandPose.h"
 #include "controls/input/XrInput.h"
 #include "render/camera/StereoCamera.h"
 #include "physics/contact/SurfaceStop.h"
@@ -62,6 +63,8 @@ struct GameplayPoseFrame {
     // Surface stop (SurfaceStopLane.h), by Hand: how far from where its
     // controller puts it each hand is drawn, held back by fixed scenery.
     std::array<surface::Correction, 2> surface{};
+    // Each hand's index finger on its grip (FingerPose below).
+    handpose::FingerGrip finger{};
 };
 
 // The play space's whole rotation into the world: tilt * Rz(yaw).
@@ -80,6 +83,20 @@ inline bool Tilted(const GameplayPoseFrame& frame)
 inline Vec3 SurfaceOffset(const GameplayPoseFrame& frame, Hand hand)
 {
     return frame.surface[static_cast<unsigned>(hand)].offset;
+}
+
+// **What a hand with no weapon points with**, in tracking space, laid out as an
+// aim pose: the tip of its index finger held out to point (handpose::FingerInGrip),
+// along the controller's aim, as a weapon's barrel is. The hand is seated so the
+// finger lies along that aim (handpose::kTubeLeanDegrees). Fixed to the grip, so
+// the trigger never moves it. The aim pose itself until a rig has been read. Its
+// validity is the aim pose's: the two come from one controller.
+inline Pose FingerPose(const GameplayPoseFrame& frame, Hand hand)
+{
+    const auto index = static_cast<unsigned>(hand);
+    const auto& controller = frame.tracking.hands[index];
+    if (!frame.finger.known[index]) { return controller.aimPose; }
+    return {controller.aimPose.orientation, Compose(controller.gripPose, frame.finger.pose[index]).position};
 }
 
 bool EnsureGameplayPoseObservation();

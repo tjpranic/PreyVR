@@ -328,12 +328,12 @@ worn OK (2026-10-25), as Body Follows You's commands had on 2026-10-24.
 | `ik.trace` / `ik.dump` / `ik.helpers` | | | Diagnostics, written to the log. |
 | `ik.skel [label]` | letters, digits, `-`, `_` (24 at most) | `manual` | Writes every joint of the player's rig to the log on the next frame the IK sees it (`preyvr_anim_ik skel`): a header with the label, the rig's location (its model-to-world transform) and the joint the game's `#camera` rides; the character's attachments (`name@joint`); then per joint its name, the joint table's fields, its parent (derived from the pose), and its relative pose, its absolute pose before the native pass (`pre`) and after it and the mod's arms (`abs`), in model space. |
 | `pose.mode` | 0/1 | 1 | Anatomical hand pose (1) or the original lane (0). |
-| `pose.grip <along‰> <outMm> <thumbMm> <leanDeci>` | all four | 550 35 0 150 | Where the controller sits in the drawn hand. |
+| `pose.grip <along‰> <outMm> <thumbMm> <leanDeci>` | all four | 550 35 0 390 | Where the controller sits in the drawn hand. The lean sets where the index finger points: at 39° it lies along the controller's aim ([scope](FINGER-LASER-SCOPE-2026-11-01.md)). |
 | `pose.reach <mode> <knee%>` | both | 1 85 | Exact reach to the knee then soft (1), or `ik.reach` (0). |
 | `pose.roll` | 0/1 | 1 | Rolls a held weapon about its barrel to fit the hand. |
 | `pose.stretch` | 90–125 % | 120 | Arm stretch limit against the rig's arm. |
 | `pose.curl` | 0–300 % | 100 | Free-hand finger curl. |
-| `pose.report` / `pose.marks` | report | | Hand-pose settings and segments. |
+| `pose.report` / `pose.marks` | report | | Hand-pose settings and segments. `pose.report` also gives the finger pose against the drawn fingertip (`fingerCm`, `tipCm`, `tipErrCm`) and against the controller's aim (`fingerAimDeg`). |
 
 ### Use, carrying and grenades
 
@@ -341,7 +341,7 @@ worn OK (2026-10-25), as Body Follows You's commands had on 2026-10-24.
 |---|---|---|---|
 | `use.hand` | 0/1 | 0 → VR 1 | 1: the left hand points and grab (Prey's X) uses, or reloads with nothing to use; the right grip reloads. 0: right grip uses the eye ray. |
 | `use.hold` / `use.trace` | 0/1 | 1 / 0 | Use held every frame while down; log selection changes. |
-| `use.back` | 0–400 mm | 100 | How far behind the controller the use ray starts. |
+| `use.back` | 0–400 mm | 170 | How far behind the fingertip the use ray starts, so a prop at the palm is still in front of it. |
 | `use.filter <on> [minCutoff] [beta] [backlash]` | centi-Hz, ×100, centi-degrees | 1 100 200 75 | Smoothing on the use pointer. |
 | `use.find <entityId>` / `use.report` | | | Test harness; lane state. |
 | `carry.hand` | 0/1 | 0 → VR 1 | Carried objects in the left hand, thrown with it. **Menu.** |

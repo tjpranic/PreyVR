@@ -198,6 +198,36 @@ Vec3 GripPointInWrist(const Frame& hand, float knuckleDistance, const GripPoint&
                Scale(hand.thumb, point.towardThumb));
 }
 
+float PointingCurl(float relaxed)
+{
+    return ShapeFromController(0.0f, false, 0.0f, false, relaxed).curl[kFingerIndex];
+}
+
+bool FingerInGrip(Side side, const Frame& hand, float knuckleDistance, const GripPoint& point, float tubeLean,
+                  const IndexBones& bones, float curl, float scale, Pose& out)
+{
+    // Down the finger from the wrist, as the joints are propagated.
+    Quaternion q = ShapeRelative(side, kIndexBase, curl, 0.0f);
+    const Vec3 knuckle = Add(bones.base, Rotate(q, bones.first));
+    q = Multiply(q, ShapeRelative(side, kIndex1, curl, 0.0f));
+    Vec3 tip = Add(knuckle, Rotate(q, bones.second));
+    q = Multiply(q, ShapeRelative(side, kIndex2, curl, 0.0f));
+    tip = Add(tip, Rotate(q, bones.third));
+    q = Multiply(q, ShapeRelative(side, kIndex3, curl, 0.0f));
+    tip = Add(tip, Rotate(q, Vec3{kFingertipLength, 0.0f, 0.0f}));
+    // From the wrist into the grip, as the hand is placed on its controller.
+    const Quaternion handInGrip = FrameToFrame(hand, GripHandFrame(side, tubeLean));
+    Vec3 along = Rotate(handInGrip, Sub(tip, knuckle));
+    if (!Unit(along)) { return false; }
+    const Vec3 thumb = Rotate(handInGrip, hand.thumb);
+    Vec3 up = Sub(thumb, Scale(along, Dot(thumb, along)));
+    if (!Unit(up)) { return false; }
+    const Vec3 back = Scale(along, -1.0f);
+    out.orientation = Normalize(QuaternionFromBasis(Cross(up, back), up, back));
+    out.position = Scale(Rotate(handInGrip, Sub(tip, GripPointInWrist(hand, knuckleDistance, point))), scale);
+    return Finite(out.position);
+}
+
 float RollToMatch(const Vec3& axis, const Vec3* from, const Vec3* to, int count)
 {
     // Rotating v about the unit axis a by t: v' = v|| + v_|_ cos t + (a x v) sin t.

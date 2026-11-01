@@ -555,8 +555,6 @@ void BuildOverlayScene(const OverlayFrame& frame, unsigned mask, Scene& scene)
             const auto& c = frame.hands[h];
             if (!c.valid) { continue; }
             AppendAxes(scene, c.grip, .06f, .002f);
-            // The left ray already is this aim ray; drawing it twice only hides it.
-            if (h == 0 && (mask & kRays) && frame.rays[0].valid) { continue; }
             const Vec3 forward = Rotate(Normalize(c.aim.orientation), {0, 0, -1});
             Line aim{c.aim.position, Add(c.aim.position, Scale(forward, 2.0f)), WithAlpha(kIdle, 150), .0015f, 1.2f};
             aim.dash = .02f;

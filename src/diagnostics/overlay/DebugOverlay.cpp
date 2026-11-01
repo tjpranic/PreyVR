@@ -632,14 +632,15 @@ void DebugOverlayAim(const GameplayPoseFrame& frame, const aim::Sample& sample)
     // weaponGeneration is the equipped rig's owner for this frame, 0 with none.
     ray.role = frame.weaponGeneration ? dd::RayRole::Weapon : dd::RayRole::Pointer;
     ray.direction = stereo::EngineDirToTracking(sample.direction, PlaySpaceRotation(frame));
-    if (sample.muzzleOrigin && frame.cameraCentreValid) {
-        // aim.shot: the sample starts at the muzzle, a real world point. Drawn
-        // with the anchor the hands are placed with, it lands on the drawn barrel.
-        ray.fromMuzzle = true;
+    if ((sample.muzzleOrigin || sample.fingerOrigin) && frame.cameraCentreValid) {
+        // aim.shot: the sample starts at the muzzle, a real world point; with an
+        // empty hand, at the fingertip. Drawn with the anchor the hands are placed
+        // with, it lands on the drawn barrel or finger.
+        ray.fromMuzzle = sample.muzzleOrigin;
         ray.origin = EngineToXr(frame, frame.cameraCentre, sample.origin);
         ray.target = EngineToXr(frame, frame.cameraCentre, dd::Add(sample.origin, dd::Scale(sample.direction, distance)));
     } else {
-        ray.origin = right.aimPose.position;
+        ray.origin = ray.role == dd::RayRole::Pointer ? FingerPose(frame, Hand::right).position : right.aimPose.position;
         // The aim sample's ray starts at the native eye (or the hand with
         // aim.origin, or on the hand's line at a screen); its target is
         // converted with the same anchor it was built from.
@@ -718,10 +719,11 @@ void DebugOverlayGameFrame(const GameplayPoseFrame& frame, bool tracking)
         gLeft.Publish(record);
         return;
     }
-    const Vec3 forward = Rotate(Normalize(left.aimPose.orientation), {0, 0, -1});
-    Pose aimWorld{};
-    HandWorld(frame, Hand::left, ControllerPose::aim, Anchor::cameraElseReticle, Placement::controller, aimWorld);
-    const Vec3 originWorld = aimWorld.position;
+    const Pose finger = FingerPose(frame, Hand::left);
+    const Vec3 forward = Rotate(Normalize(finger.orientation), {0, 0, -1});
+    Pose fingerWorld{};
+    HandWorld(frame, Hand::left, ControllerPose::finger, Anchor::cameraElseReticle, Placement::controller, fingerWorld);
+    const Vec3 originWorld = fingerWorld.position;
     const bool psi = PsiTargetMode() == 2;
     float distance = 0;
     const bool hit = Finite(originWorld) && Hit(frame, originWorld, stereo::TrackingDirToEngine(forward, PlaySpaceRotation(frame)), mask, distance);
@@ -730,7 +732,7 @@ void DebugOverlayGameFrame(const GameplayPoseFrame& frame, bool tracking)
     auto& ray = record.ray;
     ray.valid = true;
     ray.role = psi ? dd::RayRole::Psi : dd::RayRole::Pointer;
-    ray.origin = left.aimPose.position;
+    ray.origin = finger.position;
     ray.direction = forward;
     ray.target = dd::Add(ray.origin, dd::Scale(forward, distance));
     ray.hit = hit;

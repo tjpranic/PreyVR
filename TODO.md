@@ -39,11 +39,10 @@
     Grabs are only allowed with the left hand, will need to rethink how this works
 - Arm IK should be biased to stay downwards
     They tend to "chicken-wing" when I rotate my hands
-- Aim lasers should come out of my pointer fingers
-    This way it will handle like the weapon aiming
 - The in-game cutscenes show on a flat plane but it needs to be adjusted downward a bit
     The first-time Typhon neuromod usage trigger 3 of these cutscenes in a row. it also causes the game to pause between each cutscene.
-- Left hand IK seems to break aiming a Typhon ability
+- Hands don't move wehn aiming a Typhon ability
+    Or when opening the radial menu
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -65,8 +64,6 @@
 - Psi energy shows on wrist before installing first neuromod
 - Some UI elements still only display at the periphery of vision
     It makes them hard to see. They need to be moved a little closer in.
-- Left hand laser doesn't hit at surface of objects unlike the right hand aim laser (?)
-    Only sometimes? This might be intentional? Will need to investigate.
 - Will need to adjust UI element depths
 - 2D marker (objective, repair etc.) position jitter a lot (?)
     They need some smoothing
@@ -130,6 +127,9 @@
     > The loading screen no longer has a laser, and neither does "press any key" after it. That prompt is Prey's pause menu in a mode of its own, so the mod reads the mode, and a real pause keeps its laser. PreyVR-123, worn OK 2026-10-31. See docs/LOADING-SCREEN-2026-10-20.md.
 - Psychoscope zoom is broken
     > Prey zooms by narrowing the view's FOV, and the mod told the headset the true FOV of each frame, so the image covered less of the lens instead of magnifying. Zoomed frames are now declared at the FOV slider's frustum, with the eyes moved closer by the zoom, and the world reticle and wrist card follow the magnified image. Every zoom in the game goes through this. PreyVR-120, worn OK 2026-10-31. See docs/PSYCHOSCOPE-ZOOM-SCOPE-2026-10-31.md.
+- Left hand laser doesn't hit at surface of objects unlike the right hand aim laser (?)
+    Only sometimes? This might be intentional? Will need to investigate.
+    > "Left hand laser doesn't hit at surface of objects" looks explained, from reading the code only. When something is selected, the left laser ends on the object's bounding box rather than its surface, and it only uses a real scene hit when nothing is selected. That would also fit the "only sometimes" in your note.
 
 ### UX/Immersion
 - Zero-G doesn't have rotate controls
@@ -164,6 +164,9 @@
     Wrench draw animation is already disabled.
     Add an option to toggle all of them?
     > Every weapon now comes out and goes away at once instead of playing Prey's draw and stow animations, and each still makes its own sounds. Swaps are instant as a result: those animations took about 1 to 2 seconds between them. Equipment's Weapon Draw Animations brings them back, along with the wrench's hand spin. PreyVR-126, worn OK 2026-10-31. See docs/WEAPON-DRAW-SCOPE-2026-10-31.md.
+- Aim lasers should come out of my pointer fingers
+    This way it will handle like the weapon aiming
+    > The lasers started at the controller's aim pose, off the hand, and the empty right hand's wasn't a true ray: it ended where a ray from the eye landed. They now leave the index fingertip along the controller's aim, and the empty hand's is a true ray, as a gun's is from its muzzle. That left the finger 24° below the laser, so the hands moved instead: they lean 39° on the controllers rather than 15°, which lays the finger within 3.5° of the aim, and an empty hand aims where a gun does. PreyVR-128, worn OK 2026-11-01. See docs/FINGER-LASER-SCOPE-2026-11-01.md.
 
 ### Rendering
 - The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision). (Archived)

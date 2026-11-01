@@ -16,6 +16,10 @@ preyvr::dll::TrackingFrame tracked;
 preyvr::dll::AppliedView appliedView;
 preyvr::Vec3 drawnOrigin, drawnDirection;
 bool focused = true, calibrated = false, examiningScreen = false;
+// A weapon is drawn unless a test holsters it; no rig has been read until one
+// publishes its finger pose.
+bool weaponDrawn = true;
+preyvr::handpose::FingerGrip fingerGrip{};
 const preyvr::Vec3 eye{10, 20, 30}, muzzle{10.3f, 20.5f, 29.8f};
 int failures = 0;
 std::array<std::uint8_t, preyvr::engine::SystemLayout::viewCamera +
@@ -53,11 +57,15 @@ bool WriteReticleScreenPosition(void*, const Vec3& origin, const Vec3& direction
     if (context) drawnContext = *context;
     return true;
 }
-// What the aim frame reads, at rest: no rig, no two-handed hold, no shot ray or
-// scene hit, so the published ray is the takeover's own.
+// What the aim frame reads, at rest: a weapon with no muzzle read, no two-handed
+// hold, no shot ray or scene hit, so the published ray is the takeover's own.
 bool HudGameplayInputAllowed() { return true; }
 bool MedkitOwnsGrip() { return false; }
-bool TryGetEquippedRig(std::uintptr_t, EquippedRig&) { return false; }
+bool TryGetEquippedRig(std::uintptr_t, EquippedRig& out) {
+    if (weaponDrawn) out.generation = 7;
+    return weaponDrawn;
+}
+bool TryGetFingerGrip(handpose::FingerGrip& out) { out = fingerGrip; return true; }
 bool ShotRayFrame(const GameplayPoseFrame&, aim::Sample&) { return false; }
 void QueryAimScene(const GameplayPoseFrame&, aim::Sample&) {}
 void PublishReticleTarget(const GameplayPoseFrame&, const aim::Sample&) {}
@@ -288,6 +296,78 @@ int main() {
     Check(TryGetGameplayPoseFrame(levelFrame) && !Tilted(levelFrame) && AimTiltedFrameCount() == tiltedBefore + 1,
           "a level view has no tilt and does not count as one");
     appliedView = {};
+
+    // **An empty hand points with its finger.** A real grip-to-aim angle, the pose
+    // the rig would publish, and the eye-origin ray the laser used to end on.
+    gOriginMode = 0;
+    tracked.head.orientation = {};
+    stereo::WriteMatrix(camera, stereo::MatrixFromPose({stereo::YawQuaternion(bodyYaw), eye}));
+    hand.gripPose.orientation = Normalize({0.25f, -0.1f, 0.05f, 0.96f});
+    hand.aimPose.orientation = Normalize(Multiply(hand.gripPose.orientation, Conjugate(Normalize({0.365f, 0, 0, 0.931f}))));
+    const auto next = [&] {
+        ++tracked.sequence;
+        tracked.publishedNs = MonotonicNanoseconds();
+        UpdateCachedRayWithTakeover(player.data());
+        aim::Sample out{};
+        TryGetAimSample(out);
+        return out;
+    };
+    const auto cached = [&](std::size_t offset) {
+        Vec3 out{};
+        std::memcpy(&out, player.data() + offset, sizeof(out));
+        return out;
+    };
+    const auto placed = [&](ControllerPose pose, Placement placement) {
+        GameplayPoseFrame f{};
+        Pose out{};
+        TryGetGameplayPoseFrame(f);
+        HandWorld(f, Hand::right, pose, Anchor::camera, placement, out);
+        return out;
+    };
+    const aim::Sample gun = next();
+    Check(!gun.fingerOrigin && !gun.cameraAnchored && Same(gun.origin, eye), "a weapon drawn: its ray, from the eye here");
+
+    // The rig's finger on the grip, turned as handpose::FingerInGrip lays it out,
+    // which the lasers leave from without taking its direction.
+    const Quaternion below{std::sin(-2.0f * 0.0174532925f), 0, 0, std::cos(-2.0f * 0.0174532925f)};
+    fingerGrip.pose[1] = {Multiply(Conjugate(Normalize({0.365f, 0, 0, 0.931f})), below), {0.027f, -0.067f, -0.121f}};
+    fingerGrip.known[1] = true;
+    Check(!next().fingerOrigin && Same(next().direction, gun.direction), "with a weapon the finger changes nothing");
+
+    // Holstered, the ray is the finger's, on the same frame.
+    weaponDrawn = false;
+    const aim::Sample empty = next();
+    const Pose finger = placed(ControllerPose::finger, Placement::drawn);
+    Check(empty.fingerOrigin && empty.cameraAnchored && !empty.muzzleOrigin && Same(empty.origin, finger.position),
+          "an empty hand: the sample starts at the fingertip, against the camera, as a muzzle's does");
+    Check(Same(cached(engine::ArkPlayerLayout::cachedReticleOrigin), eye), "and the engine's own origin stays the eye");
+    Check(Same(empty.direction, gun.direction) &&
+              Same(cached(engine::ArkPlayerLayout::cachedReticleDirection), gun.direction),
+          "and it aims where a weapon does: holstering turns nothing");
+    Check(Same(Rotate(empty.orientation, {0, 1, 0}), empty.direction), "orientation and direction agree");
+    Check(!Same(empty.origin, gun.origin), "not from the eye");
+
+    // Pointing at a screen, the hand's line is the finger's.
+    examiningScreen = true;
+    const aim::Sample pointed = next();
+    GameplayPoseFrame pointedFrame{};
+    Check(TryGetGameplayPoseFrame(pointedFrame) && pointed.cameraAnchored && !pointed.fingerOrigin &&
+              Same(pointed.origin, examine::ScreenRayOrigin(placed(ControllerPose::finger, Placement::controller).position,
+                                                            pointedFrame.cameraCentre, pointed.direction)) &&
+              Same(pointed.direction, gun.direction),
+          "an examined screen: on the finger's line");
+    examiningScreen = false;
+
+    // No rig read: the aim pose, as a place for it to start.
+    fingerGrip = {};
+    const aim::Sample noRig = next();
+    Check(noRig.fingerOrigin && Same(noRig.origin, placed(ControllerPose::aim, Placement::drawn).position),
+          "no rig: the controller's aim pose");
+
+    // A weapon drawn again counts at once.
+    weaponDrawn = true;
+    const aim::Sample drawn = next();
+    Check(!drawn.fingerOrigin && !drawn.cameraAnchored && Same(drawn.origin, eye), "drawn: the weapon's ray, this frame");
 
     focused = false;
     UpdateCachedRayWithTakeover(player.data());

@@ -231,6 +231,10 @@ void LayoutChecks(){
        "marker size: Prey's size by default, half to double");
  Check(std::wstring(MenuPageName(2))==L"HANDS"&&MenuEntries(2)[0]==AimLasers&&MenuEntries(2)[1]==ShotTrail,
        "hands: the aim lasers first, apart from the interface tab's menu laser");
+ {Values kept{};Present found{};
+  Check(Parse("version=1\nlaser_direction=0\nturn=45\n",kept,&found)&&kept[Turn]==45&&found[Turn]&&
+        Serialize(kept,&found).find("laser_direction")==std::string::npos,
+        "a file saved with Aim Laser Direction still loads, and the next save leaves it out");}
  {const auto page=MenuEntries(2);const auto fingers=std::find(page.begin(),page.end(),FingerCurl);
   Check(fingers!=page.end()&&fingers+1!=page.end()&&fingers[1]==ArmLength,"hands: the arm's length beside the fingers");}
  Check(Defaults()[ArmLength]==56&&Valid(ArmLength,40)&&Valid(ArmLength,70)&&!Valid(ArmLength,39)&&!Valid(ArmLength,71)&&

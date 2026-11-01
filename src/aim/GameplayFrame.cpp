@@ -1,5 +1,6 @@
 #include "aim/GameplayFrame.h"
 #include "aim/AimTakeover.h"
+#include "body/ik/AnimIkTakeover.h"
 #include "engine/EngineAccess.h"
 #include "render/camera/HeadTrackingHook.h"
 #include "controls/input/XrInput.h"
@@ -33,6 +34,9 @@ std::atomic<bool> gHaveHeadYaw{false};
 std::atomic<unsigned long long> gHeadYawHeld{0}, gHeadYawUnavailable{0};
 // Frames built on zero-G's tilted view.
 std::atomic<unsigned long long> gTiltedFrames{0};
+// The last finger pose read, gameplay thread only: a read refused by the publisher
+// keeps this, rather than dropping every laser to the aim pose for a frame.
+handpose::FingerGrip gFinger;
 
 // The yaw the engine's own view camera is facing. Read live rather than cached,
 // because the whole point is to follow the player's facing as it changes.
@@ -81,6 +85,8 @@ FrameBuild BuildGameplayFrame(std::uintptr_t player, GameplayPoseFrame& frame, b
     gNativeMagnitude.store(static_cast<unsigned int>(nativeLength * 1000.0f + 0.5f));
     haveTracking = TryGetTrackingFrame(frame.tracking) &&
         IsPoseUsable(frame.tracking.head, frame.tracking.headValidity, kMaxPoseAgeNs);
+    TryGetFingerGrip(gFinger);
+    frame.finger = gFinger;
     frame.referenceGeneration = HeadTrackingReferenceGeneration();
     frame.recenterEpoch = HeadTrackingRecenterEpoch();
     frame.referenceYaw = HeadTrackingReferenceYaw();

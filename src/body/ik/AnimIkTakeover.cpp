@@ -129,6 +129,7 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
                                      static_cast<std::uint8_t*>(relative), static_cast<unsigned>(poseCount),
                                      owner.character);
                     }
+                    PublishFingerPose(poseSettings, location.s);
                     // The body first, so the shoulders are placed on it.
                     const float shoulderYaw = ShoulderYaw(frame);
                     PlanBody(frame, location, static_cast<std::uint8_t*>(relative), static_cast<std::uint8_t*>(absolute),
@@ -564,6 +565,8 @@ DWORD SetAnimIkFingerCurl(unsigned enabled)
 }
 
 unsigned AnimIkFingerCurl() { return gFingerCurl.load(); }
+
+bool TryGetFingerGrip(handpose::FingerGrip& out) { return gFingerGrip.TryRead(out); }
 
 bool AnimIkFreeArmsBound() { return gFreeBound.load(); }
 

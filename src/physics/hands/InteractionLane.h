@@ -35,7 +35,7 @@ unsigned UseHandLeft();
 DWORD SetUseHold(unsigned enabled);       // post the use button as held every frame while down (default 1)
 unsigned UseHoldEnabled();
 DWORD SetUseFilter(unsigned enabled, float minCutoff, float beta, float backlashDegrees);
-DWORD SetUseBackMillimetres(unsigned mm); // ray origin behind the controller (default 100)
+DWORD SetUseBackMillimetres(unsigned mm); // ray origin behind the fingertip (default 170)
 DWORD SetUseTrace(unsigned enabled);      // log every selection change and press
 
 // Installs the hooks (idempotent). False if a prologue does not match.
@@ -59,7 +59,8 @@ void NoteUseButton(bool down, unsigned owner, bool pressed, bool released, unsig
 // What the pointer shows (debug overlay). Engine world space.
 struct UsePointer {
     bool valid = false;
-    Vec3 hand{};           // the controller's aim point the line starts from
+    Vec3 hand{};           // the fingertip the line starts from (FingerPose)
+    Vec3 start{};          // the ray behind the palm, which the selector looks along
     Vec3 direction{};
     bool target = false;   // the game selected something
     Vec3 end{};            // where the line ends (on the target's bounds when target)

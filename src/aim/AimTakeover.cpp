@@ -101,11 +101,11 @@ std::atomic<unsigned long long> gWorldUiSteered{0};
 // as the drawn hands are, not against Prey's cached origin: that is a near-plane
 // point that moves with Prey's own examination cursor. False leaves the ray as
 // it was (no camera this frame).
-bool AimAtScreen(const GameplayPoseFrame& frame, const Vec3& engineOrigin, const Vec3& direction,
-                 preyvr::aim::Sample& sample)
+bool AimAtScreen(const GameplayPoseFrame& frame, ControllerPose pointing, const Vec3& engineOrigin,
+                 const Vec3& direction, preyvr::aim::Sample& sample)
 {
     Pose hand{};
-    if (!HandWorld(frame, Hand::right, ControllerPose::aim, Anchor::camera, Placement::controller, hand)) {
+    if (!HandWorld(frame, Hand::right, pointing, Anchor::camera, Placement::controller, hand)) {
         gScreenRefused.fetch_add(1, std::memory_order_relaxed);
         return false;
     }
@@ -123,10 +123,26 @@ bool AimAtScreen(const GameplayPoseFrame& frame, const Vec3& engineOrigin, const
     return true;
 }
 
+// **An empty right hand points as a gun does**: the sample starts at the fingertip
+// as a gun's starts at its muzzle, so the scene query, the reticle, the laser and
+// the screens all describe a ray that leaves the hand, not one from the eye. On
+// the anchor the hand is drawn with, where it is drawn. The engine's cached origin
+// stays the eye, as it does for a gun. Left from the eye with no camera this frame.
+void AimFromFinger(const GameplayPoseFrame& frame, preyvr::aim::Sample& sample)
+{
+    Pose finger{};
+    if (!HandWorld(frame, Hand::right, ControllerPose::finger, Anchor::camera, Placement::drawn, finger) ||
+        !Finite(finger.position)) { return; }
+    sample.origin = finger.position;
+    sample.fingerOrigin = true;
+    sample.cameraAnchored = true;
+}
+
 // The getter's filter (ReticleRayHook.h), last in line. The world UI's cursor
 // raycast is handed the ray the crosshair is drawn from -- the published sample:
-// from the muzzle with a gun drawn, from the hand's line at an examined screen,
-// else from the eye -- instead of the cached one, whose origin stays the eye. So
+// from the muzzle with a gun drawn, the fingertip with an empty hand, the hand's
+// line at an examined screen, else the eye -- instead of the cached one, whose
+// origin stays the eye. So
 // what a screen highlights is what the crosshair sits on. With no usable sample
 // Prey's own ray is left.
 void WorldUiRay(std::uintptr_t, void* out, void* result, std::uintptr_t caller)
@@ -217,7 +233,9 @@ void OverrideAimRay(const GameplayPoseFrame& frame, bool haveTracking)
     const unsigned int originMode = gOriginMode.load(std::memory_order_acquire);
     // A screen being examined is pointed at from the hand, whatever aim.origin
     // says (AimAtScreen).
-    const bool screen = ExaminingScreen(playerAddress) && AimAtScreen(frame, engineOrigin, ray->direction, sample);
+    const bool emptyHand = frame.weaponGeneration == 0;
+    const bool screen = ExaminingScreen(playerAddress) &&
+        AimAtScreen(frame, emptyHand ? ControllerPose::finger : ControllerPose::aim, engineOrigin, ray->direction, sample);
     if (!screen && originMode != 0) {
         Vec3 chosen = hand.position;
         bool haveMuzzle = false;
@@ -270,7 +288,10 @@ void OverrideAimRay(const GameplayPoseFrame& frame, bool haveTracking)
     // the scene query, the reticles and the overlay all describe the shot. The
     // engine's cached origin stays the eye (see ShotRayLane.h). Not at a screen: its
     // ray is the hand's.
-    if (originMode == 0 && !screen) { ShotRayFrame(frame, sample); }
+    if (originMode == 0 && !screen) {
+        ShotRayFrame(frame, sample);
+        if (emptyHand && !sample.muzzleOrigin) { AimFromFinger(frame, sample); }
+    }
     QueryAimScene(frame,sample);
     sample.publishedNs = MonotonicNanoseconds();
     gAimSample.Publish(sample);

@@ -47,8 +47,8 @@ It first takes a direct hit along the ray (`interactDistance` long); otherwise e
 an `origin ± distance` box whose interaction point is within its distance and **inside the 16.3° cone** of
 the ray, with line of sight. Items outrank props (`m_itemTypePriorityMap`: an item scores ~1000, a prop ~2).
 So the native code already has the aim assist the Dishonored VR mod first tried to add by hand; the mod adds
-none. The ray starts 10 cm behind the controller (`use.back`), so a prop the hand touches is still in front of
-it.
+none. The ray starts 17 cm behind the fingertip (`use.back`), so a prop the hand touches is still in front of
+it ([finger laser scope](FINGER-LASER-SCOPE-2026-11-01.md); 10 cm behind the controller's aim pose until then).
 
 **Suppression** (the right grip's reload) runs the selector looking at an empty point 20 km above the eye: no
 foreign call, the native code runs normally and simply finds nothing.
@@ -121,7 +121,7 @@ is its hold action (drag a body, eat, carry the bin).
 | `use.hand 1\|0` | left hand points and uses, right grip reloads (default) / previous layout (right grip, weapon ray) |
 | `use.hold 1\|0` | post the held state every frame (default 1) |
 | `use.filter on [minCutoffCentiHz 100] [betaHundredths 200] [backlashCentiDeg 75]` | pointer filter |
-| `use.back <mm>` | ray origin behind the controller (default 100) |
+| `use.back <mm>` | ray origin behind the fingertip (default 170) |
 | `use.trace 1` | log every selection change |
 | `use.find <entityId>` | where an entity is, as the controller angles that point at it (test harness) |
 

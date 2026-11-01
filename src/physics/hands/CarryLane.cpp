@@ -484,10 +484,11 @@ void CaptureGrab(std::uintptr_t entity)
         g.heavy.handOffset = Sub(hand.grip.position, hand.head);
         g.heavy.yaw = hand.bodyYaw;
         // The point the left hand's ray met it at, if this carry is what it pointed at.
+        // From behind the palm: a hand touching it has its fingertip already inside.
         UsePointer pointer{};
         if (TryGetUsePointer(pointer) && pointer.valid && pointer.entity == g.entity &&
             MonotonicNanoseconds() - pointer.ns < 500000000ull &&
-            carry::GrabPointLocal(tm, g.box, pointer.hand, pointer.direction, g.grabLocal)) {
+            carry::GrabPointLocal(tm, g.box, pointer.start, pointer.direction, g.grabLocal)) {
             g.haveGrabPoint = true;
         }
     }

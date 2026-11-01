@@ -84,10 +84,17 @@ struct Frame {
 bool MeasureHandFrame(Side side, const Vec3 baseOffset[4], const Quaternion baseRotation[4],
                       const Vec3 firstOffset[4], Frame& frame, float& knuckleDistance);
 
-// The player's real hand in GRIP-local OpenXR coordinates. `tubeLean` is the
-// angle by which the fist's tube (pinky -> thumb) leans from perpendicular
-// towards the fingers' direction (radians; ~15 deg in a power grip).
+// The hand in GRIP-local OpenXR coordinates. `tubeLean` is the angle by which the
+// fist's tube (pinky -> thumb) leans from perpendicular towards the fingers'
+// direction (radians).
 Frame GripHandFrame(Side side, float tubeLean);
+
+// **How far every hand leans on its controller.** A real power grip is about 15
+// degrees, which leaves the index finger 24 degrees below the controller's aim.
+// At 39 it lies along that aim, within 3.5, so an empty hand points as a weapon
+// does: the wearer's choice over turning the lasers instead, 2026-11-01
+// (docs/FINGER-LASER-SCOPE-2026-11-01.md). A held weapon's roll hardly moves.
+inline constexpr float kTubeLeanDegrees = 39.0f;
 
 // The rotation taking `from` to `to` (both orthonormal, same handedness).
 Quaternion FrameToFrame(const Frame& from, const Frame& to);
@@ -101,6 +108,43 @@ struct GripPoint {
     float towardThumb = 0.0f;
 };
 Vec3 GripPointInWrist(const Frame& hand, float knuckleDistance, const GripPoint& point);
+
+// The rig has no joint at a fingertip: the distal phalanx runs about this far
+// past its joint, along its bone (model units).
+inline constexpr float kFingertipLength = 0.022f;
+
+// How far a finger pointing off the controller flexes: its `curl` in
+// ShapeFromController with nothing touched.
+float PointingCurl(float relaxed);
+
+// The index finger's bones, each joint's offset from its parent: the metacarpal
+// from the wrist, then the three phalanges.
+struct IndexBones {
+    Vec3 base{}, first{}, second{}, third{};
+};
+
+// **The index finger held out to point, on the controller's GRIP**: what the
+// aim lasers leave from (docs/FINGER-LASER-SCOPE-2026-11-01.md). In grip-local
+// OpenXR coordinates, metres, laid out as an aim pose is: at the fingertip, -Z
+// along the finger from its knuckle through its tip, +Y to the thumb side. The
+// lasers take its position; their direction is the controller's aim, and the
+// finger's own is for pose.report to measure against it.
+//
+// One fixed pose for each hand, through the mapping that places the hand
+// (FrameToFrame, GripPointInWrist), so it stays on the drawn finger wherever the
+// hand is drawn on its controller. Not the finger as drawn: that curls with the
+// trigger, up to 12 cm at the tip and over 100 degrees along the finger, and an
+// aim on it would swing with every pull. `scale` takes model units to metres;
+// `curl` flexes the finger as RelaxedRelative does. False if the geometry is
+// degenerate.
+bool FingerInGrip(Side side, const Frame& hand, float knuckleDistance, const GripPoint& point, float tubeLean,
+                  const IndexBones& bones, float curl, float scale, Pose& out);
+
+// Each hand's finger pose, as published for the frame. By Hand: 0 left, 1 right.
+struct FingerGrip {
+    Pose pose[2]{};
+    bool known[2]{};
+};
 
 // The roll about `axis` (unit) that best turns the vectors `from` onto `to`
 // (least squares over the pairs; radians). Used to roll a held weapon about

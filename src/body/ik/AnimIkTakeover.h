@@ -1,5 +1,7 @@
 #pragma once
 
+#include "body/HandPose.h"
+
 #include <string>
 
 #include <windows.h>
@@ -167,6 +169,9 @@ unsigned long long AnimIkNoOwner();
 // (trigger, grip, thumb and index touch); off, they keep one relaxed pose.
 DWORD SetAnimIkFingerCurl(unsigned enabled);
 unsigned AnimIkFingerCurl();
+// Each hand's index finger held out to point (handpose::FingerInGrip), once a rig
+// has been read. False, leaving `out`, while the publisher is writing.
+bool TryGetFingerGrip(handpose::FingerGrip& out);
 // The IK is driving the no-weapon arms right now: with no weapon drawn (holstered,
 // carrying) the player's own arms rig is driven as well (open hands; the carrying
 // hand closes).

@@ -42,7 +42,12 @@ inline bool AnchorPoint(const GameplayPoseFrame& frame, Anchor anchor, Vec3& out
     return false;
 }
 
-enum class ControllerPose { grip, aim };
+enum class ControllerPose {
+    grip,
+    aim,
+    // The index finger a hand with no weapon points with (FingerPose, GameplayFrame.h).
+    finger,
+};
 
 enum class Placement {
     // Where the controller is.
@@ -62,8 +67,10 @@ inline bool HandWorld(const GameplayPoseFrame& frame, Hand hand, ControllerPose 
     Vec3 at{};
     if (!AnchorPoint(frame, anchor, at)) { return false; }
     const auto& controller = frame.tracking.hands[static_cast<unsigned>(hand)];
-    out = animik::ControllerWorldFromHead(PlaySpaceRotation(frame), at, frame.tracking.head,
-                                          pose == ControllerPose::aim ? controller.aimPose : controller.gripPose);
+    const Pose tracked = pose == ControllerPose::finger ? FingerPose(frame, hand)
+                       : pose == ControllerPose::aim    ? controller.aimPose
+                                                        : controller.gripPose;
+    out = animik::ControllerWorldFromHead(PlaySpaceRotation(frame), at, frame.tracking.head, tracked);
     if (placement == Placement::drawn) { out.position = Add(out.position, SurfaceOffset(frame, hand)); }
     return true;
 }

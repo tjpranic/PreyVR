@@ -1,0 +1,40 @@
+== R control: knuckle=0.0881 len=[0.991 0.057 0.122] palm=[ 0.073 -0.988 -0.136] (log: 0.0881; lenL .993,.009,-.121; palmL .017,-.998,.066)
+   wristToGrip=6.0cm (log 6.0)  lenInGrip=[-0.   -0.97 -0.26] (log 0,-.97,-.26)
+   aim origin in grip=[-1.6 -2.5 -7.8]cm  aim dir in grip=[ 0.    -0.68  -0.734]  hand len vs aim=32.2deg
+   pointing (off trigger)   tip in grip=[  2.7 -11.   -8.3]cm | tip->aim origin 9.6cm (along ray +6.2, off ray 7.3) | chord vs aim 24.1deg, prox vs aim 23.3deg
+   relaxed/no follow        tip in grip=[  0.7 -10.8  -7.7]cm | tip->aim origin 8.6cm (along ray +5.6, off ray 6.6) | chord vs aim 31.4deg, prox vs aim 25.6deg
+   resting (touch)          tip in grip=[-2.1 -9.2 -6.3]cm | tip->aim origin 6.9cm (along ray +3.5, off ray 6.0) | chord vs aim 50.2deg, prox vs aim 33.5deg
+   half trigger             tip in grip=[-3.4 -3.8 -3.5]cm | tip->aim origin 4.9cm (along ray -2.3, off ray 4.4) | chord vs aim 93.1deg, prox vs aim 54.6deg
+   full trigger             tip in grip=[ 0.  -0.3 -2.8]cm | tip->aim origin 5.7cm (along ray -5.2, off ray 2.4) | chord vs aim 135.3deg, prox vs aim 77.9deg
+   tip travel pointing->resting 5.5cm, pointing->full 12.4cm
+   lean  5deg: chord vs aim 34.0deg
+   lean 15deg: chord vs aim 24.1deg
+   lean 25deg: chord vs aim 14.2deg
+== L control: knuckle=0.0881 len=[ 0.993  0.008 -0.121] palm=[ 0.017 -0.998  0.066] (log: 0.0881; lenL .993,.009,-.121; palmL .017,-.998,.066)
+   wristToGrip=6.0cm (log 6.0)  lenInGrip=[ 0.   -0.97 -0.26] (log 0,-.97,-.26)
+   aim origin in grip=[ 1.6 -2.5 -7.8]cm  aim dir in grip=[ 0.    -0.68  -0.734]  hand len vs aim=32.2deg
+   pointing (off trigger)   tip in grip=[ -2.8 -11.   -8.3]cm | tip->aim origin 9.6cm (along ray +6.2, off ray 7.4) | chord vs aim 24.0deg, prox vs aim 23.2deg
+   relaxed/no follow        tip in grip=[ -0.8 -10.8  -7.8]cm | tip->aim origin 8.7cm (along ray +5.7, off ray 6.6) | chord vs aim 30.3deg, prox vs aim 24.3deg
+   resting (touch)          tip in grip=[ 2.1 -9.2 -6.6]cm | tip->aim origin 6.9cm (along ray +3.7, off ray 5.8) | chord vs aim 48.4deg, prox vs aim 30.6deg
+   half trigger             tip in grip=[ 3.6 -3.7 -3.9]cm | tip->aim origin 4.6cm (along ray -2.0, off ray 4.1) | chord vs aim 91.0deg, prox vs aim 50.5deg
+   full trigger             tip in grip=[ 0.1 -0.1 -3. ]cm | tip->aim origin 5.6cm (along ray -5.1, off ray 2.2) | chord vs aim 133.2deg, prox vs aim 73.4deg
+   tip travel pointing->resting 5.5cm, pointing->full 12.5cm
+   lean  5deg: chord vs aim 33.9deg
+   lean 15deg: chord vs aim 24.0deg
+   lean 25deg: chord vs aim 14.1deg
+
+=== decomposition ===
+R: knuckle in grip [ 3.2 -2.9 -4.8]  tip [  2.7 -11.   -8.3]  finger len knuckle->tip 8.9cm
+   aim origin rel. knuckle: 5.7cm; in aim-frame cm (x right,y up,z back) = [-4.8  2.3 -1.9]
+   tip rel. aim origin, aim frame cm = [ 4.3 -5.9 -6.2]
+   chord vs aim: pitch -23.8deg (neg=below ray), yaw -3.8deg (+=right)
+   selector start today (grip cm) [-1.6  4.3 -0.5], dist from grip origin 4.6cm
+   back-offset from tip to reach same spot: 16.9cm along finger (passes 5.4cm from it); to reach grip origin: 13.2cm
+   finger axis in grip frame (unit) [-0.06  -0.916 -0.396]  -> pointerInGrip constant candidate
+L: knuckle in grip [-3.2 -2.9 -4.8]  tip [ -2.8 -11.   -8.3]  finger len knuckle->tip 8.8cm
+   aim origin rel. knuckle: 5.7cm; in aim-frame cm (x right,y up,z back) = [ 4.8  2.4 -1.9]
+   tip rel. aim origin, aim frame cm = [-4.4 -5.9 -6.2]
+   chord vs aim: pitch -23.8deg (neg=below ray), yaw +2.8deg (+=right)
+   selector start today (grip cm) [ 1.6  4.3 -0.5], dist from grip origin 4.6cm
+   back-offset from tip to reach same spot: 17.0cm along finger (passes 5.3cm from it); to reach grip origin: 13.3cm
+   finger axis in grip frame (unit) [ 0.045 -0.917 -0.396]  -> pointerInGrip constant candidate

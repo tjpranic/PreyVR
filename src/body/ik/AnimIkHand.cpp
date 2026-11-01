@@ -458,6 +458,24 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
     }
 }
 
+// Each hand's finger pose (handpose::FingerInGrip), under gIkMutex. Every pass, so
+// a change to how the hand sits (pose.grip) or to Fingers Follow reaches the lasers.
+// A hand not placed anatomically (pose.mode 0) has no finger pose to give.
+void PublishFingerPose(const PoseSettings& settings, float scale)
+{
+    handpose::FingerGrip grip{};
+    const bool follows = gFingerCurl.load(std::memory_order_relaxed) != 0;
+    const float curl = follows ? handpose::PointingCurl(settings.curl) : settings.curl;
+    for (int s = 0; s < 2 && settings.mode == 1; ++s) {
+        if (!gHandRig.valid[s]) { continue; }
+        const auto side = s == 1 ? handpose::Side::left : handpose::Side::right;
+        const auto hand = static_cast<unsigned>(s == 1 ? Hand::left : Hand::right);
+        grip.known[hand] = handpose::FingerInGrip(side, gHandRig.frame[s], gHandRig.knuckle[s], settings.point,
+                                                  settings.tubeLean, gHandRig.index[s], curl, scale, grip.pose[hand]);
+    }
+    gFingerGrip.Publish(grip);
+}
+
 // Before the native pass: a free hand's finger joints take `shape` -- each
 // finger its own flexion and closure -- closed at least by `carryFist` around a
 // carried object, blended with the animation's by `weight` (1 = the shape).

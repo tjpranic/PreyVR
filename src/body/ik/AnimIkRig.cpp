@@ -280,6 +280,12 @@ void BuildHandRig(std::uint8_t* skeleton, unsigned jointCount, std::uint8_t* rel
             firstOffset[f] = {first.t[0], first.t[1], first.t[2]};
             baseRotation[f] = handpose::RelaxedRelative(side, bases[f], 1.0f);
         }
+        // The rest of the index finger, for the finger pose.
+        QuatT second{}, third{};
+        ok = ok && ReadQuatT(relative, poseCount, rig.joint[s][handpose::kIndex2], second) &&
+             ReadQuatT(relative, poseCount, rig.joint[s][handpose::kIndex3], third);
+        rig.index[s] = {baseOffset[0], firstOffset[0], {second.t[0], second.t[1], second.t[2]},
+                        {third.t[0], third.t[1], third.t[2]}};
         rig.valid[s] = ok && handpose::MeasureHandFrame(side, baseOffset, baseRotation, firstOffset,
                                                          rig.frame[s], rig.knuckle[s]);
     }

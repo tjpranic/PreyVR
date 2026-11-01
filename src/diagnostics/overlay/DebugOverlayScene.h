@@ -59,18 +59,18 @@ inline constexpr Color kMuted{150, 150, 150, 140};
 enum class RayRole : std::uint8_t { None, Weapon, Psi, Pointer, Use };
 // **The lasers ease in from the hand** over their first kLaserFadeIn metres
 // (Line::fadeIn), never more than half their length. Without it a laser began
-// at full strength in mid-air: the weapon's starts at the controller's aim
-// pose, ahead of the hand drawn at its grip.
+// at full strength in mid-air, and an empty hand's starts at where its finger
+// is held out to point, off a finger resting on the trigger.
 inline constexpr float kLaserFadeIn = .2f;
 // The use pointer's states (InteractionLane): pointing at something the game
 // selected, using it (button held), or blanked while the right grip reloads.
 inline constexpr Color kUseHeld{90, 235, 120, 245};
 inline constexpr Color kUseIdle{80, 205, 255, 120};
-// One hand's ray. `origin`/`direction` are what is drawn from (the controller's
-// aim pose); `target` is where the game's own ray ends -- its scene hit when
-// `hit`, otherwise the fallback range. For the weapon the game's ray starts at
-// the eye, so the drawn origin-to-target line is the converging shot path, and
-// the raw aim ray beside it shows the parallax at close range.
+// One hand's ray. `origin`/`direction` are what is drawn from (the muzzle, or the
+// index finger of a hand with no weapon: FingerPose); `target` is where the
+// game's own ray ends -- its scene hit when `hit`, otherwise the fallback range.
+// With a wrench the game's ray starts at the eye, so the drawn line from the
+// controller's aim pose to the target converges on it.
 struct HandRay {
     bool valid = false;
     RayRole role = RayRole::None;
