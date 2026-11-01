@@ -4,6 +4,7 @@
 // head turned since; without it, every pixel's motion is the eye's parallax.
 #include "render/taa/NearMotion.h"
 #include "TestSupport.h"
+#include "TestGeometry.h"
 
 #include <array>
 #include <cmath>
@@ -15,19 +16,10 @@ using preyvr::test::Require;
 
 namespace {
 
-using Matrix = std::array<float, 16>;   // row-vector, translation in row 3, as Prey's
+using preyvr::test::Matrix;
+using preyvr::test::Multiply;
 using Vec4 = std::array<float, 4>;
 
-Matrix Multiply(const Matrix& a, const Matrix& b)
-{
-    Matrix m{};
-    for (int i = 0; i < 4; ++i) {
-        for (int j = 0; j < 4; ++j) {
-            for (int k = 0; k < 4; ++k) { m[4 * i + j] += a[4 * i + k] * b[4 * k + j]; }
-        }
-    }
-    return m;
-}
 Vec4 Transform(const Vec4& v, const Matrix& m)
 {
     Vec4 out{};

@@ -5,7 +5,6 @@
 #include "equipment/weapon/WeaponSound.h"
 #include "equipment/body/EquipmentNative.h"
 #include "engine/NativeContract.h"
-#include "base/TextFormat.h"
 #include "equipment/weapon/WeaponDrawNative.h"
 #include <array>
 #include <atomic>

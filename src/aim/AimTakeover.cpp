@@ -11,7 +11,6 @@
 #include "aim/WeaponAttachment.h"
 #include "diagnostics/overlay/DebugOverlay.h"
 #include "body/ik/AnimIk.h"
-#include "engine/hooks/MinHookInit.h"
 #include "base/LatestSnapshot.h"
 
 #include "render/camera/HeadTrackingHook.h"
@@ -43,7 +42,6 @@ void Log(const std::string& line)
 
 // R-011 ArkPlayer::UpdateCachedReticleViewPosAndDir(ArkPlayer*).
 using UpdateCachedRayFn = void(__fastcall*)(void* player);
-using GetArkPlayerInstanceFn = void*(__fastcall*)();
 
 void* gTarget = nullptr;
 std::atomic<UpdateCachedRayFn> gOriginal{nullptr};

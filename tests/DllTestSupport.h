@@ -11,6 +11,8 @@
 //
 // No project includes, for the same reason as TestSupport.h.
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -45,6 +47,28 @@ inline std::size_t Count(const char* a, const char* b = "", const char* c = "")
     return n;
 }
 
+// Whether a report holds `field` ("draws=0") whole: braces count as spaces, so
+// a field has a space either side wherever it sits.
+inline bool ReportHas(std::string report, const std::string& field)
+{
+    for (char& c : report) {
+        if (c == '{' || c == '}') { c = ' '; }
+    }
+    return (" " + report + " ").find(" " + field + " ") != std::string::npos;
+}
+
+// A value at a byte offset in a fake engine object.
+template <class T> void Put(void* base, std::size_t offset, const T& value)
+{
+    std::memcpy(static_cast<std::uint8_t*>(base) + offset, &value, sizeof(value));
+}
+template <class T> T Get(const void* base, std::size_t offset)
+{
+    T value{};
+    std::memcpy(&value, static_cast<const std::uint8_t*>(base) + offset, sizeof(value));
+    return value;
+}
+
 // What PREYVR_TEST_STUB_MINHOOK answers, and how many times it was asked.
 inline bool gMinHookReady = false;
 inline unsigned gMinHookCalls = 0;
@@ -58,6 +82,25 @@ inline unsigned gMinHookCalls = 0;
 // preyvr::lifecycle::Log drops every line.
 #define PREYVR_TEST_DROP_LOG() \
     void preyvr::lifecycle::Log(std::string_view) {}
+
+// The frame observer's status and the verified renderer-setting queue: the test
+// sets gObserver and gQueueResult, and reads what was queued from gQueued.
+#define PREYVR_TEST_STUB_VERIFIED_SETTINGS() \
+    namespace preyvr::dll { \
+    DWORD gObserver = static_cast<DWORD>(FrameObserverRuntimeStatus::enabled); \
+    DWORD FrameObserverStatus() { return gObserver; } \
+    std::vector<std::string> gQueued; \
+    DWORD gQueueResult = 0; \
+    unsigned long long gVerifiedCount = 0; \
+    DWORD gVerifiedResult = 0; \
+    DWORD QueueVerifiedRendererSetting(const char* command) \
+    { \
+        if (gQueueResult == 0) { gQueued.emplace_back(command); } \
+        return gQueueResult; \
+    } \
+    unsigned long long VerifiedRendererSettingCount() { return gVerifiedCount; } \
+    DWORD VerifiedRendererSettingResult() { return gVerifiedResult; } \
+    }
 
 // preyvr::dll::EnsureMinHook never initialises MinHook: it counts the call and
 // answers gMinHookReady (false unless the test sets it).

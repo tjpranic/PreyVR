@@ -5,7 +5,6 @@
 #include "engine/hooks/HookInstall.h"
 #include "engine/EngineAccess.h"
 
-#include "engine/hooks/MinHookInit.h"
 
 #include "aim/AimTakeover.h"
 #include "app/FrameSchedule.h"

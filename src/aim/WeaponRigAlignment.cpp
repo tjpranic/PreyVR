@@ -1,4 +1,5 @@
 #include "aim/WeaponRigAlignment.h"
+#include "engine/EngineMap.h"
 
 #include <cmath>
 #include <cstdint>
@@ -7,7 +8,7 @@
 
 namespace preyvr::weaponrig {
 namespace {
-constexpr std::uintptr_t kBoneVtable = 0x1D212B8;
+constexpr std::uintptr_t kBoneVtable = engine::BoneAttachmentLayout::vtableRva;
 constexpr std::uintptr_t kSkinVtable = 0x1D1EDA8;
 constexpr std::uintptr_t kWrenchVtable = 0x1E92F00;
 constexpr std::uintptr_t kDisruptorVtable = 0x1E31290;
@@ -15,7 +16,7 @@ constexpr std::uintptr_t kDisruptorVtable = 0x1E31290;
 // reset by its destructor 0x169E2D0); also the weaponVtable ik.align reported live.
 constexpr std::uintptr_t kGlooVtable = 0x1E6E390;
 constexpr std::uintptr_t kCharacterBindingVtable = 0x1CB1328;
-constexpr std::uintptr_t kCharacterVtable = 0x1D22200;
+constexpr std::uintptr_t kCharacterVtable = engine::CharacterInstanceLayout::vtableRva;
 constexpr std::uintptr_t kManagerVtable = 0x1D22110;
 constexpr std::uintptr_t kSkeletonVtable = 0x1D2A3E8;
 constexpr unsigned kMaxJoints = 768, kMaxAttachments = 256;

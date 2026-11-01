@@ -80,12 +80,6 @@ std::mutex gMountMutex;
 std::array<Pose, kLights> gMount{};
 std::array<bool, kLights> gMountSeen{};
 
-bool Usable(Quaternion q)
-{
-    const float n = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
-    return std::isfinite(n) && n > 0.5f && n < 2.0f;
-}
-
 float Degrees(Quaternion q)
 {
     return 2.0f * std::acos(std::fmin(1.0f, std::fabs(Normalize(q).w))) * 180.0f / 3.14159265f;
@@ -160,7 +154,7 @@ bool OnJointOf(std::uintptr_t attachment, Pose& onJoint, int& joint)
     Quaternion k{};
     if (!SafeCopy(&relative, reinterpret_cast<const void*>(attachment + hn::AttachRelative), sizeof(relative)) ||
         !SafeRead(attachment + hn::AttachK, k) || !SafeRead(attachment + hn::AttachJoint, joint) ||
-        !Usable(relative.orientation) || !Usable(k) || !Finite(relative.position)) {
+        !NearUnit(relative.orientation) || !NearUnit(k) || !Finite(relative.position)) {
         return false;
     }
     onJoint = headlamp::OnJoint(relative, k);
@@ -179,7 +173,7 @@ bool ReadLamp(std::uintptr_t binding, std::uintptr_t attachment, std::uint64_t c
     if (eyeAttachment == 0 || !SafeRead(eyeAttachment, eyeVtable) || eyeVtable != gBase + hn::BoneVtable ||
         !OnJointOf(attachment, light, lightJoint) || !OnJointOf(eyeAttachment, eye, eyeJoint) ||
         lightJoint != eyeJoint || !SafeRead(binding + hn::BindingEntity, out.entity) ||
-        !SafeRead(binding + hn::BindingScale, out.size) || !gWorldPlacement(attachment, world) || !Usable(world.q) ||
+        !SafeRead(binding + hn::BindingScale, out.size) || !gWorldPlacement(attachment, world) || !NearUnit(world.q) ||
         !Finite(world.t) || !std::isfinite(world.s)) {
         return false;
     }
@@ -212,9 +206,9 @@ void NoteMount(std::size_t light, const Pose& mount)
 bool Put(std::size_t light, const Lamp& lamp, const AppliedView& view)
 {
     bool done = false;
-    if (Usable(view.rotation) && Finite(view.offset)) {
+    if (NearUnit(view.rotation) && Finite(view.offset)) {
         const Pose placed = headlamp::OnEye(view.rotation, Add(lamp.eye, view.offset), lamp.scale, lamp.mount);
-        done = Usable(placed.orientation) && Finite(placed.position) &&
+        done = NearUnit(placed.orientation) && Finite(placed.position) &&
                gPlaceEntity(lamp.entity, placed.position, placed.orientation, lamp.size);
     }
     if (!done) {

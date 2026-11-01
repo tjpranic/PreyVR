@@ -10,6 +10,7 @@
 #include "base/LatestSnapshot.h"
 
 #include "base/Logger.h"
+#include "engine/EngineMap.h"
 
 #include <array>
 #include <atomic>
@@ -128,6 +129,11 @@ constexpr std::array<std::uint8_t, 8> kSetConstraintsTail{
 // so any element the binary names can be reached the same way (R-123).
 constexpr std::size_t kGetElementByNameSlot = 0x60;
 constexpr std::size_t kIsVisibleSlot = 0xE8;   // IUIElement slot 29
+constexpr std::uintptr_t kIsVisibleGetterRva = 0x2FD150;
+// CFlashUI: its primary vtable, the hardware-mouse listener's vtable at primary+8,
+// the listener's +8 callee, and SendFlashMouseEvent at primary +0xE0.
+constexpr std::uintptr_t kFlashUiVtableRva = 0x1CA6898, kFlashUiMouseVtableRva = 0x1CA6008;
+constexpr std::uintptr_t kFlashUiMouseRva = 0x2CFCC0, kSendFlashMouseEventRva = 0x2CEF30;
 using GetElementByNameFn = void*(__fastcall*)(void*, const char*);
 using IsVisibleFn = bool(__fastcall*)(void*);
 
@@ -626,8 +632,8 @@ DWORD HudRefreshMenuOpenState()
         // +0xE8 -> 0x2FD150: movzx eax, byte [rcx+0x70]; ret. SetVisible
         // 0x3005F0 writes that same byte. Do not accept an arbitrary executable.
         constexpr std::uint8_t getterBytes[] = {0x0F, 0xB6, 0x41, 0x70, 0xC3};
-        if (ReadPointer(reinterpret_cast<std::uintptr_t>(element)) != base + 0x1CAB358 ||
-            isVisible != base + 0x2FD150 || !BytesMatch(
+        if (ReadPointer(reinterpret_cast<std::uintptr_t>(element)) != base + engine::FlashUiElementLayout::vtableRva ||
+            isVisible != base + kIsVisibleGetterRva || !BytesMatch(
                 reinterpret_cast<const std::uint8_t*>(isVisible), getterBytes, sizeof(getterBytes))) { continue; }
         bool ok = false;
         const bool visible = CallIsVisible(isVisible, element, &ok);
@@ -687,15 +693,16 @@ DWORD HudDispatchPointer(int event,int x,int y)
         const auto slot=reinterpret_cast<std::uintptr_t>(accessor)+7+
             static_cast<std::intptr_t>(ReadRelativeDisplacement(accessor+3));
         const auto ui=ReadPointer(slot);
-        if(!ui||ReadPointer(ui)!=base+0x1CA6898||ReadPointer(ui+8)!=base+0x1CA6008||
-           ReadPointer(base+0x1CA6010)!=base+0x2CFCC0||ReadPointer(base+0x1CA6978)!=base+0x2CEF30)
+        if(!ui||ReadPointer(ui)!=base+kFlashUiVtableRva||ReadPointer(ui+8)!=base+kFlashUiMouseVtableRva||
+           ReadPointer(base+kFlashUiMouseVtableRva+8)!=base+kFlashUiMouseRva||
+           ReadPointer(base+kFlashUiVtableRva+0xE0)!=base+kSendFlashMouseEventRva)
             return ERROR_INVALID_ADDRESS;
         constexpr std::uint8_t head[]={0x48,0x89,0x5C,0x24,0x08,0x48,0x89,0x6C,0x24,0x10,
             0x48,0x89,0x74,0x24,0x18,0x57,0x48,0x83,0xEC,0x40};
-        if(!BytesMatch(reinterpret_cast<const std::uint8_t*>(base+0x2CFCC0),head,sizeof(head)))return ERROR_BAD_EXE_FORMAT;
+        if(!BytesMatch(reinterpret_cast<const std::uint8_t*>(base+kFlashUiMouseRva),head,sizeof(head)))return ERROR_BAD_EXE_FORMAT;
         using MouseFn=void(__fastcall*)(void*,int,int,int,int);
         BeginInventoryPointerEvent(event);
-        reinterpret_cast<MouseFn>(base+0x2CFCC0)(reinterpret_cast<void*>(ui+8),x,y,event,0);
+        reinterpret_cast<MouseFn>(base+kFlashUiMouseRva)(reinterpret_cast<void*>(ui+8),x,y,event,0);
         EndInventoryPointerEvent(event);
         return 0;
     } __except(EXCEPTION_EXECUTE_HANDLER) {EndInventoryPointerEvent(event);return GetExceptionCode();}

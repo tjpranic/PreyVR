@@ -6,7 +6,6 @@
 #include "aim/ShotRayLane.h"
 #include <sstream>
 #include "aim/WeaponAttachment.h"
-#include "engine/hooks/MinHookInit.h"
 #include "base/LatestSnapshot.h"
 
 #include "base/Logger.h"
@@ -36,14 +35,13 @@ void Log(const std::string& line)
 using AttachToHandFn = bool(__fastcall*)(void*);
 
 constexpr std::uintptr_t kAttachToHandRva = 0x16914F0;
+constexpr std::uintptr_t kGetOwnerIdRva = 0x10DFC10;
 constexpr std::array<std::uint8_t, 28> kAttachToHandPrologue{
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
     0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x48,
     0x89, 0x7C, 0x24, 0x20, 0x41, 0x56, 0x48, 0x81,
     0xEC, 0x90, 0x00, 0x00,
 };
-
-constexpr std::size_t kWeaponAttachmentField = 0x2B0;   // R-024
 
 // IAttachment vtable, aligned against R-024's independently recorded +0xD8
 // (AddBinding, index 27).
@@ -135,7 +133,7 @@ bool InstallMuzzleObserver()
     if (gMuzzleInstalled.load()) { return true; }
     const auto base = PreyBase();
     if (!base) { return false; }
-    auto* target = reinterpret_cast<void*>(base + 0x1694BC0);
+    auto* target = reinterpret_cast<void*>(base + engine::ArkWeaponLayout::getFiringPositionRva);
     if (std::memcmp(target, kFiringPositionPrologue.data(), kFiringPositionPrologue.size()) != 0) { return false; }
     if (!hook::Install(target, reinterpret_cast<void*>(&FiringPositionObserved), gFiringPositionOriginal)) { return false; }
     gMuzzleInstalled.store(true);
@@ -179,12 +177,12 @@ bool ReadRig(void* weapon, EquippedRig& out)
         const auto itemVtable = *reinterpret_cast<std::uintptr_t*>(out.weapon + 8);
         // Concrete GetOwnerId is mov eax,[rcx+58h]; ret at 0x10DFC10,
         // with RCX=weapon+8. Read its proven field, never call a guessed slot.
-        if (!itemVtable || *reinterpret_cast<std::uintptr_t*>(itemVtable + 0x1D8) != base + 0x10DFC10 ||
+        if (!itemVtable || *reinterpret_cast<std::uintptr_t*>(itemVtable + 0x1D8) != base + kGetOwnerIdRva ||
             *reinterpret_cast<std::uint32_t*>(out.weapon + 0x60) != 0x7777) { return false; }
         out.itemId = *reinterpret_cast<std::uint32_t*>(out.weapon + 0x38);
         out.attachment = *reinterpret_cast<std::uintptr_t*>(out.weapon + 0x2B0);
         if (!out.itemId || !out.attachment ||
-            *reinterpret_cast<std::uintptr_t*>(out.attachment) != base + 0x1D212B8) { return false; }
+            *reinterpret_cast<std::uintptr_t*>(out.attachment) != base + engine::BoneAttachmentLayout::vtableRva) { return false; }
         out.binding = *reinterpret_cast<std::uintptr_t*>(out.attachment + 0x20);
         const auto manager = *reinterpret_cast<std::uintptr_t*>(out.attachment + 0x28);
         if (!manager || !out.binding) { return false; }

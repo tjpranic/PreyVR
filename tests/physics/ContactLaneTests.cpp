@@ -2,6 +2,7 @@
 // ABI boundary -- the broadphase, the per-entity box test, dynamics status and
 // the surface tables.
 #include "physics/contact/ContactLane.cpp"
+#include "DllTestSupport.h"
 #include "TestSupport.h"
 #include "physics/contact/PhysicalInteractions.h"
 #include <cstdlib>
@@ -9,19 +10,12 @@
 #include <string>
 #include <vector>
 
-std::vector<std::string> lines;
-namespace preyvr::lifecycle { void Log(std::string_view line) { lines.emplace_back(line); } }
+PREYVR_TEST_CAPTURE_LOG()
 namespace {
 using namespace preyvr;
 using namespace preyvr::dll;
 using preyvr::test::Check;
-bool Logged(const char* a, const char* b = "")
-{
-    for (const auto& l : lines) {
-        if (l.find(a) != std::string::npos && l.find(b) != std::string::npos) { return true; }
-    }
-    return false;
-}
+using preyvr::test::Logged;
 
 // Fake physics objects: each starts with its class's vtable, as the engine's do,
 // and carries the rigid fields a push reads (inverse mass +0x2E8, inertia +0x328),
@@ -619,7 +613,7 @@ int main()
     SetContactEventLog(0);
     listed = {};
     for (int i = 0; i < 3; ++i) { tick(0); }
-    lines.clear();
+    preyvr::test::gLines.clear();
     const auto beginsBefore = begins.load(), pushesBefore = pushes.load();
     listed = {&can};
     move({0, 0, -.01f});

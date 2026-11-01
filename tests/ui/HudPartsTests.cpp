@@ -30,11 +30,8 @@ struct Api {
     void* Of(const char* path){return &objects[path];}
 };
 std::set<std::string> Set(std::span<const char* const> paths){return {paths.begin(),paths.end()};}
-}
-// A part's replay against the mapped layout: it leaves out exactly every other
-// child of each container its kept clips sit in; any probe or override touches
-// only what it keeps or a container of it.
-void CheckLayout(const hud::Part& part){
+// The layout as a tree: every child of each container a part reaches into.
+std::map<std::string,std::set<std::string>> LayoutTree(){
     std::map<std::string,std::set<std::string>> tree;
     tree["_root"]=Set(hud::RootChildren);
     tree["_root.safe"]=Set(hud::SafeChildren);
@@ -43,6 +40,14 @@ void CheckLayout(const hud::Part& part){
     tree["_root.safe.quadrant_SE"]=Set(hud::QuadrantSEChildren);
     tree["_root.safe.quadrant_C"]=Set(hud::QuadrantCChildren);
     tree["_root.safe.quadrant_W"]=Set(hud::QuadrantWChildren);
+    return tree;
+}
+}
+// A part's replay against the mapped layout: it leaves out exactly every other
+// child of each container its kept clips sit in; any probe or override touches
+// only what it keeps or a container of it.
+void CheckLayout(const hud::Part& part){
+    auto tree=LayoutTree();
     const auto roots=Set(part.roots);
     Require(roots.size()==part.roots.size(),"each kept clip once");
     std::set<std::string> containers;
@@ -102,15 +107,7 @@ int main(){
     }
     // --- the wheel's profile is the layout less what it keeps ----------------
     {
-        // The layout as a tree: every child of each container a part reaches into.
-        std::map<std::string,std::set<std::string>> tree;
-        tree["_root"]=Set(hud::RootChildren);
-        tree["_root.safe"]=Set(hud::SafeChildren);
-        for(const char* path:hud::SafeAttached)tree["_root.safe"].insert(path);
-        tree["_root.safe.quadrant_S"]=Set(hud::QuadrantSChildren);
-        tree["_root.safe.quadrant_SE"]=Set(hud::QuadrantSEChildren);
-        tree["_root.safe.quadrant_C"]=Set(hud::QuadrantCChildren);
-        tree["_root.safe.quadrant_W"]=Set(hud::QuadrantWChildren);
+        auto tree=LayoutTree();
         const auto roots=Set(hud::Wheel.roots);
         Require(roots.size()==hud::Wheel.roots.size()&&roots.count("_root.safe.wheel_mc"),"the wheel and its companions, each once");
         const auto ancestors=[](const std::string& path){

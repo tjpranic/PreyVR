@@ -16,22 +16,11 @@ using namespace preyvr;
 using namespace preyvr::dll;
 using preyvr::test::Check;
 using preyvr::test::Logged;
+using preyvr::test::Put;
 namespace en = preyvr::examine::native;
 
 // "examine={pullbackCm=30 ... unwritten=0}" with each field between spaces.
-bool Reports(const char* field)
-{
-    std::string report = " " + ExamineCameraReport() + " ";
-    for (char& c : report) {
-        if (c == '{' || c == '}') { c = ' '; }
-    }
-    return report.find(std::string(" ") + field + " ") != std::string::npos;
-}
-
-template <class T> void Put(void* base, std::size_t offset, const T& value)
-{
-    std::memcpy(static_cast<std::uint8_t*>(base) + offset, &value, sizeof(value));
-}
+bool Reports(const char* field) { return preyvr::test::ReportHas(ExamineCameraReport(), field); }
 bool Near(float a, float b) { return std::fabs(a - b) < 1e-5f; }
 
 // The examination as Prey's begin leaves it: a world UI, entity 7. The screen's

@@ -41,23 +41,15 @@ std::optional<Quaternion> LevelledTurn(const Quaternion& current, float delta)
     return stereo::YawQuaternion(controller::WrapAngle(*yaw + delta));
 }
 
-namespace {
-bool Usable(const Quaternion& q)
-{
-    const float n = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
-    return std::isfinite(n) && n > 0.5f && n < 2.0f;
-}
-} // namespace
-
 std::optional<Quaternion> LocalTurn(const Quaternion& current, float delta)
 {
-    if (!Usable(current) || !std::isfinite(delta)) { return std::nullopt; }
+    if (!NearUnit(current) || !std::isfinite(delta)) { return std::nullopt; }
     return Normalize(Multiply(Normalize(current), stereo::YawQuaternion(delta)));
 }
 
 std::optional<float> LocalYawBetween(const Quaternion& from, const Quaternion& to)
 {
-    if (!Usable(from) || !Usable(to)) { return std::nullopt; }
+    if (!NearUnit(from) || !NearUnit(to)) { return std::nullopt; }
     const Quaternion d = Multiply(Conjugate(Normalize(from)), Normalize(to));
     if (std::fabs(d.z) < 1e-9f && std::fabs(d.w) < 1e-9f) { return 0.0f; }   // a half turn about a level axis
     return controller::WrapAngle(2.0f * std::atan2(d.z, d.w));
@@ -88,7 +80,7 @@ bool NativeTurnWatch::Update(float yaw, std::uint64_t nowNs, float epsilon, std:
 
 bool NativeRotationWatch::Update(const Quaternion& rotation, std::uint64_t nowNs, float epsilon, std::uint64_t holdNs)
 {
-    if (!Usable(rotation)) { return true; }
+    if (!NearUnit(rotation)) { return true; }
     if (valid_) {
         const Quaternion a = Normalize(left_), b = Normalize(rotation);
         const float dot = std::fabs(a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w);

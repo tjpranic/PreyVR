@@ -8,9 +8,6 @@
 
 namespace preyvr::engine {
 
-inline constexpr std::string_view kSupportedPreyDllSha256 =
-    "7D6E322F61B28331095A400F0BA5F09BD9A39C57BF993602285DD6ACB05311A7";
-
 struct ArkPlayerLayout {
     // GetArkPlayerInstance, the `player.get_instance` landmark: returns the player.
     static constexpr std::uintptr_t getInstanceRva = 0x157C990;
@@ -179,17 +176,6 @@ struct PassInfoLayout {
     static constexpr int renderWorldFlags = 0xF;
 };
 
-// C3DEngine vtable slot that CreateGeneralPassRenderingInfo (R-071) calls to turn
-// a CCamera* into the value it stores at SRenderingPassInfo+0x18:
-//     uVar4 = p3DEngine->vtable[0x608](p3DEngine, camera);
-//     *(undefined8 *)(passInfo + 0x18) = uVar4;
-// A second pass that wants its own camera must go through the same call rather
-// than writing a raw CCamera* into +0x18, or it stores something structurally
-// different from what every reader expects.
-struct ThreeDEngineLayout {
-    static constexpr std::uintptr_t vtableRegisterPassCamera = 0x608;
-};
-
 struct SystemLayout {
     static constexpr std::uintptr_t gEnvPointer = 0x28;
     static constexpr std::uintptr_t viewCamera = 0x788;
@@ -215,6 +201,7 @@ struct SystemLayout {
 struct GlobalEnvironmentLayout {
     static constexpr std::uintptr_t baseRva = 0x224D980;
     static constexpr std::uintptr_t threeDEngine = 0x08;
+    static constexpr std::uintptr_t input = 0x58;
     static constexpr std::uintptr_t entitySystem = 0xB8;
     static constexpr std::uintptr_t console = 0xC0;
     static constexpr std::uintptr_t system = 0xE0;
@@ -225,6 +212,21 @@ struct GlobalEnvironmentLayout {
 // called on gEnv->pEntitySystem in the binary (1228 sites; the next is 134).
 struct EntitySystemLayout {
     static constexpr std::uintptr_t vtableGetEntity = 0x70;
+};
+
+// CArkWeapon::GetFiringPosition: (weapon, out16, flags, overrideEntity).
+struct ArkWeaponLayout {
+    static constexpr std::uintptr_t getFiringPositionRva = 0x1694BC0;
+};
+
+// The vtable of an attachment bound to a joint.
+struct BoneAttachmentLayout {
+    static constexpr std::uintptr_t vtableRva = 0x1D212B8;
+};
+
+// CFlashUIElement: its constructor 0x2F79B0 installs this vtable.
+struct FlashUiElementLayout {
+    static constexpr std::uintptr_t vtableRva = 0x1CAB358;
 };
 
 // CRenderView. SetCamera copies the camera BY VALUE into m_camera, so a camera

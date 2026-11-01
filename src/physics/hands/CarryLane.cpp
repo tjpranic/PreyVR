@@ -127,7 +127,6 @@ template <class T> T Get(const T& v)
 // --- the hands' motion (XR thread writes, the release reads) -------------------
 std::mutex gMotionMutex;
 carry::MotionHistory gMotion[2];
-std::uint64_t gMotionGeneration = 0;
 std::atomic<unsigned long long> gMotionSamples{0}, gRuntimeVelocitySamples{0};
 
 // --- the release request (input lane -> main thread) ----------------------------

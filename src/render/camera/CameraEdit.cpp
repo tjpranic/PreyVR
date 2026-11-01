@@ -1,21 +1,10 @@
 #include "render/camera/CameraEdit.h"
+#include "base/FloatBytes.h"
 
 #include <cmath>
 #include <cstring>
 
 namespace preyvr::cameraedit {
-namespace {
-
-
-float ReadFloat(std::span<const std::uint8_t> bytes, std::size_t index)
-{
-    float value = 0.0f;
-    std::memcpy(&value, bytes.data() + index * sizeof(float), sizeof(float));
-    return value;
-}
-
-} // namespace
-
 bool RotationIsOrthonormal(std::span<const std::uint8_t> camera, float epsilon)
 {
     if (camera.size() < kCameraSize) {

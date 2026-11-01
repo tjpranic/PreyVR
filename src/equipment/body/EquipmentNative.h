@@ -2,6 +2,9 @@
 #include <cstdint>
 #include <cstddef>
 namespace preyvr::equipment::native {
+inline constexpr std::uintptr_t Equip=0x1274820,CanEquip=0x1273EB0,Unequip=0x12773A0,WeaponLookup=0x16A5650;
+inline constexpr std::uintptr_t Health=0x158B4D0,MaxHealth=0x158B4F0,Psi=0x15ACFE0,MaxPsi=0x15ACFA0;
+inline constexpr std::uintptr_t Status=0x148F000,Property=0x10B1F40;
 struct Contract {std::uintptr_t rva;std::size_t size;std::uint64_t hash;};
 inline constexpr Contract Contracts[]={
  {0x1274820,168,0x2A804FD9AFB560D7ull}, // Equip

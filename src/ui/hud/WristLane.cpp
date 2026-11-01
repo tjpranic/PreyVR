@@ -4,7 +4,6 @@
 #include "aim/GameplayFrame.h"
 #include "diagnostics/overlay/DebugOverlay.h"
 #include "controls/input/Haptics.h"
-#include "base/Logger.h"
 #include "physics/contact/SceneQueryLane.h"
 #include "ui/options/VrOptionsRuntime.h"
 #include "controls/input/XrInput.h"

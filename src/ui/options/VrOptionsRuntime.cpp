@@ -24,7 +24,6 @@
 #include "body/ik/AnimIkTakeover.h"
 #include "physics/hands/CarryLane.h"
 #include "physics/hands/GrenadeLane.h"
-#include "ui/hud/HudLayer.h"
 #include "physics/hands/InteractionLane.h"
 #include "body/RoomScaleLane.h"
 #include "ui/hud/WristLane.h"

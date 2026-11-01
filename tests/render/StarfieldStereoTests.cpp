@@ -13,29 +13,12 @@ PREYVR_TEST_STUB_MINHOOK()
 namespace {
 using namespace preyvr::dll;
 using preyvr::test::Check;
+using preyvr::test::Get;
 using preyvr::test::Logged;
+using preyvr::test::Put;
 namespace sn = preyvr::starfield::native;
 // "stars={depth=1 ... distanceM=10000}" with each field between spaces.
-std::string Report()
-{
-    std::string report = StarfieldDepthReport() + " ";
-    for (char& c : report) {
-        if (c == '{' || c == '}') { c = ' '; }
-    }
-    return report;
-}
-bool Reports(const char* field) { return Report().find(std::string(" ") + field + " ") != std::string::npos; }
-
-template <class T> void Put(void* base, std::size_t offset, const T& value)
-{
-    std::memcpy(static_cast<std::uint8_t*>(base) + offset, &value, sizeof(value));
-}
-template <class T> T Get(const void* base, std::size_t offset)
-{
-    T value{};
-    std::memcpy(&value, static_cast<const std::uint8_t*>(base) + offset, sizeof(value));
-    return value;
-}
+bool Reports(const char* field) { return preyvr::test::ReportHas(StarfieldDepthReport(), field); }
 
 // The space sky's render element and its star block, as Prey's main thread
 // leaves them: the block at +0x40, the star mesh +0x48, the texture's id +0x50

@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstddef>
 namespace preyvr::hud::native {
+inline constexpr std::uintptr_t SpriteDisplay=0x18BABA0,GetVariable=0x18ABE10;
 struct Contract {std::uintptr_t rva;std::size_t size;std::uint64_t hash;};
 inline constexpr Contract Contracts[]={
  {0x18BABA0,799,0x9F87BBA79DD8FDB1ull}, // SpriteDisplay

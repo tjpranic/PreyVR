@@ -13,8 +13,6 @@ Vec3 Unit(Vec3 a, Vec3 fallback)
     const float l = Length(a);
     return l > 1e-6f && std::isfinite(l) ? Scale(a, 1.0f / l) : fallback;
 }
-// The part of v perpendicular to the unit axis.
-Vec3 Perp(Vec3 v, Vec3 axis) { return Sub(v, Scale(axis, Dot(v, axis))); }
 float Wrap(float a)
 {
     while (a > kPi) { a -= 2.0f * kPi; }

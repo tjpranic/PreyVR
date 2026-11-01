@@ -23,6 +23,7 @@ bool WeaponSoundPlayStow(unsigned sound) { ++stowPlays; lastStow = sound; return
 namespace {
 using namespace preyvr::dll;
 using preyvr::test::Check;
+using preyvr::test::Get;
 using preyvr::test::gLines;
 using preyvr::test::Logged;
 std::string Report() { return WeaponDrawReport() + " "; }
@@ -30,12 +31,6 @@ bool Reports(const char* field) { return Report().find(std::string(" ") + field 
 void Put(void* base, std::size_t offset, const void* value, std::size_t size)
 {
     std::memcpy(static_cast<std::uint8_t*>(base) + offset, value, size);
-}
-template <class T> T Get(const void* base, std::size_t offset)
-{
-    T value{};
-    std::memcpy(&value, static_cast<const std::uint8_t*>(base) + offset, sizeof(value));
-    return value;
 }
 
 // Fake engine objects, each starting with its vtable.

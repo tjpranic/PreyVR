@@ -27,7 +27,7 @@ DWORD Toggle(std::uintptr_t player){
   const auto input=player+scope::InputOffset;
   if(*reinterpret_cast<const std::uintptr_t*>(input)!=base+scope::InputVtableRva||
      *reinterpret_cast<const std::uintptr_t*>(input+0x70)!=player)return ERROR_INVALID_ADDRESS;
-  if(!*reinterpret_cast<const std::uintptr_t*>(base+0x224D9D8)||
+  if(!*reinterpret_cast<const std::uintptr_t*>(base+engine::GlobalEnvironmentLayout::baseRva+engine::GlobalEnvironmentLayout::input)||
      !*reinterpret_cast<const std::uintptr_t*>(player+0x678+0xE8))return ERROR_NOT_READY;
   // Same member-function ABI as the registered native action. This exact body
   // reads only this; entity/name/mode/value are unused (verified in all 208 bytes).

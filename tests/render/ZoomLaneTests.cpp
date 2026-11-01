@@ -22,14 +22,7 @@ float Tangent(float degrees) { return std::tan(degrees * 0.5f * kDegree); }
 float ViewFov(float hfov) { return 2.0f * std::atan(Tangent(hfov)); }
 bool Near(float a, float b) { return std::fabs(a - b) < 1e-3f; }
 
-bool Reports(const std::string& field)
-{
-    std::string report = " " + ZoomLaneReport() + " ";
-    for (char& c : report) {
-        if (c == '{' || c == '}') { c = ' '; }
-    }
-    return report.find(" " + field + " ") != std::string::npos;
-}
+bool Reports(const std::string& field) { return preyvr::test::ReportHas(ZoomLaneReport(), field); }
 
 // The player the camera sits in, and Prey's values for this frame.
 std::uint8_t player[0x1400]{};

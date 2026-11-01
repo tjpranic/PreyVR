@@ -5,6 +5,7 @@
 #include "equipment/head/HeadLampLane.cpp"
 #include "DllTestSupport.h"
 #include "TestSupport.h"
+#include "TestGeometry.h"
 #include <cmath>
 #include <cstring>
 #include <iostream>
@@ -24,6 +25,7 @@ namespace headlamp_test {
 using namespace preyvr;
 using namespace preyvr::dll;
 using preyvr::test::Check;
+using preyvr::test::About;
 using preyvr::test::Logged;
 namespace hn = preyvr::headlamp::native;
 
@@ -35,22 +37,9 @@ bool Near(Quaternion a, Quaternion b)
     const float dot = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
     return std::fabs(std::fabs(dot) - 1.0f) < 1e-4f;
 }
-Quaternion About(Vec3 axis, float degrees)
-{
-    const float h = degrees * 3.14159265f / 360.0f;
-    const float n = Length(axis);
-    return {axis.x / n * std::sin(h), axis.y / n * std::sin(h), axis.z / n * std::sin(h), std::cos(h)};
-}
 
 // "flashlight={active=1 ... psychoscopeMountMm=none}" with each field between spaces.
-bool Reports(const char* field)
-{
-    std::string report = " " + HeadLampReport() + " ";
-    for (char& c : report) {
-        if (c == '{' || c == '}') { c = ' '; }
-    }
-    return report.find(std::string(" ") + field + " ") != std::string::npos;
-}
+bool Reports(const char* field) { return preyvr::test::ReportHas(HeadLampReport(), field); }
 
 // --- Prey's composition, written out as its bytes do it ------------------------------
 // The bone update 0x7A3390: model = joint * relative, then the orientation * K.

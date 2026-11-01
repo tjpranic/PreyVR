@@ -1,6 +1,7 @@
 #include "diagnostics/probes/FrameProbe.h"
 #include "base/EnvSwitch.h"
 #include "base/Logger.h"
+#include "base/Qpc.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -65,13 +66,6 @@ std::atomic<unsigned long long> gStalls{0}, gLoads{0}, gWritten{0}, gSuppressed{
 void Log(const std::string& line)
 {
     lifecycle::Log("preyvr_frame_probe " + line);
-}
-
-std::int64_t Qpc()
-{
-    LARGE_INTEGER now{};
-    QueryPerformanceCounter(&now);
-    return now.QuadPart;
 }
 
 std::int64_t QpcMicros(std::int64_t ticks)
@@ -353,7 +347,7 @@ void ProbeRecord(ProbeStep step, std::uint32_t a, std::uint32_t b, std::uint32_t
     if (!gRecording.load(std::memory_order_relaxed)) {
         return;
     }
-    const std::int64_t qpc = Qpc();
+    const std::int64_t qpc = QpcNow();
     const DWORD thread = GetCurrentThreadId();
     const std::uint64_t index = gNext.fetch_add(1, std::memory_order_relaxed);
     Slot& slot = gRing[index % kRingSize];
@@ -397,13 +391,13 @@ void ProbeRecord(ProbeStep step, std::uint32_t a, std::uint32_t b, std::uint32_t
 
 std::int64_t ProbeClock()
 {
-    return gRecording.load(std::memory_order_relaxed) ? Qpc() : 0;
+    return gRecording.load(std::memory_order_relaxed) ? QpcNow() : 0;
 }
 
 std::uint32_t ProbeMicrosSince(std::int64_t start)
 {
     if (start == 0) return 0;
-    const std::int64_t us = QpcMicros((std::max)(Qpc() - start, std::int64_t{0}));
+    const std::int64_t us = QpcMicros((std::max)(QpcNow() - start, std::int64_t{0}));
     return static_cast<std::uint32_t>((std::min)(us, std::int64_t{(std::numeric_limits<std::uint32_t>::max)()}));
 }
 
@@ -431,7 +425,7 @@ void ServiceFrameProbe()
     {
         std::lock_guard lock(gWindowMutex);
         if (gWindowOpen.load(std::memory_order_relaxed) &&
-            QpcMicros(Qpc() - gOpen.triggerQpc) > kWindowTimeoutUs) {
+            QpcMicros(QpcNow() - gOpen.triggerQpc) > kWindowTimeoutUs) {
             Finish(gNext.load(std::memory_order_relaxed));
         }
         for (; count < gReadyCount; ++count) ready[count] = gReady[count];

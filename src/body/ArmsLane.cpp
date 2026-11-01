@@ -11,6 +11,7 @@
 #include "diagnostics/commands/MemoryCommands.h"
 #include "aim/WeaponAttachment.h"
 #include "engine/EngineMap.h"
+#include "equipment/body/EquipmentNative.h"
 
 #include <cstdint>
 #include <cstdlib>
@@ -38,7 +39,7 @@ void Log(const std::string& line) { lifecycle::Log("preyvr_arms " + line); }
 //   ArkPlayerInput = player+0x8E0 (vtable 0x1E580E0): +0x94 cinematic input.
 //   player+0x7BC: items restricted.
 constexpr std::uintptr_t kWeaponComponent = 0x14B8;
-constexpr std::uintptr_t kEquipRva = 0x1274820, kCanEquipRva = 0x1273EB0, kGetPlayerRva = engine::ArkPlayerLayout::getInstanceRva;
+constexpr std::uintptr_t kEquipRva = equipment::native::Equip, kCanEquipRva = equipment::native::CanEquip, kGetPlayerRva = engine::ArkPlayerLayout::getInstanceRva;
 constexpr std::uintptr_t kInputOffset = engine::ArkPlayerLayout::input, kInputVtableRva = engine::ArkPlayerInputLayout::vtableRva;
 constexpr std::array<std::uint8_t, 16> kEquipPrologue{0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                       0x24, 0x10, 0x57, 0x48, 0x83, 0xEC, 0x20, 0x48};
@@ -101,11 +102,6 @@ int DrawNative(std::uintptr_t base, std::uintptr_t player, std::uint32_t id)
     } __except (EXCEPTION_EXECUTE_HANDLER) { return 5; }
 }
 
-bool Copy(std::uint64_t address, void* out, std::size_t size)
-{
-    return SafeCopy(out, reinterpret_cast<const void*>(address), size);
-}
-
 // The character's attachment manager (character+0x18) keeps a DynArray of IAttachment* at
 // manager+0x20; the element count is the low 31 bits of the dword before the data.
 struct AttachmentList {
@@ -116,9 +112,9 @@ bool ReadAttachments(std::uint64_t character, AttachmentList& out)
 {
     std::uint64_t data = 0;
     std::uint32_t header = 0;
-    if (character == 0 || !Copy(character + 0x38, &data, 8) || data == 0 || !Copy(data - 4, &header, 4)) { return false; }
+    if (character == 0 || !SafeCopy(&data, character + 0x38, 8) || data == 0 || !SafeCopy(&header, data - 4, 4)) { return false; }
     out.count = (std::min)(header & 0x7FFFFFFFu, 64u);
-    return Copy(data, out.items, out.count * 8);
+    return SafeCopy(out.items, data, out.count * 8);
 }
 
 bool SetHiddenBits(std::uint64_t attachment, bool hide)
@@ -164,7 +160,7 @@ std::uint64_t FindAttachment(std::uint64_t character, std::string_view name)
     if (!ReadAttachments(character, list)) { return 0; }
     for (unsigned i = 0; i < list.count; ++i) {
         std::uint64_t namePtr = 0;
-        if (Copy(list.items[i] + 0x10, &namePtr, 8) && SafeText(namePtr) == name) { return list.items[i]; }
+        if (SafeCopy(&namePtr, list.items[i] + 0x10, 8) && SafeText(namePtr) == name) { return list.items[i]; }
     }
     return 0;
 }
@@ -173,7 +169,7 @@ int AttachmentJoint(std::uint64_t character, std::string_view name)
 {
     const std::uint64_t attachment = FindAttachment(character, name);
     int joint = -1;
-    return attachment != 0 && Copy(attachment + 0x15C, &joint, 4) ? joint : -1;
+    return attachment != 0 && SafeCopy(&joint, attachment + 0x15C, 4) ? joint : -1;
 }
 
 std::string AttachmentListText(std::uint64_t character)
@@ -184,8 +180,8 @@ std::string AttachmentListText(std::uint64_t character)
     for (unsigned i = 0; i < list.count; ++i) {
         std::uint64_t namePtr = 0;
         int joint = -1;
-        Copy(list.items[i] + 0x10, &namePtr, 8);
-        Copy(list.items[i] + 0x15C, &joint, 4);
+        SafeCopy(&namePtr, list.items[i] + 0x10, 8);
+        SafeCopy(&joint, list.items[i] + 0x15C, 4);
         out += " " + SafeText(namePtr) + "@" + std::to_string(joint);
     }
     return out;
@@ -217,11 +213,11 @@ bool ExecuteArmsCommand(const std::vector<std::string>& args, std::ostringstream
             std::uint64_t vt = 0, namePtr = 0, binding = 0;
             std::uint32_t flags = 0;
             int joint = -1;
-            Copy(a, &vt, 8);
-            Copy(a + 8, &flags, 4);
-            Copy(a + 0x10, &namePtr, 8);
-            Copy(a + 0x20, &binding, 8);
-            Copy(a + 0x15C, &joint, 4);
+            SafeCopy(&vt, a, 8);
+            SafeCopy(&flags, a + 8, 4);
+            SafeCopy(&namePtr, a + 0x10, 8);
+            SafeCopy(&binding, a + 0x20, 8);
+            SafeCopy(&joint, a + 0x15C, 4);
             out << "\n " << i << " vt=0x" << std::hex << (vt >= dll ? vt - dll : vt) << " flags=0x" << flags
                 << " binding=0x" << binding << std::dec << " joint=" << joint << " name=" << SafeText(namePtr);
         }
@@ -237,20 +233,20 @@ bool ExecuteArmsCommand(const std::vector<std::string>& args, std::ostringstream
         const std::string filter = args.size() > 1 ? args[1] : "hand";
         std::uint64_t skeleton = 0, joints = 0, absolute = 0;
         int count = 0, jointCount = 0;
-        if (!Copy(character + 0x10, &skeleton, 8) || !Copy(skeleton + 0x08, &joints, 8) ||
-            !Copy(joints - 4, &jointCount, 4) || !Copy(character + 0x968, &count, 4) ||
-            !Copy(character + 0x978, &absolute, 8) || count <= 0 || count > 768) {
+        if (!SafeCopy(&skeleton, character + 0x10, 8) || !SafeCopy(&joints, skeleton + 0x08, 8) ||
+            !SafeCopy(&jointCount, joints - 4, 4) || !SafeCopy(&count, character + 0x968, 4) ||
+            !SafeCopy(&absolute, character + 0x978, 8) || count <= 0 || count > 768) {
             out << "arms.joints result=2";
             return true;
         }
         out << "arms.joints result=0 count=" << count << " skeletonJoints=" << jointCount;
         for (int j = 0; j < count; ++j) {
             std::uint64_t namePtr = 0;
-            Copy(joints + static_cast<std::uint64_t>(j) * 0xA8, &namePtr, 8);
+            SafeCopy(&namePtr, joints + static_cast<std::uint64_t>(j) * 0xA8, 8);
             const std::string name = SafeText(namePtr);
             if (filter != "all" && name.find(filter) == std::string::npos) { continue; }
             float qt[7]{};
-            Copy(absolute + static_cast<std::uint64_t>(j) * 28, qt, sizeof(qt));
+            SafeCopy(qt, absolute + static_cast<std::uint64_t>(j) * 28, sizeof(qt));
             out << "\n " << j << " " << name << " t=" << qt[4] << "," << qt[5] << "," << qt[6];
         }
     } else if (verb == "arms.draw") {

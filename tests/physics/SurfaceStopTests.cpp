@@ -2,6 +2,7 @@
 // inside a box does not see it, as the engine's one-sided triangles do not.
 #include "physics/contact/SurfaceStop.h"
 #include "TestSupport.h"
+#include "TestGeometry.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -32,28 +33,12 @@ public:
         float best = 2;
         Vec3 normal{};
         for (const auto& k : blocks) {
-            const float lo[3] = {k.lo.x, k.lo.y, k.lo.z}, hi[3] = {k.hi.x, k.hi.y, k.hi.z};
-            const float o[3] = {a.x, a.y, a.z}, v[3] = {d.x, d.y, d.z};
-            bool inside = true;
-            for (int i = 0; i < 3; ++i) { inside &= o[i] > lo[i] && o[i] < hi[i]; }
-            if (inside) { continue; }
-            float enter = -1e9f, leave = 1e9f;
+            float enter = 0;
             int axis = -1;
-            bool miss = false;
-            for (int i = 0; i < 3 && !miss; ++i) {
-                if (std::fabs(v[i]) < 1e-9f) {
-                    miss = o[i] < lo[i] || o[i] > hi[i];
-                    continue;
-                }
-                float t0 = (lo[i] - o[i]) / v[i], t1 = (hi[i] - o[i]) / v[i];
-                if (t0 > t1) { std::swap(t0, t1); }
-                if (t0 > enter) { enter = t0; axis = i; }
-                leave = std::min(leave, t1);
-            }
-            if (miss || axis < 0 || enter > leave || enter < 0 || enter > 1 || enter >= best) { continue; }
+            if (!preyvr::test::EntersBox(k.lo, k.hi, a, d, enter, axis) || enter >= best) { continue; }
             best = enter;
             normal = {};
-            (&normal.x)[axis] = v[axis] > 0 ? -1.0f : 1.0f;
+            (&normal.x)[axis] = (&d.x)[axis] > 0 ? -1.0f : 1.0f;
         }
         if (best > 1) { return true; }
         hit.hit = true;

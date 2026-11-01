@@ -4,6 +4,7 @@
 #include "equipment/head/HelmetLane.cpp"
 #include "DllTestSupport.h"
 #include "TestSupport.h"
+#include "TestGeometry.h"
 #include <cmath>
 #include <cstring>
 #include <iostream>
@@ -22,6 +23,7 @@ namespace helmet_test {
 using namespace preyvr;
 using namespace preyvr::dll;
 using preyvr::test::Check;
+using preyvr::test::About;
 using preyvr::test::Logged;
 namespace hm = preyvr::helmet::native;
 namespace hn = preyvr::headlamp::native;
@@ -34,22 +36,9 @@ bool Near(Quaternion a, Quaternion b)
     return std::fabs(std::fabs(dot) - 1.0f) < 1e-4f;
 }
 bool Near(const Pose& a, const Pose& b) { return Near(a.position, b.position) && Near(a.orientation, b.orientation); }
-Quaternion About(Vec3 axis, float degrees)
-{
-    const float h = degrees * 3.14159265f / 360.0f;
-    const float n = Length(axis);
-    return {axis.x / n * std::sin(h), axis.y / n * std::sin(h), axis.z / n * std::sin(h), std::cos(h)};
-}
 
 // "helmet={active=1 ... eyeGapMaxDeg=0.0}" with each field between spaces.
-bool Reports(const char* field)
-{
-    std::string report = " " + HelmetReport() + " ";
-    for (char& c : report) {
-        if (c == '{' || c == '}') { c = ' '; }
-    }
-    return report.find(std::string(" ") + field + " ") != std::string::npos;
-}
+bool Reports(const char* field) { return preyvr::test::ReportHas(HelmetReport(), field); }
 
 // --- Prey's composition, as its bytes do it ---------------------------------------
 // The bone update 0x7A3390: model = joint * relative, then the orientation * K.

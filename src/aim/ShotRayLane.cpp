@@ -42,7 +42,7 @@ void Log(const std::string& line) { lifecycle::Log("preyvr_shot " + line); }
 constexpr std::uintptr_t kQueryRva = 0x1694890;
 // GetFiringPosition 0x1694BC0: (weapon, out16, flags, overrideEntity). Called
 // through its hooked entry so the VR spawn test applies to our call too.
-constexpr std::uintptr_t kFiringPositionRva = 0x1694BC0;
+constexpr std::uintptr_t kFiringPositionRva = engine::ArkWeaponLayout::getFiringPositionRva;
 // Helper world TM 0x11A5CF0: (Matrix34* out, IEntity*, slot, const char* name,
 // bool, bool) -> out. GetFiringPosition calls it with (entity = weapon+0x40,
 // slot 0, name = weapon+0x2F0, 1, 0); we make exactly that call.
@@ -91,7 +91,6 @@ constexpr std::array<std::uint8_t, 24> kUpdateLaserPrologue{
     0x48, 0x89, 0x6C, 0x24, 0x18, 0x56, 0x57, 0x41, 0x56, 0x48, 0x81, 0xEC,
     0x10, 0x01, 0x00, 0x00, 0x48, 0x83, 0x79, 0x10, 0x00, 0x49, 0x8B, 0xE9};
 constexpr std::size_t kWeaponBeam = 0x520;
-constexpr float kBeamRayBehind = .7f;   // 0x1C8FD90
 using BeamRayFn = float(__fastcall*)(void*, const Vec3*, const Vec3*, float, std::uint64_t, std::uint64_t,
                                      std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);
 using UpdateLaserFn = void*(__fastcall*)(void*, const Vec3*, const Vec3*, const Vec3*);

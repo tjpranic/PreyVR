@@ -19,15 +19,7 @@ using preyvr::test::Count;
 using preyvr::test::Logged;
 
 // " video={hook=1 ... lastRefusal=none}" with each field between spaces.
-std::string Report()
-{
-    std::string report = VideoOverlayReport() + " ";
-    for (char& c : report) {
-        if (c == '{' || c == '}') { c = ' '; }
-    }
-    return report;
-}
-bool Reports(const char* field) { return Report().find(std::string(" ") + field + " ") != std::string::npos; }
+bool Reports(const char* field) { return preyvr::test::ReportHas(VideoOverlayReport(), field); }
 
 // dual.overlay and the overlay window, as DualOverlay and XrSessionHost answer.
 bool overlayOn = true, windowOpen = true;

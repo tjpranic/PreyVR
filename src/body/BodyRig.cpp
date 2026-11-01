@@ -40,7 +40,6 @@ Vec3 Unit(Vec3 v, Vec3 fallback)
     return l > 1e-6f && std::isfinite(l) ? Scale(v, 1.0f / l) : fallback;
 }
 Vec3 Level(Vec3 v) { return {v.x, v.y, 0.0f}; }
-Vec3 Perp(Vec3 v, Vec3 axis) { return Sub(v, Scale(axis, Dot(v, axis))); }
 
 bool FiniteJoint(const Joint& j)
 {

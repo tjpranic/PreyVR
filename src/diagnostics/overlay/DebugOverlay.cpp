@@ -111,7 +111,6 @@ WorldContact gContactHistory;
 constexpr std::size_t kMaxSweeps = 120;   // over a second at 90 Hz
 
 std::atomic<unsigned long long> gDrawn{0}, gVertices{0}, gTruncated{0}, gFailures{0}, gQueries{0};
-std::atomic<DWORD> gLastError{0};
 
 // What the last drawn eye saw, for dbg.report / dbg.marks.
 std::mutex gLastMutex;

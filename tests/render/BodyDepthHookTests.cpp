@@ -37,31 +37,14 @@ bool preyvr::dll::FindBuiltEyeByPosition(const float position[3], BuiltEye& out)
 namespace {
 using namespace preyvr::dll;
 using preyvr::test::Check;
+using preyvr::test::Get;
 using preyvr::test::Logged;
+using preyvr::test::Put;
 namespace bn = preyvr::bodydepth::native;
 namespace engine = preyvr::engine;
 
 // "bodyDepth={depth=1 ... unread=0}" with each field between spaces.
-std::string Report()
-{
-    std::string report = BodyDepthReport() + " ";
-    for (char& c : report) {
-        if (c == '{' || c == '}') { c = ' '; }
-    }
-    return report;
-}
-bool Reports(const char* field) { return Report().find(std::string(" ") + field + " ") != std::string::npos; }
-
-template <class T> void Put(void* base, std::size_t offset, const T& value)
-{
-    std::memcpy(static_cast<std::uint8_t*>(base) + offset, &value, sizeof(value));
-}
-template <class T> T Get(const void* base, std::size_t offset)
-{
-    T value{};
-    std::memcpy(&value, static_cast<const std::uint8_t*>(base) + offset, sizeof(value));
-    return value;
-}
+bool Reports(const char* field) { return preyvr::test::ReportHas(BodyDepthReport(), field); }
 
 constexpr std::uintptr_t kBase = 0x180000000;
 alignas(16) std::uint8_t slot[0x100]{}, otherSlot[0x100]{}, params[0x100]{}, pass[0x40]{};

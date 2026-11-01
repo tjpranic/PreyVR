@@ -16,17 +16,11 @@
 namespace preyvr::dll {
 namespace {
 
-// No C++ objects here: __try cannot share a frame with unwinding.
-bool GuardedCopy(void* out, std::uintptr_t address, std::size_t size)
-{
-    return SafeCopy(out, reinterpret_cast<const void*>(address), size);
-}
-
 class GuardedMemory final : public input::MemoryView {
 public:
     bool Read(std::uintptr_t address, void* out, std::size_t size) const override
     {
-        return address != 0 && GuardedCopy(out, address, size);
+        return address != 0 && SafeCopy(out, address, size);
     }
 };
 

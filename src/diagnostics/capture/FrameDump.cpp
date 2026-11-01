@@ -126,6 +126,31 @@ std::uint64_t ExpectedFileSize(const Header& header) {
            static_cast<std::uint64_t>(header.rowPitch) * static_cast<std::uint64_t>(header.height);
 }
 
+namespace {
+
+// The same size and format, each header consistent, each payload long enough.
+bool Comparable(
+    const Header& headerA,
+    std::span<const std::uint8_t> payloadA,
+    const Header& headerB,
+    std::span<const std::uint8_t> payloadB)
+{
+    if (headerA.width != headerB.width || headerA.height != headerB.height ||
+        headerA.dxgiFormat != headerB.dxgiFormat) {
+        return false;
+    }
+    if (!HeaderIsSelfConsistent(headerA) || !HeaderIsSelfConsistent(headerB)) {
+        return false;
+    }
+    const std::uint64_t neededA =
+        static_cast<std::uint64_t>(headerA.rowPitch) * static_cast<std::uint64_t>(headerA.height);
+    const std::uint64_t neededB =
+        static_cast<std::uint64_t>(headerB.rowPitch) * static_cast<std::uint64_t>(headerB.height);
+    return payloadA.size() >= neededA && payloadB.size() >= neededB;
+}
+
+} // namespace
+
 Difference Compare(
     const Header& headerA,
     std::span<const std::uint8_t> payloadA,
@@ -134,19 +159,7 @@ Difference Compare(
     std::uint32_t perPixelEpsilon) {
     Difference difference{};
 
-    if (headerA.width != headerB.width || headerA.height != headerB.height ||
-        headerA.dxgiFormat != headerB.dxgiFormat) {
-        return difference;
-    }
-    if (!HeaderIsSelfConsistent(headerA) || !HeaderIsSelfConsistent(headerB)) {
-        return difference;
-    }
-
-    const std::uint64_t neededA =
-        static_cast<std::uint64_t>(headerA.rowPitch) * static_cast<std::uint64_t>(headerA.height);
-    const std::uint64_t neededB =
-        static_cast<std::uint64_t>(headerB.rowPitch) * static_cast<std::uint64_t>(headerB.height);
-    if (payloadA.size() < neededA || payloadB.size() < neededB) {
+    if (!Comparable(headerA, payloadA, headerB, payloadB)) {
         return difference;
     }
 
@@ -202,25 +215,13 @@ ShiftScan FindHorizontalShift(
     int step)
 {
     ShiftScan scan{};
-    if (headerA.width != headerB.width || headerA.height != headerB.height ||
-        headerA.dxgiFormat != headerB.dxgiFormat) {
-        return scan;
-    }
-    if (!HeaderIsSelfConsistent(headerA) || !HeaderIsSelfConsistent(headerB)) {
+    if (!Comparable(headerA, payloadA, headerB, payloadB)) {
         return scan;
     }
     if (step < 1) { step = 1; }
     if (maxShift < 0) { maxShift = 0; }
     if (maxShift > static_cast<int>(headerA.width) / 2) {
         maxShift = static_cast<int>(headerA.width) / 2;
-    }
-
-    const std::uint64_t neededA =
-        static_cast<std::uint64_t>(headerA.rowPitch) * static_cast<std::uint64_t>(headerA.height);
-    const std::uint64_t neededB =
-        static_cast<std::uint64_t>(headerB.rowPitch) * static_cast<std::uint64_t>(headerB.height);
-    if (payloadA.size() < neededA || payloadB.size() < neededB) {
-        return scan;
     }
 
     // Residual for one candidate offset, over the region where both images

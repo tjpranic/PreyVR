@@ -45,7 +45,6 @@
 #include "physics/hands/GrenadeLane.h"
 #include "body/ArmsLane.h"
 #include "diagnostics/commands/MemoryCommands.h"
-#include "physics/contact/PhysicalInteractionsLane.h"
 #include "physics/contact/ContactLane.h"
 #include "physics/contact/SurfaceStopLane.h"
 #include "physics/swing/SwingLane.h"

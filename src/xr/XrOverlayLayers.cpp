@@ -1,16 +1,8 @@
-#include "xr/XrSessionHost.h"
 #include "xr/XrSessionState.h"
-#include "engine/EngineAccess.h"
 
 #include "xr/FrameTiming.h"
-#include "xr/FrustumCoverage.h"
 
 #include "base/Logger.h"
-#include "diagnostics/probes/FrameProbe.h"
-#include "engine/EngineMap.h"
-#include "xr/XrFrameContract.h"
-#include "xr/XrHold.h"
-#include "engine/hooks/MainRenderHook.h"
 #include "render/camera/EyeRecords.h"
 #include "render/camera/HeadTrackingHook.h"
 #include "controls/input/XrInput.h"
@@ -20,7 +12,6 @@
 #include "xr/LayerSwapchain.h"
 #include "engine/RendererAccess.h"
 #include "xr/XrPose.h"
-#include "ui/screens/LoadingScreen.h"
 #include "ui/options/VrOptionsLayer.h"
 #include "ui/options/VrOptionsRuntime.h"
 #include "equipment/body/BodyEquipmentLane.h"
@@ -38,7 +29,6 @@
 #include "render/camera/StereoCamera.h"
 #include "render/camera/StereoFrame.h"
 #include "ui/hud/WristHolo.h"
-#include "xr/XrSwapchainFormat.h"
 
 #include <d3d11.h>
 #include <d3d11_4.h>

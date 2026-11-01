@@ -30,6 +30,11 @@ inline bool SafeCopy(void* out, const void* from, std::size_t size)
     }
 }
 
+inline bool SafeCopy(void* out, std::uintptr_t from, std::size_t size)
+{
+    return SafeCopy(out, reinterpret_cast<const void*>(from), size);
+}
+
 // False when the bytes differ or cannot be read.
 inline bool SafeEqual(const void* at, const void* expected, std::size_t size)
 {

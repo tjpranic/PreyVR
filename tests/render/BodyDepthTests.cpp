@@ -6,6 +6,7 @@
 #include "engine/NativeContract.h"
 #include "render/stereo/NearParticles.h"
 #include "TestSupport.h"
+#include "TestGeometry.h"
 
 #include <array>
 #include <cmath>
@@ -110,18 +111,8 @@ void TestRestored()
 
 // --- the near pass at the world's depth ---------------------------------------------
 
-using Matrix = std::array<float, 16>;   // row-major, row vectors, translation in row 3
-
-Matrix Multiply(const Matrix& a, const Matrix& b)
-{
-    Matrix m{};
-    for (int i = 0; i < 4; ++i) {
-        for (int j = 0; j < 4; ++j) {
-            for (int k = 0; k < 4; ++k) { m[4 * i + j] += a[4 * i + k] * b[4 * k + j]; }
-        }
-    }
-    return m;
-}
+using preyvr::test::Matrix;
+using preyvr::test::Multiply;
 
 // An off-centre perspective projection; reverse depth maps `n` to 1 and `f` to 0.
 Matrix Projection(float n, float f, bool reverse)

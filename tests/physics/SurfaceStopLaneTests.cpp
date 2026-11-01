@@ -2,6 +2,8 @@
 // world of boxes (a static wall, loose props and bodies), and the rest of the DLL
 // at its boundary.
 #include "physics/contact/SurfaceStopLane.cpp"
+#include "DllTestSupport.h"
+#include "TestGeometry.h"
 #include "TestSupport.h"
 #include <cstring>
 #include <iostream>
@@ -9,19 +11,12 @@
 #include <utility>
 #include <vector>
 
-std::vector<std::string> lines;
-namespace preyvr::lifecycle { void Log(std::string_view line) { lines.emplace_back(line); } }
+PREYVR_TEST_CAPTURE_LOG()
 namespace {
 using namespace preyvr;
 using namespace preyvr::dll;
 using preyvr::test::Check;
-bool Logged(const char* a, const char* b = "")
-{
-    for (const auto& l : lines) {
-        if (l.find(a) != std::string::npos && l.find(b) != std::string::npos) { return true; }
-    }
-    return false;
-}
+using preyvr::test::Logged;
 
 // Fake physics objects: each starts with its class's vtable, as the engine's do.
 // GetType (slot 0x08) answers the static class; the rigid and articulated
@@ -71,29 +66,13 @@ bool FakeQuery(const GameplayPoseFrame&, Vec3 a, Vec3 b, void* skip, int types, 
     Vec3 normal{};
     for (const auto& k : blocks) {
         if (k.owner == skip || (k.loose && !(types & 0x6))) { continue; }
-        const float lo[3] = {k.lo.x, k.lo.y, k.lo.z}, hi[3] = {k.hi.x, k.hi.y, k.hi.z};
-        const float o[3] = {a.x, a.y, a.z}, v[3] = {d.x, d.y, d.z};
-        bool inside = true;
-        for (int i = 0; i < 3; ++i) { inside &= o[i] > lo[i] && o[i] < hi[i]; }
-        if (inside) { continue; }
-        float enter = -1e9f, leave = 1e9f;
+        float enter = 0;
         int axis = -1;
-        bool miss = false;
-        for (int i = 0; i < 3 && !miss; ++i) {
-            if (std::fabs(v[i]) < 1e-9f) {
-                miss = o[i] < lo[i] || o[i] > hi[i];
-                continue;
-            }
-            float t0 = (lo[i] - o[i]) / v[i], t1 = (hi[i] - o[i]) / v[i];
-            if (t0 > t1) { std::swap(t0, t1); }
-            if (t0 > enter) { enter = t0; axis = i; }
-            leave = std::min(leave, t1);
-        }
-        if (miss || axis < 0 || enter > leave || enter < 0 || enter > 1 || enter >= best) { continue; }
+        if (!preyvr::test::EntersBox(k.lo, k.hi, a, d, enter, axis) || enter >= best) { continue; }
         best = enter;
         met = &k;
         normal = {};
-        (&normal.x)[axis] = v[axis] > 0 ? -1.0f : 1.0f;
+        (&normal.x)[axis] = (&d.x)[axis] > 0 ? -1.0f : 1.0f;
     }
     if (!met) { return true; }
     hit.distance = best * Length(d);
@@ -356,6 +335,6 @@ int main()
               report.find(" usMax=") != std::string::npos && report.find(" static=") != std::string::npos &&
               report.find(" heavy=1 ") != std::string::npos && report.find(" presses=") != std::string::npos,
           "the report");
-    std::cout << "surface_stop_lane: " << lines.size() << " lines\n";
+    std::cout << "surface_stop_lane: " << preyvr::test::gLines.size() << " lines\n";
     return 0;
 }

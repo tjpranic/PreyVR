@@ -3,7 +3,6 @@
 #include "base/Logger.h"
 #include "ui/hud/HudLayer.h"
 #include "engine/RendererAccess.h"
-#include "engine/EngineMap.h"
 #include "diagnostics/capture/FrameDump.h"
 
 #include <d3d11.h>

@@ -2,8 +2,6 @@
 #include "engine/SafeMemory.h"
 #include "engine/hooks/HookInstall.h"
 #include "app/Bootstrap.h"
-#include "engine/console/ConsoleBridgeWin32.h"
-#include "engine/hooks/FrameObserverHook.h"
 #include "base/Logger.h"
 #include "engine/hooks/MinHookInit.h"
 #include "engine/console/VerifiedSetting.h"

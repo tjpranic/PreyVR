@@ -27,11 +27,6 @@ bool ParseHex(const std::string& text, std::uint64_t& value)
     }
 }
 
-bool Copy(std::uint64_t address, void* out, std::size_t size)
-{
-    return SafeCopy(out, reinterpret_cast<const void*>(address), size);
-}
-
 }  // namespace
 
 bool ResolveAddress(const std::string& text, std::uint64_t& value)
@@ -72,7 +67,7 @@ bool ExecuteMemoryCommand(const std::vector<std::string>& args, std::ostringstre
         out << "mem.peek result=0 at=0x" << std::hex << address;
         for (std::uint64_t o = 0; o < size; o += 8) {
             std::uint64_t q = 0;
-            if (!Copy(address + o, &q, 8)) { out << " +" << o << "=??"; break; }
+            if (!SafeCopy(&q, address + o, 8)) { out << " +" << o << "=??"; break; }
             out << "\n+" << std::setw(4) << std::setfill('0') << o << " " << std::setw(16) << q;
             float f[2];
             std::memcpy(f, &q, 8);
@@ -92,7 +87,7 @@ bool ExecuteMemoryCommand(const std::vector<std::string>& args, std::ostringstre
         unsigned hits = 0;
         for (std::uint64_t o = 0; o + 8 <= size; o += 8) {
             std::uint64_t q = 0;
-            if (!Copy(address + o, &q, 8)) { out << "[fault+" << o << "]"; break; }
+            if (!SafeCopy(&q, address + o, 8)) { out << "[fault+" << o << "]"; break; }
             if (q == value && hits++ < 64) { out << "+" << o << " "; }
         }
         out << std::dec << " count=" << hits;
@@ -111,12 +106,12 @@ bool ExecuteMemoryCommand(const std::vector<std::string>& args, std::ostringstre
         unsigned hits = 0;
         for (std::uint64_t o = 0; o + 8 <= size; o += 8) {
             std::uint64_t p = 0;
-            if (!Copy(address + o, &p, 8)) { break; }
+            if (!SafeCopy(&p, address + o, 8)) { break; }
             if (p < 0x10000 || (p & 7) != 0 || p > 0x7FFFFFFFFFFF) { continue; }
             if (p == value) { out << "+" << o << "=self "; continue; }
             for (std::uint64_t i = 0; i + 8 <= inner; i += 8) {
                 std::uint64_t q = 0;
-                if (!Copy(p + i, &q, 8)) { break; }
+                if (!SafeCopy(&q, p + i, 8)) { break; }
                 if (q == value && hits++ < 64) { out << "+" << o << "->0x" << p << "+" << i << " "; }
             }
         }
@@ -156,7 +151,7 @@ bool ExecuteMemoryCommand(const std::vector<std::string>& args, std::ostringstre
         out << "mem.stack result=0 (stack may have moved since the trap)" << std::hex;
         for (unsigned i = 0; i < 64; ++i) {
             std::uint64_t q = 0;
-            if (!Copy(c.rsp + i * 8, &q, 8)) { break; }
+            if (!SafeCopy(&q, c.rsp + i * 8, 8)) { break; }
             if (q >= dll && q < dll + 0x1E00000) { out << " +" << i * 8 << ":" << (q - dll); }
         }
         out << std::dec;

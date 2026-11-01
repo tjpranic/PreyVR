@@ -4,6 +4,7 @@
 #include "ui/hud/HudBridge.h"
 #include "base/Logger.h"
 #include "engine/hooks/MinHookInit.h"
+#include "engine/EngineMap.h"
 #include <MinHook.h>
 #include <array>
 #include <atomic>
@@ -59,7 +60,7 @@ void __fastcall PickWithCapture(void* self,void* sender,const void* event,const 
 DWORD CancelChecked(std::uintptr_t base,const Capture& c,bool* cancelled) {
     __try {
         if(*reinterpret_cast<std::uintptr_t*>(c.receiver)!=base+kInventoryTable||
-           *reinterpret_cast<std::uintptr_t*>(c.sender)!=base+0x1CAB358)return ERROR_INVALID_ADDRESS;
+           *reinterpret_cast<std::uintptr_t*>(c.sender)!=base+engine::FlashUiElementLayout::vtableRva)return ERROR_INVALID_ADDRESS;
         // IsVisible 0x2FD150 reads sender+0x70. Native close owns hidden UI cleanup.
         if(!*reinterpret_cast<unsigned char*>(c.sender+0x70))return 0;
         if(*reinterpret_cast<unsigned*>(c.receiver+0x28)!=c.item||

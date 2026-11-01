@@ -2,6 +2,12 @@
 
 ## TODO
 
+### Compatibility
+- Need to make sure the mod controls are compatible with other headsets (Meta Quest, Valve Index, HTC Vive etc.)
+- Since different headset use different per-eye resolution, Prey's FOV setting may need to be adjusted per-headset type
+    Steam Frame = 110
+    May need to build a calculator for this?
+
 ### Rendering
 - DLSS (?)
 - Upscaling (?)
@@ -33,7 +39,7 @@
     e.g. Pressing down on a mug on a desk can push the mug through the desk
 - Physical crouching
     Crouching in real life should enable crouch mode. Standing up should disable crouch mode.
-- Optional body model rendering \(?)
+- Optional body model rendering (?)
     Have it only render the hands like in Half Life Alyx?
 - The Earth and Moon are very obviously rendered way too close
     Having them rendered at a more realisitic depth would be nice but challenging.
@@ -215,4 +221,5 @@ Feature set tracking list, in broad terms:
     VR handsets working as similar to gamepads where possible.
 - HUD/UI (**PARTIALLY IMPLEMENTED**)
     Having UI and HUD elements display nicely and at the proper depth.
+- Compatibility (**TODO**)
 - ...

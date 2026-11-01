@@ -1,7 +1,5 @@
 #include "controls/input/ControllerPrompts.h"
-#include "engine/console/ConsoleBridgeWin32.h"
 #include "engine/EngineAccess.h"
-#include "engine/hooks/FrameObserverHook.h"
 #include "base/Logger.h"
 #include "engine/SafeMemory.h"
 #include "engine/console/VerifiedSetting.h"

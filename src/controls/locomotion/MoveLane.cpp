@@ -19,7 +19,6 @@
 #include "body/TorsoLane.h"
 #include "ui/screens/UiMode.h"
 #include "base/Logger.h"
-#include "engine/hooks/MinHookInit.h"
 #include "controls/input/XrInput.h"
 #include "controls/input/InputEvent.h"
 #include "physics/hands/InteractionUse.h"
@@ -293,16 +292,6 @@ void ReassertHeld(unsigned first, unsigned last)
     }
 }
 
-bool ReadFloat(const void* at, float* out)
-{
-    return SafeRead(at, *out);
-}
-
-bool ReadInt(const void* at, int* out)
-{
-    return SafeRead(at, *out);
-}
-
 // Runs inside the engine's own input walk, on whichever thread posted. Reads
 // only; the original does the work.
 void ObserveHandler(void* inputObject, bool isX)
@@ -323,14 +312,14 @@ void ObserveHandler(void* inputObject, bool isX)
     // Read back what the engine actually stored, rather than trusting that a
     // posted value arrived. R-089 names these offsets; this is where that claim
     // gets checked every frame instead of once.
-    if (ReadFloat(bytes + kMoveX, &value)) {
+    if (SafeRead(bytes + kMoveX, value)) {
         gAxisMilli[0].store(static_cast<int>(value * 1000.0f), std::memory_order_relaxed);
     }
-    if (ReadFloat(bytes + kMoveY, &value)) {
+    if (SafeRead(bytes + kMoveY, value)) {
         gAxisMilli[1].store(static_cast<int>(value * 1000.0f), std::memory_order_relaxed);
     }
     int gate = 0;
-    if (ReadInt(bytes + kCinematicGate, &gate)) {
+    if (SafeRead(bytes + kCinematicGate, gate)) {
         gCinematic.store(gate, std::memory_order_relaxed);
     }
 }

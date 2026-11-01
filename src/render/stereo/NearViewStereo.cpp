@@ -2,9 +2,7 @@
 #include "engine/SafeMemory.h"
 #include "engine/hooks/HookInstall.h"
 #include "engine/EngineAccess.h"
-#include "engine/hooks/MinHookInit.h"
 
-#include "engine/hooks/MainRenderHook.h"
 #include "render/camera/EyeRecords.h"
 #include "base/Logger.h"
 #include "render/taa/TemporalAaLane.h"

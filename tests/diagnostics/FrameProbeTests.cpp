@@ -236,7 +236,7 @@ void TestOverwriteAndTimeout()
     Hold(ProbeStep::holdBegin, 100, 0);
     {
         std::lock_guard lock(gWindowMutex);
-        gOpen.triggerQpc -= 10 * Qpc(); // long ago
+        gOpen.triggerQpc -= 10 * QpcNow(); // long ago
     }
     ServiceFrameProbe();
     Require(!gWindowOpen && gEmitted == 1 && Logged("window=1 kinds=stall stalls=1 stall_ms=? held=0"),

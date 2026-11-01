@@ -81,6 +81,20 @@ private:
     bool ok_ = true;
 };
 
+// The action map manager, once its pointer is set and its vtables are this
+// build's; 0, with `why` saying so, when not.
+std::uintptr_t ReadManager(Reader& r, std::uintptr_t base, const ActionMapLayout& layout, std::string& why)
+{
+    const std::uintptr_t manager = r.Q(base + layout.managerPointer);
+    if (!r.Ok()) { return 0; }
+    if (manager == 0) { why = "no action map manager yet"; return 0; }
+    if (r.Q(manager) != base + layout.managerVtable || r.Q(manager + 8) != base + layout.managerSecondaryVtable) {
+        r.Fail("manager vtables do not match this build");
+        return 0;
+    }
+    return manager;
+}
+
 } // namespace
 
 std::uint32_t Crc32(const std::string& text)
@@ -99,13 +113,8 @@ bool ReadBindings(const MemoryView& memory, std::uintptr_t base, const ActionMap
     out.clear();
     why.clear();
     Reader r(memory, why);
-    const std::uintptr_t manager = r.Q(base + layout.managerPointer);
-    if (!r.Ok()) { return false; }
-    if (manager == 0) { why = "no action map manager yet"; return false; }
-    if (r.Q(manager) != base + layout.managerVtable || r.Q(manager + 8) != base + layout.managerSecondaryVtable) {
-        r.Fail("manager vtables do not match this build");
-        return false;
-    }
+    const std::uintptr_t manager = ReadManager(r, base, layout, why);
+    if (manager == 0) { return false; }
     const bool managerEnabled = r.B(manager + 0xDC) != 0;
     std::vector<BoundAction> rows;
     std::uint32_t previous = 0;
@@ -148,13 +157,8 @@ bool ReadActionMapEnabled(const MemoryView& memory, std::uintptr_t base, const A
     enabled = false;
     why.clear();
     Reader r(memory, why);
-    const std::uintptr_t manager = r.Q(base + layout.managerPointer);
-    if (!r.Ok()) { return false; }
-    if (manager == 0) { why = "no action map manager yet"; return false; }
-    if (r.Q(manager) != base + layout.managerVtable || r.Q(manager + 8) != base + layout.managerSecondaryVtable) {
-        r.Fail("manager vtables do not match this build");
-        return false;
-    }
+    const std::uintptr_t manager = ReadManager(r, base, layout, why);
+    if (manager == 0) { return false; }
     if (map == 0 || r.Q(map) != base + layout.mapVtable || r.Q(map + 0x10) != manager) {
         r.Fail("map vtable or back-pointer");
         return false;

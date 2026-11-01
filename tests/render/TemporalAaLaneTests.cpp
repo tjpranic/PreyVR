@@ -224,14 +224,7 @@ std::array<Seen, 2> Frame(int frame, bool temporal, bool stopAfterFirst = false,
     return seen;
 }
 
-bool Reports(const char* field)
-{
-    std::string report = " " + TaaLaneReport() + " ";
-    for (char& c : report) {
-        if (c == '{' || c == '}') { c = ' '; }
-    }
-    return report.find(std::string(" ") + field + " ") != std::string::npos;
-}
+bool Reports(const char* field) { return preyvr::test::ReportHas(TaaLaneReport(), field); }
 
 // Each eye blends its own last output and reprojects with its own last cameras.
 void CheckOwn(const std::array<Seen, 2>& seen, int frame, const char* what)

@@ -27,7 +27,7 @@ constexpr std::uintptr_t kGEnvRva = engine::GlobalEnvironmentLayout::baseRva;
 // **our own verified receipt**, not a guess from the CryEngine 5 headers --
 // H-006 recorded this slot as open because that work happened separately and the
 // two were never connected.
-constexpr std::uintptr_t kPInputOffset = 0x58;
+constexpr std::uintptr_t kPInputOffset = engine::GlobalEnvironmentLayout::input;
 
 // Candidate vtable index for IInput::PostInputEvent, counted from the CryEngine 5
 // public IInput.h with the MSVC scalar-deleting destructor at slot 0:
@@ -58,11 +58,6 @@ bool ReadPointer(std::uintptr_t address, std::uintptr_t& out)
     return SafeRead(address, out);
 }
 
-bool ReadBytes(std::uintptr_t address, std::uint8_t* out, std::size_t count)
-{
-    return SafeCopy(out, reinterpret_cast<const void*>(address), count);
-}
-
 // The alignment test, and the reason this probe is worth building rather than
 // guessing an index.
 //
@@ -91,7 +86,7 @@ unsigned int FindEventPostingPair(std::uintptr_t vtable)
         }
         std::uint8_t s[8]{};
         std::uint8_t g[8]{};
-        if (!ReadBytes(setter, s, sizeof(s)) || !ReadBytes(getter, g, sizeof(g))) {
+        if (!SafeCopy(s, setter, sizeof(s)) || !SafeCopy(g, getter, sizeof(g))) {
             continue;
         }
         // **Both shapes are wider than the obvious guess, measured live

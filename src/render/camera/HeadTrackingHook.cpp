@@ -4,20 +4,18 @@
 #include "render/camera/HeadTrackingHook.h"
 #include "engine/SafeMemory.h"
 #include "controls/input/XrInput.h"
-#include "engine/hooks/MinHookInit.h"
-#include "base/AtomicMax.h"
 
 #include "base/Logger.h"
 #include "body/TorsoLane.h"
 #include "render/camera/ZoomLane.h"
 #include "render/camera/CameraEdit.h"
-#include "engine/EngineMap.h"
 #include "render/camera/StereoCamera.h"
 #include "aim/MotionController.h"
 #include "render/stereo/NearClip.h"
 #include "controls/locomotion/ComfortControls.h"
 #include "body/RoomScale.h"
 #include "xr/XrSessionHost.h"
+#include "base/Qpc.h"
 
 #include <MinHook.h>
 
@@ -89,13 +87,6 @@ std::atomic<unsigned long long> gSnapCount{0};
 // The body turns with each snap (SetSnapTurnsAboutBody): the snap then leaves
 // the origin alone, so the view turns about the body as a smooth turn's does.
 std::atomic<bool> gSnapAboutBody{false};
-
-std::int64_t QpcNow()
-{
-    LARGE_INTEGER now{};
-    QueryPerformanceCounter(&now);
-    return now.QuadPart;
-}
 
 std::int64_t QpcFrequency()
 {

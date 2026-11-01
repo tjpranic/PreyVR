@@ -4,6 +4,7 @@
 #include "base/Logger.h"
 
 #include "diagnostics/capture/DebugRegisters.h"
+#include "base/Qpc.h"
 
 #include <tlhelp32.h>
 
@@ -56,13 +57,6 @@ struct SlotState {
 
 std::atomic<unsigned long long> gApplyApplied{0};
 std::atomic<unsigned long long> gApplySkipped{0};
-
-long long QpcNowRaw()
-{
-    LARGE_INTEGER now{};
-    QueryPerformanceCounter(&now);
-    return now.QuadPart;
-}
 
 std::array<SlotState, kSlots> gSlots;
 std::array<WatchCapture, kRingSize> gRing;
@@ -180,7 +174,7 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* info)
         // capture quota: an override must keep working after the ring is full,
         // or it would stop silently mid-test.
         if (state.applyEnabled.load(std::memory_order_acquire)) {
-            if (QpcNowRaw() > state.applyDeadlineQpc.load(std::memory_order_relaxed)) {
+            if (QpcNow() > state.applyDeadlineQpc.load(std::memory_order_relaxed)) {
                 state.applyEnabled.store(false, std::memory_order_release);
             } else if (context.Rip != state.applyMatchRip.load(std::memory_order_relaxed)) {
                 // A write from some other site in the cycle. Left alone -- only
@@ -414,7 +408,7 @@ DWORD ArmApplyOffset(unsigned int slot, unsigned long long vec3Address,
     state.applyOffsetY.store(dy, std::memory_order_relaxed);
     state.applyOffsetZ.store(dz, std::memory_order_relaxed);
     state.applyDeadlineQpc.store(
-        QpcNowRaw() + static_cast<long long>(seconds) * (freq.QuadPart ? freq.QuadPart : 1),
+        QpcNow() + static_cast<long long>(seconds) * (freq.QuadPart ? freq.QuadPart : 1),
         std::memory_order_relaxed);
     gApplyApplied.store(0, std::memory_order_relaxed);
     gApplySkipped.store(0, std::memory_order_relaxed);

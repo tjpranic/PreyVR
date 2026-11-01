@@ -17,6 +17,7 @@
 #include "body/RoomScale.h"
 #include "body/RoomScaleNative.h"
 #include "render/camera/StereoCamera.h"
+#include "physics/contact/SceneQueryNative.h"
 
 #include <algorithm>
 #include <atomic>
@@ -46,7 +47,7 @@ using GetPosFn = const Vec3*(__fastcall*)(void* entity);
 constexpr std::size_t kPlayerEntity = 0x38;
 constexpr std::uintptr_t kEntityVtableRva = 0x1D30BD0;
 constexpr unsigned kSetPosSlot = 0x108 / 8, kGetPosSlot = 0x110 / 8, kGetPhysicsSlot = 0x228 / 8;
-constexpr std::uintptr_t kSetPosRva = 0x90AF40, kGetPosRva = 0x10EA250, kGetPhysicsRva = 0x9042B0;
+constexpr std::uintptr_t kSetPosRva = 0x90AF40, kGetPosRva = 0x10EA250, kGetPhysicsRva = scene::native::EntityPhysics;
 constexpr std::string_view kSetPosBody =
     "f30f1002458bd00f2e41387516f30f1042040f2e413c750bf30f1042080f2e41407424f20f10024183ca02f20f114138"
     "450fb6c18b4208418bd2894140488b0148ffa050030000c3";

@@ -19,6 +19,7 @@
 #include "physics/hands/HandCarry.h"
 #include "base/LatestSnapshot.h"
 #include "render/camera/StereoCamera.h"
+#include "equipment/body/EquipmentNative.h"
 
 #include <MinHook.h>
 #include <intrin.h>
@@ -77,9 +78,9 @@ constexpr std::array<std::uint8_t, 17> kReleasePrologue{
 // then sticks the charge there instead of charging a throw.
 constexpr std::uintptr_t kDeployRange = 0x4C0;
 constexpr std::size_t kThrowSlot = 0x118;
-constexpr std::uintptr_t kFiringPositionRva = 0x1694BC0;   // (weapon, out16, flags, overrideEntity)
+constexpr std::uintptr_t kFiringPositionRva = engine::ArkWeaponLayout::getFiringPositionRva;   // (weapon, out16, flags, overrideEntity)
 constexpr std::uintptr_t kWeaponEntity = 0x40;
-constexpr std::uintptr_t kMinSpeed = 0x4E0, kMaxSpeed = 0x4E4, kArchetype = 0x4F0, kDeployReady = 0x4F9;
+constexpr std::uintptr_t kMinSpeed = 0x4E0, kMaxSpeed = 0x4E4, kDeployReady = 0x4F9;
 constexpr std::uintptr_t kCharging = 0x521, kChargeRemaining = 0x524, kChargeDuration = 0x528;
 constexpr std::uintptr_t kProjectileEntity = 0x38;
 // The EMP charge's centre comes to rest ~7 cm above the floor (measured contact
@@ -95,10 +96,11 @@ constexpr std::array<std::uint8_t, 15> kGivePrologue{
     0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55, 0x56, 0x57, 0x41, 0x54};
 constexpr std::uintptr_t kItemManagerGetterRva = 0x16FDDA0, kItemManagerGlobalRva = 0x2C16840;
 constexpr std::uintptr_t kFreeRva = 0x1B772CC;
-constexpr std::uintptr_t kEntitySystemRva = 0x224DA38;
+constexpr std::uintptr_t kEntitySystemRva =
+    engine::GlobalEnvironmentLayout::baseRva + engine::GlobalEnvironmentLayout::entitySystem;
 constexpr std::size_t kArchetypeSlot = 0x1A0;
 // Equip (ArmsLane.cpp): ArkPlayerWeaponComponent = player+0x14B8.
-constexpr std::uintptr_t kEquipRva = 0x1274820, kCanEquipRva = 0x1273EB0, kWeaponComponent = 0x14B8;
+constexpr std::uintptr_t kEquipRva = equipment::native::Equip, kCanEquipRva = equipment::native::CanEquip, kWeaponComponent = 0x14B8;
 constexpr std::uintptr_t kGetPlayerRva = engine::ArkPlayerLayout::getInstanceRva;
 
 constexpr std::size_t kWorldTmSlot = 0xE8, kPhysicsSlot = 0x228, kGetIdSlot = 0x08, kGetNameSlot = 0x78;

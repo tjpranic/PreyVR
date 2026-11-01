@@ -51,6 +51,14 @@ inline float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
 inline Vec3 Cross(Vec3 a, Vec3 b) { return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x}; }
 inline float Length(Vec3 a) { return std::sqrt(Dot(a, a)); }
 inline bool Finite(Vec3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
+// The part of v perpendicular to the unit axis.
+inline Vec3 Perp(Vec3 v, Vec3 axis) { return Sub(v, Scale(axis, Dot(v, axis))); }
+// Finite, and near enough to unit length to trust as a rotation.
+inline bool NearUnit(Quaternion q)
+{
+    const float n = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
+    return std::isfinite(n) && n > 0.5f && n < 2.0f;
+}
 // The share of the way to its target an exponential filter at `perSecond` moves
 // in `dt` seconds: 1 - e^(-dt * perSecond). Not the time-constant form
 // 1 - e^(-dt / tau), which rounds differently.

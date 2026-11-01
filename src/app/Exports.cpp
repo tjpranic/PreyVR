@@ -15,14 +15,8 @@
 #include "base/Logger.h"
 #include "aim/AimTakeover.h"
 #include "render/camera/HeadTrackingHook.h"
-#include "ui/hud/ReticleFollow.h"
-#include "controls/input/XrInput.h"
-#include "diagnostics/commands/ResearchHotkeys.h"
 #include "diagnostics/probes/IkTargetProbe.h"
 #include "controls/input/InputPath.h"
-#include "diagnostics/commands/CommandChannel.h"
-#include "render/stereo/NearViewStereo.h"
-#include "aim/WeaponAttachment.h"
 #include "diagnostics/capture/DebugWatch.h"
 #include "diagnostics/probes/RuntimeSnapshotWin32.h"
 #include "engine/EngineMap.h"
@@ -198,11 +192,6 @@ extern "C" __declspec(dllexport) DWORD PreyVR_SetStereoEyeLock(unsigned int eye)
 
 // Rung 3: build each eye by translation alone and keep Prey's own projection,
 // so the frustum we declare to OpenXR is the frustum the game actually drew.
-extern "C" __declspec(dllexport) DWORD PreyVR_SetNativeProjection(unsigned int enabled)
-{
-    return preyvr::dll::SetNativeProjection(enabled);
-}
-
 // Pointer-taking variant, per F-009 - Frida's NativeFunction aborts calls into
 // this DLL, so anything that must be driven from a probe needs a thread-callable
 // shape.
@@ -353,16 +342,6 @@ extern "C" __declspec(dllexport) DWORD PreyVR_RecenterHeadTracking()
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetEyeHandoffLag()
 {
     return preyvr::dll::EyeHandoffLag();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetEyeHandoffStarvedCount()
-{
-    return preyvr::dll::EyeHandoffStarvedCount();
-}
-
-extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetEyeHandoffDroppedCount()
-{
-    return preyvr::dll::EyeHandoffDroppedCount();
 }
 
 extern "C" __declspec(dllexport) ULONGLONG PreyVR_GetXrSubmittedFrameCount()

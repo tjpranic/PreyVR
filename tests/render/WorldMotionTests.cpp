@@ -5,6 +5,7 @@
 // motion is the stereo disparity. The pixels are the headset's, 2644 across.
 #include "render/taa/WorldMotion.h"
 #include "TestSupport.h"
+#include "TestGeometry.h"
 
 #include <algorithm>
 #include <array>
@@ -17,21 +18,11 @@ using preyvr::test::Require;
 
 namespace {
 
-using Matrix = std::array<float, 16>;   // row-vector, translation in row 3, as Prey's
+using preyvr::test::Matrix;
+using preyvr::test::Multiply;
 using Point = std::array<float, 3>;
 constexpr double kHalfWidth = 1322.0;
 constexpr float kEyes = 0.065f;
-
-Matrix Multiply(const Matrix& a, const Matrix& b)
-{
-    Matrix m{};
-    for (int i = 0; i < 4; ++i) {
-        for (int j = 0; j < 4; ++j) {
-            for (int k = 0; k < 4; ++k) { m[4 * i + j] += a[4 * i + k] * b[4 * k + j]; }
-        }
-    }
-    return m;
-}
 
 // Where a point lands on screen, in pixels from the centre.
 std::array<double, 2> Screen(const Point& p, const Matrix& m)

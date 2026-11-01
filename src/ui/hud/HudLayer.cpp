@@ -44,6 +44,14 @@ std::atomic<bool> enabled{false};
 std::atomic<unsigned long long> refused{0};
 
 constexpr const char* kHudMovie="DanielleHUD";
+// A Flash element's render, its GFx player, and the player's render proxy, whose
+// draw (proxy, release) reaches the native render target.
+constexpr std::uintptr_t kElementRenderRva=0x2FEBC0,kProxyDrawRva=0xE8C5E0;
+constexpr std::uintptr_t kPlayerVtableRva=0x1DB56D8,kProxyVtableRva=0x1DB58B8;
+// The movie root and its display callback; SetVariable is the root's slot +0x80.
+constexpr std::uintptr_t kMovieRootVtableRva=0x1EB4B60,kMovieDisplayRva=0x18AB710,kMovieSetVariableRva=0x18ABCC0;
+// Display's slot in the sprite's vtable 0x1EB5700.
+constexpr std::uintptr_t kSpriteDisplaySlotRva=0x1EB5700+0xE8;
 
 struct Identity {std::uintptr_t proxy=0;std::uint64_t stamp=0;};
 struct Presentation {float width=0,height=0,distance=2;bool active=false;std::uint64_t stamp=0;};
@@ -224,11 +232,11 @@ using SetVar=bool(__fastcall*)(void*,const char*,const NativeHudValue*,int);
 bool SetNumberGuarded(void* root,std::uintptr_t base,const char* path,double value){
     __try {
         NativeHudValue v{};v.type=3;std::memcpy(&v.payload,&value,sizeof(value));
-        return reinterpret_cast<SetVar>(base+0x18ABCC0)(root,path,&v,0);
+        return reinterpret_cast<SetVar>(base+kMovieSetVariableRva)(root,path,&v,0);
     } __except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 bool GetValueGuarded(void* root,std::uintptr_t base,const char* path,NativeHudValue& v){
-    __try {return reinterpret_cast<NativeHudApi::Get>(base+0x18ABE10)(root,&v,path);}
+    __try {return reinterpret_cast<NativeHudApi::Get>(base+hud::native::GetVariable)(root,&v,path);}
     __except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 std::string DescribeValue(const NativeHudValue& v){
@@ -241,7 +249,7 @@ std::string DescribeValue(const NativeHudValue& v){
     return b;
 }
 bool SetValueGuarded(void* root,std::uintptr_t base,const char* path,const NativeHudValue& v){
-    __try {return reinterpret_cast<SetVar>(base+0x18ABCC0)(root,path,&v,0);}
+    __try {return reinterpret_cast<SetVar>(base+kMovieSetVariableRva)(root,path,&v,0);}
     __except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 
@@ -604,14 +612,14 @@ void __fastcall StereoDisplay(void* root) {
 int Inspect(void* element,std::uintptr_t base,std::uintptr_t* proxy,char (&name)[40]) {
     __try {
         auto e=static_cast<std::uint8_t*>(element);
-        if(!e || *reinterpret_cast<std::uintptr_t*>(e)!=base+0x1CAB358)return 0;
+        if(!e || *reinterpret_cast<std::uintptr_t*>(e)!=base+engine::FlashUiElementLayout::vtableRva)return 0;
         const char* text=*reinterpret_cast<const char**>(e+0x30);
         if(!text)return 0;
         std::size_t i=0;for(;i+1<sizeof(name)&&text[i];++i)name[i]=text[i];name[i]=0;
         auto p=*reinterpret_cast<std::uintptr_t*>(e+0x58);
-        if(!p || *reinterpret_cast<std::uintptr_t*>(p)!=base+0x1DB56D8)return 0;
+        if(!p || *reinterpret_cast<std::uintptr_t*>(p)!=base+kPlayerVtableRva)return 0;
         const auto proxyVtable=*reinterpret_cast<std::uintptr_t*>(p+8);
-        if(proxyVtable!=base+0x1DB58B8){*proxy=proxyVtable>base?proxyVtable-base:proxyVtable;return 2;}
+        if(proxyVtable!=base+kProxyVtableRva){*proxy=proxyVtable>base?proxyVtable-base:proxyVtable;return 2;}
         *proxy=p+8;
         return 1;
     } __except(EXCEPTION_EXECUTE_HANDLER) {return 0;}
@@ -683,7 +691,7 @@ bool WantHud() {
 void* MovieRoot(void* proxy,std::uintptr_t base) {
     __try {
         auto root=*reinterpret_cast<void**>(static_cast<char*>(proxy)+0xA8);
-        return root && *reinterpret_cast<std::uintptr_t*>(root)==base+0x1EB4B60?root:nullptr;
+        return root && *reinterpret_cast<std::uintptr_t*>(root)==base+kMovieRootVtableRva?root:nullptr;
     } __except(EXCEPTION_EXECUTE_HANDLER) {return nullptr;}
 }
 bool EnsureDepthCopy(ID3D11Device* device,ID3D11DepthStencilView* ds,Capture& capture,UINT width,UINT height) {
@@ -854,8 +862,8 @@ bool Install() {
     if(!base)return false;
     constexpr std::uint8_t elementBytes[]={0x41,0x56,0x48,0x83,0xEC,0x20,0x48,0x83,0x79,0x58,0,0x4C,0x8B,0xF1,0x74,0x6A};
     constexpr std::uint8_t flashBytes[]={0x48,0x89,0x5C,0x24,8,0x48,0x89,0x6C,0x24,0x18,0x48,0x89,0x74,0x24,0x20,0x57};
-    if(std::memcmp(reinterpret_cast<void*>(base+0x2FEBC0),elementBytes,sizeof(elementBytes)) ||
-       std::memcmp(reinterpret_cast<void*>(base+0xE8C5E0),flashBytes,sizeof(flashBytes)))return false;
+    if(std::memcmp(reinterpret_cast<void*>(base+kElementRenderRva),elementBytes,sizeof(elementBytes)) ||
+       std::memcmp(reinterpret_cast<void*>(base+kProxyDrawRva),flashBytes,sizeof(flashBytes)))return false;
     auto renderer=*reinterpret_cast<std::uintptr_t*>(base+engine::RendererLayout::singletonPointerRva);
     if(!renderer)return false;
     auto device=RendererDevice(renderer);if(!device)return false;
@@ -864,8 +872,8 @@ bool Install() {
     // One transaction: all three live or none.
     const hook::Spec hooks[]={
         {om,reinterpret_cast<void*>(RedirectTargets),reinterpret_cast<void**>(&originalTargets)},
-        {reinterpret_cast<void*>(base+0x2FEBC0),reinterpret_cast<void*>(ObserveElement),reinterpret_cast<void**>(&originalElement)},
-        {reinterpret_cast<void*>(base+0xE8C5E0),reinterpret_cast<void*>(CaptureFlash),reinterpret_cast<void**>(&originalFlash)}};
+        {reinterpret_cast<void*>(base+kElementRenderRva),reinterpret_cast<void*>(ObserveElement),reinterpret_cast<void**>(&originalElement)},
+        {reinterpret_cast<void*>(base+kProxyDrawRva),reinterpret_cast<void*>(CaptureFlash),reinterpret_cast<void**>(&originalFlash)}};
     if(!hook::InstallAll(hooks))return false;
     installed=true;return true;
 }
@@ -875,7 +883,7 @@ bool InstallDisplay() {
     if(!Install())return false;
     const auto base=PreyBase();
     constexpr unsigned char displayBytes[]={0x40,0x55,0x56,0x48,0x81,0xEC,0x68,0x03,0,0};
-    const auto display=reinterpret_cast<void*>(base+0x18AB710);
+    const auto display=reinterpret_cast<void*>(base+kMovieDisplayRva);
     if(std::memcmp(display,displayBytes,sizeof(displayBytes)))return false;
     if(!hook::Install(display,reinterpret_cast<void*>(StereoDisplay),originalDisplay))return false;
     displayInstalled=true;return true;
@@ -885,8 +893,8 @@ bool InstallStatus(){
     if(!InstallDisplay())return false;
     const auto base=PreyBase();
     if(!VerifyNativeWrist(base))return false;
-    if(*reinterpret_cast<std::uintptr_t*>(base+0x1EB57E8)!=base+0x18BABA0)return false;
-    auto at=reinterpret_cast<void*>(base+0x18BABA0);
+    if(*reinterpret_cast<std::uintptr_t*>(base+kSpriteDisplaySlotRva)!=base+hud::native::SpriteDisplay)return false;
+    auto at=reinterpret_cast<void*>(base+hud::native::SpriteDisplay);
     if(!hook::Install(at,reinterpret_cast<void*>(FilterStatusSprite),originalSpriteDisplay))return false;
     spriteInstalled=true;return true;
 }

@@ -33,8 +33,14 @@ std::array<std::uintptr_t,2> slotWeapons{};
 std::uintptr_t owner=0,inventory=0;
 std::uint64_t ownerEpoch=0;
 
-static_assert(contract::Gated(equipment::native::Contracts,engine::ArkPlayerLayout::getInstanceRva));
-bool Gate(std::uintptr_t base){return contract::BodiesMatch(base,equipment::native::Contracts);}
+namespace en=equipment::native;
+static_assert(contract::Gated(en::Contracts,engine::ArkPlayerLayout::getInstanceRva));
+static_assert(contract::Gated(en::Contracts,en::Equip)&&contract::Gated(en::Contracts,en::CanEquip)&&
+              contract::Gated(en::Contracts,en::Unequip)&&contract::Gated(en::Contracts,en::WeaponLookup)&&
+              contract::Gated(en::Contracts,en::Health)&&contract::Gated(en::Contracts,en::MaxHealth)&&
+              contract::Gated(en::Contracts,en::Psi)&&contract::Gated(en::Contracts,en::MaxPsi)&&
+              contract::Gated(en::Contracts,en::Status)&&contract::Gated(en::Contracts,en::Property));
+bool Gate(std::uintptr_t base){return contract::BodiesMatch(base,en::Contracts);}
 // These are direct Steam native functions, never inferred vtable indices.
 // Entry/consumer bytes and complete ABIs are recorded in EquipmentNative.h.
 DWORD Native(const GameplayPoseFrame& frame,int slot,bool readStats,Status* out,bool* didStow){
@@ -58,17 +64,17 @@ DWORD Native(const GameplayPoseFrame& frame,int slot,bool readStats,Status* out,
   if(readStats){
    using Scalar=float(__fastcall*)(std::uintptr_t);
    // Health and maximum are native internal units: HUD's producer scales by .1.
-   const float health=reinterpret_cast<Scalar>(base+0x158B4D0)(0);
-   const float maximum=reinterpret_cast<Scalar>(base+0x158B4F0)(0);
+   const float health=reinterpret_cast<Scalar>(base+en::Health)(0);
+   const float maximum=reinterpret_cast<Scalar>(base+en::MaxHealth)(0);
    out->values.health=equipment::DisplayValue(health,.1f);
    out->values.maxHealth=equipment::DisplayValue(maximum,.1f);
    const auto psi=*reinterpret_cast<const std::uintptr_t*>(player+0x678);
-   if(psi){out->values.psi=equipment::DisplayValue(reinterpret_cast<Scalar>(base+0x15ACFE0)(psi));
-    out->values.maxPsi=equipment::DisplayValue(reinterpret_cast<Scalar>(base+0x15ACFA0)(psi));}
+   if(psi){out->values.psi=equipment::DisplayValue(reinterpret_cast<Scalar>(base+en::Psi)(psi));
+    out->values.maxPsi=equipment::DisplayValue(reinterpret_cast<Scalar>(base+en::MaxPsi)(psi));}
    const auto statuses=*reinterpret_cast<const std::uintptr_t*>(player+0x678+0xC0);
    if(statuses){
-    const auto armor=reinterpret_cast<std::uintptr_t(__fastcall*)(std::uintptr_t,int)>(base+0x148F000)(statuses,11);
-    if(armor){const float maximumArmor=reinterpret_cast<Scalar>(base+0x10B1F40)(armor+0x30);
+    const auto armor=reinterpret_cast<std::uintptr_t(__fastcall*)(std::uintptr_t,int)>(base+en::Status)(statuses,11);
+    if(armor){const float maximumArmor=reinterpret_cast<Scalar>(base+en::Property)(armor+0x30);
      const float damage=*reinterpret_cast<const float*>(armor+0x18);
      if(std::isfinite(maximumArmor)&&maximumArmor>0&&std::isfinite(damage)&&damage>=0&&damage<=maximumArmor)
       out->values.suit=equipment::DisplayValue((1-damage/maximumArmor)*100.f);
@@ -82,18 +88,18 @@ DWORD Native(const GameplayPoseFrame& frame,int slot,bool readStats,Status* out,
      *reinterpret_cast<const unsigned char*>(weapon+0x78)||
      *reinterpret_cast<const unsigned char*>(player+0x7BC)||
      *reinterpret_cast<const int*>(input+0x94)||
-     !reinterpret_cast<bool(__fastcall*)(std::uintptr_t)>(base+0x1273EB0)(weapon))return ERROR_NOT_READY;
+     !reinterpret_cast<bool(__fastcall*)(std::uintptr_t)>(base+en::CanEquip)(weapon))return ERROR_NOT_READY;
   const auto current=*reinterpret_cast<const std::uint32_t*>(weapon+0x58);
   if(!slots[slot]||slots[slot]==current){
    // Only a currently validated local weapon can be assigned; consumables and
    // guessed entity IDs never enter a holster. The native animation does stow.
    EquippedRig rig{};
    if(!current||!TryGetEquippedRig(player,rig)||rig.itemId!=current)return ERROR_NOT_READY;
-   reinterpret_cast<void(__fastcall*)(std::uintptr_t,bool,bool)>(base+0x12773A0)(weapon,true,false);
+   reinterpret_cast<void(__fastcall*)(std::uintptr_t,bool,bool)>(base+en::Unequip)(weapon,true,false);
    slots[slot]=current;slotWeapons[slot]=rig.weapon;
    *didStow=true;
   }else{
-   const auto stored=reinterpret_cast<std::uintptr_t(__fastcall*)(std::uint32_t)>(base+0x16A5650)(slots[slot]);
+   const auto stored=reinterpret_cast<std::uintptr_t(__fastcall*)(std::uint32_t)>(base+en::WeaponLookup)(slots[slot]);
    if(!stored||stored!=slotWeapons[slot]||*reinterpret_cast<const std::uint32_t*>(stored+0x60)!=0x7777||
       *reinterpret_cast<const std::uint32_t*>(stored+0x38)!=slots[slot]){
     slots[slot]=0;slotWeapons[slot]=0;occupied=static_cast<unsigned>((slots[0]!=0)+(slots[1]!=0));
@@ -101,7 +107,7 @@ DWORD Native(const GameplayPoseFrame& frame,int slot,bool readStats,Status* out,
    }
    // Equip retains IsEquippable, transition, progression and CanEquip checks.
    // Item no longer owned/equippable => no successful draw, never force fields.
-   const bool accepted=reinterpret_cast<bool(__fastcall*)(std::uintptr_t,std::uint32_t)>(base+0x1274820)(weapon,slots[slot]);
+   const bool accepted=reinterpret_cast<bool(__fastcall*)(std::uintptr_t,std::uint32_t)>(base+en::Equip)(weapon,slots[slot]);
    if(!accepted)return ERROR_NOT_READY;
   }
   occupied=static_cast<unsigned>((slots[0]!=0)+(slots[1]!=0));return 0;

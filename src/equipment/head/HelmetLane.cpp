@@ -86,12 +86,6 @@ Pose gMount{};
 bool gMountSeen = false;
 float gEyeGapMm = 0.0f, gEyeGapDeg = 0.0f, gEyeGapMaxMm = 0.0f, gEyeGapMaxDeg = 0.0f;
 
-bool Usable(Quaternion q)
-{
-    const float n = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
-    return std::isfinite(n) && n > 0.5f && n < 2.0f;
-}
-
 float Degrees(Quaternion q)
 {
     return 2.0f * std::acos(std::fmin(1.0f, std::fabs(Normalize(q).w))) * 180.0f / 3.14159265f;
@@ -200,7 +194,7 @@ bool Bone(std::uintptr_t attachment, int& joint, Pose& relative, Quaternion& k)
     std::uintptr_t vtable = 0;
     return SafeRead(attachment, vtable) && vtable == gBase + hn::BoneVtable && SafeRead(attachment + hn::AttachJoint, joint) &&
            SafeCopy(&relative, reinterpret_cast<const void*>(attachment + hn::AttachRelative), sizeof(relative)) &&
-           SafeRead(attachment + hn::AttachK, k) && Usable(k);
+           SafeRead(attachment + hn::AttachK, k) && NearUnit(k);
 }
 
 // The player's helmet and its eye, both on one joint. `found` says whether
@@ -214,10 +208,10 @@ bool ReadRig(std::uint64_t character, Rig& out, bool& found)
     Pose helmetRelative{}, eyeRelative{};
     Quaternion helmetK{}, eyeK{};
     if (!found || eye == 0 || !Bone(out.helmet, helmetJoint, helmetRelative, helmetK) ||
-        !Bone(eye, eyeJoint, eyeRelative, eyeK) || helmetJoint != eyeJoint || !Usable(eyeRelative.orientation) ||
+        !Bone(eye, eyeJoint, eyeRelative, eyeK) || helmetJoint != eyeJoint || !NearUnit(eyeRelative.orientation) ||
         !Finite(eyeRelative.position) || !SafeRead(out.helmet + hm::AttachFlags, out.flags) ||
         !SafeCopy(&out.eyeModel, reinterpret_cast<const void*>(eye + hm::AttachModel), sizeof(out.eyeModel)) ||
-        !Usable(out.eyeModel.orientation) || !Finite(out.eyeModel.position)) {
+        !NearUnit(out.eyeModel.orientation) || !Finite(out.eyeModel.position)) {
         return false;
     }
     out.mount = helmet::Mount(headlamp::OnJoint(eyeRelative, eyeK), helmetK);
@@ -399,8 +393,8 @@ void PlaceHelmetBeforeRender()
     }
     Pose location{};
     float scale = 1.0f;
-    if (!Usable(view.rotation) || !Finite(view.offset) || !Finite(view.prey.position) ||
-        !Usable(view.prey.orientation) || !gPlayerLocation(location, scale)) {
+    if (!NearUnit(view.rotation) || !Finite(view.offset) || !Finite(view.prey.position) ||
+        !NearUnit(view.prey.orientation) || !gPlayerLocation(location, scale)) {
         gUnread.fetch_add(1, std::memory_order_relaxed);
         return;
     }
@@ -415,7 +409,7 @@ void PlaceHelmetBeforeRender()
                                   static_cast<float>(gHeightMm.load(std::memory_order_acquire))},
                              0.001f / scale);
     const Pose model = helmet::OnEye(eye, rig.mount, shift);
-    if (!Usable(model.orientation) || !Finite(model.position) || !WriteModel(rig.helmet, model)) {
+    if (!NearUnit(model.orientation) || !Finite(model.position) || !WriteModel(rig.helmet, model)) {
         gUnplaced.fetch_add(1, std::memory_order_relaxed);
         return;
     }

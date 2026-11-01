@@ -17,8 +17,8 @@ C++ tests sit in a folder per category, the same categories as `src/`. The launc
 
 **Shared helpers:**
 - `TestSupport.h`: checks; it has no project includes.
-- `TestGeometry.h`.
-- `DllTestSupport.h`, for DLL-source tests: the captured log with `Logged`/`Count`, and the `PREYVR_TEST_CAPTURE_LOG()`, `PREYVR_TEST_DROP_LOG()` and `PREYVR_TEST_STUB_MINHOOK()` stubs.
+- `TestGeometry.h`: rotations, the 4x4 product, and a segment against a box.
+- `DllTestSupport.h`, for DLL-source tests: the captured log with `Logged`/`Count`, `ReportHas` for a report's fields, `Put`/`Get` for fake engine objects, and the `PREYVR_TEST_CAPTURE_LOG()`, `PREYVR_TEST_DROP_LOG()`, `PREYVR_TEST_STUB_MINHOOK()` and `PREYVR_TEST_STUB_VERIFIED_SETTINGS()` stubs.
 
 **Not in ctest:** `test_extract_native_hud.py`. The extractor it tests needs Python 3.11+ (`hashlib.file_digest`) and pycryptodome.
 

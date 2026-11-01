@@ -10,21 +10,7 @@
 #include "TestSupport.h"
 
 PREYVR_TEST_CAPTURE_LOG()
-namespace preyvr::dll {
-DWORD gObserver = static_cast<DWORD>(FrameObserverRuntimeStatus::enabled);
-DWORD FrameObserverStatus() { return gObserver; }
-std::vector<std::string> gQueued;
-DWORD gQueueResult = 0;
-unsigned long long gVerifiedCount = 0;
-DWORD gVerifiedResult = 0;
-DWORD QueueVerifiedRendererSetting(const char* command)
-{
-    if (gQueueResult == 0) { gQueued.emplace_back(command); }
-    return gQueueResult;
-}
-unsigned long long VerifiedRendererSettingCount() { return gVerifiedCount; }
-DWORD VerifiedRendererSettingResult() { return gVerifiedResult; }
-} // namespace preyvr::dll
+PREYVR_TEST_STUB_VERIFIED_SETTINGS()
 
 namespace {
 using namespace preyvr::dll;

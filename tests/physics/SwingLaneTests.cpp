@@ -4,6 +4,7 @@
 // (phase 2) the hit, its fatigue setter, Prey's stamina check and the four hooks'
 // originals.
 #include "physics/swing/SwingLane.cpp"
+#include "DllTestSupport.h"
 #include "TestSupport.h"
 #include <cstdlib>
 #include <iostream>
@@ -11,25 +12,13 @@
 #include <string>
 #include <vector>
 
-std::vector<std::string> lines;
-namespace preyvr::lifecycle { void Log(std::string_view line) { lines.emplace_back(line); } }
+PREYVR_TEST_CAPTURE_LOG()
 namespace {
 using namespace preyvr;
 using namespace preyvr::dll;
 using preyvr::test::Check;
-bool Logged(const char* a, const char* b = "", const char* c = "")
-{
-    for (const auto& l : lines) {
-        if (l.find(a) != std::string::npos && l.find(b) != std::string::npos && l.find(c) != std::string::npos) { return true; }
-    }
-    return false;
-}
-unsigned Count(const char* a, const char* b = "")
-{
-    unsigned n = 0;
-    for (const auto& l : lines) { n += l.find(a) != std::string::npos && l.find(b) != std::string::npos; }
-    return n;
-}
+using preyvr::test::Count;
+using preyvr::test::Logged;
 void Put(void* base, std::size_t offset, const void* value, std::size_t size)
 {
     std::memcpy(static_cast<std::uint8_t*>(base) + offset, value, size);
@@ -612,5 +601,5 @@ int main()
     Check(fault.load() && Logged("preyvr_swing fault", "detail=hooks") && !SwingLaneWanted(),
           "hooks that fail to go in: nothing strikes");
     Check(AttackHook(reinterpret_cast<std::uintptr_t>(wrench), 0, nullptr, 1, 1), "and the trigger is Prey's again");
-    std::cout << "swing_lane: " << lines.size() << " lines\n";
+    std::cout << "swing_lane: " << preyvr::test::gLines.size() << " lines\n";
 }

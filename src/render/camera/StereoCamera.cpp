@@ -1,4 +1,5 @@
 #include "render/camera/StereoCamera.h"
+#include "base/FloatBytes.h"
 
 #include <cmath>
 #include <cstring>
@@ -9,13 +10,6 @@ namespace {
 void WriteFloat(std::span<std::uint8_t> bytes, std::size_t index, float value)
 {
     std::memcpy(bytes.data() + index * sizeof(float), &value, sizeof(float));
-}
-
-float ReadFloat(std::span<const std::uint8_t> bytes, std::size_t index)
-{
-    float value = 0.0f;
-    std::memcpy(&value, bytes.data() + index * sizeof(float), sizeof(float));
-    return value;
 }
 
 } // namespace
