@@ -6,6 +6,7 @@
 - DLSS (?)
 - Upscaling (?)
 - Foveated rendering (?)
+- Frame geneneration (?)
 
 ### UX/Immersion
 - Rotate to face direction (?)
@@ -17,6 +18,7 @@
 - Two-handed carrying (?)
 - Physical touch screen controls for computer monitors and keypads (?)
 - The wrench tends to hit around the hand area instead of the head of the wrench
+    Maybe adjust the hitbox so that it's just around the head of the wrench?
 - Adjustable wrench bounding box
     Add in an adjustable wrench bounding box lengthening system that only registers hits against enemies. Essentially, an additional bounding box would be added to the wrench, but it would be longer and only used to find collisions with enemies. This would preserve existing correct physical interaction between wrench/hands and objects, but allow for smoother feeling combat.
 - Immersive reloading
@@ -31,7 +33,7 @@
     e.g. Pressing down on a mug on a desk can push the mug through the desk
 - Physical crouching
     Crouching in real life should enable crouch mode. Standing up should disable crouch mode.
-- Optional body model rendering
+- Optional body model rendering \(?)
     Have it only render the hands like in Half Life Alyx?
 - The Earth and Moon are very obviously rendered way too close
     Having them rendered at a more realisitic depth would be nice but challenging.
@@ -41,16 +43,21 @@
 - Arm IK should be biased to stay downwards
     They tend to "chicken-wing" when I rotate my hands
 - The in-game cutscenes show on a flat plane but it needs to be adjusted downward a bit
-    The first-time Typhon neuromod usage trigger 3 of these cutscenes in a row. it also causes the game to pause between each cutscene.
-- Hands don't move wehn aiming a Typhon ability
-    Or when opening the radial menu
-- Going down the main lift causes body position jittering
+    The first-time Typhon neuromod usage trigger 3 of these cutscenes in a row. It also causes the game to pause between each cutscene.
+    Might also want to have the interface VR options apply to cutscenes if applicable.
+- Hands don't move when aiming a Typhon ability
+    Or when opening the radial menu. Can't see the wrist status HUD when using the radial menu either.
+- Going up or down the main lift causes body position jittering
+    The actual body is moving up and down, might be a side-effect of all the body following and IK changes.
 - Going through loading screens can cause the hands to not be out
 - Might want to remove the Q-beam holding offset
+    May not be necessary.
 - Can't initiate reload when two-handing the shotgun
 - Can't switch to some weapons when using the Psychoscope
 - Auto-break two-hand grip option
     To complement the auto-snap
+- Audit body holster implementation
+    Not sure how much work has been done on this and how it works.
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -71,10 +78,11 @@
 ### HUD/UI
 - Psi energy shows on wrist before installing first neuromod
 - Some UI elements still only display at the periphery of vision
-    It makes them hard to see. They need to be moved a little closer in.
+    It makes them hard to see. They need to be moved a little closer in. Will need some additional VR options menu settings to adjust them.
 - Will need to adjust UI element depths
+    Need to adjust for HUD and psychoscope.
 - 2D marker (objective, repair etc.) position jitter a lot (?)
-    They need some smoothing
+    They could use some smoothing.
 - Remove the background from the wrist status HUD
 
 ### VR Options Menu
@@ -191,15 +199,20 @@
 ---
 
 Feature set tracking list, in broad terms:
-- Body follow and roomscale (**IMPLEMENTED**)
+- Body Follow and Roomscale (**IMPLEMENTED**)
     Having the player character model follow the headset and camera like a real body would follow someone's head while still allowing for things like physical leaning and crouching. Body depth rendering is also grouped in here.
-- Physical interaction (**PARTIALLY IMPLEMENTED**)
+- Physical Interaction (**PARTIALLY IMPLEMENTED**)
     Player interaction with objects in the world. Encompasses touching, pushing and throwing stuff along with hitting things with the wrench.
-- Stereoscopic rendering (**IMPLEMENTED**)
+- Stereoscopic Rendering (**IMPLEMENTED**)
     Using the dormant stereoscopic rendering code in Prey's CryEngine fork. Cutscenes, fades and UI elements need special handling to display in both eyes correctly.
 - Temporal Anti-Aliasing (**IMPLEMENTED**)
 - VR Options Menu (**IN PROGRESS**)
-- Engine Instability Bugs (**IN PROGRESS**)
+- Engine and Mod Stability (**IN PROGRESS**)
 - Mod Launcher (**TODO**)
     A small window to configure launch settings and run the game with the VR mod enabled.
+- Physical Weapon Interactions (**TODO**)
+- VR Compatible Controls (**IMPLEMENTED**)
+    VR handsets working as similar to gamepads where possible.
+- HUD/UI (**PARTIALLY IMPLEMENTED**)
+    Having UI and HUD elements display nicely and at the proper depth.
 - ...
