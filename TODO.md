@@ -10,6 +10,7 @@
 ### UX/Immersion
 - Rotate to face direction (?)
     Add in an option to rotate the camera in the direction the right hand is facing. Alternatively, having the player body and camera follow the left/right hand when holding a certain button?
+    Maybe a way to snap to the place I'm aiming at?
 - Recenter player body when the player stops moving (?)
 - Two-handed wrench (?)
     Add in a two-handed wrench mode that automatically triggers heavy wrench attacks. One handed mode would always be a light attack. This would replace the speed based light/heavy attack system.
@@ -43,6 +44,13 @@
     The first-time Typhon neuromod usage trigger 3 of these cutscenes in a row. it also causes the game to pause between each cutscene.
 - Hands don't move wehn aiming a Typhon ability
     Or when opening the radial menu
+- Going down the main lift causes body position jittering
+- Going through loading screens can cause the hands to not be out
+- Might want to remove the Q-beam holding offset
+- Can't initiate reload when two-handing the shotgun
+- Can't switch to some weapons when using the Psychoscope
+- Auto-break two-hand grip option
+    To complement the auto-snap
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -192,4 +200,6 @@ Feature set tracking list, in broad terms:
 - Temporal Anti-Aliasing (**IMPLEMENTED**)
 - VR Options Menu (**IN PROGRESS**)
 - Engine Instability Bugs (**IN PROGRESS**)
+- Mod Launcher (**TODO**)
+    A small window to configure launch settings and run the game with the VR mod enabled.
 - ...
