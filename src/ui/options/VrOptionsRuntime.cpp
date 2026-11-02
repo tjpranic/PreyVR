@@ -159,7 +159,8 @@ constexpr Wiring wiring[]={
  {options::GripToggle,Set<SetTwoHandGripToggle>,Get<TwoHandGripToggle>},
  {options::AutoSnap,Set<SetTwoHandAutoSnap>,Get<TwoHandAutoSnap>},
  {options::AutoSnapAttach,Set<SetTwoHandSnapAttachCm>,Get<TwoHandSnapAttachCm>},
- {options::AutoSnapBreak,Set<SetTwoHandSnapBreakCm>,Get<TwoHandSnapBreakCm>},
+ {options::AutoBreak,Set<SetTwoHandAutoBreak>,Get<TwoHandAutoBreak>},
+ {options::AutoBreakDistance,Set<SetTwoHandBreakCm>,Get<TwoHandBreakCm>},
  {options::Psychoscope,[](int v){scope.store(v!=0);},[]{return static_cast<int>(scope.load());}},
  {options::UiScale,Set<SetUiScalePercent>,Get<UiScalePercent>},
  // A change of mind clears the slots, so no weapon is left in a disabled one.

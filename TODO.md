@@ -60,10 +60,10 @@
     May not be necessary.
 - Can't initiate reload when two-handing the shotgun
 - Can't switch to some weapons when using the Psychoscope
-- Auto-break two-hand grip option
-    To complement the auto-snap
 - Audit body holster implementation
     Not sure how much work has been done on this and how it works.
+- Have Psi-powers aim with the left hand
+- Aiming lasers can show briefly in-between loading screen and press A button screen
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -189,6 +189,9 @@
 - Aim lasers should come out of my pointer fingers
     This way it will handle like the weapon aiming
     > The lasers started at the controller's aim pose, off the hand, and the empty right hand's wasn't a true ray: it ended where a ray from the eye landed. They now leave the index fingertip along the controller's aim, and the empty hand's is a true ray, as a gun's is from its muzzle. That left the finger 24° below the laser, so the hands moved instead: they lean 39° on the controllers rather than 15°, which lays the finger within 3.5° of the aim, and an empty hand aims where a gun does. PreyVR-128, worn OK 2026-11-01. See docs/FINGER-LASER-SCOPE-2026-11-01.md.
+- Auto-break two-hand grip option
+    To complement the auto-snap
+    > Hands' Auto-Break Support Hand lets any hold go once the left hand moves Auto-Break Distance from where it attached, on any weapon and however it attached, so toggle grip needs no second press. It is the only thing that ends a hold by distance: with it off, nothing does. That retired the pistol's fixed 30 cm release, and Auto-Snap alone no longer lets go by distance. PreyVR-130, worn OK 2026-11-02.
 
 ### Rendering
 - The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision). (Archived)

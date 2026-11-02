@@ -55,6 +55,8 @@ DWORD SetTwoHandGripToggle(unsigned v){applied[options::GripToggle]=v;return 0;}
 bool TwoHandGripToggle(){return applied[options::GripToggle]!=0;}
 DWORD SetTwoHandAutoSnap(unsigned v){applied[options::AutoSnap]=v;return 0;}
 bool TwoHandAutoSnap(){return applied[options::AutoSnap]!=0;}
+DWORD SetTwoHandAutoBreak(unsigned v){applied[options::AutoBreak]=v;return 0;}
+bool TwoHandAutoBreak(){return applied[options::AutoBreak]!=0;}
 DWORD SetUiScalePercent(unsigned v){applied[options::UiScale]=v;return 0;}
 DWORD UiScalePercent(){return applied[options::UiScale];}
 unsigned menuDistance=200,distanceSets=0,offsetSets=0;int menuRight=0,menuUp=0;
@@ -73,7 +75,7 @@ PREYVR_STUB(SetTurnLaneDeadzone,TurnLaneDeadzone,TurnDeadzone,unsigned)
 PREYVR_STUB(SetArmLengthCm,ArmLengthCm,ArmLength,int)
 PREYVR_STUB(SetAnimIkFingerCurl,AnimIkFingerCurl,FingerCurl,unsigned)
 PREYVR_STUB(SetTwoHandSnapAttachCm,TwoHandSnapAttachCm,AutoSnapAttach,unsigned)
-PREYVR_STUB(SetTwoHandSnapBreakCm,TwoHandSnapBreakCm,AutoSnapBreak,unsigned)
+PREYVR_STUB(SetTwoHandBreakCm,TwoHandBreakCm,AutoBreakDistance,unsigned)
 PREYVR_STUB(SetAimLasers,AimLasersEnabled,AimLasers,unsigned)
 PREYVR_STUB(SetShotTrail,ShotTrailEnabled,ShotTrail,unsigned)
 PREYVR_STUB(SetCarryHoldToHold,CarryHoldPreference,CarryHold,unsigned)
@@ -232,7 +234,7 @@ int main(){
    {options::CarryHold,0},{options::GrenadeHand,0},{options::CarryThrowStrength,200},
    {options::GrenadeThrowStrength,150},{options::WristTick,0},{options::WristAlong,100},
    {options::WristHover,50},{options::WristTilt,30},{options::CarryHand,0},
-   {options::DebugOverlay,1},{options::FingerCurl,0},{options::AimLasers,0},{options::ShotTrail,1},{options::AutoSnap,1},{options::AutoSnapAttach,15},{options::AutoSnapBreak,40},
+   {options::DebugOverlay,1},{options::FingerCurl,0},{options::AimLasers,0},{options::ShotTrail,1},{options::AutoSnap,1},{options::AutoSnapAttach,15},{options::AutoBreak,1},{options::AutoBreakDistance,40},
    {options::ArmLength,51},{options::SurfaceStop,0},{options::HeavyMass,40},
    {options::LeanZone,40},{options::HipsBack,12},{options::NearClip,6},{options::ScreenPullback,45},
    {options::Antialiasing,0},{options::Helmet,0},

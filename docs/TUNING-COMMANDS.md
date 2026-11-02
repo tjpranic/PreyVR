@@ -120,9 +120,10 @@ this session. "Menu only" means no command reaches it.
 | Hands | Shot trail (`shot_trail`): a green line from the muzzle to where each shot went, for 4 s | on/off | off | `dbg.shots <0\|1>` |
 | Hands | Two-hand aim (`two_hand`) | on/off | on | `aim.twohand <0\|1>` |
 | Hands | Foregrip input (`grip_toggle`) | hold (0), toggle (1) | hold | menu only |
-| Hands | Auto-snap support hand (`support_auto`): the left hand attaches on its own after 0.1 s within the attach distance with its grip at rest, and lets go at the break distance from where it attached. A squeeze during it makes it an ordinary hold. After a release it waits for the hand to leave. While attached, left-hand use, psi, reload and holstering are blocked, as in any two-hand hold | on/off | off | menu only (`aim.twohand`'s `autoSnap`, `snaps`) |
+| Hands | Auto-snap support hand (`support_auto`): the left hand attaches on its own after 0.1 s within the attach distance with its grip at rest. A squeeze during it makes it an ordinary hold, which Foregrip Input then ends. After a release it waits for the hand to leave. While attached, left-hand use, psi, reload and holstering are blocked, as in any two-hand hold | on/off | off | menu only (`aim.twohand`'s `autoSnap`, `snaps`) |
 | Hands | Auto-snap attach distance (`support_auto_attach`): from a foregrip's grab line or a handgun's cup; a squeeze keeps its own reach | 5–25 cm | 10 | menu only (`aim.twohand`'s `snapAttachCm`) |
-| Hands | Auto-snap break distance (`support_auto_break`): from where the hand attached, on any weapon, and always at least 5 cm past the attach distance; a squeezed hold has no such limit, and a squeezed handgun lets go at 30 cm between the hands | 10–60 cm | 25 | menu only (`aim.twohand`'s `snapBreakCm`) |
+| Hands | Auto-break support hand (`support_break`): any hold, squeezed or snapped, lets go at the break distance; a squeeze still lets go as Foregrip Input says. Off, no hold ends by distance, on any weapon | on/off | off | menu only (`aim.twohand`'s `autoBreak`) |
+| Hands | Auto-break distance (`support_auto_break`, the key from when it was Auto-Snap Break Distance): from where the hand attached, on any weapon, and always at least 5 cm past the reach it attached from (the attach distance, or a squeeze's own grab reach) | 10–60 cm | 25 | menu only (`aim.twohand`'s `breakCm`) |
 | Hands | Psychoscope gesture (`psychoscope`) | on/off | off | menu only |
 | Hands | Fingers follow the controller (`finger_curl`) | on/off | on | menu only |
 | Hands | Arm length (`arm_length`) | 40–70 cm, shoulder to wrist | 56 | `arm.length <cm>` |
@@ -374,7 +375,7 @@ worn OK (2026-10-25), as Body Follows You's commands had on 2026-10-24.
 
 | Command | Values | Default | What it does |
 |---|---|---|---|
-| `aim.twohand` | 0/1 | 1 | Two-hand support aim: a foregrip steers, a handgun's cupped grip only braces. The report's `grip=foregrip\|handgun` is the equipped weapon's kind; `autoSnap` is Auto-snap support hand, and `snaps` the holds it has made. **Menu.** |
+| `aim.twohand` | 0/1 | 1 | Two-hand support aim: a foregrip steers, a handgun's cupped grip only braces. The report's `grip=foregrip\|handgun` is the equipped weapon's kind; `autoSnap` is Auto-snap support hand, `snaps` the holds it has made, and `autoBreak` Auto-break support hand. **Menu.** |
 | `aim.world` | report | | Prey's crosshair sits in the world at the aim's hit, or 10 m along the aim when it hits nothing; with no fresh target, on the HUD panel. Its targets, the frames shown, and the scene query. |
 | `aim.reticlesize` | 50–200 % | 100 | The world crosshair's size against the HUD's. **Menu.** |
 | `aim.scene` | 0/1 | 0 | Runs the aim's scene query on its own (diagnostics); the world reticle runs it whatever this is. The old Scene Reticle setting is retired, and a saved `scene_reticle` is skipped. |

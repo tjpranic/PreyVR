@@ -92,6 +92,8 @@ void SettingsChecks(){
        "the shot trail is opt in, on/off");
  Check(Defaults()[AutoSnap]==0&&KindOf(AutoSnap)==Kind::toggle&&std::string(Describe(AutoSnap).key)=="support_auto",
        "auto-snap is opt in, on/off");
+ Check(Defaults()[AutoBreak]==0&&KindOf(AutoBreak)==Kind::toggle&&std::string(Describe(AutoBreak).key)=="support_break",
+       "auto-break is opt in, on/off");
  {Present marked{};
   Check(Parse("version=1\naim_lasers=0\n",parsed,&marked)&&parsed[AimLasers]==0&&marked[AimLasers],"aim lasers persist as off");
   Check(Parse("version=1\ndebug_overlay=0\n",parsed,&marked)&&parsed[AimLasers]==1&&!marked[AimLasers],
@@ -179,16 +181,16 @@ void LayoutChecks(){
  Check(recenter==1&&clear==1&&calibrate==1,"each button appears once");
  Check(MenuEntries(MenuPages()).empty(),"past the last tab there is nothing");
  {const auto page=MenuEntries(2);const auto grip=std::find(page.begin(),page.end(),GripToggle);
-  Check(page.end()-grip>=4&&grip[1]==AutoSnap&&grip[2]==AutoSnapAttach&&grip[3]==AutoSnapBreak,
-        "auto-snap and its two distances sit under foregrip input");}
+  Check(page.end()-grip>=5&&grip[1]==AutoSnap&&grip[2]==AutoSnapAttach&&grip[3]==AutoBreak&&grip[4]==AutoBreakDistance,
+        "auto-snap and auto-break, each over its distance, sit under foregrip input");}
  Check(Defaults()[AutoSnapAttach]==10&&Valid(AutoSnapAttach,5)&&Valid(AutoSnapAttach,25)&&!Valid(AutoSnapAttach,4)&&
        !Valid(AutoSnapAttach,26)&&KindOf(AutoSnapAttach)==Kind::range&&Display(AutoSnapAttach,10)==L"10 CM"&&
        std::string(Describe(AutoSnapAttach).key)=="support_auto_attach",
        "auto-snap attach distance: 10 cm by default, 5 to 25");
- Check(Defaults()[AutoSnapBreak]==25&&Valid(AutoSnapBreak,10)&&Valid(AutoSnapBreak,60)&&!Valid(AutoSnapBreak,9)&&
-       !Valid(AutoSnapBreak,61)&&KindOf(AutoSnapBreak)==Kind::range&&Display(AutoSnapBreak,25)==L"25 CM"&&
-       std::string(Describe(AutoSnapBreak).key)=="support_auto_break",
-       "auto-snap break distance: 25 cm by default, 10 to 60");
+ Check(Defaults()[AutoBreakDistance]==25&&Valid(AutoBreakDistance,10)&&Valid(AutoBreakDistance,60)&&!Valid(AutoBreakDistance,9)&&
+       !Valid(AutoBreakDistance,61)&&KindOf(AutoBreakDistance)==Kind::range&&Display(AutoBreakDistance,25)==L"25 CM"&&
+       std::string(Describe(AutoBreakDistance).key)=="support_auto_break",
+       "auto-break distance: 25 cm by default, 10 to 60, under the key it was saved with");
  {const auto page=MenuEntries(2);const auto carry=std::find(page.begin(),page.end(),static_cast<int>(CarryHand));
   Check(carry!=page.end()&&carry+1!=page.end()&&carry[1]==CarryHold&&Defaults()[CarryHand]==1,
         "physical carrying, on by default, sits on the hands tab above the carry grip");}

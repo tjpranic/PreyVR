@@ -23,10 +23,12 @@ constexpr Spec specs[]={
  {"turn_speed",L"SMOOTH TURN SPEED",L"Scales the game's turn rate. Applies in Smooth mode.",100,10,200,25,U::percent},
  {"two_hand",L"TWO-HAND AIM",L"Grip a long weapon's foregrip to aim it, or a pistol's grip to brace it.",1,0,1,1},
  {"grip_toggle",L"FOREGRIP INPUT",L"Hold the grip, or squeeze once to attach and again to release.",0,0,1,1,U::none,gripToggleNames},
- {"support_auto",L"AUTO-SNAP SUPPORT HAND",L"Your left hand attaches to the weapon on its own when you hold it close, and lets go when you move it away. A squeeze still works as Foregrip Input says. While attached, the left hand can't grab or use, and you can't reload.",0,0,1,1},
+ {"support_auto",L"AUTO-SNAP SUPPORT HAND",L"Your left hand attaches to the weapon on its own when you hold it close. A squeeze still attaches and lets go as Foregrip Input says. While attached, the left hand can't grab or use, and you can't reload.",0,0,1,1},
  // The two-hand lane takes the same 5-25 and 10-60 (AimTakeover.h).
  {"support_auto_attach",L"AUTO-SNAP ATTACH DISTANCE",L"How close your left hand must come to the weapon's grip to attach. Needs Auto-Snap Support Hand.",10,5,25,1,U::cm},
- {"support_auto_break",L"AUTO-SNAP BREAK DISTANCE",L"How far your left hand must move from where it attached to let go. Always at least 5 cm past the attach distance. Needs Auto-Snap Support Hand.",25,10,60,1,U::cm},
+ {"support_break",L"AUTO-BREAK SUPPORT HAND",L"Your left hand lets go of the weapon on its own when you move it away, however it attached. A squeeze still lets go as Foregrip Input says.",0,0,1,1},
+ // Keeps the key it was saved under as Auto-Snap Break Distance.
+ {"support_auto_break",L"AUTO-BREAK DISTANCE",L"How far your left hand must move from where it attached to let go. Always at least 5 cm past the distance it attached from. Needs Auto-Break Support Hand.",25,10,60,1,U::cm},
  {"psychoscope",L"PSYCHOSCOPE GESTURE",L"Left grip at forehead: pull down or lift up. Native unlock rules apply.",0,0,1,1},
  {"ui_scale",L"INTERFACE SIZE",L"Scales game panels and the HUD, as far as your view allows.",100,20,200,10,U::percent},
  {"holsters",L"BODY HOLSTERS",L"Right grip at right hip or left chest: store current weapon, then draw/stow. Assignments are not saved.",0,0,1,1},
@@ -107,7 +109,7 @@ static_assert(Consistent(),"every Spec describes its own range");
 constexpr int setup[]={CalibratePosture,RecenterView,LeanZone,HipsBack,NearClip,Antialiasing,DebugOverlay};
 constexpr int movement[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,StrafeSpeed,BackwardSpeed,ZeroGRoll,
     ZeroGPitch};
-constexpr int hands[]={AimLasers,ShotTrail,TwoHand,GripToggle,AutoSnap,AutoSnapAttach,AutoSnapBreak,Psychoscope,FingerCurl,ArmLength,CarryHand,CarryHold,GrenadeHand,
+constexpr int hands[]={AimLasers,ShotTrail,TwoHand,GripToggle,AutoSnap,AutoSnapAttach,AutoBreak,AutoBreakDistance,Psychoscope,FingerCurl,ArmLength,CarryHand,CarryHold,GrenadeHand,
     CarryThrowStrength,GrenadeThrowStrength,SurfaceStop,HeavyMass,PhysicalContact,PushStrength,FreeSwing,SwingSpeed,HeavySwingSpeed};
 constexpr int interface_[]={UiScale,UiDistance,UiOffsetRight,UiOffsetUp,UiText,ScreenPullback,
     PointerHand,ReticleSize,MarkerSize,Helmet,HelmetHeight,HelmetForward,HelmetSize};

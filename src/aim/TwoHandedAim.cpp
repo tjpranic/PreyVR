@@ -93,8 +93,9 @@ Output Solver::Update(const Input& i) {
         armed_=ValidInput(i)&&i.squeeze<.45f;
         return out;
     }
-    const auto attach=[&] {
+    const auto attach=[&](float reach) {
         held_=true;
+        reach_=reach;
         handgun_=i.region.grip==Grip::handgun;
         supportInAim_=Multiply(Conjugate(i.aim.orientation),i.support.orientation);
     };
@@ -104,17 +105,14 @@ Output Solver::Update(const Input& i) {
         armed_=false;
         if(held_&&i.toggleGrip) held_=false;
         else if(held_) byProximity_=false;   // the squeeze takes the hold over
-        else if(ClosestGrip(i,socket_)) attach();
+        else if(ClosestGrip(i,socket_)) attach(i.region.radius);
     }
     const Vec3 line=Sub(i.support.position,Add(i.primary,i.visualPrimaryOffset));
     // A handgun's hands sit closer than this; only a steering foregrip spins.
     if(held_&&!handgun_&&Dot(line,line)<.0144f) { held_=false;armed_=false;blend_=0;swing_={}; }
-    // A support hand gone from a handgun lets go, and blends out. A snapped hold
-    // goes by the break distance instead, on any weapon.
-    if(held_&&handgun_&&!byProximity_&&Dot(line,line)>kHandgunBreak*kHandgunBreak) { held_=false;armed_=false; }
-    if(held_&&byProximity_) {
+    if(held_&&i.autoBreak) {
         const Vec3 off=Sub(Rotate(Conjugate(i.aim.orientation),line),socket_);
-        const float limit=std::max(i.snapBreak,i.snapAttach+kAutoSnapMargin);
+        const float limit=std::max(i.breakDistance,reach_+kAutoBreakMargin);
         if(Dot(off,off)>limit*limit) held_=false;
     }
     if(wasHeld&&!held_) { byProximity_=false;waitForExit_=true; }
@@ -123,7 +121,7 @@ Output Solver::Update(const Input& i) {
         const bool inRange=InSnapRange(i,point);
         if(!inRange) waitForExit_=false;
         dwell_=inRange&&!waitForExit_&&i.squeeze<.45f?dwell_+i.dt:0;
-        if(dwell_>=kAutoSnapDwell) { dwell_=0;socket_=point;byProximity_=true;attach(); }
+        if(dwell_>=kAutoSnapDwell) { dwell_=0;socket_=point;byProximity_=true;attach(i.snapAttach); }
     }
     if(held_&&!handgun_) {
         // Raw controllers steer. The displayed support hand never feeds back here.

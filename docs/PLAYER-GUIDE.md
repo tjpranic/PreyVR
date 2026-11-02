@@ -46,9 +46,9 @@ smoothly to one hand. A squeeze away from the weapon does nothing. With the pist
 or the Disruptor, bring the left controller under or beside the right one and
 squeeze: the drawn left hand cups the grip the way the game holds it. The right
 hand alone still aims; bracing one controller on the other is what steadies it.
-Moving the left hand away (about 30 cm) lets go. Changing weapons, opening a menu,
-recentering or losing tracking requires releasing and grabbing again; a snap turn
-does not.
+Moving the left hand away lets go only with **Auto-Break Support Hand** on.
+Changing weapons, opening a menu, recentering or losing tracking requires releasing
+and grabbing again; a snap turn does not.
 To recenter, squeeze both grips and press **Menu** (or Menu, then both grips): it neither pauses nor opens VR
 Options. F12 also works. With Menu held first, the right grip does not reload either.
 
@@ -144,11 +144,13 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   your weapon's muzzle to where each shot went, fading after a few seconds),
   two-hand aim on/off, hold/toggle foregrip, **auto-snap support hand** (off by
   default: your left hand attaches to the weapon on its own when you hold it close
-  for a moment, within **Attach Distance** (10 cm by default), and lets go when you
-  move it away, at **Break Distance** (25 cm by default); a squeeze still works
-  as Foregrip Input says, and after a release the hand must move away before it
-  snaps again. While attached, as in any two-hand hold, the left hand can't grab or
-  use and you can't reload or holster),
+  for a moment, within **Attach Distance** (10 cm by default); a squeeze still
+  works as Foregrip Input says, and after a release the hand must move away before
+  it snaps again. While attached, as in any two-hand hold, the left hand can't grab
+  or use and you can't reload or holster), **auto-break support hand** (off by
+  default: your left hand lets go on its own when you move it away, at **Auto-Break
+  Distance** (25 cm by default) from where it attached, however it attached, so
+  toggle grip needs no second press and auto-snap needs no squeeze to let go),
   the optional psychoscope gesture, **fingers follow
   the controller** (on by default: a free hand's thumb rests on a button or
   lifts, the index points or curls on the trigger, the other three close with

@@ -9,8 +9,8 @@
 namespace preyvr::options {
 // **Every VR Options setting.** The save file names each by its Spec key, so
 // these ids are this build's alone and their order is free to change.
-enum Setting : unsigned { Turn, HeadRelative, TurnSpeed, TwoHand, GripToggle, AutoSnap, AutoSnapAttach, AutoSnapBreak,
-    Psychoscope, UiScale, Holsters, Wrist, WristSize,
+enum Setting : unsigned { Turn, HeadRelative, TurnSpeed, TwoHand, GripToggle, AutoSnap, AutoSnapAttach, AutoBreak,
+    AutoBreakDistance, Psychoscope, UiScale, Holsters, Wrist, WristSize,
     ReticleSize, MarkerSize, Haptics, HapticStrength, FreeSwing, SwingSpeed, HeavySwingSpeed, PhysicalContact, PushStrength,
     PsiTarget, Medkit, BeltHints, DebugOverlay,
     UiDistance, UiOffsetRight, UiOffsetUp, UiText, PointerHand,
