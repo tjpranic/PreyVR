@@ -11,6 +11,7 @@
 #include "equipment/head/HeadLamp.h"
 #include "equipment/head/HeadLampNative.h"
 #include "engine/NativeContract.h"
+#include "engine/NativeGate.h"
 
 #include <array>
 #include <atomic>
@@ -80,14 +81,7 @@ std::mutex gMountMutex;
 std::array<Pose, kLights> gMount{};
 std::array<bool, kLights> gMountSeen{};
 
-float Degrees(Quaternion q)
-{
-    return 2.0f * std::acos(std::fmin(1.0f, std::fabs(Normalize(q).w))) * 180.0f / 3.14159265f;
-}
-
 // --- the engine (tests replace it here) ----------------------------------------
-std::uint64_t PlayerCharacter() { return AnimIkOwnerCharacter(); }
-
 bool WorldPlacement(std::uintptr_t attachment, Placement& out)
 {
     using WorldFn = const Placement*(__fastcall*)(std::uintptr_t attachment, Placement* out);
@@ -120,7 +114,7 @@ bool PlaceEntity(std::uint32_t id, const Vec3& position, const Quaternion& rotat
     }
 }
 
-std::uint64_t (*gPlayerCharacter)() = PlayerCharacter;
+std::uint64_t (*gPlayerCharacter)() = AnimIkOwnerCharacter;
 std::uint64_t (*gFindAttachment)(std::uint64_t, std::string_view) = FindAttachment;
 AppliedView (*gLastView)() = LastAppliedView;
 bool (*gWorldPlacement)(std::uintptr_t, Placement&) = WorldPlacement;
@@ -189,7 +183,7 @@ void NoteMount(std::size_t light, const Pose& mount)
     std::lock_guard lock(gMountMutex);
     const Pose& last = gMount[light];
     if (gMountSeen[light] && Length(Sub(last.position, mount.position)) < 0.0005f &&
-        Degrees(Multiply(Conjugate(last.orientation), mount.orientation)) < 0.1f) {
+        RotationDegrees(Multiply(Conjugate(last.orientation), mount.orientation)) < 0.1f) {
         return;
     }
     gMount[light] = mount;
@@ -197,7 +191,7 @@ void NoteMount(std::size_t light, const Pose& mount)
     std::ostringstream s;
     s.precision(1);
     s << std::fixed << "mount light=" << kNames[light] << " mm=" << mount.position.x * 1000.0f << ","
-      << mount.position.y * 1000.0f << "," << mount.position.z * 1000.0f << " deg=" << Degrees(mount.orientation);
+      << mount.position.y * 1000.0f << "," << mount.position.z * 1000.0f << " deg=" << RotationDegrees(mount.orientation);
     Log(s.str());
 }
 
@@ -268,41 +262,17 @@ void __fastcall ProcessAttachmentDetour(void* binding, void* attachment)
 // The three bodies, and the two vtable slots that reach them.
 bool GateBodies(std::uintptr_t base)
 {
-    __try {
-        return contract::BodiesMatch(base, hn::Contracts) &&
-               *reinterpret_cast<const std::uintptr_t*>(base + hn::BindingVtable + hn::VtableProcessAttachment) ==
-                   base + hn::ProcessAttachment &&
-               *reinterpret_cast<const std::uintptr_t*>(base + hn::BoneVtable + hn::VtableWorldAbsolute) ==
-                   base + hn::BoneWorldAbsolute;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
-// PreyDll's base, once it is loaded and the bodies are the ones read:
-// ERROR_NOT_READY before, ERROR_BAD_EXE_FORMAT for other bytes.
-DWORD Resolve(std::uintptr_t& base)
-{
-    base = PreyBase();
-    if (base == 0) { return ERROR_NOT_READY; }
-    if (!GateBodies(base)) {
-        base = 0;
-        return ERROR_BAD_EXE_FORMAT;
-    }
-    return ERROR_SUCCESS;
+    return BodiesMatchGuarded(base, hn::Contracts) &&
+           SlotIs(base, hn::BindingVtable, hn::VtableProcessAttachment, hn::ProcessAttachment) &&
+           SlotIs(base, hn::BoneVtable, hn::VtableWorldAbsolute, hn::BoneWorldAbsolute);
 }
 // Tests replace the engine here.
-DWORD (*gResolve)(std::uintptr_t&) = Resolve;
+DWORD (*gResolve)(std::uintptr_t&) = ResolveBase<GateBodies>;
 
 bool Install(std::uintptr_t target)
 {
-    const hook::Result result = hook::Install(reinterpret_cast<void*>(target),
-                                              reinterpret_cast<void*>(&ProcessAttachmentDetour), gOriginal);
-    if (!result) {
-        Log(std::string("result=failed detail=") + hook::StepName(result.step) +
-            " status=" + std::to_string(result.status) + " target=EntityProcessAttachment");
-        return false;
-    }
-    return true;
+    return hook::InstallLogged(reinterpret_cast<void*>(target), reinterpret_cast<void*>(&ProcessAttachmentDetour),
+                               gOriginal, "EntityProcessAttachment", &Log);
 }
 // Tests replace the installer here.
 bool (*gInstall)(std::uintptr_t) = Install;

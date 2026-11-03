@@ -14,6 +14,7 @@
 #include "physics/contact/ContactNative.h"
 #include "base/MonotonicClock.h"
 #include "engine/NativeContract.h"
+#include "engine/NativeGate.h"
 #include "body/RoomScale.h"
 #include "body/RoomScaleNative.h"
 #include "render/camera/StereoCamera.h"
@@ -46,7 +47,7 @@ using SetPosFn = void(__fastcall*)(void* entity, const Vec3* position, int whyFl
 using GetPosFn = const Vec3*(__fastcall*)(void* entity);
 constexpr std::size_t kPlayerEntity = 0x38;
 constexpr std::uintptr_t kEntityVtableRva = 0x1D30BD0;
-constexpr unsigned kSetPosSlot = 0x108 / 8, kGetPosSlot = 0x110 / 8, kGetPhysicsSlot = 0x228 / 8;
+constexpr std::size_t kSetPosSlot = 0x108, kGetPosSlot = 0x110, kGetPhysicsSlot = 0x228;
 constexpr std::uintptr_t kSetPosRva = 0x90AF40, kGetPosRva = 0x10EA250, kGetPhysicsRva = scene::native::EntityPhysics;
 constexpr std::string_view kSetPosBody =
     "f30f1002458bd00f2e41387516f30f1042040f2e413c750bf30f1042080f2e41407424f20f10024183ca02f20f114138"
@@ -101,36 +102,6 @@ std::atomic<int> gLastMoveMm{0}, gResidualMm{0}, gDropMm{0}, gAllowanceMm{0}, gU
 
 int Mm(float metres) { return std::isfinite(metres) ? static_cast<int>(std::lround(metres * 1000.0f)) : 0; }
 
-template<class T> bool ReadAt(const void* base, std::size_t offset, T& out)
-{
-    return SafeCopy(&out, static_cast<const std::uint8_t*>(base) + offset, sizeof(out));
-}
-
-bool BytesMatch(std::uintptr_t address, std::string_view hex)
-{
-    std::uint8_t bytes[0x80]{};
-    const std::size_t size = hex.size() / 2;
-    if (size == 0 || size > sizeof(bytes) || !SafeCopy(bytes, reinterpret_cast<const void*>(address), size)) {
-        return false;
-    }
-    const auto nibble = [](char c) { return c <= '9' ? c - '0' : c - 'a' + 10; };
-    for (std::size_t i = 0; i < size; ++i) {
-        if (bytes[i] != static_cast<std::uint8_t>((nibble(hex[2 * i]) << 4) | nibble(hex[2 * i + 1]))) { return false; }
-    }
-    return true;
-}
-
-bool SlotIs(std::uintptr_t base, std::uintptr_t vtableRva, unsigned slot, std::uintptr_t rva)
-{
-    std::uintptr_t value = 0;
-    return SafeRead(base + vtableRva + slot * sizeof(value), value) && value == base + rva;
-}
-
-template <class Fn> Fn Slot(void* object, std::size_t offset)
-{
-    return *reinterpret_cast<const Fn*>(*static_cast<const std::uintptr_t*>(object) + offset);
-}
-
 bool PhysicsMatches(std::uintptr_t base)
 {
     __try {
@@ -143,9 +114,9 @@ bool PhysicsMatches(std::uintptr_t base)
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
-    return SlotIs(base, cn::LivingVtable, rn::SetParamsSlot / 8, rn::LivingSetParams) &&
-           SlotIs(base, cn::LivingVtable, cn::StatusSlot / 8, cn::LivingGetStatus) &&
-           SlotIs(base, cn::LivingVtable, cn::ParamsSlot / 8, cn::LivingGetParams);
+    return SlotIs(base, cn::LivingVtable, rn::SetParamsSlot, rn::LivingSetParams) &&
+           SlotIs(base, cn::LivingVtable, cn::StatusSlot, cn::LivingGetStatus) &&
+           SlotIs(base, cn::LivingVtable, cn::ParamsSlot, cn::LivingGetParams);
 }
 
 // Once, before the first call: the entity's pair and the living body's calls.
@@ -156,8 +127,8 @@ bool OpenGate()
     const std::uintptr_t base = PreyBase();
     const char* mismatch = nullptr;
     if (base == 0) { mismatch = "no_preydll"; }
-    else if (!BytesMatch(base + kSetPosRva, kSetPosBody)) { mismatch = "set_pos_body"; }
-    else if (!BytesMatch(base + kGetPosRva, kGetPosBody)) { mismatch = "get_pos_body"; }
+    else if (!SafeEqualHex(base + kSetPosRva, kSetPosBody)) { mismatch = "set_pos_body"; }
+    else if (!SafeEqualHex(base + kGetPosRva, kGetPosBody)) { mismatch = "get_pos_body"; }
     else if (!SlotIs(base, kEntityVtableRva, kSetPosSlot, kSetPosRva) || !SlotIs(base, kEntityVtableRva, kGetPosSlot, kGetPosRva) ||
              !SlotIs(base, kEntityVtableRva, kGetPhysicsSlot, kGetPhysicsRva)) {
         mismatch = "entity_vtable";
@@ -190,7 +161,7 @@ void* PlayerEntity(void* player)
 {
     void* entity = nullptr;
     std::uintptr_t table = 0;
-    if (!ReadAt(player, kPlayerEntity, entity) || entity == nullptr || !ReadAt(entity, 0, table) ||
+    if (!SafeReadAt(player, kPlayerEntity, entity) || entity == nullptr || !SafeReadAt(entity, 0, table) ||
         table != gEntityVtable) {
         return nullptr;
     }
@@ -231,7 +202,7 @@ bool ReadLiving(void* physics, Living& out)
     std::memcpy(status, &type, sizeof(type));
     __try {
         using GetStatusFn = int(__fastcall*)(void*, void*);
-        if (!Slot<GetStatusFn>(physics, cn::StatusSlot)(physics, status)) { return false; }
+        if (!Virtual<GetStatusFn>(physics, cn::StatusSlot)(physics, status)) { return false; }
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
@@ -262,7 +233,7 @@ bool StanceDepth(void* physics, const Vec3* position, float& depth)
     int fits = 0;
     __try {
         using GetStatusFn = int(__fastcall*)(void*, void*);
-        fits = Slot<GetStatusFn>(physics, cn::StatusSlot)(physics, check);
+        fits = Virtual<GetStatusFn>(physics, cn::StatusSlot)(physics, check);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
@@ -294,7 +265,7 @@ bool SetPositionKeepingMotion(void* physics, const Vec3& position)
     __try {
         // bThreadSafe 0, as the entity's own physics proxy calls it.
         using SetParamsFn = int(__fastcall*)(void*, const void*, int);
-        Slot<SetParamsFn>(physics, rn::SetParamsSlot)(physics, params, 0);
+        Virtual<SetParamsFn>(physics, rn::SetParamsSlot)(physics, params, 0);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
@@ -307,8 +278,8 @@ bool PhysicsIdle(std::uintptr_t world, void* physics)
 {
     std::uint32_t stepLock = 1, stepBusy = 1, worldLock = 1, queued = rn::EntityQueuedUnit;
     const void* const w = reinterpret_cast<const void*>(world);
-    return world != 0 && ReadAt(w, rn::WorldStepLock, stepLock) && ReadAt(w, rn::WorldStepBusy, stepBusy) &&
-           ReadAt(w, rn::WorldLock, worldLock) && ReadAt(physics, rn::EntityQueued, queued) && stepLock == 0 &&
+    return world != 0 && SafeReadAt(w, rn::WorldStepLock, stepLock) && SafeReadAt(w, rn::WorldStepBusy, stepBusy) &&
+           SafeReadAt(w, rn::WorldLock, worldLock) && SafeReadAt(physics, rn::EntityQueued, queued) && stepLock == 0 &&
            stepBusy == 0 && worldLock == 0 && queued < rn::EntityQueuedUnit;
 }
 
@@ -379,7 +350,7 @@ void ServiceRoomScale(void* player, float torsoYaw, float dt, bool gameplay)
     std::uintptr_t world = 0, table = 0;
     void* physics = nullptr;
     Living living{};
-    if (SceneQueryWorld(pose, world, physics) != ERROR_SUCCESS || physics == nullptr || !ReadAt(physics, 0, table) ||
+    if (SceneQueryWorld(pose, world, physics) != ERROR_SUCCESS || physics == nullptr || !SafeReadAt(physics, 0, table) ||
         table != gLivingVtable || !ReadLiving(physics, living)) {
         gNoLiving.fetch_add(1, std::memory_order_relaxed);
         gFollower.Reset();
@@ -431,7 +402,7 @@ void ServiceRoomScale(void* player, float torsoYaw, float dt, bool gameplay)
         Vec3 base = feet;
         if (moving) {
             Vec3 body{};
-            if (!PhysicsIdle(world, physics) || !ReadAt(physics, rn::BodyPosition, body) || !Finite(body)) {
+            if (!PhysicsIdle(world, physics) || !SafeReadAt(physics, rn::BodyPosition, body) || !Finite(body)) {
                 gBusy.fetch_add(1, std::memory_order_relaxed);
                 return std::nullopt;
             }
@@ -485,7 +456,7 @@ void ServiceRoomScale(void* player, float torsoYaw, float dt, bool gameplay)
         // own SetParams behind it; replayed afterwards with this position, it
         // puts the body back by that step's movement. Counted, should it happen.
         std::uint32_t queued = 0;
-        if (moving && ReadAt(physics, rn::EntityQueued, queued) && queued >= rn::EntityQueuedUnit) {
+        if (moving && SafeReadAt(physics, rn::EntityQueued, queued) && queued >= rn::EntityQueuedUnit) {
             gRaced.fetch_add(1, std::memory_order_relaxed);
         }
         Vec3 movedTo{};

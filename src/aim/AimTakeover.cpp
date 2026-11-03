@@ -21,6 +21,7 @@
 #include "aim/ExamineRay.h"
 #include "aim/MotionController.h"
 #include "engine/NativeContract.h"
+#include "engine/NativeGate.h"
 #include "render/camera/StereoCamera.h"
 #include "aim/WorldUiNative.h"
 
@@ -43,7 +44,6 @@ void Log(const std::string& line)
 // R-011 ArkPlayer::UpdateCachedReticleViewPosAndDir(ArkPlayer*).
 using UpdateCachedRayFn = void(__fastcall*)(void* player);
 
-void* gTarget = nullptr;
 std::atomic<UpdateCachedRayFn> gOriginal{nullptr};
 bool gInstalled = false;
 LatestSnapshot<preyvr::aim::Sample> gAimSample;
@@ -154,15 +154,6 @@ void WorldUiRay(std::uintptr_t, void* out, void* result, std::uintptr_t caller)
     const float ray[6] = {sample.origin.x, sample.origin.y, sample.origin.z,
                           sample.direction.x, sample.direction.y, sample.direction.z};
     if (SafeCopy(out, ray, sizeof(ray))) { gWorldUiSteered.fetch_add(1, std::memory_order_relaxed); }
-}
-
-bool WorldUiBodyMatches(std::uintptr_t base)
-{
-    __try {
-        return contract::BodiesMatch(base, wn::Contracts);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
 }
 
 // The aim override: the cached ray (and with aim.origin its origin) from the
@@ -343,18 +334,16 @@ bool Install()
         Log("result=unavailable detail=landmark_missing");
         return false;
     }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         return false;
     }
-    const auto target = reinterpret_cast<std::uintptr_t>(preyDll) + landmark->rva;
-    if (std::memcmp(reinterpret_cast<const void*>(target),
-                    landmark->expected.data(), landmark->expected.size()) != 0) {
+    const auto installed = hook::InstallVerified(reinterpret_cast<void*>(base + landmark->rva), landmark->expected,
+                                                 reinterpret_cast<void*>(&UpdateCachedRayWithTakeover), gOriginal);
+    if (installed.step == hook::Step::prologue) {
         Log("result=unavailable detail=prologue_mismatch");
         return false;
     }
-    gTarget = reinterpret_cast<void*>(target);
-    const auto installed = hook::Install(gTarget, reinterpret_cast<void*>(&UpdateCachedRayWithTakeover), gOriginal);
     if (!installed) {
         Log(std::string("result=failed detail=") + hook::StepName(installed.step));
         return false;
@@ -419,7 +408,7 @@ void EnsureWorldUiRay()
         gWorldUiGate = "no_preydll";
         return;
     }
-    if (!WorldUiBodyMatches(base)) {
+    if (!BodiesMatchGuarded(base, wn::Contracts)) {
         gWorldUiGate = "refused";
         Log("result=unavailable detail=bytes_mismatch target=WorldUiCursorRay");
         return;

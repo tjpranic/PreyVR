@@ -1,7 +1,8 @@
 #pragma once
 
 // The engine reads nearly every lane starts from: PreyDll.dll's base, CSystem's
-// live view camera and an entity by id. Header-only so tests that compile a lane's .cpp
+// live view camera, an entity by id and a virtual function by its vtable slot.
+// Header-only so tests that compile a lane's .cpp
 // directly need nothing extra; a test that redefines GetModuleHandleW before
 // including the lane still stubs this.
 #include "engine/EngineMap.h"
@@ -9,6 +10,7 @@
 #include <windows.h>
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <string_view>
@@ -81,6 +83,20 @@ inline std::uintptr_t EntityById(std::uintptr_t base, std::uint32_t id)
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return 0;
     }
+}
+
+// The virtual function at byte offset `slot` of `object`'s vtable. Plain reads:
+// a caller that can fault keeps its own __try.
+template <class Fn>
+Fn Virtual(const void* object, std::size_t slot)
+{
+    return reinterpret_cast<Fn>((*reinterpret_cast<void* const* const*>(object))[slot / sizeof(void*)]);
+}
+
+template <class Fn>
+Fn Virtual(std::uintptr_t object, std::size_t slot)
+{
+    return Virtual<Fn>(reinterpret_cast<const void*>(object), slot);
 }
 
 } // namespace preyvr::dll

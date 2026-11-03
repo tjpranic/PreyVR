@@ -8,7 +8,10 @@
 // Header-only, so the tests that compile a lane's .cpp directly need nothing
 // extra.
 #include "aim/GameplayFrame.h"
+#include "base/MonotonicClock.h"
 #include "body/ik/AnimIk.h"
+
+#include <cmath>
 
 namespace preyvr::dll {
 
@@ -60,7 +63,8 @@ enum class Placement {
 // `hand`'s controller pose in engine world. False only when the anchor is
 // unavailable (AnchorPoint), and then `out` is untouched. The pose's own
 // freshness and finiteness stay with the caller: the sites check different
-// validity fields and ages, and refuse with their own reasons.
+// validity fields and ages, and refuse with their own reasons (ControllerGrip
+// below is the one check two lanes share).
 inline bool HandWorld(const GameplayPoseFrame& frame, Hand hand, ControllerPose pose, Anchor anchor,
                       Placement placement, Pose& out)
 {
@@ -73,6 +77,22 @@ inline bool HandWorld(const GameplayPoseFrame& frame, Hand hand, ControllerPose 
     out = animik::ControllerWorldFromHead(PlaySpaceRotation(frame), at, frame.tracking.head, tracked);
     if (placement == Placement::drawn) { out.position = Add(out.position, SurfaceOffset(frame, hand)); }
     return true;
+}
+
+// `hand`'s grip at the controller, from the camera centre: what the contact box
+// and the surface stop's probes are built on, checked as both refuse it. Null,
+// or the refusal: "hand_pose" for a stale or non-finite pose, "camera" for a
+// frame without the camera.
+inline const char* ControllerGrip(const GameplayPoseFrame& frame, Hand hand, Pose& out)
+{
+    const auto& h = frame.tracking.hands[static_cast<unsigned>(hand)];
+    if (!IsPoseUsable(h.gripPose, h.gripValidity, kMaxPoseAgeNs)) { return "hand_pose"; }
+    if (!HandWorld(frame, hand, ControllerPose::grip, Anchor::camera, Placement::controller, out)) { return "camera"; }
+    const auto& q = out.orientation;
+    if (!Finite(out.position) || !std::isfinite(q.x) || !std::isfinite(q.y) || !std::isfinite(q.z) || !std::isfinite(q.w)) {
+        return "hand_pose";
+    }
+    return nullptr;
 }
 
 } // namespace preyvr::dll

@@ -29,7 +29,6 @@ std::atomic<DWORD> gFirstThreadId{0};
 std::atomic<void*> gFirstRenderer{nullptr};
 std::atomic<DWORD> gMilestoneThreadId{0};
 std::atomic<void*> gMilestoneRenderer{nullptr};
-std::atomic<void*> gLastRenderer{nullptr};
 void* gTarget = nullptr;
 std::atomic<EndRendererSceneFn> gOriginal{nullptr};
 bool gHookCreated = false;
@@ -39,7 +38,6 @@ void __fastcall ObserveEndRendererScene(void* renderer)
     const ULONGLONG count = gFrameCount.fetch_add(1, std::memory_order_relaxed) + 1;
     // Ahead of the XR frame, so its records follow it (FrameProbe.h).
     ProbeRecord(ProbeStep::endFrame, static_cast<std::uint32_t>(count));
-    gLastRenderer.store(renderer, std::memory_order_relaxed);
     if (count == 1) {
         gFirstThreadId.store(GetCurrentThreadId(), std::memory_order_relaxed);
         gFirstRenderer.store(renderer, std::memory_order_relaxed);
@@ -185,7 +183,6 @@ DWORD SetFrameObserverEnabled(bool enabled)
     gFirstRenderer.store(nullptr, std::memory_order_release);
     gMilestoneThreadId.store(0, std::memory_order_release);
     gMilestoneRenderer.store(nullptr, std::memory_order_release);
-    gLastRenderer.store(nullptr, std::memory_order_release);
 
     status = MH_EnableHook(gTarget);
     if (status != MH_OK) {

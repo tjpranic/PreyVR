@@ -9,6 +9,7 @@
 #include "render/stereo/BodyDepthNative.h"
 #include "engine/EngineMap.h"
 #include "engine/NativeContract.h"
+#include "engine/NativeGate.h"
 
 #include <atomic>
 #include <cstdint>
@@ -313,14 +314,6 @@ struct Targets {
     std::uintptr_t slotRender = 0, setViewport = 0, nearestChange = 0;
 };
 
-bool GateBody(std::uintptr_t base)
-{
-    __try {
-        return contract::BodiesMatch(base, bn::Contracts);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
 // The three functions' addresses, once PreyDll is loaded and every body is the
 // one read: ERROR_NOT_READY before, ERROR_BAD_EXE_FORMAT for other bytes.
 DWORD Resolve(Targets& targets)
@@ -328,31 +321,21 @@ DWORD Resolve(Targets& targets)
     targets = {};
     const auto base = PreyBase();
     if (base == 0) { return ERROR_NOT_READY; }
-    if (!GateBody(base)) { return ERROR_BAD_EXE_FORMAT; }
+    if (!BodiesMatchGuarded(base, bn::Contracts)) { return ERROR_BAD_EXE_FORMAT; }
     targets = {base + bn::SlotRender, base + bn::SetViewport, base + bn::NearestChange};
     return ERROR_SUCCESS;
 }
 // Tests replace the engine here.
 DWORD (*gResolve)(Targets&) = Resolve;
 
-template <class Fn>
-bool InstallOne(std::uintptr_t target, void* detour, std::atomic<Fn>& original, const char* name)
-{
-    const hook::Result result = hook::Install(reinterpret_cast<void*>(target), detour, original);
-    if (!result) {
-        Log(std::string("result=failed detail=") + hook::StepName(result.step) + " status=" +
-            std::to_string(result.status) + " target=" + name);
-        return false;
-    }
-    return true;
-}
 bool Install(const Targets& targets)
 {
-    return InstallOne(targets.slotRender, reinterpret_cast<void*>(&SlotRenderDetour), gOriginal, "SlotRender") &&
-           InstallOne(targets.setViewport, reinterpret_cast<void*>(&SetViewportDetour), gViewportOriginal,
-                      "SetViewport") &&
-           InstallOne(targets.nearestChange, reinterpret_cast<void*>(&NearestChangeDetour), gNearestOriginal,
-                      "NearestChange");
+    return hook::InstallLogged(reinterpret_cast<void*>(targets.slotRender), reinterpret_cast<void*>(&SlotRenderDetour),
+                               gOriginal, "SlotRender", &Log) &&
+           hook::InstallLogged(reinterpret_cast<void*>(targets.setViewport),
+                               reinterpret_cast<void*>(&SetViewportDetour), gViewportOriginal, "SetViewport", &Log) &&
+           hook::InstallLogged(reinterpret_cast<void*>(targets.nearestChange),
+                               reinterpret_cast<void*>(&NearestChangeDetour), gNearestOriginal, "NearestChange", &Log);
 }
 // Tests replace the installer here.
 bool (*gInstall)(const Targets&) = Install;

@@ -266,20 +266,19 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
 bool Install()
 {
     if (gInstalled.load(std::memory_order_acquire)) { return true; }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         Log("result=unavailable detail=no_preydll");
         return false;
     }
-    const auto target = reinterpret_cast<std::uintptr_t>(preyDll) + kProcessAdikRva;
-    const engine::Landmark* adik = engine::FindLandmark("anim.process_adik");
-    if (adik == nullptr || adik->rva != kProcessAdikRva ||
-        std::memcmp(reinterpret_cast<const void*>(target), adik->expected.data(), adik->expected.size()) != 0) {
+    // A missing landmark, or one at another RVA, gives no bytes: refused as a mismatch.
+    const auto installed = hook::InstallVerified(reinterpret_cast<void*>(base + kProcessAdikRva),
+                                                 LandmarkBytes("anim.process_adik", kProcessAdikRva),
+                                                 reinterpret_cast<void*>(&ProcessAdikWithTakeover), gOriginal);
+    if (installed.step == hook::Step::prologue) {
         Log("result=unavailable detail=adik_prologue_mismatch");
         return false;
     }
-    gTarget = reinterpret_cast<void*>(target);
-    const auto installed = hook::Install(gTarget, reinterpret_cast<void*>(&ProcessAdikWithTakeover), gOriginal);
     if (!installed) {
         Log(std::string("result=failed detail=") + hook::StepName(installed.step));
         return false;

@@ -1,6 +1,7 @@
 #include "body/TorsoLane.h"
 
 #include "engine/EngineAccess.h"
+#include "engine/NativeGate.h"
 #include "render/camera/HeadTrackingHook.h"
 #include "engine/hooks/HookInstall.h"
 #include "base/Logger.h"
@@ -144,32 +145,10 @@ int Mdeg(float radians)
     return std::isfinite(radians) ? static_cast<int>(std::lround(radians * kDegreesPerRadian * 1000.0f)) : 0;
 }
 
-template<class T> bool ReadAt(const void* base, std::size_t offset, T& out)
+// Whether slot `index` of the player's primary vtable holds the function at `rva`.
+bool PlayerSlotIs(std::uintptr_t base, unsigned index, std::uintptr_t rva)
 {
-    return SafeCopy(&out, static_cast<const std::uint8_t*>(base) + offset, sizeof(out));
-}
-
-bool BytesMatch(std::uintptr_t address, std::string_view hex)
-{
-    std::uint8_t bytes[0x80]{};
-    const std::size_t size = hex.size() / 2;
-    if (size == 0 || size > sizeof(bytes) || !SafeCopy(bytes, reinterpret_cast<const void*>(address), size)) {
-        return false;
-    }
-    const auto nibble = [](char c) { return c <= '9' ? c - '0' : c - 'a' + 10; };
-    for (std::size_t i = 0; i < size; ++i) {
-        if (bytes[i] != static_cast<std::uint8_t>((nibble(hex[2 * i]) << 4) | nibble(hex[2 * i + 1]))) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool SlotIs(std::uintptr_t base, unsigned slot, std::uintptr_t rva)
-{
-    std::uintptr_t value = 0;
-    return ReadAt(reinterpret_cast<const void*>(base + kPlayerVtableRva), slot * sizeof(value), value) &&
-           value == base + rva;
+    return SlotIs(base, kPlayerVtableRva, index * sizeof(std::uintptr_t), rva);
 }
 
 bool CallGet(void* player, Quaternion* out)
@@ -217,8 +196,8 @@ bool InGameplay(void* player)
     int mode = -1;
     int cinematic = -1;
     std::uintptr_t customView = 1;
-    return ReadAt(player, kCameraMode, mode) && ReadAt(player, kCustomView, customView) &&
-           ReadAt(player, kCinematicGate, cinematic) && mode == 0 && customView == 0 && cinematic == 0;
+    return SafeReadAt(player, kCameraMode, mode) && SafeReadAt(player, kCustomView, customView) &&
+           SafeReadAt(player, kCinematicGate, cinematic) && mode == 0 && customView == 0 && cinematic == 0;
 }
 
 // Whether the game is turning the player itself this frame, or was within the
@@ -315,7 +294,7 @@ void Tick(void* player)
     gTicks.fetch_add(1, std::memory_order_relaxed);
     if (!gActive.load(std::memory_order_acquire) || player == nullptr) { return; }
     std::uintptr_t vtable = 0;
-    if (!ReadAt(player, 0, vtable) || vtable != gVtable.load(std::memory_order_relaxed)) {
+    if (!SafeReadAt(player, 0, vtable) || vtable != gVtable.load(std::memory_order_relaxed)) {
         gNotPlayer.fetch_add(1, std::memory_order_relaxed);
         return;
     }
@@ -362,8 +341,8 @@ void NoteZeroG(void* player)
 {
     std::uintptr_t vtable = 0;
     int state = -1;
-    if (!ReadAt(player, 0, vtable) || vtable != gVtable.load(std::memory_order_relaxed)) { return; }
-    const bool zeroG = ReadAt(player, kMovementState, state) && state == kZeroGState;
+    if (!SafeReadAt(player, 0, vtable) || vtable != gVtable.load(std::memory_order_relaxed)) { return; }
+    const bool zeroG = SafeReadAt(player, kMovementState, state) && state == kZeroGState;
     if (zeroG == gZeroG.exchange(zeroG, std::memory_order_acq_rel)) { return; }
     gWatch.Reset();
     gRotationWatch.Reset();
@@ -422,16 +401,16 @@ DWORD Install()
     if (gInstalled.load(std::memory_order_acquire)) { return 0; }
     const auto base = PreyBase();
     if (base == 0) { return 1; }
-    if (!SlotIs(base, kUpdateSlot, kPlayerUpdateRva)) {
+    if (!PlayerSlotIs(base, kUpdateSlot, kPlayerUpdateRva)) {
         Log("result=unavailable detail=player_vtable");
         return 2;
     }
     // Without the setter the torso is still estimated; a snap leaves the body behind.
     const char* mismatch = nullptr;
-    if (!BytesMatch(base + kSetViewRotationRva, kSetViewRotationBody)) { mismatch = "set_view_rotation_body"; }
-    else if (!BytesMatch(base + kGetViewRotationRva, kGetViewRotationBody)) { mismatch = "get_view_rotation_body"; }
-    else if (!BytesMatch(base + kComponentCopyRva, kComponentCopyBody)) { mismatch = "component_copy_body"; }
-    else if (!SlotIs(base, kSetSlot, kSetViewRotationRva) || !SlotIs(base, kGetSlot, kGetViewRotationRva)) {
+    if (!SafeEqualHex(base + kSetViewRotationRva, kSetViewRotationBody)) { mismatch = "set_view_rotation_body"; }
+    else if (!SafeEqualHex(base + kGetViewRotationRva, kGetViewRotationBody)) { mismatch = "get_view_rotation_body"; }
+    else if (!SafeEqualHex(base + kComponentCopyRva, kComponentCopyBody)) { mismatch = "component_copy_body"; }
+    else if (!PlayerSlotIs(base, kSetSlot, kSetViewRotationRva) || !PlayerSlotIs(base, kGetSlot, kGetViewRotationRva)) {
         mismatch = "view_rotation_slots";
     }
     if (mismatch != nullptr) {
@@ -496,7 +475,7 @@ void ServiceBodyFollow()
     if (!gActive.load(std::memory_order_acquire)) { return; }
     // The player the frame started with, still the player.
     std::uintptr_t vtable = 0;
-    if (!ReadAt(pending.player, 0, vtable) || vtable != gVtable.load(std::memory_order_relaxed)) { return; }
+    if (!SafeReadAt(pending.player, 0, vtable) || vtable != gVtable.load(std::memory_order_relaxed)) { return; }
     // The turn first: it changes G and R together and leaves the play space,
     // and so the head's offset, alone.
     FollowTurn(pending.player, pending.torso, pending.dt, MonotonicNanoseconds());

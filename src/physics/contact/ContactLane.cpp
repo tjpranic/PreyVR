@@ -21,6 +21,7 @@
 #include "physics/contact/ContactQuery.h"
 #include "base/MonotonicClock.h"
 #include "engine/NativeContract.h"
+#include "engine/NativeGate.h"
 #include "physics/contact/PhysicalNative.h"
 #include "physics/contact/SceneQueryNative.h"
 #include "render/camera/StereoCamera.h"
@@ -115,10 +116,6 @@ DWORD SafeQuery(const Natives& n, const Box& now, const Box* previous, Contact* 
     }
 }
 
-bool SlotIs(std::uintptr_t base, std::uintptr_t table, std::size_t slot, std::uintptr_t rva)
-{
-    return *reinterpret_cast<const std::uintptr_t*>(base + table + slot) == base + rva;
-}
 // Every function called through a named RVA is one the gate hashes.
 static_assert(contract::Gated(cn::Contracts, cn::GetEntitiesInBox) && contract::Gated(cn::Contracts, cn::CollideEntityWithPrimitive) &&
               contract::Gated(cn::Contracts, cn::GetSurfaceParameters) && contract::Gated(cn::Contracts, cn::RigidGetStatus) &&
@@ -169,14 +166,10 @@ static_assert(contract::Gated(cn::Contracts, cn::ArticulatedAction) && contract:
               contract::Gated(cn::Contracts, cn::ArticulatedGetParams));
 bool GateBodyPush(std::uintptr_t base)
 {
-    __try {
-        return SlotIs(base, cn::ArticulatedVtable, cn::ActionSlot, cn::ArticulatedAction) &&
-               SlotIs(base, cn::ArticulatedVtable, cn::StepSlot, cn::ArticulatedStep) &&
-               SlotIs(base, cn::ArticulatedVtable, cn::StepBackSlot, cn::ArticulatedStepBack) &&
-               SlotIs(base, cn::ArticulatedVtable, cn::ParamsSlot, cn::ArticulatedGetParams);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SlotIs(base, cn::ArticulatedVtable, cn::ActionSlot, cn::ArticulatedAction) &&
+           SlotIs(base, cn::ArticulatedVtable, cn::StepSlot, cn::ArticulatedStep) &&
+           SlotIs(base, cn::ArticulatedVtable, cn::StepBackSlot, cn::ArticulatedStepBack) &&
+           SlotIs(base, cn::ArticulatedVtable, cn::ParamsSlot, cn::ArticulatedGetParams);
 }
 // What the player stands on comes from the player's living GetStatus
 // (pe_status_living) and GetParams (pe_player_dimensions): the living vtable's
@@ -185,12 +178,8 @@ static_assert(contract::Gated(cn::Contracts, cn::LivingGetStatus) && contract::G
               contract::Gated(cn::Contracts, cn::LivingGetParams) && contract::Gated(cn::Contracts, cn::StaticGetParams));
 bool GateLiving(std::uintptr_t base)
 {
-    __try {
-        return SlotIs(base, cn::LivingVtable, cn::StatusSlot, cn::LivingGetStatus) &&
-               SlotIs(base, cn::LivingVtable, cn::ParamsSlot, cn::LivingGetParams);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return SlotIs(base, cn::LivingVtable, cn::StatusSlot, cn::LivingGetStatus) &&
+           SlotIs(base, cn::LivingVtable, cn::ParamsSlot, cn::LivingGetParams);
 }
 bool gated = false, gatedPush = false, gatedBodyPush = false, gatedLiving = false;
 DWORD Resolve(const GameplayPoseFrame& frame, Natives& n)
@@ -788,13 +777,9 @@ unsigned PushContacts(const GameplayPoseFrame& frame, const Natives& n, const Co
 // what it visibly touches.
 void HandProxy(const GameplayPoseFrame& f, Hand hand, ProxyNow& out)
 {
-    const auto& h = f.tracking.hands[static_cast<unsigned>(hand)];
-    if (!IsPoseUsable(h.gripPose, h.gripValidity, kMaxPoseAgeNs)) { out.why = "hand_pose"; return; }
     Pose grip{};
-    if (!HandWorld(f, hand, ControllerPose::grip, Anchor::camera, Placement::controller, grip)) { out.why = "camera"; return; }
-    const auto& q = grip.orientation;
-    if (!Finite(grip.position) || !std::isfinite(q.x) || !std::isfinite(q.y) || !std::isfinite(q.z) || !std::isfinite(q.w)) {
-        out.why = "hand_pose";
+    if (const char* why = ControllerGrip(f, hand, grip)) {
+        out.why = why;
         return;
     }
     grip.position = Add(grip.position, SurfaceOffset(f, hand));

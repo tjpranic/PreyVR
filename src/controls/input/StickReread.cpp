@@ -7,6 +7,7 @@
 #include "engine/SafeMemory.h"
 #include "controls/locomotion/Locomotion.h"
 #include "engine/NativeContract.h"
+#include "engine/NativeGate.h"
 #include "controls/input/StickRereadNative.h"
 
 #include <atomic>
@@ -232,21 +233,11 @@ void __fastcall ListenerDetour(void* listener, const void* event)
     LogStop(read);
 }
 
-bool SlotHolds(std::uintptr_t base, std::uintptr_t vtable, std::size_t slot, std::uintptr_t rva)
-{
-    std::uintptr_t target = 0;
-    return SafeRead(base + vtable + slot, target) && target == base + rva;
-}
-
 bool HooksGateMatches(std::uintptr_t base)
 {
-    __try {
-        if (!contract::BodiesMatch(base, sn::Contracts)) { return false; }
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-    return SlotHolds(base, sn::ListenerVtable, sn::ListenerSlot, sn::ActionMapEvent) &&
-           SlotHolds(base, sn::ManagerVtable, sn::FilteredSlot, sn::ActionFiltered);
+    return BodiesMatchGuarded(base, sn::Contracts) &&
+           SlotIs(base, sn::ListenerVtable, sn::ListenerSlot, sn::ActionMapEvent) &&
+           SlotIs(base, sn::ManagerVtable, sn::FilteredSlot, sn::ActionFiltered);
 }
 
 // What the read-back calls and relies on: the player singleton and the yaw

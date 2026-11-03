@@ -163,11 +163,6 @@ struct Touch {
     scene::Hit hit{};
 };
 struct QueryStats { unsigned entities = 0, statics = 0, rigids = 0, bodies = 0, other = 0, self = 0; DWORD error = 0; };
-// A virtual function of an engine object, by its vtable slot's byte offset.
-template <class Fn> Fn Virtual(const void* object, std::size_t slot)
-{
-    return reinterpret_cast<Fn>((*reinterpret_cast<void* const* const*>(object))[slot / sizeof(void*)]);
-}
 // GetType through the IPhysicalEntity interface, which every class answers.
 int TypeOf(void* entity)
 {

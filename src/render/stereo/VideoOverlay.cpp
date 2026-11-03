@@ -7,6 +7,7 @@
 #include "xr/XrSessionHost.h"
 #include "render/stereo/FullscreenVideoNative.h"
 #include "engine/NativeContract.h"
+#include "engine/NativeGate.h"
 #include "render/stereo/VideoLetterbox.h"
 
 #include <atomic>
@@ -112,14 +113,6 @@ void __fastcall FullscreenDrawDetour(void* backend, void* movie, unsigned int ha
 }
 
 // --- the gate and the hook (main thread) ----------------------------------------
-bool GateBodies(std::uintptr_t base)
-{
-    __try {
-        return contract::BodiesMatch(base, vn::Contracts);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
 // The draw, GetViewport and the renderer, once PreyDll is loaded and both
 // bodies are the ones read: ERROR_NOT_READY before, ERROR_BAD_EXE_FORMAT for
 // other bytes.
@@ -128,7 +121,7 @@ DWORD Resolve(Engine& engine)
     engine = {};
     const auto base = PreyBase();
     if (base == 0) { return ERROR_NOT_READY; }
-    if (!GateBodies(base)) { return ERROR_BAD_EXE_FORMAT; }
+    if (!BodiesMatchGuarded(base, vn::Contracts)) { return ERROR_BAD_EXE_FORMAT; }
     engine.draw = base + vn::FullscreenDraw;
     engine.getViewport = reinterpret_cast<GetViewportFn>(base + vn::GetViewport);
     engine.renderer = reinterpret_cast<void*>(base + vn::Renderer);

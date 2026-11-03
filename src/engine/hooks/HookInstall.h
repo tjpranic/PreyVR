@@ -118,6 +118,28 @@ bool HookAt(void* target, std::span<const std::uint8_t> prologue, void* detour, 
     return static_cast<bool>(result);
 }
 
+// HookAt for the function at `rva` in the module at `base`.
+template <class Slot>
+bool HookAt(std::uintptr_t base, std::uintptr_t rva, std::span<const std::uint8_t> prologue, void* detour,
+            Slot& original, const char* name, void (*log)(const std::string&))
+{
+    return HookAt(reinterpret_cast<void*>(base + rva), prologue, detour, original, name, log);
+}
+
+// Install, for a target its lane has already gated, with the lanes' shared
+// failure line:
+//   result=failed detail=create_hook status=<MinHook status> target=<name>   (and enable_hook)
+template <class Slot>
+bool InstallLogged(void* target, void* detour, Slot& original, const char* name, void (*log)(const std::string&))
+{
+    const Result result = Install(target, detour, original);
+    if (!result) {
+        log(std::string("result=failed detail=") + StepName(result.step) + " status=" + std::to_string(result.status) +
+            " target=" + name);
+    }
+    return static_cast<bool>(result);
+}
+
 // One hook of a set that only works whole.
 struct Spec {
     void* target;

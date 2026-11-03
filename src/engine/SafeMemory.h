@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <string_view>
 #include <type_traits>
 
 namespace preyvr::dll {
@@ -56,6 +57,31 @@ template <class T>
 bool SafeRead(std::uintptr_t at, T& out)
 {
     return SafeRead(reinterpret_cast<const void*>(at), out);
+}
+
+// The T `offset` bytes past `base`.
+template <class T>
+bool SafeReadAt(const void* base, std::size_t offset, T& out)
+{
+    return SafeCopy(&out, static_cast<const std::uint8_t*>(base) + offset, sizeof(out));
+}
+
+// Whether the bytes at `address` are `hex` (two lower-case digits a byte, at
+// most 0x80 bytes). False when they differ or cannot be read.
+inline bool SafeEqualHex(std::uintptr_t address, std::string_view hex)
+{
+    std::uint8_t bytes[0x80]{};
+    const std::size_t size = hex.size() / 2;
+    if (size == 0 || size > sizeof(bytes) || !SafeCopy(bytes, reinterpret_cast<const void*>(address), size)) {
+        return false;
+    }
+    const auto nibble = [](char c) { return c <= '9' ? c - '0' : c - 'a' + 10; };
+    for (std::size_t i = 0; i < size; ++i) {
+        if (bytes[i] != static_cast<std::uint8_t>((nibble(hex[2 * i]) << 4) | nibble(hex[2 * i + 1]))) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // Copies the printable C string at `source`, cut to fit `out`; false for a null,

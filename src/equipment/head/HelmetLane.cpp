@@ -11,6 +11,7 @@
 #include "equipment/head/Helmet.h"
 #include "equipment/head/HelmetNative.h"
 #include "engine/NativeContract.h"
+#include "engine/NativeGate.h"
 #include "controls/input/StickRereadNative.h"
 
 #include <algorithm>
@@ -86,14 +87,7 @@ Pose gMount{};
 bool gMountSeen = false;
 float gEyeGapMm = 0.0f, gEyeGapDeg = 0.0f, gEyeGapMaxMm = 0.0f, gEyeGapMaxDeg = 0.0f;
 
-float Degrees(Quaternion q)
-{
-    return 2.0f * std::acos(std::fmin(1.0f, std::fabs(Normalize(q).w))) * 180.0f / 3.14159265f;
-}
-
 // --- the engine (tests replace it here) ----------------------------------------
-std::uint64_t PlayerCharacter() { return AnimIkOwnerCharacter(); }
-
 // Where the player's character is drawn: its entity's world matrix.
 bool PlayerLocation(Pose& location, float& scale)
 {
@@ -133,7 +127,7 @@ bool WriteHideBits(std::uintptr_t attachment, std::uint32_t bits)
     }
 }
 
-std::uint64_t (*gPlayerCharacter)() = PlayerCharacter;
+std::uint64_t (*gPlayerCharacter)() = AnimIkOwnerCharacter;
 std::uint64_t (*gFindAttachment)(std::uint64_t, std::string_view) = FindAttachment;
 AppliedView (*gLastView)() = LastAppliedView;
 bool (*gPlayerLocation)(Pose&, float&) = PlayerLocation;
@@ -158,14 +152,9 @@ void __fastcall RenderDetour(void* character, void* params, const float* offset,
 
 bool InstallScale(std::uintptr_t target)
 {
-    const hook::Result result =
-        hook::Install(reinterpret_cast<void*>(target), reinterpret_cast<void*>(&RenderDetour), gRenderOriginal);
-    if (!result) {
-        Log(std::string("result=failed detail=") + hook::StepName(result.step) +
-            " status=" + std::to_string(result.status) + " target=CharacterRender size=prey");
-        return false;
-    }
-    return true;
+    // The line ends "size=prey": the helmet is still placed, at Prey's size.
+    return hook::InstallLogged(reinterpret_cast<void*>(target), reinterpret_cast<void*>(&RenderDetour), gRenderOriginal,
+                               "CharacterRender size=prey", &Log);
 }
 // Tests replace the installer here.
 bool (*gInstallScale)(std::uintptr_t) = InstallScale;
@@ -222,7 +211,7 @@ void NoteMount(const Pose& mount)
 {
     std::lock_guard lock(gStatsMutex);
     if (gMountSeen && Length(Sub(gMount.position, mount.position)) < 0.0005f &&
-        Degrees(Multiply(Conjugate(gMount.orientation), mount.orientation)) < 0.1f) {
+        RotationDegrees(Multiply(Conjugate(gMount.orientation), mount.orientation)) < 0.1f) {
         return;
     }
     gMount = mount;
@@ -230,14 +219,14 @@ void NoteMount(const Pose& mount)
     std::ostringstream s;
     s.precision(1);
     s << std::fixed << "mount mm=" << mount.position.x * 1000.0f << "," << mount.position.y * 1000.0f << ","
-      << mount.position.z * 1000.0f << " deg=" << Degrees(mount.orientation);
+      << mount.position.z * 1000.0f << " deg=" << RotationDegrees(mount.orientation);
     Log(s.str());
 }
 
 void NoteEyeGap(const Pose& prey, const Pose& drawn)
 {
     const float mm = Length(Sub(prey.position, drawn.position)) * 1000.0f;
-    const float deg = Degrees(Multiply(Conjugate(Normalize(prey.orientation)), drawn.orientation));
+    const float deg = RotationDegrees(Multiply(Conjugate(Normalize(prey.orientation)), drawn.orientation));
     std::lock_guard lock(gStatsMutex);
     gEyeGapMm = mm;
     gEyeGapDeg = deg;
@@ -259,10 +248,6 @@ void Unhide()
 }
 
 // --- the gate (main thread) -------------------------------------------------------
-bool SlotIs(std::uintptr_t base, std::uintptr_t vtable, std::size_t offset, std::uintptr_t target)
-{
-    return *reinterpret_cast<const std::uintptr_t*>(base + vtable + offset) == base + target;
-}
 // The four bodies, the bone vtable's three slots and the entity's GetWorldTM,
 // and the player getter StickReread pins.
 bool GateBodies(std::uintptr_t base)
@@ -283,20 +268,8 @@ bool GateBodies(std::uintptr_t base)
         return false;
     }
 }
-// PreyDll's base, once it is loaded and the bodies are the ones read:
-// ERROR_NOT_READY before, ERROR_BAD_EXE_FORMAT for other bytes.
-DWORD Resolve(std::uintptr_t& base)
-{
-    base = PreyBase();
-    if (base == 0) { return ERROR_NOT_READY; }
-    if (!GateBodies(base)) {
-        base = 0;
-        return ERROR_BAD_EXE_FORMAT;
-    }
-    return ERROR_SUCCESS;
-}
 // Tests replace the engine here.
-DWORD (*gResolve)(std::uintptr_t&) = Resolve;
+DWORD (*gResolve)(std::uintptr_t&) = ResolveBase<GateBodies>;
 
 // Once: a refused gate stays refused. Before PreyDll is loaded it is not yet tried.
 bool CheckGate()

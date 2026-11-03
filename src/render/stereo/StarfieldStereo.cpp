@@ -5,6 +5,7 @@
 #include "base/Logger.h"
 #include "engine/SafeMemory.h"
 #include "engine/NativeContract.h"
+#include "engine/NativeGate.h"
 #include "render/stereo/StarfieldDepth.h"
 #include "render/stereo/StarfieldNative.h"
 
@@ -75,14 +76,6 @@ void __fastcall ArkStarsDrawDetour(void* element)
 }
 
 // --- the gate and the hook (main thread) ----------------------------------------
-bool GateBody(std::uintptr_t base)
-{
-    __try {
-        return contract::BodiesMatch(base, sn::Contracts);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
 // The draw's address, once PreyDll is loaded and the draw's body is the one
 // read: ERROR_NOT_READY before, ERROR_BAD_EXE_FORMAT for other bytes.
 DWORD Resolve(std::uintptr_t& target)
@@ -90,7 +83,7 @@ DWORD Resolve(std::uintptr_t& target)
     target = 0;
     const auto base = PreyBase();
     if (base == 0) { return ERROR_NOT_READY; }
-    if (!GateBody(base)) { return ERROR_BAD_EXE_FORMAT; }
+    if (!BodiesMatchGuarded(base, sn::Contracts)) { return ERROR_BAD_EXE_FORMAT; }
     target = base + sn::ArkStarsDraw;
     return ERROR_SUCCESS;
 }
@@ -99,14 +92,8 @@ DWORD (*gResolve)(std::uintptr_t&) = Resolve;
 
 bool Install(std::uintptr_t target)
 {
-    const hook::Result result =
-        hook::Install(reinterpret_cast<void*>(target), reinterpret_cast<void*>(&ArkStarsDrawDetour), gOriginal);
-    if (!result) {
-        Log(std::string("result=failed detail=") + hook::StepName(result.step) +
-            " status=" + std::to_string(result.status) + " target=ArkStarsDraw");
-        return false;
-    }
-    return true;
+    return hook::InstallLogged(reinterpret_cast<void*>(target), reinterpret_cast<void*>(&ArkStarsDrawDetour), gOriginal,
+                               "ArkStarsDraw", &Log);
 }
 // Tests replace the installer here.
 bool (*gInstall)(std::uintptr_t) = Install;

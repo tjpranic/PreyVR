@@ -3,6 +3,7 @@
 #include "base/Logger.h"
 #include "engine/EngineMap.h"
 #include "engine/NativeContract.h"
+#include "engine/NativeGate.h"
 #include "render/camera/ViewZoom.h"
 #include "render/camera/ViewZoomNative.h"
 
@@ -51,28 +52,9 @@ bool ReadEngine(const std::uint8_t* player, float& hfov, float& slider)
 // Tests replace the engine here.
 bool (*gRead)(const std::uint8_t*, float&, float&) = ReadEngine;
 
-bool GateBodies(std::uintptr_t base)
-{
-    __try {
-        return contract::BodiesMatch(base, zn::Contracts);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
-// PreyDll's base, once it is loaded and the body is the one read: ERROR_NOT_READY
-// before, ERROR_BAD_EXE_FORMAT for other bytes.
-DWORD Resolve(std::uintptr_t& base)
-{
-    base = PreyBase();
-    if (base == 0) { return ERROR_NOT_READY; }
-    if (!GateBodies(base)) {
-        base = 0;
-        return ERROR_BAD_EXE_FORMAT;
-    }
-    return ERROR_SUCCESS;
-}
+bool GateBodies(std::uintptr_t base) { return BodiesMatchGuarded(base, zn::Contracts); }
 // Tests replace the engine here.
-DWORD (*gResolve)(std::uintptr_t&) = Resolve;
+DWORD (*gResolve)(std::uintptr_t&) = ResolveBase<GateBodies>;
 
 // Once it has an answer: other bytes leave zooms as they were.
 bool Gate()

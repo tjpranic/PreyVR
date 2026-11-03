@@ -1,4 +1,5 @@
 #include "controls/input/InputPost.h"
+#include "engine/EngineAccess.h"
 #include "ui/options/VrOptionsRuntime.h"
 
 #include "engine/hooks/MainRenderHook.h"
@@ -73,8 +74,8 @@ bool Resolve()
         Log("result=refused detail=null_input_or_rva");
         return false;
     }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         return false;
     }
     // **Without the drain seam this would queue for ever.** Arming the post and
@@ -85,7 +86,7 @@ bool Resolve()
         return false;
     }
     gInput = reinterpret_cast<void*>(input);
-    gPost = reinterpret_cast<PostInputEventFn>(reinterpret_cast<std::uintptr_t>(preyDll) + rva);
+    gPost = reinterpret_cast<PostInputEventFn>(base + rva);
     Log("result=0 detail=resolved slot=" + std::to_string(InputPathAlignmentSlot()));
     return true;
 }

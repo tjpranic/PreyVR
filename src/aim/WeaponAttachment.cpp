@@ -55,7 +55,6 @@ struct QuatT {
 
 using GetAbsFn = const QuatT*(__fastcall*)(void* attachment);
 
-void* gTarget = nullptr;
 std::atomic<AttachToHandFn> gOriginal{nullptr};
 bool gInstalled = false;
 LatestSnapshot<EquippedRig> gEquippedRig;
@@ -133,9 +132,11 @@ bool InstallMuzzleObserver()
     if (gMuzzleInstalled.load()) { return true; }
     const auto base = PreyBase();
     if (!base) { return false; }
-    auto* target = reinterpret_cast<void*>(base + engine::ArkWeaponLayout::getFiringPositionRva);
-    if (std::memcmp(target, kFiringPositionPrologue.data(), kFiringPositionPrologue.size()) != 0) { return false; }
-    if (!hook::Install(target, reinterpret_cast<void*>(&FiringPositionObserved), gFiringPositionOriginal)) { return false; }
+    if (!hook::InstallVerified(reinterpret_cast<void*>(base + engine::ArkWeaponLayout::getFiringPositionRva),
+                               kFiringPositionPrologue, reinterpret_cast<void*>(&FiringPositionObserved),
+                               gFiringPositionOriginal)) {
+        return false;
+    }
     gMuzzleInstalled.store(true);
     return true;
 }
@@ -238,18 +239,16 @@ bool Install()
     if (gInstalled) {
         return true;
     }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         return false;
     }
-    const auto target = reinterpret_cast<std::uintptr_t>(preyDll) + kAttachToHandRva;
-    if (std::memcmp(reinterpret_cast<const void*>(target),
-                    kAttachToHandPrologue.data(), kAttachToHandPrologue.size()) != 0) {
+    const auto installed = hook::InstallVerified(reinterpret_cast<void*>(base + kAttachToHandRva), kAttachToHandPrologue,
+                                                 reinterpret_cast<void*>(&AttachToHandObserved), gOriginal);
+    if (installed.step == hook::Step::prologue) {
         Log("result=unavailable detail=attach_prologue_mismatch");
         return false;
     }
-    gTarget = reinterpret_cast<void*>(target);
-    const auto installed = hook::Install(gTarget, reinterpret_cast<void*>(&AttachToHandObserved), gOriginal);
     if (!installed) {
         Log(std::string("result=failed detail=") + hook::StepName(installed.step));
         return false;

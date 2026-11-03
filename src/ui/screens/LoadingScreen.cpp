@@ -1,4 +1,5 @@
 #include "ui/screens/LoadingScreen.h"
+#include "engine/EngineAccess.h"
 #include "engine/SafeMemory.h"
 #include "engine/hooks/HookInstall.h"
 #include "app/Bootstrap.h"
@@ -73,9 +74,8 @@ DWORD EnsureLoadingScreenHook()
     // A refused gate stays refused: the bytes will not change in this process.
     if (gRefusal == kCodeMismatch || gRefusal == kSlotMismatch) return gRefusal;
     if (ModulePinStatus() == 0) return kNotPinned;
-    const auto module = GetModuleHandleW(L"PreyDll.dll");
-    if (module == nullptr) return kNoModule;
-    const auto base = reinterpret_cast<std::uintptr_t>(module);
+    const auto base = PreyBase();
+    if (base == 0) return kNoModule;
     auto* const target = reinterpret_cast<void*>(base + kPresentRva);
     if (!SafeEqual(target, kPresentCode, sizeof(kPresentCode)) ||
         !SafeEqual(reinterpret_cast<const void*>(base + kLoopRva), kLoopCode, sizeof(kLoopCode))) {

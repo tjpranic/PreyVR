@@ -75,6 +75,11 @@ inline float SmoothStep(float x)
 inline Quaternion Conjugate(Quaternion q) { return {-q.x, -q.y, -q.z, q.w}; }
 
 Quaternion Normalize(Quaternion value);
+// The angle `q` turns through, in degrees, 0 to 180.
+inline float RotationDegrees(Quaternion q)
+{
+    return 2.0f * std::acos(std::fmin(1.0f, std::fabs(Normalize(q).w))) * 180.0f / 3.14159265f;
+}
 Quaternion Multiply(Quaternion parent, Quaternion child);
 Vec3 Rotate(Quaternion rotation, Vec3 value);
 Pose Compose(Pose parent, Pose child);

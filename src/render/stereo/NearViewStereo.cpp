@@ -75,7 +75,6 @@ constexpr std::size_t kViewProjection = 0x60;
 // This is the provenance anchor that replaces the main-thread eye global.
 constexpr std::size_t kViewInfoCamera = 0x08;
 
-void* gTarget = nullptr;
 std::atomic<PackViewInfoFn> gOriginal{nullptr};
 bool gInstalled = false;
 
@@ -524,19 +523,17 @@ bool Install()
     if (gInstalled) {
         return true;
     }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         Log("result=unavailable detail=no_preydll");
         return false;
     }
-    const auto target = reinterpret_cast<std::uintptr_t>(preyDll) + kPackerRva;
-    if (std::memcmp(reinterpret_cast<const void*>(target),
-                    kPackerPrologue.data(), kPackerPrologue.size()) != 0) {
+    const auto installed = hook::InstallVerified(reinterpret_cast<void*>(base + kPackerRva), kPackerPrologue,
+                                                 reinterpret_cast<void*>(&PackViewInfoWithEyeOffset), gOriginal);
+    if (installed.step == hook::Step::prologue) {
         Log("result=unavailable detail=packer_prologue_mismatch");
         return false;
     }
-    gTarget = reinterpret_cast<void*>(target);
-    const auto installed = hook::Install(gTarget, reinterpret_cast<void*>(&PackViewInfoWithEyeOffset), gOriginal);
     if (!installed) {
         Log(std::string("result=failed detail=") + hook::StepName(installed.step));
         return false;

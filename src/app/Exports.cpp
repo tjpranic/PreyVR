@@ -29,12 +29,12 @@ DWORD CaptureRenderViewsToLog()
         lifecycle::Log("preyvr_renderview refused reason=host_not_verified");
         return 1;
     }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         lifecycle::Log("preyvr_renderview refused reason=PreyDll.dll_not_loaded");
         return 1;
     }
-    const auto capture = CaptureRenderViewsNow(reinterpret_cast<std::uintptr_t>(preyDll));
+    const auto capture = CaptureRenderViewsNow(base);
     snapshot::Report(
         capture,
         [](std::string_view line, void*) { lifecycle::Log(line); },

@@ -1,4 +1,5 @@
 #include "engine/fixes/FocusHold.h"
+#include "engine/EngineAccess.h"
 #include "engine/SafeMemory.h"
 #include "engine/hooks/HookInstall.h"
 #include "app/Bootstrap.h"
@@ -118,9 +119,8 @@ std::string Hex(const void* value)
     return out.str();
 }
 
-std::uintptr_t PreyDllBase() { return reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll")); }
 // Replaced by the tests, which build a fake image.
-std::uintptr_t (*gModuleBase)() = &PreyDllBase;
+std::uintptr_t (*gModuleBase)() = &PreyBase;
 
 HWND WINAPI AnswerGetActiveWindow()
 {

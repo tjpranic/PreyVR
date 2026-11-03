@@ -1,4 +1,5 @@
 #include "controls/input/ActionMaps.h"
+#include "engine/EngineAccess.h"
 #include "engine/SafeMemory.h"
 
 #include "ui/screens/UiMode.h"
@@ -66,9 +67,8 @@ bool FindWheelMap(std::uintptr_t base)
 
 bool PreyWheelOpen()
 {
-    const HMODULE module = GetModuleHandleW(L"PreyDll.dll");
-    if (module == nullptr) { return false; }
-    const auto base = reinterpret_cast<std::uintptr_t>(module);
+    const auto base = PreyBase();
+    if (base == 0) { return false; }
     if (gWheelMap == 0 && !FindWheelMap(base)) { return false; }
     bool open = false;
     std::string why;
@@ -96,15 +96,14 @@ void ServiceBindingDump()
         gLoggedInPlay = true;
     }
     if (request == 0) { return; }
-    const HMODULE module = GetModuleHandleW(L"PreyDll.dll");
-    if (module == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         Log("result=failed detail=bindings reason=no_preydll");
         return;
     }
     std::vector<input::BoundAction> rows;
     std::string why;
-    if (!input::ReadBindings(GuardedMemory{}, reinterpret_cast<std::uintptr_t>(module), input::ActionMapLayout{},
-                             rows, why)) {
+    if (!input::ReadBindings(GuardedMemory{}, base, input::ActionMapLayout{}, rows, why)) {
         Log("result=failed detail=bindings reason=\"" + why + "\"");
         return;
     }

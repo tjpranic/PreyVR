@@ -2,6 +2,7 @@
 #include "app/Bootstrap.h"
 #include "base/EnvSwitch.h"
 #include "base/Logger.h"
+#include "engine/EngineAccess.h"
 #include "engine/SafeMemory.h"
 #include <array>
 #include <atomic>
@@ -192,12 +193,11 @@ DWORD Install()
     if (ModulePinStatus() == 0) {
         return 2;
     }
-    const HMODULE module = GetModuleHandleW(L"PreyDll.dll");
-    if (module == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         Log("result=unavailable detail=preydll_not_loaded");
         return 3;
     }
-    const auto base = reinterpret_cast<std::uintptr_t>(module);
     if (!CodeMatches(base)) {
         Log("result=refused detail=code_mismatch");
         return 4;

@@ -77,8 +77,6 @@ constexpr std::size_t kCinematicGate = 0x94;
 
 std::atomic<bool> gInstalled{false};
 std::atomic<AnalogHandlerFn> gOriginalX{nullptr}, gOriginalY{nullptr};
-void* gTargetX = nullptr;
-void* gTargetY = nullptr;
 
 // --- interaction bindings ----------------------------------------------------
 //
@@ -342,29 +340,23 @@ bool __fastcall AnalogYObserved(void* inputObject, unsigned int entity,
     return accepted;
 }
 
-bool InstallOne(std::uintptr_t rva, const std::uint8_t* prologue, std::size_t size,
-                void* detour, std::atomic<AnalogHandlerFn>& original, void*& target,
-                const char* name)
+bool InstallOne(std::uintptr_t rva, std::span<const std::uint8_t> prologue, void* detour,
+                std::atomic<AnalogHandlerFn>& original, const char* name)
 {
     // Already in place from an attempt whose other hook failed.
     if (original.load(std::memory_order_acquire) != nullptr) { return true; }
     const auto base = PreyBase();
     if (base == 0) { return false; }
-    target = reinterpret_cast<void*>(base + rva);
-    return hook::HookAt(target, {prologue, size}, detour, original, name, &Log);
+    return hook::HookAt(base, rva, prologue, detour, original, name, &Log);
 }
 
 bool Install()
 {
     if (gInstalled.load(std::memory_order_acquire)) { return true; }
-    if (!InstallOne(kAnalogXRva, kAnalogXPrologue.data(), kAnalogXPrologue.size(),
-                    reinterpret_cast<void*>(&AnalogXObserved), gOriginalX, gTargetX,
-                    "analog_x")) {
+    if (!InstallOne(kAnalogXRva, kAnalogXPrologue, reinterpret_cast<void*>(&AnalogXObserved), gOriginalX, "analog_x")) {
         return false;
     }
-    if (!InstallOne(kAnalogYRva, kAnalogYPrologue.data(), kAnalogYPrologue.size(),
-                    reinterpret_cast<void*>(&AnalogYObserved), gOriginalY, gTargetY,
-                    "analog_y")) {
+    if (!InstallOne(kAnalogYRva, kAnalogYPrologue, reinterpret_cast<void*>(&AnalogYObserved), gOriginalY, "analog_y")) {
         // Leave X installed rather than half-removing: it is passive, and a
         // partial install is visible in the counters.
         Log("result=partial detail=x_installed_y_failed");
@@ -373,6 +365,21 @@ bool Install()
     gInstalled.store(true, std::memory_order_release);
     Log("result=0 detail=hooks_installed x=0x158FD20 y=0x158FD80");
     return true;
+}
+
+// A look axis as it is posted, the turn's and zero-G pitch's alike: rescaled past
+// the deadzone rather than clipped, so leaving the dead area is gentle instead of
+// a step to full rate, then times the speed. Not finite is centre.
+float ShapeLookAxis(float value)
+{
+    const float dead = gTurnDeadzoneHundredths.load(std::memory_order_relaxed) / 100.0f;
+    const float scale = gTurnScalePercent.load(std::memory_order_relaxed) / 100.0f;
+    if (!std::isfinite(value)) { value = 0.0f; }
+    const float magnitude = std::fabs(value);
+    value = (magnitude <= dead || dead >= 1.0f)
+                ? 0.0f
+                : ((value > 0.0f) ? 1.0f : -1.0f) * ((magnitude - dead) / (1.0f - dead));
+    return value * scale;
 }
 
 } // namespace
@@ -603,17 +610,8 @@ void UpdateTurnAndFireLanes()
         if(QueueSnapTurn(steps,snapDegrees)==0) ++gTurnPosted; else ++gTurnRefused;
     }
     if (!turnHold && (turnOn || (gTurnPrimed && gLastTurnSent != 0))) {
-        const float dead = gTurnDeadzoneHundredths.load(std::memory_order_relaxed) / 100.0f;
-        const float scale = gTurnScalePercent.load(std::memory_order_relaxed) / 100.0f;
-        float value = (turnOn && haveInput && !releaseTurn && snapDegrees==0) ? play.turn.x : 0.0f;
-        if (!std::isfinite(value)) { value = 0.0f; }
-        // Rescaled past the deadzone rather than clipped, so leaving the dead
-        // area is gentle instead of a step to full rate.
-        const float magnitude = std::fabs(value);
-        value = (magnitude <= dead || dead >= 1.0f)
-                    ? 0.0f
-                    : ((value > 0.0f) ? 1.0f : -1.0f) * ((magnitude - dead) / (1.0f - dead));
-        value *= scale;
+        const float value =
+            ShapeLookAxis((turnOn && haveInput && !releaseTurn && snapDegrees == 0) ? play.turn.x : 0.0f);
         // Emit only on change, and ALWAYS emit the return to zero: the engine
         // keeps turning on the last value it was told until contradicted, which
         // is the same failure the movement lane's release case exists to avoid.
@@ -648,15 +646,7 @@ void UpdateTurnAndFireLanes()
         }
     }
     if (!turnHold && (pitchOn || (gPitchPrimed && gLastPitchSent != 0))) {
-        const float dead = gTurnDeadzoneHundredths.load(std::memory_order_relaxed) / 100.0f;
-        const float scale = gTurnScalePercent.load(std::memory_order_relaxed) / 100.0f;
-        float value = pitchOn && pitchDegrees == 0 ? play.turn.y : 0.0f;
-        if (!std::isfinite(value)) { value = 0.0f; }
-        const float magnitude = std::fabs(value);
-        value = (magnitude <= dead || dead >= 1.0f)
-                    ? 0.0f
-                    : ((value > 0.0f) ? 1.0f : -1.0f) * ((magnitude - dead) / (1.0f - dead));
-        value *= scale;
+        const float value = ShapeLookAxis(pitchOn && pitchDegrees == 0 ? play.turn.y : 0.0f);
         // As the turn's: only on change, and always the return to zero.
         if (!gPitchPrimed || (value == 0 && gLastPitchSent != 0) || std::fabs(value - gLastPitchSent) > 0.002f) {
             const int milli = static_cast<int>(value * 1000.0f);

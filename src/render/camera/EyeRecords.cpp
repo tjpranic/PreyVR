@@ -49,8 +49,9 @@ std::atomic<unsigned long long> gFrameCentreCount{0};
 // finished frame, and identity is exact with no dwell at all. Each eye then
 // refreshes every 2 frames instead of every 2*N.
 //
-// **Order is an assumption, so it is measured rather than trusted.** `Lag()` is
-// pushes minus pops, which is the pipeline depth in frames. It should sit at a
+// **Order is an assumption, so it is measured rather than trusted.**
+// `EyeHandoffLag()` is the queue's depth, the pushes not yet popped, which is
+// the pipeline depth in frames. It should sit at a
 // small constant. If it drifts, the 1:1 correspondence this relies on is not
 // holding, and the caller can say so instead of quietly rendering the wrong eye
 // into the wrong socket -- which looks like broken stereo rather than like a bug
@@ -58,7 +59,7 @@ std::atomic<unsigned long long> gFrameCentreCount{0};
 namespace eyehandoff {
 
 RenderContractQueue gQueue;
-std::atomic<unsigned long long> gPushed{0}, gPopped{0}, gStarved{0}, gDropped{0};
+std::atomic<unsigned long long> gPushed{0}, gStarved{0}, gDropped{0};
 std::atomic<unsigned long long> gMatched{0}, gResyncs{0}, gSkipped{0}, gUnmatched{0};
 // The head camera of the frame the render thread doubled (NoteDualFrameCamera),
 // taken by the Consume at that frame's RT_EndFrame. Render thread only.
@@ -74,7 +75,7 @@ bool Consume(RenderContract& contract) {
     if (identified) {
         std::size_t skipped = 0;
         if (gQueue.PopMatching(gRenderedCamera, contract, skipped)) {
-            ++gPopped; ++gMatched;
+            ++gMatched;
             if (skipped != 0) {
                 gSkipped += skipped;
                 const auto resyncs = ++gResyncs;
@@ -98,10 +99,10 @@ bool Consume(RenderContract& contract) {
         }
     }
     if(!gQueue.Pop(contract)) {++gStarved;return false;}
-    ++gPopped;return true;
+    return true;
 }
 void Reset() {
-    gQueue.Reset();gPushed=0;gPopped=0;gStarved=0;gDropped=0;
+    gQueue.Reset();gPushed=0;gStarved=0;gDropped=0;
     gMatched=0;gResyncs=0;gSkipped=0;gUnmatched=0;
 }
 

@@ -213,9 +213,8 @@ bool CallOneFloat(std::uintptr_t address, void* element, const char* name, float
 // base through `base` and the element, or nullptr with `code` set.
 void* ResolveElement(std::uintptr_t& base, DWORD& code)
 {
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) { code = 4; return nullptr; }
-    base = reinterpret_cast<std::uintptr_t>(preyDll);
+    base = PreyBase();
+    if (base == 0) { code = 4; return nullptr; }
 
     const auto* const getter = reinterpret_cast<const std::uint8_t*>(base + kGetHudElementRva);
     if (!BytesMatch(getter, kGetHudHead.data(), kGetHudHead.size()) ||
@@ -350,57 +349,44 @@ bool CallIsVisible(std::uintptr_t address, void* element, bool* ok)
 
 bool ValidName(const char* function) { return function != nullptr && function[0] != 0; }
 
+// The one-float and two-float dispatches: the same checks, each through its own
+// gated caller. `y` is ignored, and not checked, for one float.
+DWORD CallHud(const char* function, float x, float y, bool twoArguments)
+{
+    if (!ValidName(function)) { gRefused.fetch_add(1); return 1; }
+    if (!std::isfinite(x) || (twoArguments && !std::isfinite(y))) { gRefused.fetch_add(1); return 2; }
+
+    std::uintptr_t base = 0;
+    DWORD code = 0;
+    void* const element = ResolveElement(base, code);
+    if (element == nullptr) { gRefused.fetch_add(1); return code; }
+
+    const std::uintptr_t rva = twoArguments ? kCallTwoFloatRva : kCallOneFloatRva;
+    const auto* const caller = reinterpret_cast<const std::uint8_t*>(base + rva);
+    const bool gated = twoArguments ? BytesMatch(caller, kCallTwoFloatPrologue.data(), kCallTwoFloatPrologue.size())
+                                    : BytesMatch(caller, kCallOneFloatPrologue.data(), kCallOneFloatPrologue.size());
+    if (!gated) {
+        Log(twoArguments ? "result=unavailable detail=call_two_float_prologue_mismatch"
+                         : "result=unavailable detail=call_one_float_prologue_mismatch");
+        gRefused.fetch_add(1);
+        return 6;
+    }
+    const bool called = twoArguments ? CallTwoFloat(base + rva, element, function, x, y)
+                                     : CallOneFloat(base + rva, element, function, x);
+    if (!called) {
+        Log("result=failed detail=exception_in_dispatch fn=" + std::string(function));
+        gRefused.fetch_add(1);
+        return 8;
+    }
+    gCalls.fetch_add(1, std::memory_order_relaxed);
+    return 0;
+}
+
 } // namespace
 
-DWORD CallHudTwoFloat(const char* function, float x, float y)
-{
-    if (!ValidName(function)) { gRefused.fetch_add(1); return 1; }
-    if (!std::isfinite(x) || !std::isfinite(y)) { gRefused.fetch_add(1); return 2; }
+DWORD CallHudTwoFloat(const char* function, float x, float y) { return CallHud(function, x, y, true); }
 
-    std::uintptr_t base = 0;
-    DWORD code = 0;
-    void* const element = ResolveElement(base, code);
-    if (element == nullptr) { gRefused.fetch_add(1); return code; }
-
-    const auto* const caller = reinterpret_cast<const std::uint8_t*>(base + kCallTwoFloatRva);
-    if (!BytesMatch(caller, kCallTwoFloatPrologue.data(), kCallTwoFloatPrologue.size())) {
-        Log("result=unavailable detail=call_two_float_prologue_mismatch");
-        gRefused.fetch_add(1);
-        return 6;
-    }
-    if (!CallTwoFloat(base + kCallTwoFloatRva, element, function, x, y)) {
-        Log("result=failed detail=exception_in_dispatch fn=" + std::string(function));
-        gRefused.fetch_add(1);
-        return 8;
-    }
-    gCalls.fetch_add(1, std::memory_order_relaxed);
-    return 0;
-}
-
-DWORD CallHudOneFloat(const char* function, float value)
-{
-    if (!ValidName(function)) { gRefused.fetch_add(1); return 1; }
-    if (!std::isfinite(value)) { gRefused.fetch_add(1); return 2; }
-
-    std::uintptr_t base = 0;
-    DWORD code = 0;
-    void* const element = ResolveElement(base, code);
-    if (element == nullptr) { gRefused.fetch_add(1); return code; }
-
-    const auto* const caller = reinterpret_cast<const std::uint8_t*>(base + kCallOneFloatRva);
-    if (!BytesMatch(caller, kCallOneFloatPrologue.data(), kCallOneFloatPrologue.size())) {
-        Log("result=unavailable detail=call_one_float_prologue_mismatch");
-        gRefused.fetch_add(1);
-        return 6;
-    }
-    if (!CallOneFloat(base + kCallOneFloatRva, element, function, value)) {
-        Log("result=failed detail=exception_in_dispatch fn=" + std::string(function));
-        gRefused.fetch_add(1);
-        return 8;
-    }
-    gCalls.fetch_add(1, std::memory_order_relaxed);
-    return 0;
-}
+DWORD CallHudOneFloat(const char* function, float value) { return CallHud(function, value, 0.0f, false); }
 
 DWORD CallHudFunction(const char* function, float x, float y, bool twoArguments)
 {

@@ -5,6 +5,7 @@
 #include "engine/RendererAccess.h"
 #include "engine/SafeMemory.h"
 #include "engine/NativeContract.h"
+#include "engine/NativeGate.h"
 #include "render/taa/TemporalAa.h"
 #include "render/taa/TemporalAaNative.h"
 #include "render/taa/WorldMotion.h"
@@ -39,28 +40,9 @@ enum class Gate : int { untried = 0, ok = 1, refused = 2 };
 std::atomic<int> gGate{0};
 std::atomic<std::uintptr_t> gBase{0};
 
-bool GateBodies(std::uintptr_t base)
-{
-    __try {
-        return contract::BodiesMatch(base, tn::Contracts);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
-// PreyDll's base, once it is loaded and the bodies are the ones read:
-// ERROR_NOT_READY before, ERROR_BAD_EXE_FORMAT for other bytes.
-DWORD Resolve(std::uintptr_t& base)
-{
-    base = PreyBase();
-    if (base == 0) { return ERROR_NOT_READY; }
-    if (!GateBodies(base)) {
-        base = 0;
-        return ERROR_BAD_EXE_FORMAT;
-    }
-    return ERROR_SUCCESS;
-}
+bool GateBodies(std::uintptr_t base) { return BodiesMatchGuarded(base, tn::Contracts); }
 // Tests replace the engine here.
-DWORD (*gResolve)(std::uintptr_t&) = Resolve;
+DWORD (*gResolve)(std::uintptr_t&) = ResolveBase<GateBodies>;
 
 // Render thread only, so the first resolve has no race. A refusal stays refused.
 std::uintptr_t Base()

@@ -120,8 +120,6 @@ inline std::atomic<bool> gInstalled{false};
 
 inline std::atomic<ProcessAdikFn> gOriginal{nullptr};
 
-inline void* gTarget = nullptr;
-
 inline std::atomic<unsigned int> gMode{0};
 
 inline std::atomic<int> gTestMm[3]{0, 0, 0};

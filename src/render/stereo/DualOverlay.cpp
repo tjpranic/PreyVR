@@ -1,4 +1,5 @@
 #include "render/stereo/DualOverlay.h"
+#include "engine/EngineAccess.h"
 #include "engine/SafeMemory.h"
 #include "engine/hooks/HookInstall.h"
 
@@ -148,8 +149,8 @@ DWORD EnsureImageHook()
     if (gInstalled) {
         return 0;
     }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         Log("result=unavailable detail=preydll_not_loaded");
         return 3;
     }
@@ -158,7 +159,7 @@ DWORD EnsureImageHook()
         Log("result=unavailable detail=landmark_missing id=renderer.draw2d_images");
         return 3;
     }
-    const auto address = reinterpret_cast<std::uintptr_t>(preyDll) + landmark->rva;
+    const auto address = base + landmark->rva;
     if (!IsExecutableAddress(reinterpret_cast<const void*>(address)) ||
         std::memcmp(reinterpret_cast<const void*>(address), landmark->expected.data(), landmark->expected.size()) != 0) {
         Log("result=unavailable detail=prologue_mismatch id=renderer.draw2d_images");

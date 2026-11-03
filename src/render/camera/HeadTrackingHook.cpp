@@ -79,7 +79,6 @@ LatestSnapshot<RoomReference> gRoomReference;
 std::mutex gRecenterMutex;
 std::atomic<unsigned long long> gReferenceGeneration{0};
 std::atomic<unsigned long long> gRecenterEpoch{0};
-std::atomic<unsigned long long> gRoomReadFallbacks{0};
 comfort::PendingSnap gPendingSnap;
 std::atomic<unsigned long long> gSnapsApplied{0}, gSnapsLate{0}, gSnapsDropped{0};
 // Every snap turn applied, from any seam (HeadTrackingSnapCount).
@@ -212,7 +211,6 @@ constexpr std::size_t kViewRotation = 0x0C;   // Quat, x y z w
 constexpr std::size_t kViewNearPlane = 0x2C;
 constexpr std::size_t kViewFov = 0x30;
 
-void* gTarget = nullptr;
 std::atomic<UpdateViewFn> gOriginal{nullptr};
 bool gInstalled = false;
 std::atomic<bool> gObserving{false};
@@ -356,7 +354,6 @@ void __fastcall UpdateViewObserved(void* camera, std::uint8_t* viewParams)
         lastRoomReference = renderReference;
     } else if (!stereo::Recentering(renderReference) && lastRoomReference == renderReference) {
         room = lastRoom;
-        gRoomReadFallbacks.fetch_add(1, std::memory_order_relaxed);
     } else {
         return;
     }
@@ -472,18 +469,16 @@ bool Install()
     if (gInstalled) {
         return true;
     }
-    const HMODULE preyDll = GetModuleHandleW(L"PreyDll.dll");
-    if (preyDll == nullptr) {
+    const auto base = PreyBase();
+    if (base == 0) {
         return false;
     }
-    const auto target = reinterpret_cast<std::uintptr_t>(preyDll) + kUpdateViewRva;
-    if (std::memcmp(reinterpret_cast<const void*>(target),
-                    kUpdateViewPrologue.data(), kUpdateViewPrologue.size()) != 0) {
+    const auto installed = hook::InstallVerified(reinterpret_cast<void*>(base + kUpdateViewRva), kUpdateViewPrologue,
+                                                 reinterpret_cast<void*>(&UpdateViewObserved), gOriginal);
+    if (installed.step == hook::Step::prologue) {
         Log("result=unavailable detail=update_view_prologue");
         return false;
     }
-    gTarget = reinterpret_cast<void*>(target);
-    const auto installed = hook::Install(gTarget, reinterpret_cast<void*>(&UpdateViewObserved), gOriginal);
     if (!installed) {
         Log(std::string("result=failed detail=view_") + hook::StepName(installed.step));
         return false;
@@ -769,7 +764,6 @@ bool HeadDropBelowCalibrated(const Vec3& head, float& drop) {
 }
 unsigned long long HeadTrackingRecenterEpoch() { return gRecenterEpoch.load(); }
 unsigned long long HeadTrackingSpaceEpoch() { return gHeadSpaceEpoch.load(); }
-unsigned long long HeadTrackingRoomReadFallbacks() { return gRoomReadFallbacks.load(std::memory_order_relaxed); }
 std::string HeadHeightReport() {
     RoomReference room{};TrackingFrame frame{};
     std::ostringstream out;out<<"space="<<XrTrackingSpaceName()<<" calibrated="<<gHaveReference.load();

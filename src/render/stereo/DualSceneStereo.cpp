@@ -133,7 +133,7 @@ std::atomic<unsigned long long> gCalls{0}, gRecursiveCalls{0}, gNestedCalls{0};
 std::atomic<unsigned long long> gDoubled{0}, gRefused{0}, gCaptures{0};
 std::atomic<unsigned long long> gDeferredMain{0}, gDeferredShadow{0}, gDeferredClear{0};
 std::atomic<unsigned long long> gFirstMicros{0}, gSecondMicros{0}, gSingleMicros{0}, gSingles{0};
-std::atomic<unsigned long long> gArmedAtFrame{0}, gObservedAtFrame{0}, gCallsAtObserve{0};
+std::atomic<unsigned long long> gObservedAtFrame{0}, gCallsAtObserve{0};
 std::atomic<int> gStep{0};
 std::atomic<int> gMaxDepth{0};
 std::atomic<int> gLastFlags{0};
@@ -802,7 +802,6 @@ DWORD SetDualSceneMode(unsigned int mode, unsigned int frameBudget)
     if (frameBudget != 0) {
         gBudget.store(frameBudget, std::memory_order_release);
     }
-    gArmedAtFrame.store(ObservedFrameCount(), std::memory_order_relaxed);
     gLastRefusal.store("none", std::memory_order_release);
     gMode.store(mode, std::memory_order_release);
     std::ostringstream line;

@@ -8,6 +8,7 @@
 #include "ui/screens/ExamineNative.h"
 #include "ui/screens/ExaminePullback.h"
 #include "engine/NativeContract.h"
+#include "engine/NativeGate.h"
 
 #include <intrin.h>
 
@@ -128,39 +129,15 @@ std::uintptr_t __fastcall FitViewDetour(void* examination, float* target, float*
 }
 
 // --- the gate and the hook (main thread) ----------------------------------------
-bool GateBodies(std::uintptr_t base)
-{
-    __try {
-        return contract::BodiesMatch(base, en::Contracts);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
-// PreyDll's base, once it is loaded and the three bodies are the ones read:
-// ERROR_NOT_READY before, ERROR_BAD_EXE_FORMAT for other bytes.
-DWORD Resolve(std::uintptr_t& base)
-{
-    base = PreyBase();
-    if (base == 0) { return ERROR_NOT_READY; }
-    if (!GateBodies(base)) {
-        base = 0;
-        return ERROR_BAD_EXE_FORMAT;
-    }
-    return ERROR_SUCCESS;
-}
+// The three bodies.
+bool GateBodies(std::uintptr_t base) { return BodiesMatchGuarded(base, en::Contracts); }
 // Tests replace the engine here.
-DWORD (*gResolve)(std::uintptr_t&) = Resolve;
+DWORD (*gResolve)(std::uintptr_t&) = ResolveBase<GateBodies>;
 
 bool Install(std::uintptr_t target)
 {
-    const hook::Result result =
-        hook::Install(reinterpret_cast<void*>(target), reinterpret_cast<void*>(&FitViewDetour), gOriginal);
-    if (!result) {
-        Log(std::string("result=failed detail=") + hook::StepName(result.step) +
-            " status=" + std::to_string(result.status) + " target=ExamineFitView");
-        return false;
-    }
-    return true;
+    return hook::InstallLogged(reinterpret_cast<void*>(target), reinterpret_cast<void*>(&FitViewDetour), gOriginal,
+                               "ExamineFitView", &Log);
 }
 // Tests replace the installer here.
 bool (*gInstall)(std::uintptr_t) = Install;

@@ -2,6 +2,7 @@
 #include "engine/EngineAccess.h"
 #include "base/Logger.h"
 #include "engine/NativeContract.h"
+#include "engine/NativeGate.h"
 #include "equipment/weapon/WeaponSoundNative.h"
 #include <algorithm>
 #include <array>
@@ -27,19 +28,11 @@ using TriggerIdFn = bool(__fastcall*)(std::uintptr_t, const char*, std::uint32_t
 using ExecuteFn = bool(__fastcall*)(std::uintptr_t, std::uint32_t, int, std::uint32_t, const void*);
 
 // --- the gate (main thread) --------------------------------------------------------
-std::uintptr_t SlotTarget(std::uintptr_t base, std::uintptr_t table, std::size_t slot)
-{
-    return *reinterpret_cast<const std::uintptr_t*>(base + table + slot) - base;
-}
 bool GateBodies(std::uintptr_t base)
 {
-    __try {
-        return contract::BodiesMatch(base, sn::Contracts) &&
-               SlotTarget(base, sn::AudioSystemVtable, sn::TriggerIdSlot) == sn::GetAudioTriggerId &&
-               SlotTarget(base, sn::EntityAudioProxyVtable, sn::ExecuteTriggerSlot) == sn::ProxyExecuteTrigger;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return BodiesMatchGuarded(base, sn::Contracts) &&
+           SlotIs(base, sn::AudioSystemVtable, sn::TriggerIdSlot, sn::GetAudioTriggerId) &&
+           SlotIs(base, sn::EntityAudioProxyVtable, sn::ExecuteTriggerSlot, sn::ProxyExecuteTrigger);
 }
 // Whether the live audio system is the CAudioSystem whose lookup the gate checked.
 const char* AudioSystemKind(std::uintptr_t global, std::uintptr_t vtable)
@@ -128,10 +121,6 @@ const char* PlayName(Play p)
     case Play::fault: return "fault";
     }
     return "none";
-}
-template <class Fn> Fn Virtual(std::uintptr_t object, std::size_t slot)
-{
-    return reinterpret_cast<Fn>((*reinterpret_cast<const std::uintptr_t* const*>(object))[slot / sizeof(void*)]);
 }
 // The player's entity (the entity system's GetEntity), its audio proxy (GetProxy,
 // which must be a CEntityAudioProxy: its ExecuteTrigger is the gated body), then

@@ -125,6 +125,24 @@ struct ShownTangents {
     }
 };
 
+// One publication unit, written once the image is copied into eye `target`:
+// the pose it was rendered from, the frustum declared for it, the one the
+// headset asked for (`requested`) and its time. Nothing downstream may pair the
+// image with another frame's pose or FOV, and a coverage figure can never pair
+// this frame's request with another frame's render (FAIL-STR-044).
+void PublishEye(int target, const Pose& rendered, const RenderContract& contract, const XrFovf& requested)
+{
+    gHost.eyePose[target] = ToXrPose(rendered);
+    gHost.eyeFov[target] = DeclaredFov(contract);
+    gHost.eyeHead = contract.pose;
+    gHost.eyeZoom = contract.zoom;
+    gHost.requestedFov[target] = requested;
+    gHost.requestedFovValid[target] = true;
+    gEyeContractsPublished.fetch_add(1, std::memory_order_relaxed);   // same immutable camera record
+    gHost.eyeDisplayTime[target] = contract.displayTime;
+    gHost.eyeImageValid[target] = true;
+}
+
 } // namespace
 
 namespace xrsession {
@@ -253,21 +271,12 @@ bool SubmitStereoPair(
         gHost.hudCapturePair.RecordEye(second, hudCaptured);
         for (int rendered = 0; rendered < 2; ++rendered) {
             const int target = rendered == 0 ? first : second;
-            const Pose& source = contract.eyePoses[rendered];
             RenderContract eyeContract = contract;
             eyeContract.eye = rendered;
             eyeContract.pose = RenderedEyePose(contract, rendered);
             ShownTangents shown(views[target].fov, contract.zoom);
             DrawDebugOverlay(gHost.device, context, gHost.eyeImage[target], eyeContract, shown.tangents);
-            gHost.eyePose[target] = ToXrPose(source);
-            gHost.eyeFov[target] = DeclaredFov(contract);
-            gHost.eyeHead = contract.pose;
-            gHost.eyeZoom = contract.zoom;
-            gHost.requestedFov[target] = views[target].fov;
-            gHost.requestedFovValid[target] = true;
-            gEyeContractsPublished.fetch_add(1, std::memory_order_relaxed);
-            gHost.eyeDisplayTime[target] = contract.displayTime;
-            gHost.eyeImageValid[target] = true;
+            PublishEye(target, contract.eyePoses[rendered], contract, views[target].fov);
         }
         const auto pairs = gDualPairsSubmitted.fetch_add(1, std::memory_order_relaxed) + 1;
         if (pairs == 1) {
@@ -281,23 +290,8 @@ bool SubmitStereoPair(
         ShownTangents shown(views[target].fov, contract.zoom);
         DrawDebugOverlay(gHost.device, context, gHost.eyeImage[target], contract, shown.tangents);
         gHost.hudCapturePair.RecordEye(target,hudCaptured);
-        // Publish the pixels and the contract that produced them together. The
-        // copy and these three writes are the one publication unit; nothing
-        // downstream may pair this image with any other frame's pose or FOV.
-        gHost.eyePose[target] = ToXrPose(contract.pose);
-        gHost.eyeFov[target] = DeclaredFov(contract);
-        gHost.eyeHead = contract.pose;
-        gHost.eyeZoom = contract.zoom;
-        // Stored in the SAME publication unit as the declaration it is compared
-        // against, so a coverage figure can never pair this frame's request with
-        // another frame's render.
-        gHost.requestedFov[target] = views[target].fov;
-        gHost.requestedFovValid[target] = true;
-        // Checked here, at the one point the declaration is bound to the pixels
-        // it describes -- the same publication unit FAIL-STR-044 established.
-        gEyeContractsPublished.fetch_add(1, std::memory_order_relaxed); // same immutable camera record
-        gHost.eyeDisplayTime[target] = contract.displayTime;
-        gHost.eyeImageValid[target] = true;
+        // The pixels and the contract that produced them, published together.
+        PublishEye(target, contract.pose, contract, views[target].fov);
     }
 
     if (!gHost.eyeImageValid[0] || !gHost.eyeImageValid[1]) {

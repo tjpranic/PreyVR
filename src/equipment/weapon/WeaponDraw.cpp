@@ -5,6 +5,7 @@
 #include "equipment/weapon/WeaponSound.h"
 #include "equipment/body/EquipmentNative.h"
 #include "engine/NativeContract.h"
+#include "engine/NativeGate.h"
 #include "equipment/weapon/WeaponDrawNative.h"
 #include <array>
 #include <atomic>
@@ -65,11 +66,6 @@ struct Natives {
 };
 Natives natives{};
 
-// A virtual function of an engine object, by its vtable slot's byte offset.
-template <class Fn> Fn Virtual(std::uintptr_t object, std::size_t slot)
-{
-    return reinterpret_cast<Fn>((*reinterpret_cast<const std::uintptr_t* const*>(object))[slot / sizeof(void*)]);
-}
 bool WeaponVtable(std::uintptr_t table)
 {
     for (const auto known : natives.weaponVtables) {
@@ -79,10 +75,6 @@ bool WeaponVtable(std::uintptr_t table)
 }
 
 // --- the gate (main thread) -------------------------------------------------------
-std::uintptr_t SlotTarget(std::uintptr_t base, std::uintptr_t table, std::size_t slot)
-{
-    return *reinterpret_cast<const std::uintptr_t*>(base + table + slot) - base;
-}
 bool GateBodies(std::uintptr_t base)
 {
     __try {
@@ -96,14 +88,14 @@ bool GateBodies(std::uintptr_t base)
         // each class's own OnUnequip, which reaches the hooked one, and the stow
         // action's Exit, which the instant stow stands in for.
         for (const auto& c : wn::WeaponClasses) {
-            if (SlotTarget(base, c.vtable, wn::SelectBegunSlot) != c.begun ||
-                SlotTarget(base, c.vtable, wn::SelectDoneSlot) != c.done ||
-                SlotTarget(base, c.vtable, wn::SelectFinishedSlot) != c.finished ||
-                SlotTarget(base, c.vtable, wn::OnUnequipSlot) != c.unequip) { return false; }
+            if (!SlotIs(base, c.vtable, wn::SelectBegunSlot, c.begun) ||
+                !SlotIs(base, c.vtable, wn::SelectDoneSlot, c.done) ||
+                !SlotIs(base, c.vtable, wn::SelectFinishedSlot, c.finished) ||
+                !SlotIs(base, c.vtable, wn::OnUnequipSlot, c.unequip)) { return false; }
         }
-        return SlotTarget(base, wn::SelectActionVtable, wn::EnterSlot) == wn::SelectEnter &&
-               SlotTarget(base, wn::SelectActionVtable, wn::ExitSlot) == wn::SelectExit &&
-               SlotTarget(base, wn::StowActionVtable, wn::ExitSlot) == wn::StowExit;
+        return SlotIs(base, wn::SelectActionVtable, wn::EnterSlot, wn::SelectEnter) &&
+               SlotIs(base, wn::SelectActionVtable, wn::ExitSlot, wn::SelectExit) &&
+               SlotIs(base, wn::StowActionVtable, wn::ExitSlot, wn::StowExit);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }

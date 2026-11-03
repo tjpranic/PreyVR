@@ -1,4 +1,5 @@
 #include "render/stereo/NearFovOverride.h"
+#include "engine/EngineAccess.h"
 #include "engine/SafeMemory.h"
 #include "engine/hooks/HookInstall.h"
 #include "app/Bootstrap.h"
@@ -95,9 +96,8 @@ bool Install()
     // disabling only changes the atomic setting, so in-flight calls remain safe.
     if (gInstalled) { return true; }
     if (ModulePinStatus() == 0) { return false; }
-    const auto module = GetModuleHandleW(L"PreyDll.dll");
-    if (module == nullptr) { return false; }
-    const auto base = reinterpret_cast<std::uintptr_t>(module);
+    const auto base = PreyBase();
+    if (base == 0) { return false; }
     if (!gHookCreated) {
         if (!MatchesCode(reinterpret_cast<void*>(base + kBeginFrameRva),
                          reinterpret_cast<void*>(base + kLatchRva))) {

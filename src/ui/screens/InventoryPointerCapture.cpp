@@ -1,4 +1,5 @@
 #include "ui/screens/InventoryPointerCapture.h"
+#include "engine/EngineAccess.h"
 #include "engine/hooks/HookInstall.h"
 #include "app/Bootstrap.h"
 #include "ui/hud/HudBridge.h"
@@ -42,7 +43,7 @@ void ObservePick(void* self,void* sender) {
     // Flash queues mouse input; OnPick runs during a later Advance, outside
     // HudDispatchPointer. The ownership window is our outstanding button down.
     if(!gPointerHeld)return;
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     __try {
         const auto p=reinterpret_cast<std::uintptr_t>(self);
         if(base&&*reinterpret_cast<std::uintptr_t*>(p)==base+kInventoryTable&&
@@ -76,7 +77,7 @@ DWORD EnsureInventoryPointerCapture() {
     std::lock_guard lock(gInstallMutex);
     if(gInstalled)return 0;
     if(!ModulePinStatus())return ERROR_INVALID_STATE;
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     if(!base||!CodeMatches(base,!gCreated))return ERROR_BAD_EXE_FORMAT;
     if(!EnsureMinHook())return ERROR_NOT_READY;
     auto* target=reinterpret_cast<void*>(base+kPick);
@@ -101,7 +102,7 @@ DWORD CancelInventoryPointerCapture(bool* cancelled) {
     *cancelled=false;
     const auto c=gCapture;gCapture={};
     if(!c.receiver||!c.sender||!c.item||c.thread!=GetCurrentThreadId()||!HudMenuIsOpen())return 0;
-    const auto base=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"PreyDll.dll"));
+    const auto base=PreyBase();
     if(!base||!CodeMatches(base,false))return ERROR_BAD_EXE_FORMAT;
     const auto result=CancelChecked(base,c,cancelled);
     if(*cancelled)lifecycle::Log("preyvr_pointer inventory_drag_cancelled=1");

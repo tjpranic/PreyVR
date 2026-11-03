@@ -238,9 +238,6 @@ unsigned long long HeadTrackingRecenterEpoch();
 // its poses came from (SubmittableRenderContract).
 unsigned long long HeadTrackingSpaceEpoch();
 
-// View frames that reused the last reference because its publisher held the
-// lock. Non-zero is fine; the alternative is a frame without head tracking.
-unsigned long long HeadTrackingRoomReadFallbacks();
 void ResetHeadTrackingReference();
 bool RebaseHeadTrackingSpace(const Pose& previousFromNew, bool valid);
 std::string HeadHeightReport();

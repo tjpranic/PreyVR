@@ -287,13 +287,9 @@ bool AddWeapon(const GameplayPoseFrame& f, const WeaponBox& box, surface::Probes
 // -- and the weapon's box joins them.
 void BuildHand(const GameplayPoseFrame& f, Hand hand, const WeaponBox* weapon, HandNow& out)
 {
-    const auto& h = f.tracking.hands[static_cast<unsigned>(hand)];
-    if (!IsPoseUsable(h.gripPose, h.gripValidity, kMaxPoseAgeNs)) { out.why = "hand_pose"; return; }
     Pose grip{};
-    if (!HandWorld(f, hand, ControllerPose::grip, Anchor::camera, Placement::controller, grip)) { out.why = "camera"; return; }
-    const auto& q = grip.orientation;
-    if (!Finite(grip.position) || !std::isfinite(q.x) || !std::isfinite(q.y) || !std::isfinite(q.z) || !std::isfinite(q.w)) {
-        out.why = "hand_pose";
+    if (const char* why = ControllerGrip(f, hand, grip)) {
+        out.why = why;
         return;
     }
     const auto box = contact::BoxPoints(contact::HandBoxAt(grip, hand == Hand::left));
