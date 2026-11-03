@@ -1,11 +1,16 @@
 #pragma once
 #include "base/VrMath.h"
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <optional>
 #include <span>
 
 namespace preyvr {
+// CArkWeapon::GetFiringPosition (0x1694BC0): (weapon, out16, flags,
+// overrideEntity), returning out16. Called, hooked and observed with this type.
+using FiringPositionFn = void*(__fastcall*)(void* weapon, void* out16, std::uint32_t flags, void* overrideEntity);
+
 struct FiringPosition {
     Vec3 origin{};
     unsigned int cameraFallback = 0;

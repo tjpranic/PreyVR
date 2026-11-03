@@ -116,6 +116,10 @@ constexpr std::uintptr_t kUseAdikCvarRva = 0x225780C;   // DAT_18225780c, tested
 
 constexpr unsigned int kMaxJoints = 768;
 
+// The tracked hand of a rig side. The rig numbers its hands 0 = right and
+// 1 = left, the reverse of `Hand`.
+constexpr Hand TrackedHand(unsigned int side) { return side == 0 ? Hand::right : Hand::left; }
+
 inline std::atomic<bool> gInstalled{false};
 
 inline std::atomic<ProcessAdikFn> gOriginal{nullptr};

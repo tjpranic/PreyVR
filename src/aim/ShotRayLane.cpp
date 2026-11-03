@@ -95,7 +95,6 @@ using BeamRayFn = float(__fastcall*)(void*, const Vec3*, const Vec3*, float, std
                                      std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);
 using UpdateLaserFn = void*(__fastcall*)(void*, const Vec3*, const Vec3*, const Vec3*);
 using QueryFn = void*(__fastcall*)(void* weapon, void* out);
-using FiringPositionFn = void*(__fastcall*)(void*, void*, std::uint32_t, void*);
 using HelperWorldFn = void*(__fastcall*)(void* out, void* entity, int slot, const char* name, bool, bool);
 using ProjectileSpawnFn = void*(__fastcall*)(void*, void*, void*, std::uint64_t, std::uint64_t, std::uint64_t,
                                        std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);

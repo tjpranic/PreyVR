@@ -5,6 +5,7 @@
 #include "engine/EngineAccess.h"
 #include "base/TextFormat.h"
 
+#include "aim/FiringPosition.h"
 #include "aim/GameplayFrame.h"
 #include "body/HandWorld.h"
 #include "physics/hands/CarryLane.h"
@@ -112,7 +113,6 @@ using CreateFn = std::uintptr_t(__fastcall*)(std::uintptr_t archetype, float* po
                                              std::uint64_t owner, std::uint64_t a5, std::uint64_t a6,
                                              std::uint64_t a7, std::uint64_t a8, std::uint64_t a9, std::uint64_t a10);
 using ReleaseFn = bool(__fastcall*)(std::uintptr_t weapon);
-using FiringPositionFn = void*(__fastcall*)(std::uintptr_t weapon, void* out16, std::uint32_t flags, void* entity);
 
 std::uintptr_t gBase = 0;
 std::atomic<ThrowFn> gThrow{nullptr};
@@ -372,7 +372,7 @@ bool CallFiringPosition(std::uintptr_t weapon, Vec3& out, bool& cameraFallback)
 {
     alignas(16) std::uint8_t result[16]{};
     __try {
-        reinterpret_cast<FiringPositionFn>(gBase + kFiringPositionRva)(weapon, result, 0, nullptr);
+        reinterpret_cast<FiringPositionFn>(gBase + kFiringPositionRva)(reinterpret_cast<void*>(weapon), result, 0, nullptr);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }

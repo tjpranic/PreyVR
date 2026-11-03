@@ -85,7 +85,7 @@ bool ReadWeaponState(std::uintptr_t base, std::uintptr_t player, WeaponState& ou
         out.last = *reinterpret_cast<const std::uint32_t*>(component + 0x5C);
         out.reequip = *reinterpret_cast<const std::uint32_t*>(component + 0x64);
         out.unequipping = *reinterpret_cast<const std::uint8_t*>(component + 0x78) != 0;
-        out.cinematic = *reinterpret_cast<const int*>(input + 0x94) != 0;
+        out.cinematic = *reinterpret_cast<const int*>(input + engine::ArkPlayerInputLayout::cinematic) != 0;
         out.restricted = *reinterpret_cast<const std::uint8_t*>(player + 0x7BC) != 0;
         return true;
     } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }

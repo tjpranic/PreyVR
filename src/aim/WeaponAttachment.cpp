@@ -66,7 +66,6 @@ std::atomic<unsigned long long> gAttachment{0};
 QuatT gBaseline{};
 std::atomic<bool> gHaveBaseline{false};
 
-using FiringPositionFn = void*(__fastcall*)(void*, void*, std::uint32_t, void*);
 std::atomic<FiringPositionFn> gFiringPositionOriginal{nullptr};
 std::atomic<bool> gMuzzleInstalled{false};
 struct MuzzleSample {

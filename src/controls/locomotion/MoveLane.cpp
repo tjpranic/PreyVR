@@ -73,7 +73,7 @@ constexpr std::array<std::uint8_t, 23> kAnalogYPrologue{
     0x28, 0x74, 0x03, 0x0F, 0x57, 0xC9, 0xF3, 0x0F, 0x10, 0x41, 0x5C};
 constexpr std::size_t kMoveX = 0x5C;
 constexpr std::size_t kMoveY = 0x60;
-constexpr std::size_t kCinematicGate = 0x94;
+constexpr std::size_t kCinematicGate = engine::ArkPlayerInputLayout::cinematic;
 
 std::atomic<bool> gInstalled{false};
 std::atomic<AnalogHandlerFn> gOriginalX{nullptr}, gOriginalY{nullptr};

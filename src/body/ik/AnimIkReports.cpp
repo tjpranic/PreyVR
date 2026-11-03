@@ -542,7 +542,7 @@ std::string HandPoseReport()
         // The finger pose the lasers leave from and the fingertip as drawn, in the
         // grip frame, cm: they meet with a free hand's finger held off the trigger.
         // fingerAimDeg: the finger's line against the controller's aim.
-        const unsigned byHand = static_cast<unsigned>(s == 1 ? Hand::left : Hand::right);
+        const unsigned byHand = static_cast<unsigned>(TrackedHand(s));
         if (finger.known[byHand]) {
             const Pose& pose = finger.pose[byHand];
             const Vec3 tip = Rotate(Conjugate(grip.orientation), Sub(marks.tip[s][handpose::kIndex3], grip.position));

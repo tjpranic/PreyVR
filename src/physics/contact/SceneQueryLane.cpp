@@ -62,6 +62,23 @@ DWORD Query(const GameplayPoseFrame& frame,Vec3 origin,Vec3 direction,float rang
         ++hits;return ERROR_SUCCESS;
     }__except(EXCEPTION_EXECUTE_HANDLER){return GetExceptionCode();}
 }
+// Query for the debug ray and the segments: refused while faulted, outside
+// gameplay, on a stale or other reference's frame, or re-entered. An engine
+// error that is not transient disarms every query for the process.
+bool GuardedQuery(const GameplayPoseFrame& frame,Vec3 origin,Vec3 direction,float range,scene::Hit& hit,
+                  int objectTypes=scene::AllObjects,void* also=nullptr){
+    hit={};hit.distance=-1;
+    if(fault.load()||!HudGameplayInputAllowed()||!FreshSample(MonotonicNanoseconds(),frame.tracking.publishedNs)||
+       frame.referenceGeneration!=HeadTrackingReferenceGeneration())return false;
+    thread_local bool busy=false;
+    if(busy)return false;
+    busy=true;const auto result=Query(frame,origin,direction,range,hit,objectTypes,also);busy=false;
+    if(result){lastError=result;++refused;
+        if(!TransientEngineError(result))fault=true;
+        hit={};hit.distance=-1;
+    }
+    return result==ERROR_SUCCESS;
+}
 }
 void QueryAimScene(const GameplayPoseFrame& frame,aim::Sample& sample){
     sample.sceneDistance=-1;
@@ -82,33 +99,10 @@ void QueryAimScene(const GameplayPoseFrame& frame,aim::Sample& sample){
     }
 }
 bool QueryDebugRay(const GameplayPoseFrame& frame,Vec3 origin,Vec3 direction,scene::Hit& hit){
-    hit={};hit.distance=-1;
-    if(fault.load()||!HudGameplayInputAllowed()||!FreshSample(MonotonicNanoseconds(),frame.tracking.publishedNs)||
-       frame.referenceGeneration!=HeadTrackingReferenceGeneration())return false;
-    thread_local bool busy=false;
-    if(busy)return false;
-    busy=true;const auto result=Query(frame,origin,direction,scene::Range,hit);busy=false;
-    if(result){lastError=result;++refused;
-        if(!TransientEngineError(result))fault=true;
-        hit={};hit.distance=-1;
-    }
-    return result==ERROR_SUCCESS;
+    return GuardedQuery(frame,origin,direction,scene::Range,hit);
 }
 bool QuerySegment(const GameplayPoseFrame& frame,Vec3 a,Vec3 b,scene::Hit& hit){
-    hit={};hit.distance=-1;
-    const Vec3 d{b.x-a.x,b.y-a.y,b.z-a.z};
-    const float length=std::sqrt(d.x*d.x+d.y*d.y+d.z*d.z);
-    if(fault.load()||!std::isfinite(length)||length<.001f||length>2.f||!HudGameplayInputAllowed()||
-       !FreshSample(MonotonicNanoseconds(),frame.tracking.publishedNs)||
-       frame.referenceGeneration!=HeadTrackingReferenceGeneration())return false;
-    thread_local bool busy=false;
-    if(busy)return false;
-    busy=true;const auto result=Query(frame,a,{d.x/length,d.y/length,d.z/length},length,hit);busy=false;
-    if(result){lastError=result;++refused;
-        if(!TransientEngineError(result))fault=true;
-        hit={};hit.distance=-1;
-    }
-    return result==ERROR_SUCCESS;
+    return QueryObjectsBetween(frame,a,b,nullptr,scene::AllObjects,hit);
 }
 bool QuerySceneryBetween(const GameplayPoseFrame& frame,Vec3 a,Vec3 b,void* skip,scene::Hit& hit){
     return QueryObjectsBetween(frame,a,b,skip,scene::SceneryObjects,hit);
@@ -117,19 +111,8 @@ bool QueryObjectsBetween(const GameplayPoseFrame& frame,Vec3 a,Vec3 b,void* skip
     hit={};hit.distance=-1;
     const Vec3 d{b.x-a.x,b.y-a.y,b.z-a.z};
     const float length=std::sqrt(d.x*d.x+d.y*d.y+d.z*d.z);
-    if(fault.load()||!std::isfinite(length)||length<.001f||length>2.f||!HudGameplayInputAllowed()||
-       !FreshSample(MonotonicNanoseconds(),frame.tracking.publishedNs)||
-       frame.referenceGeneration!=HeadTrackingReferenceGeneration())return false;
-    thread_local bool busy=false;
-    if(busy)return false;
-    busy=true;
-    const auto result=Query(frame,a,{d.x/length,d.y/length,d.z/length},length,hit,objectTypes,skip);
-    busy=false;
-    if(result){lastError=result;++refused;
-        if(!TransientEngineError(result))fault=true;
-        hit={};hit.distance=-1;
-    }
-    return result==ERROR_SUCCESS;
+    if(!std::isfinite(length)||length<.001f||length>2.f)return false;
+    return GuardedQuery(frame,a,{d.x/length,d.y/length,d.z/length},length,hit,objectTypes,skip);
 }
 DWORD SceneQueryWorld(const GameplayPoseFrame& frame,std::uintptr_t& world,void*& player){
     world=0;player=nullptr;std::uintptr_t base=0;

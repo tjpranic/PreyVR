@@ -102,7 +102,7 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
     // validity flag already distinguishes from a real zero.
     Vec3 traceGrip{}, traceControllerWorld{};
     if (gDrive.load(std::memory_order_acquire)) {
-        const auto& state = frame.tracking.hands[static_cast<unsigned int>(hand == 0 ? Hand::right : Hand::left)];
+        const auto& state = frame.tracking.hands[static_cast<unsigned int>(TrackedHand(hand))];
         // Without a play-space yaw the world placement is unknown, and the
         // camera-relative fallback is the defect body yaw exists to remove.
         if (!frame.headYawUsable) {
@@ -113,7 +113,7 @@ void DriveHand(unsigned int hand, const OwnedPose& owned, const GameplayPoseFram
             gNoPose.fetch_add(1, std::memory_order_relaxed);
             return;
         }
-        const Hand drivenHand = hand == 0 ? Hand::right : Hand::left;
+        const Hand drivenHand = TrackedHand(hand);
         // Surface stop (SurfaceStopLane.h): where fixed scenery holds the hand
         // back, the hand -- and the weapon it holds -- is drawn there instead.
         // The hands' anchor (kIkAnchor): a frame without a camera is refused,
@@ -469,7 +469,7 @@ void PublishFingerPose(const PoseSettings& settings, float scale)
     for (int s = 0; s < 2 && settings.mode == 1; ++s) {
         if (!gHandRig.valid[s]) { continue; }
         const auto side = s == 1 ? handpose::Side::left : handpose::Side::right;
-        const auto hand = static_cast<unsigned>(s == 1 ? Hand::left : Hand::right);
+        const auto hand = static_cast<unsigned>(TrackedHand(s));
         grip.known[hand] = handpose::FingerInGrip(side, gHandRig.frame[s], gHandRig.knuckle[s], settings.point,
                                                   settings.tubeLean, gHandRig.index[s], curl, scale, grip.pose[hand]);
     }

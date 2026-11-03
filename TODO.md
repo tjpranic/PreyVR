@@ -64,6 +64,7 @@
     Not sure how much work has been done on this and how it works.
 - Have Psi-powers aim with the left hand
 - Aiming lasers can show briefly in-between loading screen and press A button screen
+    Only sometimes?
 
 ### Technical Debt
 - Refactoring, simplification and consolidation

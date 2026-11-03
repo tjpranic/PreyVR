@@ -74,6 +74,14 @@ This was read-only: five parallel reviews, each covering one slice, with nothing
   - **Same logic twice:** `ControllerGrip` (HandWorld.h) for Contact and SurfaceStop, `ShapeLookAxis` for MoveLane's turn and pitch, one `CallHud` behind the one- and two-float HUD calls, `PublishEye` for XrEyePair's two publication blocks, and `RotationDegrees` (VrMath.h) for HeadLamp and Helmet.
   - **Write-only state cut:** the hook targets in 6 installers, `gRoomReadFallbacks` and its getter, `gLastRenderer`, `gPopped` and `gArmedAtFrame`.
   - **Left:** the four lane-local `HookAt` wrappers (each binds its file's `gBase` and `Log`; MoveLane uses the new base+RVA overload), the lanes' `ThisFramesView` (each reads its own frame mark), and `Finite(Quaternion)` (one copy left, and a `preyvr::` one would collide with `carry::Finite` through ADL).
+  - Committed by you as `33996c1`.
+- **2026-11-03: you dropped the throwing redo,** so the items parked for it (the Physics batch, Grenade's copies, its player call before install) are ordinary open items.
+- **2026-11-03, the small-items batch. Worn OK on PreyVR-133.**
+  - **SceneQuery:** `QueryDebugRay`, `QuerySegment` and `QueryObjectsBetween` share one `GuardedQuery` (the gates, re-entry flag and fault rule), and `QuerySegment` forwards to `QueryObjectsBetween` (section 3, T1 "Open, simplify"). The three re-entry flags are now one.
+  - **`FiringPositionFn`** is declared once, in FiringPosition.h, not in ShotRay, WeaponAttachment and Grenade (B11).
+  - **The cinematic gate** in MoveLane and ArmsLane is `engine::ArkPlayerInputLayout::cinematic`, as in Torso and AnimIk.
+  - **AnimIk's rig side:** `ik::TrackedHand(side)` for the 4 places that turned the rig's 0 = right numbering into `Hand` (S6; about 10 at 10-22, so a helper rather than an enum).
+  - **Not done, by decision:** MoveLane's three latches (they differ in threshold, precedence and whether a missed sample clears them), the `DualOverlay` rename, the other S6 renames, and the equip calls. The lasers split waits for the instrumentation cleanup and one IPD source for a headset that changes it mid-session. B11's `XrStep` was already done 10-23 as `StepSeconds`.
 
 **How this relates to [the 10-17 audit](DUPLICATION-AUDIT-2026-10-17.md):**
 - The older audit is still the reference for its items. Its "Constraints that shape every fix" and section F ("don't merge") still apply in full.
