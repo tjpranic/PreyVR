@@ -65,6 +65,8 @@ This was read-only: five parallel reviews, each covering one slice, with nothing
     - Build passes, 97/97 ctest pass, and the 75 export names are unchanged.
     - Packaged as PreyVR-70, **worn OK (10-24)**, and committed by you as `e8a30af` ("Command handling refactor").
     - That session's one crash was the engine's, not this batch's ([ENGINE-INSTABILITY.md](ENGINE-INSTABILITY.md#texture-view-crash)).
+- **2026-11-01, a low-hanging pass, no-risk and offline tiers.** Committed by you as `59e21bb` ("Refactoring"): dead declarations, named engine addresses, unused includes, small shared helpers and test fixtures; 72 exports.
+- **2026-11-03, the follow-up cuts.** `TemporalAaProbe`, `IkTargetProbe`, `tools/live/preyvr-harness.js`, the 48 exports only it used (24 left), the four unreferenced scripts (`IpdSweep`, `HudValidation`, `AimCheck`, `ControlDemo`), and DebugWatch's offset override. Carry and Interaction now share `SafeRead`, `EntityById`, `PlayerInstance` and `SafeCopyPrintable`; Grenade keeps its copies for the throwing redo.
 
 **How this relates to [the 10-17 audit](DUPLICATION-AUDIT-2026-10-17.md):**
 - The older audit is still the reference for its items. Its "Constraints that shape every fix" and section F ("don't merge") still apply in full.

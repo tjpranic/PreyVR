@@ -54,7 +54,6 @@ struct Case {
 
 // Tails of more than one report, or of a report and the channel's text after it.
 std::string DualReports() { return DualSceneReport() + DualOverlayReport(); }
-std::string TaaReports() { return TaaProbeReport() + " " + TaaLaneReport(); }
 std::string WorldReticleReports() { return ReticleWorldReport() + " scene:" + SceneQueryReport(); }
 std::string VrOptionsReports() { return VrOptionsReport() + PsychoscopeReport() + BodyEquipmentReport(); }
 std::string BodyReports() { return TorsoLaneReport() + BodyPinReport() + RoomScaleReport(); }
@@ -218,7 +217,7 @@ const Case kCases[] = {
     {"mem.deep", "mem.deep result=87", nullptr, processed},
     {"mem.watch 9 x", "mem.watch result=87", nullptr, processed},
     {"mem.stack", "mem.stack result=2", nullptr, processed},
-    {"mem.hits", "mem.hits result=0 count=0 slots=0,0,0,0", nullptr, processed},
+    {"mem.hits", "mem.hits result=0 count=0 slots=0,0,0,0 armed=0 threads=0 missed=0 foreign=0", nullptr, processed},
     {"arms.att", "arms.att result=2", nullptr, processed},
     {"arms.hide", "arms.hide result=2", nullptr, processed},
     {"arms.draw", "arms.draw result=0 (requested)", nullptr, processed},
@@ -246,7 +245,7 @@ const Case kCases[] = {
     {"dual.overlay", "dual.overlay result=0", DualOverlayReport, processed},
     {"frame.probe", "frame.probe result=0", FrameProbeReport, processed},
     {"frame.probe 2", "frame.probe result=1", FrameProbeReport, processed},
-    {"taa.report", "taa.report result=0 ", TaaReports, processed},
+    {"taa.report", "taa.report result=0 ", TaaLaneReport, processed},
     {"taa.vr", "taa.vr result=0 ", TaaLaneReport, processed},   // bare: report; a value queues the AA mode
     {"taa.motion", "taa.motion result=0 ", TaaLaneReport, processed},
     {"cull.prepare", "cull.prepare result=0", CullPrepareReport, processed},

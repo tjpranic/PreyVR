@@ -283,7 +283,6 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/render/camera/HeadTrackingHook.cpp
         src/ui/hud/HudBridge.cpp
         src/diagnostics/commands/ResearchHotkeys.cpp
-        src/diagnostics/probes/IkTargetProbe.cpp
         src/controls/input/InputPath.cpp
         src/controls/input/InputPost.cpp
         src/engine/hooks/MinHookInit.cpp
@@ -302,7 +301,6 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/equipment/head/HelmetLane.cpp
         src/render/stereo/BodyDepthHook.cpp
         src/render/stereo/DualSceneStereo.cpp
-        src/diagnostics/probes/TemporalAaProbe.cpp
         src/render/taa/TemporalAaLane.cpp
         src/render/stereo/DualOverlay.cpp
         src/render/stereo/VideoOverlay.cpp
@@ -535,9 +533,6 @@ if(PREYVR_BUILD_TESTS)
         preyvr_add_test(helmet tests/equipment/HelmetTests.cpp
             DLL
             LIBS preyvr_core minhook)
-        preyvr_add_test(temporal_aa_probe tests/diagnostics/TemporalAaProbeTests.cpp
-            DLL
-            LIBS preyvr_core d3d11)
         preyvr_add_test(temporal_aa tests/render/TemporalAaTests.cpp)
         preyvr_add_test(temporal_aa_lane tests/render/TemporalAaLaneTests.cpp
             DLL

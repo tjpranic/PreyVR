@@ -1,5 +1,8 @@
 # Temporal AA per eye: feasibility and scope (2026-10-30)
 
+> **2026-11-03:** the phase 0 probe (`TemporalAaProbe`, the `taa={...}` report) was removed once the lane
+> was worn OK. `taa.report` now gives only the lane's `taaLane={...}`.
+
 Branch `custom`. The wearer's report: jaggies on distant geometry, worst on near-horizontal and near-vertical
 edges. Lowering Prey's FOV slider from 120 to 110 helped. Raising the render size to 3240x3240 did not. The mod
 forces SMAA 1X (`r_AntialiasingMode 1`), a single-frame filter. It can't stop stair-steps crawling as the head

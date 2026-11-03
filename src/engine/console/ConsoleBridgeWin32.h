@@ -49,7 +49,4 @@ DWORD VerifiedRendererSettingResult();
 // Called from the frame observer; returns immediately when nothing is queued.
 void ServiceConsoleQueue();
 
-DWORD LastConsoleBridgeResult();
-unsigned long long SubmittedConsoleCommandCount();
-
 } // namespace preyvr::dll

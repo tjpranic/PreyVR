@@ -131,8 +131,12 @@ bool ExecuteMemoryCommand(const std::vector<std::string>& args, std::ostringstre
             << std::dec;
     } else if (verb == "mem.hits") {
         // mem.hits [clear]: every capture, RIP as an RVA, with rcx/rdx/r8 and the stack top.
+        // Threads armed and missed say whether no hits means absence; foreign traps say
+        // something else owns the debug registers.
         out << "mem.hits result=0 count=" << WatchCaptureCount() << " slots=" << WatchHitCount(0) << ","
-            << WatchHitCount(1) << "," << WatchHitCount(2) << "," << WatchHitCount(3) << std::hex;
+            << WatchHitCount(1) << "," << WatchHitCount(2) << "," << WatchHitCount(3)
+            << " armed=" << WatchArmedMask() << " threads=" << WatchArmedThreadCount()
+            << " missed=" << WatchMissedThreadCount() << " foreign=" << WatchForeignTrapCount() << std::hex;
         for (unsigned i = 0; i < WatchCaptureCount() && i < 64; ++i) {
             WatchCapture c{};
             if (!ReadWatchCapture(i, c)) { continue; }

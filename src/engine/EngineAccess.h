@@ -51,6 +51,19 @@ inline const std::uint8_t* LiveViewCamera()
     return system != nullptr ? system + engine::SystemLayout::viewCamera : nullptr;
 }
 
+// The player (GetArkPlayerInstance), or 0: PreyDll not loaded, no player yet, or
+// a fault. `base` is PreyDll's.
+inline std::uintptr_t PlayerInstance(std::uintptr_t base)
+{
+    using GetInstanceFn = std::uintptr_t(__fastcall*)();
+    if (base == 0) { return 0; }
+    __try {
+        return reinterpret_cast<GetInstanceFn>(base + engine::ArkPlayerLayout::getInstanceRva)();
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return 0;
+    }
+}
+
 // The entity with `id` (gEnv->pEntitySystem's GetEntity), or 0: no such entity,
 // no entity system yet, or a fault. `base` is PreyDll's.
 inline std::uintptr_t EntityById(std::uintptr_t base, std::uint32_t id)

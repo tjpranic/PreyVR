@@ -75,7 +75,6 @@ constexpr std::array<std::uint8_t, 13> kDropPrologue{
 constexpr std::uintptr_t kPhysicalWorldRva = 0x224D9C8;
 constexpr std::size_t kGetPhysVarsSlot = 0x78;
 constexpr std::uintptr_t kMinMass = 0x1C8, kMaxMass = 0x1CC, kArticulatedScale = 0x1D8;
-constexpr std::uintptr_t kGetPlayerRva = engine::ArkPlayerLayout::getInstanceRva;
 
 constexpr std::uintptr_t kCarryInInteraction = 0x28;
 constexpr std::uintptr_t kGrabberConstrained = 0x60;
@@ -225,26 +224,12 @@ std::atomic<unsigned long long> gUpdates{0}, gStarts{0}, gStops{0}, gReleasesAsk
 
 // --- SEH helpers (POD only) --------------------------------------------------------
 
-bool ReadBytes(void* destination, std::uintptr_t source, std::size_t size)
-{
-    return SafeCopy(destination, reinterpret_cast<const void*>(source), size);
-}
-template <class T> bool Read(std::uintptr_t at, T& out) { return ReadBytes(&out, at, sizeof(T)); }
 template <class R, class... A> R VCall(std::uintptr_t object, std::size_t slot, A... args)
 {
     const auto vtable = *reinterpret_cast<const std::uintptr_t*>(object);
     return (*reinterpret_cast<R(__fastcall* const*)(std::uintptr_t, A...)>(vtable + slot))(object, args...);
 }
 
-std::uintptr_t CallGetPlayer()
-{
-    __try {
-        return reinterpret_cast<std::uintptr_t(__fastcall*)()>(gBase + kGetPlayerRva)();
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return 0;
-    }
-}
-std::uintptr_t CallGetEntity(std::uint32_t id) { return EntityById(gBase, id); }
 std::uint32_t CallEntityId(std::uintptr_t entity)
 {
     __try {
@@ -306,22 +291,6 @@ const char* CallEntityName(std::uintptr_t entity)
         return nullptr;
     }
 }
-bool CopyName(const char* source, char* out, std::size_t size)
-{
-    __try {
-        if (!source) { return false; }
-        std::size_t n = 0;
-        for (; n + 1 < size && source[n]; ++n) {
-            const unsigned char c = static_cast<unsigned char>(source[n]);
-            if (c < 32 || c > 126) { return false; }
-            out[n] = static_cast<char>(c);
-        }
-        out[n] = 0;
-        return n > 0;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
 
 // The velocity change the native release's impulse gives an object, per m/s
 // of the vector it is handed: the producer scales by the mass CLAMPED to the
@@ -364,24 +333,24 @@ std::uintptr_t PlayerCarry(std::uintptr_t player)
 }
 bool IsPlayerCarry(std::uintptr_t carry)
 {
-    return carry && carry == PlayerCarry(CallGetPlayer());
+    return carry && carry == PlayerCarry(PlayerInstance(gBase));
 }
 
 std::uintptr_t PlayerEntity(std::uintptr_t player)
 {
     std::uintptr_t entity = 0;
-    return player && Read(player + 0x38, entity) ? entity : 0;
+    return player && SafeRead(player + 0x38, entity) ? entity : 0;
 }
 Vec3 PlayerVelocity()
 {
     phys::Dynamics d{};
-    const auto physics = CallPhysics(PlayerEntity(CallGetPlayer()));
+    const auto physics = CallPhysics(PlayerEntity(PlayerInstance(gBase)));
     return physics && phys::QueryDynamics(physics, d) ? d.v : Vec3{};
 }
 bool PlayerFeet(Vec3& out)
 {
     float m[12];
-    const auto entity = PlayerEntity(CallGetPlayer());
+    const auto entity = PlayerEntity(PlayerInstance(gBase));
     if (!entity || !CallWorldTm(entity, m)) { return false; }
     out = {m[3], m[7], m[11]};
     return Finite(out);
@@ -447,11 +416,11 @@ void CaptureGrab(std::uintptr_t entity)
     Grab g{};
     g.entity = CallEntityId(entity);
     if (!g.entity) { return; }
-    if (!CopyName(CallName(entity, kGetArchetypeSlot), g.label, sizeof(g.label)) &&
-        !CopyName(CallEntityName(entity), g.label, sizeof(g.label))) {
+    if (!SafeCopyPrintable(CallName(entity, kGetArchetypeSlot), g.label, sizeof(g.label)) &&
+        !SafeCopyPrintable(CallEntityName(entity), g.label, sizeof(g.label))) {
         std::snprintf(g.label, sizeof(g.label), "?");
     }
-    if (!CopyName(CallName(entity, kGetClassSlot), g.cls, sizeof(g.cls))) { std::snprintf(g.cls, sizeof(g.cls), "?"); }
+    if (!SafeCopyPrintable(CallName(entity, kGetClassSlot), g.cls, sizeof(g.cls))) { std::snprintf(g.cls, sizeof(g.cls), "?"); }
     const auto physics = CallPhysics(entity);
     g.articulated = CallPhysicsType(physics) == 6;   // PE_ARTICULATED: a ragdoll
     phys::Dynamics d{};
@@ -600,7 +569,7 @@ std::uint64_t __fastcall UpdateHook(std::uintptr_t carry, float frameTime)
     if (!IsPlayerCarry(carry)) { return original(carry, frameTime); }
     gUpdates.fetch_add(1, std::memory_order_relaxed);
     std::uint32_t id = 0;
-    Read(carry + kPickedUp, id);
+    SafeRead(carry + kPickedUp, id);
     if (gGrab.active && gGrab.entity != id) {
         gStale.fetch_add(1);
         ClearGrab("entity changed");
@@ -615,7 +584,7 @@ std::uint64_t __fastcall UpdateHook(std::uintptr_t carry, float frameTime)
         } else {
             ExecuteRelease(carry, p, id);
             std::uint32_t after = 0;
-            Read(carry + kPickedUp, after);
+            SafeRead(carry + kPickedUp, after);
             if (after == id) {
                 // DropCarriedEntity refused (a collision-restore timer, a throw
                 // still settling): try again next frame, for a while.
@@ -737,8 +706,8 @@ void __fastcall StopHook(std::uintptr_t carry, float impulse, std::uint8_t angul
     }
     gStops.fetch_add(1);
     std::uint32_t id = 0;
-    Read(carry + kPickedUp, id);
-    const auto entity = CallGetEntity(id);
+    SafeRead(carry + kPickedUp, id);
+    const auto entity = EntityById(gBase, id);
     const auto physics = CallPhysics(entity);
     StopOverride o = gOverride;
     gOverride = {};
@@ -841,14 +810,14 @@ std::string CarryFields(std::uintptr_t carry)
     float kick[4]{}, grabber[9]{}, dragH = 0, dragD = 0, dragBreak = 0;
     std::uint8_t constrained = 0, justThrown = 0;
     int constraint = 0;
-    Read(carry + kKickBacks, kick);
-    Read(carry + 0x3C, grabber);
-    Read(carry + kGrabberConstrained, constrained);
-    Read(carry + kJustThrown, justThrown);
-    Read(carry + kConstraint, constraint);
-    Read(carry + kDragHeight, dragH);
-    Read(carry + kDragDistance, dragD);
-    Read(carry + kDragBreakSq, dragBreak);
+    SafeRead(carry + kKickBacks, kick);
+    SafeRead(carry + 0x3C, grabber);
+    SafeRead(carry + kGrabberConstrained, constrained);
+    SafeRead(carry + kJustThrown, justThrown);
+    SafeRead(carry + kConstraint, constraint);
+    SafeRead(carry + kDragHeight, dragH);
+    SafeRead(carry + kDragDistance, dragD);
+    SafeRead(carry + kDragBreakSq, dragBreak);
     std::string out = " kickBacks=" + Fixed(kick[0], 2) + "," + Fixed(kick[1], 2) + "," + Fixed(kick[2], 2) + "," +
                       Fixed(kick[3], 2) + " grabberBreakSq=" + Fixed(grabber[0], 2) + " lerpSpeed=" + Fixed(grabber[4], 2) +
                       " lerpObstructed=" + Fixed(grabber[5], 2) + " lerpAccel=" + Fixed(grabber[6], 2) +
@@ -922,7 +891,7 @@ bool CarryHoldingInHand() { return gHolding.load(); }
 std::uintptr_t CarriedPhysics()
 {
     if (!gGrab.active) { return 0; }
-    return CallPhysics(CallGetEntity(gGrab.entity));
+    return CallPhysics(EntityById(gBase, gGrab.entity));
 }
 
 void RecordCarryMotion(const TrackingFrame& frame)
@@ -979,14 +948,14 @@ void UpdateCarryLane(const GameplayPoseFrame& frame, bool)
     if (!gInstalled) { return; }
     const std::uintptr_t carry = PlayerCarry(frame.player);
     std::uint32_t id = 0;
-    if (carry) { Read(carry + kPickedUp, id); }
+    if (carry) { SafeRead(carry + kPickedUp, id); }
     if (gGrab.active && id != gGrab.entity) {
         gStale.fetch_add(1);
         ClearGrab("carry ended");
     }
     // How well the object sits where it is wanted.
     if (gGrab.active && gGrab.written) {
-        const auto entity = CallGetEntity(gGrab.entity);
+        const auto entity = EntityById(gBase, gGrab.entity);
         float box[6]{};
         if (entity && CallBounds(entity, kWorldBoundsSlot, box)) {
             const Vec3 centre{(box[0] + box[3]) * .5f, (box[1] + box[4]) * .5f, (box[2] + box[5]) * .5f};
@@ -1018,7 +987,7 @@ void UpdateCarryLane(const GameplayPoseFrame& frame, bool)
     if (gWatch.entity) {
         ++gWatch.frames;
         phys::Dynamics d{};
-        const auto watched = CallGetEntity(gWatch.entity);
+        const auto watched = EntityById(gBase, gWatch.entity);
         const auto physics = CallPhysics(watched);
         float wtm[12];
         if (watched && CallWorldTm(watched, wtm)) {
@@ -1061,7 +1030,7 @@ std::string CarryReport()
         std::lock_guard lock(gLastMutex);
         last = gLast;
     }
-    const auto player = CallGetPlayer();
+    const auto player = PlayerInstance(gBase);
     std::ostringstream out;
     out << " installed=" << gInstalled << " hand=" << gHand.load() << " holdToHold=" << gHoldToHold.load()
         << " grabPointMode=" << gGrabPoint.load()

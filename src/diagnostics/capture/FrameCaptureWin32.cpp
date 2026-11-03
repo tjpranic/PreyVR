@@ -24,13 +24,11 @@ std::atomic<bool> gRequestPending{false};
 std::atomic<std::uint32_t> gRequestTag{0};
 std::atomic<bool> gHudOnly{false};
 std::mutex gRequestMutex;
-std::atomic<DWORD> gLastResult{static_cast<DWORD>(FrameCaptureResult::ok)};
 std::atomic<unsigned long long> gCompleted{0};
 std::atomic<int> gTagOverride{-1};
 
 void Finish(FrameCaptureResult result, const char* detail)
 {
-    gLastResult.store(static_cast<DWORD>(result), std::memory_order_release);
     std::ostringstream line;
     line << "preyvr_frame_capture result=" << static_cast<DWORD>(result)
          << " detail=" << detail;
@@ -125,11 +123,6 @@ DWORD RequestFrameCapture(std::uint32_t tag,bool hudOnly)
 void SetFrameCaptureTagOverride(int tag)
 {
     gTagOverride.store(tag, std::memory_order_release);
-}
-
-DWORD LastFrameCaptureResult()
-{
-    return gLastResult.load(std::memory_order_acquire);
 }
 
 unsigned long long CompletedFrameCaptureCount()
@@ -290,7 +283,6 @@ FrameCaptureResult DumpTexture(ID3D11Device* device, ID3D11Texture2D* backBuffer
          << " rowPitch=" << header.rowPitch
          << " path=" << path.string();
     lifecycle::Log(line.str());
-    gLastResult.store(static_cast<DWORD>(FrameCaptureResult::ok), std::memory_order_release);
     return FrameCaptureResult::ok;
 }
 

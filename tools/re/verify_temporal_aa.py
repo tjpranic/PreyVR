@@ -225,7 +225,7 @@ def verify():
                                               'the check: threshold against +0xAD4':(0x81bc98,'0f2f81d40a0000')})
     checks.append("world motion: the second eye's constants hold the first eye's previous view, so +0x220 must move")
 
-    # TemporalAaNative.h: the bodies the probe's gate checks, and the constants it reads through.
+    # TemporalAaNative.h: the bodies the lane's gate checks, and the constants it reads through.
     entries=native_rows(HEADER)
     assert [(rva,name) for rva,_,_,name in entries]==[(POST_DRIVER,'PostDriver'),(RESOLVE,'TemporalResolve'),
         (0xfe3760,'AaModeFlags'),(0xecec10,'AaModeClamp'),(0xfb2a00,'PipelineAaExecute'),(VIEW_INFO,'ViewInfo'),

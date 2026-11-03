@@ -42,7 +42,6 @@ namespace preyvr::dll {
 DWORD ResolveInputPath();
 
 unsigned long long InputPathInputPointer();
-unsigned long long InputPathVtable();
 
 // The slot the setter/getter pair was found at, and whether it was found at all.
 // **Check `InputPathAlignmentConfirmed` before using the RVA below.** When it is
@@ -54,9 +53,5 @@ DWORD InputPathAlignmentConfirmed();
 // `IInput::PostInputEvent` as a PreyDll RVA, ready to check against Ghidra before
 // anything is ever called through it.
 unsigned long long InputPathPostInputEventRva();
-
-// The first 20 vtable slots as RVAs, so the table can be read by eye if the
-// alignment test fails and the shape has to be judged by hand.
-unsigned long long InputPathSlotRva(unsigned int slot);
 
 } // namespace preyvr::dll

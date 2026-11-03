@@ -51,12 +51,9 @@ std::atomic<unsigned long long> gVerifiedCompleted{0};
 std::atomic<DWORD> gVerifiedResult{0};
 
 std::atomic<bool> gHasQueued{false};
-std::atomic<DWORD> gLastResult{static_cast<DWORD>(ConsoleBridgeResult::ok)};
-std::atomic<unsigned long long> gSubmitted{0};
 
 DWORD Finish(ConsoleBridgeResult result, const char* detail, const std::string& command)
 {
-    gLastResult.store(static_cast<DWORD>(result), std::memory_order_release);
     std::ostringstream line;
     line << "preyvr_console result=" << static_cast<DWORD>(result)
          << " detail=" << detail
@@ -167,16 +164,6 @@ DWORD QueueVerifiedRendererSetting(const char* command) {
 unsigned long long VerifiedRendererSettingCount() {return gVerifiedCompleted.load(std::memory_order_acquire);}
 DWORD VerifiedRendererSettingResult() {return gVerifiedResult.load(std::memory_order_acquire);}
 
-DWORD LastConsoleBridgeResult()
-{
-    return gLastResult.load(std::memory_order_acquire);
-}
-
-unsigned long long SubmittedConsoleCommandCount()
-{
-    return gSubmitted.load(std::memory_order_acquire);
-}
-
 void ServiceConsoleQueue()
 {
     if (!gHasQueued.load(std::memory_order_acquire)) {
@@ -197,13 +184,13 @@ void ServiceConsoleQueue()
         gVerifiedResult.store(static_cast<DWORD>(state==ReadbackResult::verified ? ConsoleBridgeResult::ok : ConsoleBridgeResult::unavailable));
         gVerifiedCompleted.fetch_add(1,std::memory_order_release);
         gAwaitingReadback=false;gHasQueued.store(false);gQueued.clear();
-        gSubmitted.fetch_add(1,std::memory_order_release);return;
+        return;
     }
     // Count refused dequeues too so a waiting owner sees failure immediately.
     struct Completion {
         bool deferred=false;
         DWORD result=static_cast<DWORD>(ConsoleBridgeResult::unavailable);
-        ~Completion() {if(!deferred) {if(gVerifyName) {gVerifiedResult.store(result);gVerifiedCompleted.fetch_add(1,std::memory_order_release);} gHasQueued=false;gQueued.clear();gSubmitted.fetch_add(1,std::memory_order_release);}}
+        ~Completion() {if(!deferred) {if(gVerifyName) {gVerifiedResult.store(result);gVerifiedCompleted.fetch_add(1,std::memory_order_release);} gHasQueued=false;gQueued.clear();}}
     } completion;
 
     // Re-checked after dequeue rather than trusting the enqueue-time decision:

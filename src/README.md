@@ -132,7 +132,7 @@ Before adding a hook, look for something the engine already honours: a callback,
 | Command channel | [`diagnostics/commands/`](diagnostics/commands/) | Testing and tuning, without an injector: `commands.txt` beside the log, answered in `results.txt`. Verbs are a fixed list, in [`docs/TUNING-COMMANDS.md`](../docs/TUNING-COMMANDS.md). |
 | Keys | [`VrMode.cpp`](app/VrMode.cpp) | F10 VR Options, F11 start VR, F12 recenter, while Prey has focus. |
 | Environment switches | [`EnvSwitch.h`](base/EnvSwitch.h) | Launcher kill switches, such as `PREYVR_DUAL_STEREO=0`. |
-| Exports | [`Exports.cpp`](app/Exports.cpp) | `PreyVR_*` C entry points for the live harness and the smoke host. |
+| Exports | [`Exports.cpp`](app/Exports.cpp) | `PreyVR_*` C entry points for the smoke host and the live procedures in `docs/`. |
 
 **Logging.** There is one log, `PreyVR.log`, with lines of the form `preyvr_<area> key=value`. The launcher gives each run its own folder under `%LOCALAPPDATA%\PreyVR\runs\` through `PREYVR_LOG_PATH`. Launchers and tests read these lines, so renaming one can break them.
 

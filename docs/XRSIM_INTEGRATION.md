@@ -403,8 +403,9 @@ places.
 
 Self-consistency is not correctness. The invariants prove the conversion is *a*
 rigid motion; they cannot prove it is the *right* one, because the probe converts
-whatever it is handed. `tools/Invoke-PreyVRAimCheck.ps1` supplies the missing
-half by commanding an exact aim and predicting the answer from geometry:
+whatever it is handed. `Invoke-PreyVRAimCheck.ps1` (removed 2026-11-03, last in
+`f595443`) supplied the missing half by commanding an exact aim and predicting
+the answer from geometry:
 
 | commanded | engine direction | expected |
 | --- | --- | --- |

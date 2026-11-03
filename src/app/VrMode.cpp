@@ -19,7 +19,6 @@
 #include "equipment/head/HelmetLane.h"
 #include "render/stereo/DualSceneStereo.h"
 #include "render/stereo/DualOverlay.h"
-#include "diagnostics/probes/TemporalAaProbe.h"
 #include "render/taa/TemporalAaLane.h"
 #include "render/stereo/NearFovOverride.h"
 #include "controls/input/InputPost.h"
@@ -315,7 +314,7 @@ void TickVrMode() {
             // The same text dual.report and hud.layer answer with.
             Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
                 " } torso={"+TorsoLaneReport()+" } move={"+MoveLaneStatusReport()+StickRereadReport()+
-                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" "+BodyDepthReport()+" "+ExamineCameraReport()+" "+HeadLampReport()+" "+HelmetReport()+" "+ScreenAimReport()+" "+TaaProbeReport()+" "+TaaLaneReport()+" focus={"+
+                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" "+BodyDepthReport()+" "+ExamineCameraReport()+" "+HeadLampReport()+" "+HelmetReport()+" "+ScreenAimReport()+" "+TaaLaneReport()+" focus={"+
                 FocusHoldReport()+" } hold={"+XrHoldReport()+" } prompts={"+ControllerPromptsReport()+" }");
         }
         const auto owner=AnimIkOwnerGeneration();

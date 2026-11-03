@@ -1,7 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
-// Prey's temporal-AA state, which the probe reads. Steam SHA 7d6e322f...11a7.
+// Prey's temporal-AA state, which the lane rests on. Steam SHA 7d6e322f...11a7.
 // See docs/TEMPORAL-AA-SCOPE-2026-10-30.md and R-136. Static contracts, checked
 // by tools/re/verify_temporal_aa.py.
 namespace preyvr::taa::native {

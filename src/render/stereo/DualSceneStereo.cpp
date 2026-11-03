@@ -9,7 +9,6 @@
 #include "xr/XrSessionHost.h"
 #include "engine/hooks/FrameObserverHook.h"
 #include "diagnostics/probes/FrameProbe.h"
-#include "diagnostics/probes/TemporalAaProbe.h"
 #include "render/taa/TemporalAaLane.h"
 #include "base/Logger.h"
 #include "engine/hooks/MinHookInit.h"
@@ -463,12 +462,10 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
         const auto start = topLevel ? QpcMicros() : 0;
         if (topLevel) {
             gStep.store(static_cast<int>(Step::single), std::memory_order_release);
-            TaaProbeBefore(renderer, view, TaaSubmission::single);
         }
         original(renderer, view, flags, threadInfo, renderFunc);
         if (topLevel) {
             gSingleMicros.fetch_add(QpcMicros() - start, std::memory_order_relaxed);
-            TaaProbeAfter(renderer, view, TaaSubmission::single);
             gSingles.fetch_add(1, std::memory_order_relaxed);
             gStep.store(static_cast<int>(Step::idle), std::memory_order_release);
             if (gCaptureArmed.exchange(false, std::memory_order_acq_rel)) {
@@ -503,9 +500,7 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
             // both-eyes contract finds no held first eye and is refused, which
             // costs one frame rather than the mode.
             gHeadsetBuildMisses.fetch_add(1, std::memory_order_relaxed);
-            TaaProbeBefore(renderer, view, TaaSubmission::single);
             original(renderer, view, flags, threadInfo, renderFunc);
-            TaaProbeAfter(renderer, view, TaaSubmission::single);
             gStep.store(static_cast<int>(Step::idle), std::memory_order_release);
             --tDepth;
             return;
@@ -520,9 +515,7 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
                 restoreCentre();
             }
             Refuse(built ? "render_thread_slot_unknown" : "eye_camera_unavailable");
-            TaaProbeBefore(renderer, view, TaaSubmission::single);
             original(renderer, view, flags, threadInfo, renderFunc);
-            TaaProbeAfter(renderer, view, TaaSubmission::single);
             gStep.store(static_cast<int>(Step::idle), std::memory_order_release);
             --tDepth;
             return;
@@ -544,12 +537,10 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
     if (temporal) {
         TaaLaneEyeBegin(renderer, view, 0, eyes[0]);
     }
-    TaaProbeBefore(renderer, view, TaaSubmission::first);
     const auto t0 = QpcMicros();
     original(renderer, view, flags, firstInfo, renderFunc);
     const auto t1 = QpcMicros();
     tDeferTeardown = false;
-    TaaProbeAfter(renderer, view, TaaSubmission::first);
     if (temporal) {
         TaaLaneEyeEnd(renderer, 0, eyes[0]);
     }
@@ -609,10 +600,8 @@ void __fastcall RenderSceneDetour(void* renderer, void* view, int flags, void* t
     if (temporal) {
         TaaLaneEyeBegin(renderer, view, 1, eyes[1]);
     }
-    TaaProbeBefore(renderer, view, TaaSubmission::second);
     original(renderer, view, flags, secondInfo, renderFunc);
     const auto t2 = QpcMicros();
-    TaaProbeAfter(renderer, view, TaaSubmission::second);
     if (temporal) {
         TaaLaneEyeEnd(renderer, 1, eyes[1]);
     }

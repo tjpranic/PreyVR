@@ -48,7 +48,6 @@ constexpr std::uintptr_t kInteractRva = 0x1593690;
 constexpr std::uintptr_t kPerformRva = 0x1593980;
 constexpr std::array<std::uint8_t, 18> kPerformPrologue{
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x89, 0x54, 0x24, 0x10, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56};
-constexpr std::uintptr_t kGetPlayerRva = engine::ArkPlayerLayout::getInstanceRva;
 // Virtual slots (the entity by id is EngineAccess.h's EntityById). IEntity and
 // IEntityClass slots follow the PDB-generated Chairloader headers and are
 // validated on every read: a name must be printable, bounds finite.
@@ -132,41 +131,6 @@ void Remember(const std::string& text)
 
 // --- SEH helpers (POD only) ---------------------------------------------------
 
-bool ReadBytes(void* destination, std::uintptr_t source, std::size_t size)
-{
-    return SafeCopy(destination, reinterpret_cast<const void*>(source), size);
-}
-template <class T> bool Read(std::uintptr_t at, T& out) { return ReadBytes(&out, at, sizeof(T)); }
-
-std::uintptr_t CallGetPlayer()
-{
-    __try {
-        return reinterpret_cast<std::uintptr_t(__fastcall*)()>(gBase + kGetPlayerRva)();
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return 0;
-    }
-}
-
-std::uintptr_t CallGetEntity(std::uint32_t id) { return EntityById(gBase, id); }
-
-// Copies a printable C string; false for anything else.
-bool CopyName(const char* source, char* out, std::size_t size)
-{
-    __try {
-        if (!source) { return false; }
-        std::size_t n = 0;
-        for (; n + 1 < size && source[n]; ++n) {
-            const unsigned char c = static_cast<unsigned char>(source[n]);
-            if (c < 32 || c > 126) { return false; }
-            out[n] = static_cast<char>(c);
-        }
-        out[n] = 0;
-        return n > 0;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
-
 const char* CallEntityName(std::uintptr_t entity)
 {
     __try {
@@ -233,11 +197,11 @@ bool DescribeEntity(std::uint32_t id, EntityInfo& out)
 {
     out = {};
     out.id = id;
-    out.entity = CallGetEntity(id);
+    out.entity = EntityById(gBase, id);
     if (!out.entity) { return false; }
-    if (!CopyName(CallEntityName(out.entity), out.name, sizeof(out.name))) { out.name[0] = 0; }
-    if (!CopyName(CallArchetypeName(out.entity), out.archetype, sizeof(out.archetype))) { out.archetype[0] = 0; }
-    if (!CopyName(CallClassName(out.entity), out.cls, sizeof(out.cls))) { std::snprintf(out.cls, sizeof(out.cls), "?"); }
+    if (!SafeCopyPrintable(CallEntityName(out.entity), out.name, sizeof(out.name))) { out.name[0] = 0; }
+    if (!SafeCopyPrintable(CallArchetypeName(out.entity), out.archetype, sizeof(out.archetype))) { out.archetype[0] = 0; }
+    if (!SafeCopyPrintable(CallClassName(out.entity), out.cls, sizeof(out.cls))) { std::snprintf(out.cls, sizeof(out.cls), "?"); }
     std::snprintf(out.label, sizeof(out.label), "%s",
                   out.archetype[0] ? out.archetype : out.name[0] ? out.name : out.cls);
     float box[6]{};
@@ -263,10 +227,10 @@ void ReadInfo(std::uintptr_t interaction, std::array<InfoRecord, 4>& out)
         const std::uintptr_t at = interaction + engine::ArkPlayerInteractionLayout::interactionInfo + mode * kInfoSize;
         auto& r = out[mode];
         r = {};
-        Read(at, r.type);
+        SafeRead(at, r.type);
         std::uintptr_t text = 0;
-        if (Read(at + 8, text) && text) { CopyName(reinterpret_cast<const char*>(text), r.text, sizeof(r.text)); }
-        Read(at + 0x14, r.hold);
+        if (SafeRead(at + 8, text) && text) { SafeCopyPrintable(reinterpret_cast<const char*>(text), r.text, sizeof(r.text)); }
+        SafeRead(at + 0x14, r.hold);
     }
 }
 
@@ -296,7 +260,7 @@ void __fastcall UpdateCandidatesHook(std::uintptr_t selector)
     const auto original = gUpdateCandidates.load(std::memory_order_acquire);
     gSelectorCalls.fetch_add(1, std::memory_order_relaxed);
     if (!gLeftHand.load(std::memory_order_acquire)) { original(selector); return; }
-    const std::uintptr_t player = CallGetPlayer();
+    const std::uintptr_t player = PlayerInstance(gBase);
     if (!player || selector != player + engine::ArkPlayerLayout::interaction +
                                     engine::ArkPlayerInteractionLayout::targetSelector) {
         gForeign.fetch_add(1, std::memory_order_relaxed);
@@ -306,7 +270,7 @@ void __fastcall UpdateCandidatesHook(std::uintptr_t selector)
     Vec3 origin{}, direction{};
     if (gSuppress.load(std::memory_order_acquire)) {
         Vec3 eye{};
-        if (!Read(player + engine::ArkPlayerLayout::cachedReticleOrigin, eye) || !Finite(eye)) {
+        if (!SafeRead(player + engine::ArkPlayerLayout::cachedReticleOrigin, eye) || !Finite(eye)) {
             gFaults.fetch_add(1, std::memory_order_relaxed);
             original(selector);
             return;
@@ -332,7 +296,7 @@ void __fastcall UpdateCandidatesHook(std::uintptr_t selector)
 bool __fastcall InteractHook(std::uintptr_t interaction, int mode)
 {
     std::uint32_t usable = 0;
-    Read(interaction + engine::ArkPlayerInteractionLayout::usableEntityId, usable);
+    SafeRead(interaction + engine::ArkPlayerInteractionLayout::usableEntityId, usable);
     const bool result = gInteract.load(std::memory_order_acquire)(interaction, mode);
     gInteracts.fetch_add(1, std::memory_order_relaxed);
     EntityInfo info{};
@@ -347,7 +311,7 @@ bool __fastcall InteractHook(std::uintptr_t interaction, int mode)
 void __fastcall PerformHook(std::uintptr_t interaction, int type, int mode, std::uintptr_t entity, float delay)
 {
     char name[64] = "?";
-    if (entity && !CopyName(CallArchetypeName(entity), name, sizeof(name))) { CopyName(CallEntityName(entity), name, sizeof(name)); }
+    if (entity && !SafeCopyPrintable(CallArchetypeName(entity), name, sizeof(name))) { SafeCopyPrintable(CallEntityName(entity), name, sizeof(name)); }
     gPerform.load(std::memory_order_acquire)(interaction, type, mode, entity, delay);
     gPerforms.fetch_add(1, std::memory_order_relaxed);
     Log("perform type=" + std::to_string(type) + " mode=" + std::to_string(mode) + " name=" + name +
@@ -408,18 +372,18 @@ void ReadSelection(std::uintptr_t player, Selection& s)
 {
     const std::uintptr_t interaction = player + engine::ArkPlayerLayout::interaction;
     const std::uintptr_t selector = interaction + engine::ArkPlayerInteractionLayout::targetSelector;
-    Read(interaction + engine::ArkPlayerInteractionLayout::usableEntityId, s.usable);
-    Read(interaction + kCarry + kCarryEntity, s.carry);
+    SafeRead(interaction + engine::ArkPlayerInteractionLayout::usableEntityId, s.usable);
+    SafeRead(interaction + kCarry + kCarryEntity, s.carry);
     std::uint8_t hoover = 0;
-    Read(selector + kHoovering, hoover);
+    SafeRead(selector + kHoovering, hoover);
     s.hoovering = hoover != 0;
-    Read(selector + kInnerAim, s.inner);
-    Read(selector + kOuterAim, s.outer);
-    Read(selector + engine::ArkPlayerTargetSelectorLayout::interactDistance, s.reach);
-    Read(selector + engine::ArkPlayerTargetSelectorLayout::forceSelectEntityId, s.forced);
+    SafeRead(selector + kInnerAim, s.inner);
+    SafeRead(selector + kOuterAim, s.outer);
+    SafeRead(selector + engine::ArkPlayerTargetSelectorLayout::interactDistance, s.reach);
+    SafeRead(selector + engine::ArkPlayerTargetSelectorLayout::forceSelectEntityId, s.forced);
     std::uintptr_t begin = 0, end = 0;
-    Read(selector + engine::ArkPlayerTargetSelectorLayout::candidatesBegin, begin);
-    Read(selector + engine::ArkPlayerTargetSelectorLayout::candidatesEnd, end);
+    SafeRead(selector + engine::ArkPlayerTargetSelectorLayout::candidatesBegin, begin);
+    SafeRead(selector + engine::ArkPlayerTargetSelectorLayout::candidatesEnd, end);
     s.candidates = 0;
     if (begin && end > begin && (end - begin) % engine::ArkPlayerTargetSelectorLayout::candidateRecordSize == 0) {
         const auto count = (end - begin) / engine::ArkPlayerTargetSelectorLayout::candidateRecordSize;
@@ -427,8 +391,8 @@ void ReadSelection(std::uintptr_t player, Selection& s)
             const auto record = begin + i * engine::ArkPlayerTargetSelectorLayout::candidateRecordSize;
             std::uint32_t id = 0;
             float priority = 0, aim = 0;
-            if (!Read(record + engine::ArkPlayerTargetSelectorLayout::candidateEntityId, id) || !Read(record, priority) ||
-                !Read(record + 4, aim)) { break; }
+            if (!SafeRead(record + engine::ArkPlayerTargetSelectorLayout::candidateEntityId, id) || !SafeRead(record, priority) ||
+                !SafeRead(record + 4, aim)) { break; }
             const unsigned n = s.candidates++;
             s.candidateIds[n] = id;
             s.candidatePriority[n] = priority;
@@ -810,7 +774,7 @@ std::string UseReport()
         if (s.target.bounds) { out << " boundsMin=" << Point(s.target.min) << " boundsMax=" << Point(s.target.max); }
         if (s.target.entity) {
             std::uintptr_t vtable = 0;
-            Read(s.target.entity, vtable);
+            SafeRead(s.target.entity, vtable);
             char text[32];
             std::snprintf(text, sizeof(text), "0x%llX", static_cast<unsigned long long>(vtable - gBase));
             out << " entityVtableRva=" << text;

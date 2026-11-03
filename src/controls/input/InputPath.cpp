@@ -47,11 +47,9 @@ constexpr unsigned int kPostInputEventSlotGuess = 12;
 constexpr unsigned int kSlotsToDump = 20;
 
 std::atomic<unsigned long long> gInput{0};
-std::atomic<unsigned long long> gVtable{0};
 std::atomic<unsigned int> gAlignmentSlot{0};
 std::atomic<unsigned int> gAlignmentFound{0};
 std::atomic<unsigned long long> gPostInputEvent{0};
-std::atomic<unsigned long long> gSlots[kSlotsToDump];
 
 bool ReadPointer(std::uintptr_t address, std::uintptr_t& out)
 {
@@ -150,14 +148,12 @@ DWORD ResolveInputPath()
         Log("result=failed detail=vtable_unreadable pInput=" + Hex(input));
         return 3;
     }
-    gVtable.store(vtable, std::memory_order_relaxed);
 
     std::string dump;
     for (unsigned int slot = 0; slot < kSlotsToDump; ++slot) {
         std::uintptr_t entry = 0;
         ReadPointer(vtable + slot * sizeof(std::uintptr_t), entry);
         const unsigned long long rva = (entry > base) ? (entry - base) : 0ull;
-        gSlots[slot].store(rva, std::memory_order_relaxed);
         dump += " " + std::to_string(slot) + "=" + Hex(rva);
     }
 
@@ -187,20 +183,11 @@ DWORD ResolveInputPath()
 }
 
 unsigned long long InputPathInputPointer() { return gInput.load(std::memory_order_relaxed); }
-unsigned long long InputPathVtable() { return gVtable.load(std::memory_order_relaxed); }
 DWORD InputPathAlignmentSlot() { return gAlignmentSlot.load(std::memory_order_relaxed); }
 DWORD InputPathAlignmentConfirmed() { return gAlignmentFound.load(std::memory_order_relaxed); }
 unsigned long long InputPathPostInputEventRva()
 {
     return gPostInputEvent.load(std::memory_order_relaxed);
-}
-
-unsigned long long InputPathSlotRva(unsigned int slot)
-{
-    if (slot >= kSlotsToDump) {
-        return 0;
-    }
-    return gSlots[slot].load(std::memory_order_relaxed);
 }
 
 } // namespace preyvr::dll

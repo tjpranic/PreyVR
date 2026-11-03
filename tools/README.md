@@ -119,34 +119,9 @@ exactly one place on the PowerShell side for the same reason it is described onc
 in C++: a format contract duplicated across two readers drifts, and the drift
 shows up as plausible-looking wrong images.
 
-## Automating a protocol run
+## Analysing a stereo run
 
-`live/preyvr-harness.js` is pasted into a Frida session attached to Prey and
-exposes the stereo protocols as functions:
-
-```js
-PreyVR.enableObserver();
-PreyVR.freezeScene();          // t_Scale 0, r_AntialiasingMode 0, r_MotionBlur 0
-PreyVR.runNoiseFloor();        // two unarmed captures: the noise floor
-PreyVR.runA2(0.064, 50.0);     // alternating-eye stereo, no headset
-```
-
-Every call returns a plain object, and each protocol evaluates its own acceptance
-criteria rather than leaving them to be remembered -- `runA2` checks
-`restoreFailures` and keeps capturing until it has actually seen both eyes
-instead of assuming two captures land on different ones. VR itself is started
-by the mod's `vr.enable` (`Send-PreyVR.ps1 vr.enable`, or F11), not the harness.
-The A1 yaw-edit and A3 double-render protocols were removed with their exports
-on 2026-10-18.
-
-Two F-009 behaviours are worked around deliberately. Several exports raise a
-Frida `system error` even though the call takes effect, so everything goes
-through a tolerant wrapper that reports what the *status getters* say rather than
-what the call returned -- trusting the return value alone reports failures that
-did not happen. And nothing depends on disabling the observer, since that path
-has never been observed restoring a prologue on a live host.
-
-`Invoke-PreyVRStereoAnalysis.ps1` turns the resulting dumps into the separation
+`Invoke-PreyVRStereoAnalysis.ps1` turns a run's dumps into the separation
 table the acceptance criteria are stated in terms of, plus the PNGs and stereo
 views:
 

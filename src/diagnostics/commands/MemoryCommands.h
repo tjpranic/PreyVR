@@ -7,8 +7,7 @@
 
 // **The raw-memory research verbs** (docs/TUNING-COMMANDS.md): mem.peek, scan,
 // deep and str read any address, and mem.watch, hits and stack drive the
-// hardware breakpoints (DebugWatch.h). Moved out of ArmsLane on 2026-10-24;
-// their replies are unchanged.
+// hardware breakpoints (DebugWatch.h). Moved out of ArmsLane on 2026-10-24.
 namespace preyvr::dll {
 
 // mem.* verbs; false if the verb is not one of them.

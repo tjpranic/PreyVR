@@ -26,7 +26,6 @@
 #include "base/Logger.h"
 #include "render/stereo/NearViewStereo.h"
 #include "render/stereo/DualSceneStereo.h"
-#include "diagnostics/probes/TemporalAaProbe.h"
 #include "render/taa/TemporalAaLane.h"
 #include "render/stereo/DualOverlay.h"
 #include "render/stereo/NearParticleStereo.h"
@@ -693,8 +692,8 @@ constexpr Verb kVerbs[] = {
         out << "dual.report result=0" << DualSceneReport() << DualOverlayReport();
     }},
     {"taa.report", Audience::research, 0, [](const Args&, std::ostringstream& out) {
-        // The temporal-AA probe (TemporalAaProbe.h) and the per-eye lane; both on the status line.
-        out << "taa.report result=0 " << TaaProbeReport() << ' ' << TaaLaneReport();
+        // The per-eye lane, as on the status line.
+        out << "taa.report result=0 " << TaaLaneReport();
     }},
     {"taa.vr", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
         // Anti-aliasing for this session (VR Options saves it): 1 temporal, the per-eye TSAA lane

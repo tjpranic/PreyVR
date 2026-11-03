@@ -53,8 +53,7 @@ DWORD CaptureBackBufferNow(void* renderer, std::uint32_t tag, unsigned long long
 // swaps a stereo pair and inverts the depth.
 void SetFrameCaptureTagOverride(int tag);
 
-// Status of the most recent capture attempt, and how many have completed.
-DWORD LastFrameCaptureResult();
+// How many captures have completed.
 unsigned long long CompletedFrameCaptureCount();
 
 } // namespace preyvr::dll

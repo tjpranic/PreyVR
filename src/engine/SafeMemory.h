@@ -58,6 +58,25 @@ bool SafeRead(std::uintptr_t at, T& out)
     return SafeRead(reinterpret_cast<const void*>(at), out);
 }
 
+// Copies the printable C string at `source`, cut to fit `out`; false for a null,
+// empty or unreadable one, or one with anything unprintable in what fits.
+inline bool SafeCopyPrintable(const char* source, char* out, std::size_t size)
+{
+    __try {
+        if (!source) { return false; }
+        std::size_t n = 0;
+        for (; n + 1 < size && source[n]; ++n) {
+            const unsigned char c = static_cast<unsigned char>(source[n]);
+            if (c < 32 || c > 126) { return false; }
+            out[n] = static_cast<char>(c);
+        }
+        out[n] = 0;
+        return n > 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
 // The text at `address`: up to 96 characters, to its terminator or the first
 // byte that cannot be read, with anything unprintable as '?'.
 inline std::string SafeText(std::uint64_t address)
