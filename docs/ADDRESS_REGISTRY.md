@@ -2773,3 +2773,24 @@ Static, `tools/re/verify_loading_screen.py`. See
   on `+0x28`, shows `@ui_PressAnyKey` while it is 3. `0x139BA30` plays the close. `0x139D4D0` clears the mode; a request
   of 3 still pending reopens through `UIMenuEvents`.
 - `ArkPlayer::Update` requests mode 3 at `0x15852A9` while the player's `+0x188A` is set.
+
+### 2026-11-05 addendum -- the player's clock and its animation
+
+Static, `tools/re/verify_time_stop.py`. See [TIME-STOP-SCOPE-2026-11-05.md](TIME-STOP-SCOPE-2026-11-05.md).
+
+- `CTimer` (`CSystem+0x30`, vtable `0x1DA6D08`): timers 1 game, 2 UI, 3 player, `0x1C0` apart from `+0x8`; cvars
+  `t_GameTimeScale` `+0x1D8`, `t_UITimeScale` `+0x398`, `t_PlayerScale` `+0x558`. `+0x38` `GetFrameTime(timer)`
+  `0xE14650` (0 while paused, `+0x1C4`); `+0x50` `SetTimeScale(timer, scale, source)` `0xE14BC0` (a product of sources;
+  game = min(game, player); a positive scale is at least 0.3); `+0x80` `PauseTimer` `0xE149E0`.
+- The time-scale stack, ArkGame `+0x3C0`: push `0x1285410` (mask 2 game, 8 player; the minimum per timer), pop
+  `0x1285390`; a zero on the game channel pauses timer 1 (`0x1285630`). Eased helper: set `0x11DE670`, step `0x11DE6E0`.
+- Focus mode (constructor `0x124D600`): helpers `+0x348` (game) and `+0x364` (player). Wheel open `0x1383AF0` eases player
+  time to `FocusMenuModeTimeScale`; exit `0x124DF60`. Psi targeting, by behaviour: start `0x15BAA60` (both to 0), update
+  `0x15BC840`, end `0x15B65A0`. Stat globals `0x2BD6C80`-`C90`, `0x2BD6E08`-`E28` (names from `0x11C89A0`).
+- `CAnimatedCharacter`: `UpdateTime` `0x4FDD10` (timer 3 for the player through entity system `+0x338`, else 1; any
+  other at 0 or less gets 0.0001 s); `PrePhysicsUpdate` `0x4F8570` (called only from `0x2C3073`; returns while
+  `+0x1D0 <= 0`); `PrepareAndStartAnimProc` `0x4F9A80` (`+0x710`, `+0x728`, `+0x840`, `+0x847`; location `+0x21C`;
+  only while `+0x844` is 0). `EntitySystem::PrePhysicsUpdate` `0x923BF0` picks the same timer per entity.
+- `CCharInstance+0xAE0`: the character's timer (default 1, `0x82BF28`; setter `0x82EC90`, vtable `+0x1C0`), read by
+  `StartAnimationProcessing` `0x82F910`. ArkPlayer's setup `0x157EDE0` puts character slot 0 on timer 3.
+- Debug only: `ArkPlayerInput::SetTimeScale` `0x1591340`, reset `0x1590670`.

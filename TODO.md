@@ -51,8 +51,8 @@
 - The in-game cutscenes show on a flat plane but it needs to be adjusted downward a bit
     The first-time Typhon neuromod usage trigger 3 of these cutscenes in a row. It also causes the game to pause between each cutscene.
     Might also want to have the interface VR options apply to cutscenes if applicable.
-- Hands don't move when aiming a Typhon ability
-    Or when opening the radial menu. Can't see the wrist status HUD when using the radial menu either.
+- Have Psi-powers aim with the left hand
+- Have container serach interface on left hand laser hit
 - Going up or down the main lift causes body position jittering
     The actual body is moving up and down, might be a side-effect of all the body following and IK changes.
 - Going through loading screens can cause the hands to not be out
@@ -62,8 +62,7 @@
 - Can't switch to some weapons when using the Psychoscope
 - Audit body holster implementation
     Not sure how much work has been done on this and how it works.
-- Have Psi-powers aim with the left hand
-- Aiming lasers can show briefly in-between loading screen and press A button screen
+- Aiming lasers can show briefly in-between loading screen and press A button screen (?)
     Only sometimes?
 
 ### Technical Debt
@@ -105,13 +104,6 @@
 
 ## IN PROGRESS
 
-### Engine Instability
-- Very rare render freeze
-    > The camera doesn't render any new frame for a short time. Not related to the use-after-free camera bug. Instrumentation in place: FrameProbe.cpp, now a flight recorder that opens on the stall itself and sums up where each thread waited (PreyVR-98). See docs/ENGINE-INSTABILITY.md.
-- Phantom crash
-    Didn't leave an error dump since it crashed before the process could write one.
-    > A stack overflow: Steam recorded exit code 0xC00000FD. OverflowCapture.cpp now writes a dump and a report that survive one, and the launcher keeps each session's Game.log (PreyVR-98). Waiting for it to happen again. See docs/ENGINE-INSTABILITY.md.
-
 ## DONE
 
 ### Engine Instability
@@ -121,6 +113,11 @@
     > The same cull lag, fixed by the same guard.
 - Texture view use-after-free bug (Pending recurrence)
     > Did not recur in 41 runs. The watch was removed on 2026-10-27. See docs/ENGINE-INSTABILITY.md for what to build if it comes back.
+- Very rare render freeze (Pending recurrence)
+    > The camera doesn't render any new frame for a short time. Not related to the use-after-free camera bug. Instrumentation in place: FrameProbe.cpp, now a flight recorder that opens on the stall itself and sums up where each thread waited (PreyVR-98). See docs/ENGINE-INSTABILITY.md.
+- Phantom crash (Pending recurrence)
+    Didn't leave an error dump since it crashed before the process could write one.
+    > A stack overflow: Steam recorded exit code 0xC00000FD. OverflowCapture.cpp now writes a dump and a report that survive one, and the launcher keeps each session's Game.log (PreyVR-98). Waiting for it to happen again. See docs/ENGINE-INSTABILITY.md.
 
 ### Controls
 - The movement stoppage bug (Archived)
@@ -155,6 +152,9 @@
     > "Left hand laser doesn't hit at surface of objects" looks explained, from reading the code only. When something is selected, the left laser ends on the object's bounding box rather than its surface, and it only uses a real scene hit when nothing is selected. That would also fit the "only sometimes" in your note.
 
 ### UX/Immersion
+- Hands don't move when aiming a Typhon ability
+    Or when opening the radial menu. Can't see the wrist status HUD when using the radial menu either.
+    > The wheel and psi aiming stop the player's own clock, and Prey then stops starting the player's animation (every other character gets a tiny frame time instead), so the IK that moves the hands never ran. The mod now starts it with Prey's own call while the clock is stopped: the world and Prey's pose stay frozen, the hands, body and wrist HUD follow. PreyVR-134, worn OK 2026-11-05. See docs/TIME-STOP-SCOPE-2026-11-05.md.
 - Zero-G doesn't have rotate controls
     > Prey rolls with its lean buttons (both together brake) and pitches the whole body with the right stick; the mod sent neither, and the view, the body's turns and the hands all assumed a level body. The bumpers now roll and brake and the right stick pitches, Smooth or in steps (Comfort's Zero-G Roll and Zero-G Pitch, smooth by default); the view, the body's turns, the hands, aim, lasers, throws and IK follow the tilted body. PreyVR-111 and PreyVR-112, worn OK 2026-10-30. Left for later: heavy carry while tilted, and moving where you look. See docs/ZERO-G-SCOPE-2026-10-30.md.
 - Zero-G helmet overlay doesn't render properly

@@ -17,6 +17,7 @@
 #include "ui/screens/ExamineCamera.h"
 #include "equipment/head/HeadLampLane.h"
 #include "equipment/head/HelmetLane.h"
+#include "engine/fixes/TimeStopAnimation.h"
 #include "render/stereo/DualSceneStereo.h"
 #include "render/stereo/DualOverlay.h"
 #include "render/taa/TemporalAaLane.h"
@@ -92,6 +93,7 @@ void StopFeatures() {
     StopExamineCamera();
     StopHeadLamp();
     StopHelmet();
+    StopTimeStopAnimation();
     // Prey's keyboard/mouse prompts again, if VR start had set the controller's.
     SetControllerPrompts(0);
     // Leave the input drain alive to deliver the owned releases on the next frame.
@@ -252,6 +254,9 @@ void TickVrMode() {
         // The zero-G helmet on the headset's eye (HelmetLane.h). Not fatal: without
         // the gate Prey's helmet.
         EnsureHelmet();
+        // The player's animation, so the IK, while Prey stops the player's clock
+        // (TimeStopAnimation.h). Not fatal: without the hook the body freezes then.
+        EnsureTimeStopAnimation();
         // A screen's cursor cast from the crosshair's ray (AimTakeover.h). Not
         // fatal: without it the screen keeps Prey's ray.
         EnsureWorldUiRay();
@@ -314,7 +319,7 @@ void TickVrMode() {
             // The same text dual.report and hud.layer answer with.
             Log("status dual={"+DualSceneReport()+DualOverlayReport()+" } hud={"+HudLayerReport()+
                 " } torso={"+TorsoLaneReport()+" } move={"+MoveLaneStatusReport()+StickRereadReport()+
-                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" "+BodyDepthReport()+" "+ExamineCameraReport()+" "+HeadLampReport()+" "+HelmetReport()+" "+ScreenAimReport()+" "+TaaLaneReport()+" focus={"+
+                " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" "+BodyDepthReport()+" "+ExamineCameraReport()+" "+HeadLampReport()+" "+HelmetReport()+" "+TimeStopAnimationReport()+" "+ScreenAimReport()+" "+TaaLaneReport()+" focus={"+
                 FocusHoldReport()+" } hold={"+XrHoldReport()+" } prompts={"+ControllerPromptsReport()+" }");
         }
         const auto owner=AnimIkOwnerGeneration();

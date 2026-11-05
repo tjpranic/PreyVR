@@ -270,6 +270,7 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/render/camera/EyeRecords.cpp
         src/engine/console/ConsoleBridgeWin32.cpp
         src/engine/fixes/CullPrepareGuard.cpp
+        src/engine/fixes/TimeStopAnimation.cpp
         src/diagnostics/probes/FrameProbe.cpp
         src/diagnostics/capture/OverflowCapture.cpp
         src/engine/fixes/FocusHold.cpp
@@ -568,6 +569,9 @@ if(PREYVR_BUILD_TESTS)
         preyvr_add_test(cull_prepare_guard tests/engine/CullPrepareGuardTests.cpp
             DLL
             LIBS preyvr_headers)
+        preyvr_add_test(time_stop_animation tests/engine/TimeStopAnimationTests.cpp
+            DLL
+            LIBS preyvr_core minhook)
         # Overflows a thread of its own child process and reads what was written.
         preyvr_add_test(overflow_capture tests/diagnostics/OverflowCaptureTests.cpp
             DLL
