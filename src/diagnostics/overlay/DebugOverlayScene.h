@@ -222,7 +222,7 @@ struct OverlayFrame {
     Foregrip foregrip{};
     Physical physical{};
     ArmFit armFit{};
-    unsigned psiMode = 0;                // 0 native, 1 head, 2 left controller
+    bool psiLeftHand = false;            // Psi Aim Hand is Left
     bool sceneQueryFault = false;
     std::string extra;                   // free text appended to the status panel
 };

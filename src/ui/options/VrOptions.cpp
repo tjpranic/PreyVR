@@ -10,7 +10,7 @@ namespace {
 constexpr int turnChoices[]={0,15,30,45,60,90};
 constexpr const wchar_t* headRelativeNames[]={L"BODY RELATIVE",L"HEAD RELATIVE"};
 constexpr const wchar_t* gripToggleNames[]={L"HOLD",L"TOGGLE"};
-constexpr const wchar_t* psiNames[]={L"ORIGINAL",L"HEAD",L"LEFT CONTROLLER"};
+constexpr const wchar_t* psiHandNames[]={L"RIGHT",L"LEFT"};
 constexpr const wchar_t* pointerNames[]={L"LEFT",L"RIGHT",L"BUTTONS ONLY"};
 constexpr const wchar_t* carryHoldNames[]={L"PRESS TO TOGGLE",L"HOLD TO CARRY"};
 constexpr const wchar_t* grenadeNames[]={L"GAME THROW",L"HAND THROW"};
@@ -43,7 +43,8 @@ constexpr Spec specs[]={
  {"heavy_swing_speed",L"HEAVY SWING SPEED",L"From this speed where the wrench hits, a swing lands Prey's charged hit: more damage and knockback, more stamina. Raise it to keep heavy hits for your hardest swings.",700,300,1500,50,U::cmPerSecond},
  {"physical_contact",L"PHYSICAL CONTACT",L"Your weapon and free hands push loose objects and bodies: light ones keep up, heavy ones resist. Shown in the debug overlay.",1,0,1,1},
  {"push_strength",L"PUSH STRENGTH",L"How hard your weapon and hands push. Light objects keep up either way; heavier ones move sooner with more.",100,25,200,25,U::percent},
- {"psi_target",L"PSYCHIC TARGETING",L"The left trigger casts the equipped power. Original aims it as Prey does; Head or Left Controller aim it with your head or left hand.",0,0,2,1,U::none,psiNames},
+ // Right is Prey's own aim, which follows the right hand; Left aims from the left index finger (PsiMedkit.h).
+ {"psi_hand",L"PSI AIM HAND",L"Which hand aims your psi powers. The left trigger uses them either way: hold to aim, let go to use. Right: where your weapon or right hand points. Left: where your left hand points; its laser turns violet while you aim.",0,0,1,1,U::none,psiHandNames},
  {"medkit_slot",L"LEFT-HIP MEDKIT SLOT",L"Squeeze left grip at left hip, then press left trigger while holding grip. One medkit per grab; native use rules apply.",0,0,1,1},
  {"belt_hints",L"BODY SLOT FEEDBACK",L"Brief feedback for holster requests and medkit selection/use. Requires the corresponding body slot feature.",1,0,1,1},
  {"debug_overlay",L"DEBUG OVERLAY (TESTING)",L"Draws each hand's ray and target, body slots, the wrist test, the foregrip region and the weapon's contact sweep in the world.",0,0,1,1},
@@ -109,13 +110,13 @@ static_assert(Consistent(),"every Spec describes its own range");
 constexpr int setup[]={CalibratePosture,RecenterView,LeanZone,HipsBack,NearClip,Antialiasing,DebugOverlay};
 constexpr int movement[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,StrafeSpeed,BackwardSpeed,ZeroGRoll,
     ZeroGPitch};
-constexpr int hands[]={AimLasers,ShotTrail,TwoHand,GripToggle,AutoSnap,AutoSnapAttach,AutoBreak,AutoBreakDistance,Psychoscope,FingerCurl,ArmLength,CarryHand,CarryHold,GrenadeHand,
+constexpr int hands[]={AimLasers,ShotTrail,PsiHand,TwoHand,GripToggle,AutoSnap,AutoSnapAttach,AutoBreak,AutoBreakDistance,Psychoscope,FingerCurl,ArmLength,CarryHand,CarryHold,GrenadeHand,
     CarryThrowStrength,GrenadeThrowStrength,SurfaceStop,HeavyMass,PhysicalContact,PushStrength,FreeSwing,SwingSpeed,HeavySwingSpeed};
 constexpr int interface_[]={UiScale,UiDistance,UiOffsetRight,UiOffsetUp,UiText,ScreenPullback,
     PointerHand,ReticleSize,MarkerSize,Helmet,HelmetHeight,HelmetForward,HelmetSize};
 constexpr int equipment[]={Holsters,ClearHolsterSlots,WeaponDrawAnims,Wrist,WristSize,WristTick,WristAlong,WristHover,WristTilt};
 constexpr int feedback[]={Haptics,HapticStrength};
-constexpr int abilities[]={PsiTarget,Medkit,BeltHints};
+constexpr int abilities[]={Medkit,BeltHints};
 // CONTROLS holds no setting: the panel draws what each action is bound to there.
 constexpr unsigned kControlsPage=7;
 constexpr std::span<const int> menuPages[]={setup,movement,hands,interface_,equipment,feedback,abilities,
@@ -179,7 +180,7 @@ std::string Serialize(const Values& v,const Present* present){
 }
 bool Parse(std::string_view text,Values& result,Present* present){
  if(text.size()>8192)return false;
- Values parsed=Defaults();std::array<bool,Count> seen{};bool version=false;
+ Values parsed=Defaults();std::array<bool,Count> seen{};bool version=false;int psiTarget=-1;
  std::istringstream in{std::string(text)};std::string line;
  while(std::getline(in,line)){
   if(!line.empty()&&line.back()=='\r')line.pop_back();
@@ -205,6 +206,9 @@ bool Parse(std::string_view text,Values& result,Present* present){
   // zoom_limit: Zoom Limit, 2026-10-31, the day it came: Prey's zooms stop on their own.
   // laser_direction: Aim Laser Direction, 2026-11-01, the day it came: the hand is seated on
   // the controller's aim instead (handpose::kTubeLeanDegrees).
+  // psi_target: Psychic Targeting (Original, Head, Left Controller), 2026-11-07, for Psi Aim
+  // Hand (psi_hand): Left Controller carries over as Left, the others as Right.
+  if(key=="psi_target"){psiTarget=value;continue;}
   if(key=="scene_reticle"||key=="physical_contacts"||key=="contact_strength"||key=="physical_melee"||
      key=="body_follow"||key=="body_turn_deadzone"||key=="body_step"||key=="body_glide"||
      key=="support_snap"||key=="arms_free"||key=="controller_prompts"||key=="hud_layer"||
@@ -219,6 +223,7 @@ bool Parse(std::string_view text,Values& result,Present* present){
   parsed[i]=value;seen[i]=true;
  }
  if(!version)return false;
+ if(psiTarget>=0&&!seen[PsiHand]){parsed[PsiHand]=psiTarget==2?1:0;seen[PsiHand]=true;}
  // Partial files preserve explicit defaults; future versions must bump version.
  result=parsed;if(present)*present=seen;return true;
 }

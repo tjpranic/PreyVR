@@ -12,7 +12,7 @@ namespace preyvr::options {
 enum Setting : unsigned { Turn, HeadRelative, TurnSpeed, TwoHand, GripToggle, AutoSnap, AutoSnapAttach, AutoBreak,
     AutoBreakDistance, Psychoscope, UiScale, Holsters, Wrist, WristSize,
     ReticleSize, MarkerSize, Haptics, HapticStrength, FreeSwing, SwingSpeed, HeavySwingSpeed, PhysicalContact, PushStrength,
-    PsiTarget, Medkit, BeltHints, DebugOverlay,
+    PsiHand, Medkit, BeltHints, DebugOverlay,
     UiDistance, UiOffsetRight, UiOffsetUp, UiText, PointerHand,
     MoveDeadzone, TurnDeadzone, StrafeSpeed, BackwardSpeed,
     CarryHold, GrenadeHand, CarryThrowStrength, GrenadeThrowStrength,

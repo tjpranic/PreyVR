@@ -1,5 +1,20 @@
 # Psychic targeting and one medkit slot
 
+> **2026-11-07: Psi Aim Hand replaced Psychic Targeting.** The Hands tab's **Psi Aim Hand** (`psi_hand`:
+> Right, the default, or Left) replaces the Abilities tab's Original / Head / Left Controller (`psi_target`;
+> a saved Left Controller loads as Left). Since 2026-10-17 the left trigger is Prey's own psi button
+> (MoveLane), so the mod no longer drives focus itself: the private trigger (`psi::Trigger`, `Begin`, `Cast`,
+> the hidden-focus ownership and its `FocusStart`/`FocusStop` calls) is cut, and every mode uses Prey's psi
+> input. Prey selects as the trigger goes down, targets while it is held and casts as it comes up; Left
+> changes the ray its targeting reads in the same Update/Select/Activate scopes as below. That keeps a psi
+> hypo on the left trigger in the wheel, which the private trigger swallowed. Head aiming went too, so
+> `psi.target 0|1|2` is now `psi.hand 0|1` and `psi::BuildRay` is `psi::HandRay`. **The cast changed:** Prey decides when it casts, so a cast with no fresh preview from that aim
+> (a snap turn since, or no targeting update between select and cast) now takes the ray as it is at the cast
+> (`castsCurrentRay`) instead of being refused; it is still refused when no VR ray can be made (tracking
+> lost, a recenter the frame lags). The left aim laser shows the psi ray only while a power is aimed with
+> the left hand, and is the use pointer otherwise. The "Player controls" section and the focus-ownership
+> paragraph below describe the September design.
+
 Implemented on `codex/psi-medkit`, based on integration `c9b29be`. No game runs
 were made for this work. These are opt-in candidates pending in-game/headset
 acceptance, rather than a release or a claim that every power has been tested.

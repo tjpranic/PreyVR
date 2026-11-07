@@ -6,29 +6,27 @@
 #include <optional>
 
 namespace preyvr::psi {
-enum class Mode : unsigned { Native, Head, LeftController };
 struct Ray { Vec3 origin{},direction{}; };
 static_assert(sizeof(Ray)==24);
-// `basis` is the play space's rotation into the world (stereo::PlaySpaceBasis):
-// the yaw's alone, or in zero-G the tilted body's.
-inline std::optional<Ray> BuildRay(Mode mode,Quaternion basis,Vec3 cameraCentre,
-                                 Pose head,Pose hand,PoseValidity validity) {
+// **A controller's ray in the world**: from where the hand is relative to the
+// head, placed on the gameplay camera, along the hand's aim. `basis` is the
+// play space's rotation into the world (stereo::PlaySpaceBasis): the yaw's
+// alone, or in zero-G the tilted body's. Psi's left-hand aim and the left
+// hand's use pointer (InteractionLane) both cast it.
+inline std::optional<Ray> HandRay(Quaternion basis,Vec3 cameraCentre,Pose head,Pose hand,PoseValidity validity) {
     const float n=basis.x*basis.x+basis.y*basis.y+basis.z*basis.z+basis.w*basis.w;
-    if((mode!=Mode::Head&&mode!=Mode::LeftController)||!std::isfinite(n)||n<.5f||n>2.f||!std::isfinite(cameraCentre.x)||
+    if(!std::isfinite(n)||n<.5f||n>2.f||!std::isfinite(cameraCentre.x)||
        !std::isfinite(cameraCentre.y)||!std::isfinite(cameraCentre.z))return {};
     stereo::ReferenceFrame ref{};ref.tilted=true;ref.basis=basis;
-    const auto source=mode==Mode::Head?head:hand;
-    auto ray=controller::AimFromController(ref,source,validity,100000000);
+    auto ray=controller::AimFromController(ref,hand,validity,100000000);
     if(!ray)return {};
-    const auto origin=mode==Mode::Head?cameraCentre:
-        animik::ControllerWorldFromHead(basis,cameraCentre,head,hand).position;
+    const auto origin=animik::ControllerWorldFromHead(basis,cameraCentre,head,hand).position;
     if(!std::isfinite(origin.x)||!std::isfinite(origin.y)||!std::isfinite(origin.z))return {};
     return Ray{origin,ray->direction};
 }
-inline std::optional<Ray> BuildRay(Mode mode,float yaw,Vec3 cameraCentre,
-                                 Pose head,Pose hand,PoseValidity validity) {
+inline std::optional<Ray> HandRay(float yaw,Vec3 cameraCentre,Pose head,Pose hand,PoseValidity validity) {
     if(!std::isfinite(yaw))return {};
-    return BuildRay(mode,stereo::YawQuaternion(yaw),cameraCentre,head,hand,validity);
+    return HandRay(stereo::YawQuaternion(yaw),cameraCentre,head,hand,validity);
 }
 struct Sample {
     Ray ray{};
@@ -50,16 +48,4 @@ inline bool Override(Context* ctx,std::uintptr_t receiver,Ray* result){
     if(!ctx||!ctx->active||!result||!ctx->sample.player||receiver!=ctx->sample.player+0x40)return false;
     *result=ctx->sample.ray;++ctx->reads;return true;
 }
-enum class TriggerEvent { None, Begin, Cast, Cancel };
-class Trigger {
-public:
-    TriggerEvent Update(bool down,bool valid){
-        if(!valid){const bool was=held_;Reset();return was?TriggerEvent::Cancel:TriggerEvent::None;}
-        if(!down){armed_=true;if(held_){held_=false;return TriggerEvent::Cast;}return TriggerEvent::None;}
-        if(armed_&&!held_){armed_=false;held_=true;return TriggerEvent::Begin;}
-        return TriggerEvent::None;
-    }
-    void Reset(){armed_=held_=false;}
-private: bool armed_=false,held_=false;
-};
 }

@@ -36,7 +36,7 @@ using namespace preyvr::dll;
 using preyvr::test::Require;
 
 constexpr options::Setting kStartOff[] = {options::GrenadeHand, options::CarryHand, options::AimLasers};
-constexpr options::Setting kNeedsPrey[] = {options::PsiTarget, options::Medkit, options::GrenadeHand,
+constexpr options::Setting kNeedsPrey[] = {options::PsiHand, options::Medkit, options::GrenadeHand,
                                            options::CarryHand};
 
 template <std::size_t N>

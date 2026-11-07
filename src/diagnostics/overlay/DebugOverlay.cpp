@@ -266,7 +266,7 @@ dd::OverlayFrame Gather(unsigned mask)
         arms.reference == reference) {
         f.armFit = arms.fit;
     }
-    f.psiMode = PsiTargetMode();
+    f.psiLeftHand = PsiAimHand() != 0;
     f.sceneQueryFault = SceneQueryFaulted();
     if (mask & dd::kStatus) { f.extra = UseStatusLine(); }
     if (mask & dd::kHits) {
@@ -682,8 +682,11 @@ void DebugOverlayGameFrame(const GameplayPoseFrame& frame, bool tracking)
         gLeft.Clear();
         return;
     }
+    // While a psi power is aimed with the left hand, its laser is the power's
+    // ray (Psi Aim Hand); otherwise what the hand can grab or use.
+    const bool psi = PsiAimingLeftHand();
     UsePointer use{};
-    if (PsiTargetMode() != 2 && frame.cameraCentreValid && TryGetUsePointer(use) && use.valid &&
+    if (!psi && frame.cameraCentreValid && TryGetUsePointer(use) && use.valid &&
         use.reference == frame.referenceGeneration) {
         // The use pointer: the ray the native selector looks along, ending on
         // what it selected. Same anchor as the hands, so it starts in the hand.
@@ -723,7 +726,6 @@ void DebugOverlayGameFrame(const GameplayPoseFrame& frame, bool tracking)
     Pose fingerWorld{};
     HandWorld(frame, Hand::left, ControllerPose::finger, Anchor::cameraElseReticle, Placement::controller, fingerWorld);
     const Vec3 originWorld = fingerWorld.position;
-    const bool psi = PsiTargetMode() == 2;
     float distance = 0;
     const bool hit = Finite(originWorld) && Hit(frame, originWorld, stereo::TrackingDirToEngine(forward, PlaySpaceRotation(frame)), mask, distance);
     if (!hit) { distance = psi ? kReticleFallbackM : kPointerRange; }

@@ -516,8 +516,8 @@ void UpdateInteractionLane(const GameplayPoseFrame& frame, bool tracking)
     const auto& left = frame.tracking.hands[static_cast<unsigned>(Hand::left)];
     UsePointer pointer{};
     if (gLeftHand.load() && tracking && frame.cameraCentreValid && frame.headYawUsable && !stereo::Recentering(frame.referenceGeneration)) {
-        auto ray = psi::BuildRay(psi::Mode::LeftController, PlaySpaceRotation(frame), frame.cameraCentre, frame.tracking.head,
-                                 FingerPose(frame, Hand::left), left.aimValidity);
+        auto ray = psi::HandRay(PlaySpaceRotation(frame), frame.cameraCentre, frame.tracking.head,
+                                FingerPose(frame, Hand::left), left.aimValidity);
         // From where the hand is drawn: a hand held back by glass or a wall
         // (SurfaceStopLane.h) does not reach what is behind it.
         if (ray) { ray->origin = Add(ray->origin, SurfaceOffset(frame, Hand::left)); }

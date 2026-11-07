@@ -26,7 +26,7 @@ layout wherever VR leaves one free.
 | Steam Frame: bumpers | In Prey's wheel (hold Y): left uses a suit repair kit, right eats food (Prey's LB / RB). Otherwise nothing | Previous / next tab (Prey's LB / RB), on release |
 | Steam Frame: View (left) | Open inventory | Close the menu |
 | Right grip | Tap: reload (never uses what the left hand points at). Hold: holster the weapon. With the weapon holstered: draw it again | Next tab, on release (Steam Frame: next page, Prey's RT) |
-| Left trigger | Prey's psi power (hold to use), or with psychic targeting on, aim it and let go to cast | Previous page (LT), on release; clicks instead when the laser is on the left |
+| Left trigger | Prey's psi power: hold to aim, let go to use, aimed by the hand Psi Aim Hand picks | Previous page (LT), on release; clicks instead when the laser is on the left |
 | Right trigger | Fire (hold for automatic fire and to charge the Disruptor); with a grenade: hold it, let go during a throwing motion to throw it | Clicks with the laser (default); next page (RT), on release, when the laser is on the left |
 | Left grip | Hold a long weapon's support grip; the left-hip medkit slot and the psychoscope gesture, when enabled | Previous tab, on release (Steam Frame: previous page, Prey's LT) |
 | Menu button (Touch: left; Steam Frame: right) | Tap: pause. Hold: VR options | Tap: pause / resume. Hold: VR options |
@@ -142,6 +142,7 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   an empty hand's leaves the tip of the index finger, aiming as a gun would),
   **shot trail** (off by default: a green line from
   your weapon's muzzle to where each shot went, fading after a few seconds),
+  **psi aim hand** (Right by default: which hand aims psi powers),
   two-hand aim on/off, hold/toggle foregrip, **auto-snap support hand** (off by
   default: your left hand attaches to the weapon on its own when you hold it close
   for a moment, within **Attach Distance** (10 cm by default); a squeeze still
@@ -193,9 +194,8 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   Prey's animations for taking weapons out and putting them away, and your drawn hand
   turns with the weapon as they do.
 - **Feedback:** controller feedback and its strength.
-- **Abilities:** psychic targeting (Original / Head / Left Controller), the
-  optional left-hip medkit slot, and body slot feedback. Original targeting and
-  slot off are the defaults.
+- **Abilities:** the optional left-hip medkit slot, and body slot feedback. The
+  slot is off by default.
 - **Controls:** what every button does on the controller you hold, by the names
   SteamVR gives them: play, menus and any time. It follows SteamVR: rebind an
   action there (Settings > Controllers > Manage Controller Bindings > Prey) and the
@@ -216,14 +216,14 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   at them.
 - Charges stick to the surface you look at, as in the game.
 
-**Psi powers:** equip a power using Prey's normal quick wheel. The **left trigger** is Prey's own psi button
-(Original targeting): hold it to use the power, aimed as Prey aims it. It does nothing at the left-hip medkit
-slot or on a weapon's foregrip. **Psychic targeting:** choose Head or Left Controller on the Abilities
-tab, then hold the left trigger to target and release it to cast. Head follows where you look; Left Controller follows the
-left controller's aim axis. Release the support grip before targeting. The game
-keeps its native power costs, cooldowns, target filters and unlock restrictions.
-Menus, recentering, tracking loss and long frame gaps cancel a pending cast;
-release the trigger before trying again. Original restores the existing controls.
+**Psi powers:** equip a power using Prey's normal quick wheel. The **left trigger** is Prey's own psi button:
+hold it to aim the power, let go to use it. It does nothing at the left-hip medkit slot or on a weapon's
+foregrip; release the support grip before aiming. **Psi Aim Hand** on the Hands tab picks the hand that aims:
+**Right** (the default) aims where your weapon or right hand points, along the right laser; **Left** aims
+from your left index finger along the left controller's aim, and the left laser turns violet while you aim.
+In the wheel the left trigger still uses a psi hypo, whichever hand aims. The game keeps its native power
+costs, cooldowns, target filters and unlock restrictions. With Left, a cast is refused if the left
+controller loses tracking as you let go, rather than aimed with the right hand.
 
 **Medkit slot:** once enabled, bring the left controller to your left hip,
 release grip, then squeeze **left grip**. A short pulse confirms selection.
@@ -231,8 +231,8 @@ Keep grip held and press **left trigger** to request one medkit use; you may
 move the hand away from the hip first. Release grip before another use. Prey
 checks the native inventory and whether the item can be consumed, so an empty
 inventory or full health does not force a heal. The slot uses an estimated body
-position and currently has no visible medkit prop. This feature and psychic
-targeting have offline/static checks; native and headset acceptance remain.
+position and currently has no visible medkit prop. The slot has offline/static
+checks; native and headset acceptance remain.
 See [implementation and acceptance checks](PSI-MEDKIT-2026-09-30.md).
 
 **Holsters:** with a weapon equipped, bring the right controller to your right

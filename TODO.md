@@ -51,14 +51,13 @@
 - The in-game cutscenes show on a flat plane but it needs to be adjusted downward a bit
     The first-time Typhon neuromod usage trigger 3 of these cutscenes in a row. It also causes the game to pause between each cutscene.
     Might also want to have the interface VR options apply to cutscenes if applicable.
-- Have Psi-powers aim with the left hand
-- Have container serach interface on left hand laser hit
+- Have container search interface on left hand laser hit
 - Going up or down the main lift causes body position jittering
     The actual body is moving up and down, might be a side-effect of all the body following and IK changes.
 - Going through loading screens can cause the hands to not be out
 - Might want to remove the Q-beam holding offset
     May not be necessary.
-- Can't initiate reload when two-handing the shotgun
+- Can't initiate reload when two-handing the shotgun or Q-beam
 - Can't switch to some weapons when using the Psychoscope
 - Audit body holster implementation
     Not sure how much work has been done on this and how it works.
@@ -152,6 +151,8 @@
     > "Left hand laser doesn't hit at surface of objects" looks explained, from reading the code only. When something is selected, the left laser ends on the object's bounding box rather than its surface, and it only uses a real scene hit when nothing is selected. That would also fit the "only sometimes" in your note.
 
 ### UX/Immersion
+- Have Psi-powers aim with the left hand
+    > Hands' Psi Aim Hand picks the hand: Right (the default) is Prey's own aim, which already follows the right hand; Left aims from the left index finger, and the left laser turns violet while aiming. The left trigger is Prey's own psi button either way, so psi hypos still work from the wheel (worn OK too). It replaced Abilities' Psychic Targeting (Original / Head / Left Controller); the mod's own psi trigger and the head aim are gone. PreyVR-135 and PreyVR-136 (the cleanup), worn OK 2026-11-07. See docs/PSI-MEDKIT-2026-09-30.md.
 - Hands don't move when aiming a Typhon ability
     Or when opening the radial menu. Can't see the wrist status HUD when using the radial menu either.
     > The wheel and psi aiming stop the player's own clock, and Prey then stops starting the player's animation (every other character gets a tiny frame time instead), so the IK that moves the hands never ran. The mod now starts it with Prey's own call while the clock is stopped: the world and Prey's pose stay frozen, the hands, body and wrist HUD follow. PreyVR-134, worn OK 2026-11-05. See docs/TIME-STOP-SCOPE-2026-11-05.md.

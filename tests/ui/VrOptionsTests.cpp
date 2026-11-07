@@ -84,8 +84,17 @@ void SettingsChecks(){
  Check(Defaults()[Psychoscope]==0,"gesture opt in");
  Check(Defaults()[Holsters]==0&&Defaults()[Wrist]==1,"holsters opt in; the wrist hologram is on (2026-10-07)");
  Check(Parse("version=1\nturn=45\n",parsed)&&parsed[Holsters]==0&&parsed[WristSize]==100,"old settings upgrade safely");
- Check(Defaults()[PsiTarget]==0&&Defaults()[Medkit]==0,"abilities preserve original behavior by default");
- Check(Valid(PsiTarget,2)&&!Valid(PsiTarget,3)&&!Valid(Medkit,2),"ability ranges");
+ Check(Defaults()[PsiHand]==0&&Defaults()[Medkit]==0,"psi aims with the right hand, the medkit slot opt in");
+ Check(Valid(PsiHand,1)&&!Valid(PsiHand,2)&&!Valid(Medkit,2),"psi hand and medkit ranges");
+ Check(KindOf(PsiHand)==Kind::choice&&Display(PsiHand,0)==L"RIGHT"&&Display(PsiHand,1)==L"LEFT"&&
+       std::string(Describe(PsiHand).key)=="psi_hand","psi aim hand: a choice of right or left");
+ {Values kept{};Present found{};
+  Check(Parse("version=1\npsi_target=2\n",kept,&found)&&kept[PsiHand]==1&&found[PsiHand]&&
+        Serialize(kept,&found).find("psi_target")==std::string::npos,
+        "Psychic Targeting's Left Controller carries over as Left, and the next save leaves psi_target out");
+  for(const char* old:{"version=1\npsi_target=0\n","version=1\npsi_target=1\n"})
+   Check(Parse(old,kept,&found)&&kept[PsiHand]==0&&found[PsiHand],"Original and Head carry over as Right");
+  Check(Parse("version=1\npsi_target=2\npsi_hand=0\n",kept,&found)&&kept[PsiHand]==0,"psi_hand outranks psi_target");}
  Check(Defaults()[DebugOverlay]==0,"the debug overlay is opt in");
  Check(Defaults()[AimLasers]==1&&KindOf(AimLasers)==Kind::toggle,"the aim lasers are on by default, on/off");
  Check(Defaults()[ShotTrail]==0&&KindOf(ShotTrail)==Kind::toggle&&std::string(Describe(ShotTrail).key)=="shot_trail",
@@ -233,6 +242,7 @@ void LayoutChecks(){
        "marker size: Prey's size by default, half to double");
  Check(std::wstring(MenuPageName(2))==L"HANDS"&&MenuEntries(2)[0]==AimLasers&&MenuEntries(2)[1]==ShotTrail,
        "hands: the aim lasers first, apart from the interface tab's menu laser");
+ Check(MenuEntries(2)[2]==PsiHand,"hands: which hand aims psi, after the lasers");
  {Values kept{};Present found{};
   Check(Parse("version=1\nlaser_direction=0\nturn=45\n",kept,&found)&&kept[Turn]==45&&found[Turn]&&
         Serialize(kept,&found).find("laser_direction")==std::string::npos,

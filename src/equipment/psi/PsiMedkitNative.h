@@ -6,10 +6,12 @@ namespace preyvr::abilities::native {
 // Steam PreyDll 7D6E322F...B05311A7. Sizes are complete bodies, not the first
 // unwind fragment. Target-side decompiles and instruction receipts live in docs.
 inline constexpr std::uintptr_t Update=0x15BC840,Activate=0x15B5D90,
- Select=0x15B8E00,Reticle=0x157CBB0,FocusStart=0x124DE50,FocusStop=0x124DF60,
+ Select=0x15B8E00,Reticle=0x157CBB0,
  Consume=0x1381AF0,MedkitArchetype=0x1381C50,GetPower=0x157CB80,
  GetFocus=0x1587C30,GetPlayer=0x157C990,Candidate=0x15BDA40;
 struct Contract {std::uintptr_t rva;std::size_t size;std::uint64_t hash;};
+// Bodies the hooks rely on, called or not. Prey's psi input (FocusInputConsumer,
+// with its FocusStart/FocusStop) selects, casts and stops what the hooks aim.
 inline constexpr std::array<Contract,18> Contracts{{
  {0x15BC840,999,0x3E788181B6743410ull}, // PsiUpdate
  {0x15B5D90,1020,0xEE9DD9CC7F0C9A4Dull}, // PsiActivate

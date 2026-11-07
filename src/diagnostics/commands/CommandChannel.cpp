@@ -1022,9 +1022,9 @@ constexpr Verb kVerbs[] = {
         out << "console result=" << result
             << " command=\"" << command << "\"";
     }},
-    {"psi.target", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        const auto result=Valued(args)?SetPsiTargetMode(Arg(args, 1,0)):0;
-        out<<"psi.target result="<<result<<PsiMedkitReport();
+    {"psi.hand", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
+        const auto result=Valued(args)?SetPsiAimHand(Arg(args, 1,0)):0;
+        out<<"psi.hand result="<<result<<PsiMedkitReport();
     }},
     {"medkit.slot", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
         const auto result=Valued(args)?SetMedkitSlot(Arg(args, 1,0)):0;

@@ -69,7 +69,6 @@ bool MedkitZoneHasLeftHand() { return false; }
 bool PsychoscopeZoneHasLeftHand() { return false; }
 bool SupportGripNear() { return false; }
 bool TwoHandedAimHeld() { return false; }
-unsigned PsiTargetMode() { return 0; }
 bool UseCarrying() { return false; }
 bool UseTargetPresent() { return false; }
 bool UseTargetTapOnly() { return false; }

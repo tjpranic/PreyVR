@@ -822,7 +822,7 @@ void UpdateTurnAndFireLanes()
             play.quickSlotRight,
             play.quickSlotDown,
             play.torch,                               // torch     <- D-pad up
-            psi && PsiTargetMode() == 0,              // psi power <- left trigger, Original targeting
+            psi,                                      // psi power <- left trigger; Psi Aim Hand picks the ray (PsiMedkit)
             wheelOpen || !zeroG ? play.wheelSuitRepair : roll.left,   // Prey's LB <- Frame left bumper: the wheel, zero-G roll
             wheelOpen || !zeroG ? play.wheelFood : roll.right,        // Prey's RB <- Frame right bumper: the wheel, zero-G roll
         };

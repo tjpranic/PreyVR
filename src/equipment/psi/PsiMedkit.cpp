@@ -10,7 +10,6 @@
 #include "equipment/body/SlotFeedbackLane.h"
 #include "diagnostics/overlay/DebugOverlay.h"
 #include "engine/hooks/MinHookInit.h"
-#include "controls/locomotion/MoveLane.h"
 #include "aim/ReticleRayHook.h"
 #include "equipment/psi/PsiTargeting.h"
 #include "render/camera/StereoCamera.h"
@@ -28,11 +27,13 @@
 namespace preyvr::dll {
 namespace {
 namespace native=abilities::native;
-std::atomic<unsigned> mode{0},medkit{0};
+std::atomic<unsigned> leftHand{0},medkit{0}; // leftHand: Psi Aim Hand is Left
 std::atomic<std::uint64_t> generation{1};
 std::atomic<bool> installed{false},fault{false},medkitGrip{false},medkitZone{false};
-std::atomic<unsigned long long> previews{0},rayReads{0},casts{0},rejectedCasts{0},
+std::atomic<unsigned long long> previews{0},rayReads{0},casts{0},rejectedCasts{0},currentRayCasts{0},
     medkitUsed{0},medkitAbsent{0},medkitDenied{0};
+// When Prey's targeting last read a VR ray for a selected power (PsiAimingLeftHand).
+std::atomic<std::uint64_t> aimingNs{0};
 std::atomic<DWORD> lastError{0};
 std::mutex installMutex;
 using UpdateFn=void(__fastcall*)(std::uintptr_t,float);
@@ -68,18 +69,16 @@ DWORD ReadOwner(Owner* out){
 }
 bool MakeContext(std::uintptr_t component,psi::Context& ctx){
     GameplayPoseFrame f{};Owner owner{};
-    const auto m=mode.load();
-    if(!m||fault.load()||!HudGameplayInputAllowed()||ReadOwner(&owner)||owner.power!=component||
+    if(!leftHand.load()||fault.load()||!HudGameplayInputAllowed()||ReadOwner(&owner)||owner.power!=component||
        !TryGetGameplayPoseFrame(f)||f.player!=owner.player||!f.cameraCentreValid||!f.headYawUsable||
        !FreshSample(MonotonicNanoseconds(),f.tracking.publishedNs,100000000)||
        !IsPoseUsable(f.tracking.head,f.tracking.headValidity,100000000)||
        !stereo::ReferenceCurrent(f.referenceGeneration,HeadTrackingReferenceGeneration()))return false;
     const auto& left=f.tracking.hands[0];
-    auto ray=psi::BuildRay(static_cast<psi::Mode>(m),PlaySpaceRotation(f),f.cameraCentre,
-        f.tracking.head,FingerPose(f,Hand::left),m==1?f.tracking.headValidity:left.aimValidity);
+    auto ray=psi::HandRay(PlaySpaceRotation(f),f.cameraCentre,f.tracking.head,FingerPose(f,Hand::left),left.aimValidity);
     if(!ray)return false;
     // From the drawn hand: held back by a wall (SurfaceStopLane.h), it casts from there.
-    if(static_cast<psi::Mode>(m)==psi::Mode::LeftController)ray->origin=Add(ray->origin,SurfaceOffset(f,Hand::left));
+    ray->origin=Add(ray->origin,SurfaceOffset(f,Hand::left));
     ctx.sample={*ray,f.player,component,owner.selectedPower,owner.selected,f.tracking.epoch,
         f.referenceGeneration,generation.load(),f.tracking.publishedNs,HudMenuEpoch()};
     ctx.active=true;return true;
@@ -103,7 +102,7 @@ bool InvokeSelect(std::uintptr_t self,int id,psi::Context* ctx){
 // Runs after the native reticle getter (ReticleRayHook owns that detour).
 void RayFilter(std::uintptr_t receiver,void*,void* result,std::uintptr_t){
     auto* out=static_cast<psi::Ray*>(result);
-    if(context&&!fault.load()&&mode.load()&&context->sample.generation==generation.load()&&
+    if(context&&!fault.load()&&leftHand.load()&&context->sample.generation==generation.load()&&
        context->sample.reference==HeadTrackingReferenceGeneration()&&
        context->sample.menu==HudMenuEpoch()&&
        FreshSample(MonotonicNanoseconds(),context->sample.stamp,100000000)&&
@@ -112,7 +111,7 @@ void RayFilter(std::uintptr_t receiver,void*,void* result,std::uintptr_t){
 bool __fastcall CandidateHook(std::uintptr_t parameters,std::uintptr_t entity,bool hudPreferred){
     // The native HUD candidate normally bypasses the angle check. It still
     // has to pass the native VR ray cone, distance, target type and LOS checks.
-    if(context&&context->active&&context->reads&&mode.load()&&!fault.load()&&
+    if(context&&context->active&&context->reads&&leftHand.load()&&!fault.load()&&
        context->sample.generation==generation.load()&&
        context->sample.reference==HeadTrackingReferenceGeneration()&&
        context->sample.menu==HudMenuEpoch()&&
@@ -120,31 +119,39 @@ bool __fastcall CandidateHook(std::uintptr_t parameters,std::uintptr_t entity,bo
     return originalCandidate(parameters,entity,hudPreferred);
 }
 void __fastcall UpdateHook(std::uintptr_t self,float dt){
-    if(!mode.load()||fault.load()){originalUpdate(self,dt);return;}
+    if(!leftHand.load()||fault.load()){originalUpdate(self,dt);return;}
     psi::Context ctx{};const bool valid=MakeContext(self,ctx);
-    if(valid||preview.component==self)preview={};
+    // This player's component: another's update leaves its preview and aim alone.
+    const bool mine=valid||preview.component==self;
+    if(mine)preview={};
     InvokeUpdate(self,dt,valid?&ctx:nullptr);
-    if(valid&&ctx.sample.power&&ctx.sample.generation==generation.load()){
-        preview=ctx.sample;++previews;
-    }
+    // A selected power is one being aimed: Prey selects it as the psi button
+    // goes down and clears it once cast or let go.
+    const bool aiming=valid&&ctx.sample.power&&ctx.sample.generation==generation.load();
+    if(aiming){preview=ctx.sample;++previews;}
+    if(mine)aimingNs.store(aiming?MonotonicNanoseconds():0,std::memory_order_relaxed);
 }
 bool __fastcall SelectHook(std::uintptr_t self,int id){
-    if(!mode.load()||fault.load())return originalSelect(self,id);
+    if(!leftHand.load()||fault.load())return originalSelect(self,id);
     psi::Context ctx{};const bool valid=MakeContext(self,ctx);
     if(valid||preview.component==self)preview={};
     return InvokeSelect(self,id,valid?&ctx:nullptr);
 }
 bool __fastcall ActivateHook(std::uintptr_t self){
-    if(!mode.load()||fault.load())return originalActivate(self);
+    if(!leftHand.load()||fault.load())return originalActivate(self);
     Owner owner{};const auto ownerError=ReadOwner(&owner);
     if(ownerError==ERROR_INVALID_THREAD_ID||(!ownerError&&owner.power!=self))return originalActivate(self);
+    // No VR ray now (tracking lost, a recenter the frame has not caught up
+    // with): no cast, rather than one along the other hand.
     psi::Context ctx{};
-    if(!MakeContext(self,ctx)||!psi::Castable(preview,ctx.sample,MonotonicNanoseconds())){
-        ++rejectedCasts;return false;
-    }
+    if(!MakeContext(self,ctx)){++rejectedCasts;return false;}
     // Native powers have already cached the preview target. Preserve its ray
     // for any activation-time readers rather than substituting a newer ray.
-    ctx.sample=preview;
+    // Prey decides when to cast, so without that aim's preview (a snap turn
+    // since, or no targeting update between select and cast) the cast takes
+    // the ray as it is now, never a spent one.
+    if(psi::Castable(preview,ctx.sample,MonotonicNanoseconds()))ctx.sample=preview;
+    else ++currentRayCasts;
     const bool result=InvokeActivate(self,&ctx);preview={};
     if(result)++casts;
     return result;
@@ -155,8 +162,8 @@ constexpr bool AllGated(const std::uintptr_t (&rvas)[N]){
     for(const auto rva:rvas)if(!contract::Gated(native::Contracts,rva))return false;
     return true;
 }
-constexpr std::uintptr_t kCalled[]={native::Update,native::Activate,native::Select,native::Reticle,native::FocusStart,
-    native::FocusStop,native::Consume,native::MedkitArchetype,native::GetPower,native::GetFocus,native::GetPlayer,native::Candidate};
+constexpr std::uintptr_t kCalled[]={native::Update,native::Activate,native::Select,native::Reticle,
+    native::Consume,native::MedkitArchetype,native::GetPower,native::GetFocus,native::GetPlayer,native::Candidate};
 static_assert(AllGated(kCalled));
 DWORD Gate(){
  __try {
@@ -189,67 +196,9 @@ DWORD Install(){
     installed=true;return 0;
 }
 
-struct AimOwnership {Owner owner{};std::uint64_t epoch=0,reference=0,generation=0;int selected=-1;};
-AimOwnership owned; // game producer thread only, never retained for dereference
-psi::Trigger trigger;
 equipment::MedkitSlot slot;
 std::uint64_t inputOwner=0,inputEpoch=0,inputReference=0,inputGeneration=0,inputMenu=0;
 long long previousTime=0;
-bool NativeFocusOwned(const Owner& owner){
-    return owned.owner.player==owner.player&&owned.owner.power==owner.power&&owned.owner.focus==owner.focus&&
-        owned.selected==owner.selected&&owned.owner.selectedPower==owner.selectedPower&&owner.focus;
-}
-DWORD StopOwned(bool afterCast=false){
- __try {
-    if(!owned.owner.player)return 0;
-    Owner current{};const auto error=ReadOwner(&current);
-    if(error)return error;
-    const auto base=PreyBase();
-    const bool sameFocus=current.player==owned.owner.player&&current.power==owned.owner.power&&current.focus&&
-        current.focus==owned.owner.focus;
-    // A power may clear its selection inside its own native Start callback.
-    // After our synchronous activation, release our focus even in that case.
-    if(sameFocus&&(afterCast||NativeFocusOwned(current))&&!*reinterpret_cast<const unsigned char*>(current.focus+0x88))
-        reinterpret_cast<void(__fastcall*)(std::uintptr_t,bool)>(base+native::FocusStop)(current.focus,true);
-    owned={};return 0;
- }__except(EXCEPTION_EXECUTE_HANDLER){return GetExceptionCode();}
-}
-DWORD Begin(const GameplayPoseFrame& frame){
- __try {
-    Owner owner{};const auto error=ReadOwner(&owner);if(error)return error;
-    if(owner.player!=frame.player||!owner.focus||*reinterpret_cast<const unsigned char*>(owner.focus+0x390))return ERROR_NOT_READY;
-    const int equipped=*reinterpret_cast<const int*>(owner.power+0x234);
-    if(equipped<0||equipped>=16)return ERROR_NOT_READY;
-    const auto base=PreyBase();
-    if(!reinterpret_cast<bool(__fastcall*)(std::uintptr_t,bool)>(base+native::FocusStart)(owner.focus,false))return ERROR_NOT_READY;
-    owned={owner,frame.tracking.epoch,frame.referenceGeneration,generation.load(),equipped};
-    if(!reinterpret_cast<SelectFn>(base+native::Select)(owner.power,equipped)){
-        // Selection can fail before selected ID changes; we still own the
-        // newly opened focus mode and must release its time/input policy.
-        reinterpret_cast<void(__fastcall*)(std::uintptr_t,bool)>(base+native::FocusStop)(owner.focus,false);
-        owned={};return ERROR_NOT_READY;
-    }
-    Owner selected{};
-    if(ReadOwner(&selected)||selected.player!=owner.player||selected.power!=owner.power||
-       selected.focus!=owner.focus||selected.selected!=equipped||!selected.selectedPower){
-        owned={};return ERROR_NOT_READY;
-    }
-    owned.owner=selected;
-    return 0;
- }__except(EXCEPTION_EXECUTE_HANDLER){return GetExceptionCode();}
-}
-DWORD Cast(const GameplayPoseFrame& frame){
- __try {
-    Owner current{};const auto error=ReadOwner(&current);if(error)return error;
-    if(!NativeFocusOwned(current)||owned.epoch!=frame.tracking.epoch||owned.reference!=frame.referenceGeneration||
-       owned.generation!=generation.load()||!*reinterpret_cast<const unsigned char*>(current.focus+0x390)||
-       *reinterpret_cast<const unsigned char*>(current.focus+0x88))return ERROR_NOT_READY;
-    const auto base=PreyBase();
-    const bool accepted=reinterpret_cast<ActivateFn>(base+native::Activate)(current.power);
-    const auto stop=StopOwned(true);
-    return stop?stop:accepted?ERROR_SUCCESS:ERROR_NOT_READY;
- }__except(EXCEPTION_EXECUTE_HANDLER){return GetExceptionCode();}
-}
 DWORD ConsumeMedkit(const GameplayPoseFrame& frame,int* result){
  __try {
     Owner current{};const auto error=ReadOwner(&current);if(error)return error;
@@ -272,12 +221,15 @@ void Error(DWORD result){
     if(result&&result!=ERROR_NOT_READY&&result!=ERROR_INVALID_THREAD_ID)fault=true;
 }
 }
-DWORD SetPsiTargetMode(unsigned value){
-    if(value>2)return ERROR_INVALID_PARAMETER;
-    if(value){const auto result=Install();Error(result);if(result)return result;}
-    mode=value;generation.fetch_add(1);return 0;
+DWORD SetPsiAimHand(unsigned hand){
+    if(hand>1)return ERROR_INVALID_PARAMETER;
+    if(hand){const auto result=Install();Error(result);if(result)return result;}
+    leftHand=hand;generation.fetch_add(1);return 0;
 }
-unsigned PsiTargetMode(){return mode.load();}
+unsigned PsiAimHand(){return leftHand.load();}
+bool PsiAimingLeftHand(){
+    return PsiAimHand()&&FreshSample(MonotonicNanoseconds(),aimingNs.load(std::memory_order_relaxed),100000000);
+}
 DWORD SetMedkitSlot(unsigned value){
     if(value>1)return ERROR_INVALID_PARAMETER;
     if(value){const auto result=Install();Error(result);if(result)return result;}
@@ -297,7 +249,7 @@ void UpdatePsiMedkit(const GameplayPoseFrame& frame,bool valid){
     const auto menuEpoch=HudMenuEpoch();
     const bool changed=inputOwner!=frame.player||inputEpoch!=f.epoch||inputReference!=ref||inputGeneration!=gen||inputMenu!=menuEpoch;
     if(!valid||changed){
-        Error(StopOwned());trigger.Reset();slot.Reset();medkitGrip=false;medkitZone=false;previousTime=0;preview={};
+        slot.Reset();medkitGrip=false;medkitZone=false;previousTime=0;
         inputOwner=frame.player;inputEpoch=f.epoch;inputReference=ref;inputGeneration=gen;inputMenu=menuEpoch;
         if(!valid)return;
     }
@@ -305,7 +257,7 @@ void UpdatePsiMedkit(const GameplayPoseFrame& frame,bool valid){
     const float dt=StepSeconds(previousTime,f.displayTime);
     previousTime=f.displayTime;
     if(!std::isfinite(dt)||dt<=0||dt>.2f){
-        Error(StopOwned());trigger.Reset();slot.Reset();medkitGrip=false;preview={};return;
+        slot.Reset();medkitGrip=false;return;
     }
     const auto& left=f.hands[0];
     const bool slotAllowed=valid&&medkit.load()&&!FaceButtonHeld(left)&&!f.hands[1].gripPressed;
@@ -334,17 +286,11 @@ void UpdatePsiMedkit(const GameplayPoseFrame& frame,bool valid){
         PublishSlotFeedback(!error&&result==2?equipment::SlotNotice::MedkitUsed:
             !error&&result==0?equipment::SlotNotice::MedkitEmpty:equipment::SlotNotice::MedkitDenied,frame);
     }
-    // The psi button (the left trigger, MoveLane's PsiButtonHeld). The medkit
-    // slot above reads the trigger itself: there it is the slot's.
-    const auto event=trigger.Update(PsiButtonHeld(),valid&&mode.load()&&!slot.OwnsGrip()&&!left.gripPressed&&
-        !FaceButtonHeld(left)&&!f.hands[1].gripPressed);
-    if(event==psi::TriggerEvent::Begin)Error(Begin(frame));
-    else if(event==psi::TriggerEvent::Cast){Error(Cast(frame));Error(StopOwned());}
-    else if(event==psi::TriggerEvent::Cancel)Error(StopOwned());
 }
-std::string PsiMedkitReport(){return " targetMode="+std::to_string(mode.load())+" medkitSlot="+std::to_string(medkit.load())+
+std::string PsiMedkitReport(){return " aimHand="+std::string(leftHand.load()?"left":"right")+" medkitSlot="+std::to_string(medkit.load())+
     " installed="+std::to_string(installed.load())+" previews="+std::to_string(previews.load())+
     " rayReads="+std::to_string(rayReads.load())+" casts="+std::to_string(casts.load())+
+    " castsCurrentRay="+std::to_string(currentRayCasts.load())+" aimingLeft="+std::to_string(PsiAimingLeftHand())+
     " castRefused="+std::to_string(rejectedCasts.load())+" medkitGrip="+std::to_string(medkitGrip.load())+
     " medkitUsed="+std::to_string(medkitUsed.load())+" medkitAbsent="+std::to_string(medkitAbsent.load())+
     " medkitDenied="+std::to_string(medkitDenied.load())+" fault="+std::to_string(fault.load())+" error="+std::to_string(lastError.load());}

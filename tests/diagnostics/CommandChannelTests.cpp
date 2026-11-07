@@ -385,7 +385,7 @@ const Case kCases[] = {
     {"hud_bobHud abc", "console result=1 command=\"hud_bobHud abc\"", nullptr, processed},
     {"HUD_BOBHUD 1 2", "console result=1 command=\"HUD_BOBHUD 1 2\"", nullptr, processed},
     {"console hud_bobHud 0", "console result=0 command=\"hud_bobHud 0\"", nullptr, processed},
-    {"psi.target", "psi.target result=0", PsiMedkitReport, processed},
+    {"psi.hand", "psi.hand result=0", PsiMedkitReport, processed},
     {"medkit.slot", "medkit.slot result=0", PsiMedkitReport, processed},
     {"aim.scene", "aim.scene result=0", SceneQueryReport, processed},
     {"haptics", "haptics result=0", HapticsReport, processed},
@@ -452,7 +452,7 @@ const Case kCases[] = {
 //   refused before the setter runs are pinned): observer, near.fov, near.enable,
 //   near.fxhide, aim.shotprobe, aim.reticle, aim.enable, weapon.observe,
 //   view.observe, ik.mode, move.mode, use.hand, xr.stereo,
-//   psi.target, medkit.slot, dual.observe, dual.mode, dual.overlay,
+//   psi.hand, medkit.slot, dual.observe, dual.mode, dual.overlay,
 //   dual.vr, frame.probe, cull.prepare; near.fx,
 //   markers.depth, stars.depth, body.depth and window.hold given 1; aim.beam and dual.capture
 //   even bare; hud.var, hud.setvar, hud.call, hud.fit and hud.probe given

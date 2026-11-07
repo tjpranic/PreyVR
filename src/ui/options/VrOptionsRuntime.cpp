@@ -176,7 +176,7 @@ constexpr Wiring wiring[]={
  {options::HeavySwingSpeed,Set<SetHeavySwingSpeed>,Get<HeavySwingSpeed>},
  {options::PhysicalContact,Set<SetPhysicalContact>,Get<PhysicalContactEnabled>},
  {options::PushStrength,Set<SetPushStrength>,Get<PushStrength>},
- {options::PsiTarget,Set<SetPsiTargetMode>,Get<PsiTargetMode>},
+ {options::PsiHand,Set<SetPsiAimHand>,Get<PsiAimHand>},
  {options::Medkit,Set<SetMedkitSlot>,Get<MedkitSlotEnabled>},
  {options::BeltHints,[](int v){beltHints=v!=0;},[]{return static_cast<int>(beltHints.load());}},
  // On is every layer; the menu's row cannot pick layers (dbg.draw can).

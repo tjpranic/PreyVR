@@ -14,7 +14,7 @@ using preyvr::test::Check;
 }
 PREYVR_TEST_DROP_LOG()
 namespace preyvr::dll {
-DWORD SetPsiTargetMode(unsigned v){applied[options::PsiTarget]=v;return 0;}unsigned PsiTargetMode(){return applied[options::PsiTarget];}
+DWORD SetPsiAimHand(unsigned v){applied[options::PsiHand]=v;return 0;}unsigned PsiAimHand(){return applied[options::PsiHand];}
 DWORD SetMedkitSlot(unsigned v){applied[options::Medkit]=v;return 0;}unsigned MedkitSlotEnabled(){return applied[options::Medkit];}
 void SetFreeSwing(unsigned v){applied[options::FreeSwing]=v;}unsigned FreeSwingEnabled(){return applied[options::FreeSwing];}
 void SetPhysicalContact(unsigned v){applied[options::PhysicalContact]=v;}unsigned PhysicalContactEnabled(){return applied[options::PhysicalContact];}
@@ -184,9 +184,9 @@ int main(){
  set(options::SurfaceStop,1);Check(SurfaceStopEnabled(),"and on again");
  Check(SurfaceHeavyMass()==10,"heavy objects from 10 kg by default");
  set(options::HeavyMass,25);Check(SurfaceHeavyMass()==25,"the heavy mass reaches the surface stop lane");
- Check(PsiTargetMode()==0&&!MedkitSlotEnabled(),"abilities start with native behavior");
- set(options::PsiTarget,1);Check(PsiTargetMode()==1,"head-directed psi reaches adapter");
- set(options::PsiTarget,2);Check(PsiTargetMode()==2,"controller-directed psi reaches adapter");
+ Check(PsiAimHand()==0&&!MedkitSlotEnabled(),"psi aims with the right hand and the medkit slot is off by default");
+ set(options::PsiHand,1);Check(PsiAimHand()==1,"left-hand psi aim reaches the psi lane");
+ set(options::PsiHand,0);Check(PsiAimHand()==0,"and the right hand again");
  set(options::Medkit,1);Check(MedkitSlotEnabled(),"medkit opt-in reaches adapter");
  press(options::CalibratePosture);
  viewResultForTest=3;ServiceVrOptions();

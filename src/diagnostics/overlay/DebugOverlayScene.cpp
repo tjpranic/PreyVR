@@ -607,8 +607,7 @@ std::string OverlayStatusText(const OverlayFrame& f, unsigned mask)
     text += "   L " + std::string(f.rays[0].role == RayRole::Psi ? "psi " : f.rays[0].role == RayRole::Use ? "use " : "") +
             (f.rays[0].role == RayRole::Use && f.rays[0].selected ? "TARGET " + Fixed(f.rays[0].distance, 2) + " m"
                                                                   : ray(f.rays[0]));
-    const char* psi[] = {"native", "head", "left"};
-    text += "   psi " + std::string(psi[std::min(f.psiMode, 2u)]);
+    text += "   psi " + std::string(f.psiLeftHand ? "left" : "right");
     if (f.sceneQueryFault) { text += "  QUERY FAULT"; }
     text += "\nHolsters " + std::string(f.holstersEnabled ? "on  " + slot(f.holsters[0]) + "  " + slot(f.holsters[1]) : "off");
     text += "\nMedkit " + std::string(f.medkitEnabled ? "on  " + slot(f.medkit) +

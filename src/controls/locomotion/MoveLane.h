@@ -41,8 +41,8 @@ void UpdateMoveLane();
 // Turn and fire, driven from the right controller. Same thread and frame.
 void UpdateTurnAndFireLanes();
 // The psi button (the left trigger) is held this frame, in play and with the
-// left hand free (not at the medkit slot or the foregrip). PsiMedkit's
-// psychic targeting reads it.
+// left hand free (not at the medkit slot or the foregrip): what MoveLane posts
+// as Prey's psi button.
 bool PsiButtonHeld();
 
 // Radial deadzone in hundredths (default 15). The playbook's reason for radial
