@@ -23,7 +23,7 @@ constexpr Spec specs[]={
  {"turn_speed",L"SMOOTH TURN SPEED",L"Scales the game's turn rate. Applies in Smooth mode.",100,10,200,25,U::percent},
  {"two_hand",L"TWO-HAND AIM",L"Grip a long weapon's foregrip to aim it, or a pistol's grip to brace it.",1,0,1,1},
  {"grip_toggle",L"FOREGRIP INPUT",L"Hold the grip, or squeeze once to attach and again to release.",0,0,1,1,U::none,gripToggleNames},
- {"support_auto",L"AUTO-SNAP SUPPORT HAND",L"Your left hand attaches to the weapon on its own when you hold it close. A squeeze still attaches and lets go as Foregrip Input says. While attached, the left hand can't grab or use, and you can't reload.",0,0,1,1},
+ {"support_auto",L"AUTO-SNAP SUPPORT HAND",L"Your left hand attaches to the weapon on its own when you hold it close. A squeeze still attaches and lets go as Foregrip Input says. While attached, X reloads instead of grabbing or using.",0,0,1,1},
  // The two-hand lane takes the same 5-25 and 10-60 (AimTakeover.h).
  {"support_auto_attach",L"AUTO-SNAP ATTACH DISTANCE",L"How close your left hand must come to the weapon's grip to attach. Needs Auto-Snap Support Hand.",10,5,25,1,U::cm},
  {"support_break",L"AUTO-BREAK SUPPORT HAND",L"Your left hand lets go of the weapon on its own when you move it away, however it attached. A squeeze still lets go as Foregrip Input says.",0,0,1,1},

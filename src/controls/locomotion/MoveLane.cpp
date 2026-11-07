@@ -764,13 +764,29 @@ void UpdateTurnAndFireLanes()
         // same list keeps psi (the left trigger) off the left hand's other jobs.
         const bool leftBusy = gRecenterHeld || MedkitZoneHasLeftHand() || TwoHandedAimHeld() ||
                               (leftHand.gripPressed && (SupportGripNear() || PsychoscopeZoneHasLeftHand()));
-        useIn.leftBusy = leftBusy;
-        // A paired squeeze is a hold, not use/reload.
+        // **Two-handed, the left press (Prey's X) reloads** instead of being
+        // dropped as busy: the hand is on the weapon, so there is nothing for
+        // it to use. Only for a hold that was already on before this frame and
+        // a press that is not the grip's own squeeze, or with grab rebound to
+        // the grip, the squeeze that attaches or lets go would reload. Psi
+        // keeps the full busy list.
+        static bool twoHandBefore = false, leftGripBefore = false;
+        const bool twoHand = TwoHandedAimHeld();
+        const bool leftGripEdge = leftHand.gripPressed && !leftGripBefore;
+        useIn.leftReloads = twoHand && twoHandBefore && !leftGripEdge;
+        twoHandBefore = twoHand;
+        leftGripBefore = leftHand.gripPressed;
+        useIn.leftBusy = useIn.leftReloads ? gRecenterHeld || MedkitZoneHasLeftHand() : leftBusy;
+        // A paired squeeze is a hold, not use/reload -- in the original layout,
+        // where the right grip is also use. With use.hand left it only
+        // reloads (and holsters, held), which a two-hand hold leaves free:
+        // a shotgun or Q-Beam reloads with the support hand still on it.
         // While something is carried the button drops it: the left grip lets
         // go, and the right one (reload) has nothing to do.
         const bool carrying = UseCarrying();
-        useIn.rightBusy = gRecenterHeld || HolsterOwnsGrip() || TwoHandedAimHeld() ||
-                          (haveLeftHand && leftHand.squeezeValue >= .45f && !useIn.leftHand) ||
+        useIn.rightBusy = gRecenterHeld || HolsterOwnsGrip() ||
+                          (!useIn.leftHand && (TwoHandedAimHeld() ||
+                                               (haveLeftHand && leftHand.squeezeValue >= .45f))) ||
                           (carrying && useIn.leftHand);
         useIn.target = UseTargetPresent() || carrying;
         // Phase 2: held in the hand for as long as the grip is (carry.hold).

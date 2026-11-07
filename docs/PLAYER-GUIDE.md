@@ -21,7 +21,7 @@ layout wherever VR leaves one free.
 | Right stick click | Psychoscope | Prey's RS: drop, split a stack, reset the map's zoom |
 | Steam Frame: left D-pad | Prey's quick slots (left, right, down); up: torch | Navigate |
 | Right A / B | Jump / crouch | Select / back |
-| X (Touch: left; Steam Frame: right) | Prey's X: **grab** and use what the left hand points at (press to pick up, press again to drop); with nothing to use, reload | X action shown by Prey |
+| X (Touch: left; Steam Frame: right) | Prey's X: **grab** and use what the left hand points at (press to pick up, press again to drop); with nothing to use, or with both hands on the weapon, reload | X action shown by Prey |
 | Y (Touch: left; Steam Frame: right) | Prey's Y, as Prey handles it: search, special use, the psychoscope's lock; tap to swap weapon, hold for Prey's own wheel | Y action shown by Prey |
 | Steam Frame: bumpers | In Prey's wheel (hold Y): left uses a suit repair kit, right eats food (Prey's LB / RB). Otherwise nothing | Previous / next tab (Prey's LB / RB), on release |
 | Steam Frame: View (left) | Open inventory | Close the menu |
@@ -147,8 +147,8 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   default: your left hand attaches to the weapon on its own when you hold it close
   for a moment, within **Attach Distance** (10 cm by default); a squeeze still
   works as Foregrip Input says, and after a release the hand must move away before
-  it snaps again. While attached, as in any two-hand hold, the left hand can't grab
-  or use and you can't reload or holster), **auto-break support hand** (off by
+  it snaps again. While attached, as in any two-hand hold, X reloads instead of
+  grabbing or using, and the right grip still reloads and holsters), **auto-break support hand** (off by
   default: your left hand lets go on its own when you move it away, at **Auto-Break
   Distance** (25 cm by default) from where it attached, however it attached, so
   toggle grip needs no second press and auto-snap needs no squeeze to let go),

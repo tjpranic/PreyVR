@@ -54,8 +54,8 @@
     The actual body is moving up and down, might be a side-effect of all the body following and IK changes.
 - Might want to remove the Q-beam holding offset
     May not be necessary.
-- Can't initiate reload when two-handing the shotgun or Q-beam
 - Can't switch to some weapons when using the Psychoscope
+    Not supposed to; the game restricts this.
 - Audit body holster implementation
     Not sure how much work has been done on this and how it works.
 - Aiming lasers can show briefly in-between loading screen and press A button screen (?)
@@ -197,6 +197,8 @@
 - Going through loading screens can cause the hands to not be out
     Affects the space helmet too.
     > A load replaces the player's arms with a new character. The IK held on to the old one and skipped every other character, the new arms included, until the weapon count changed. With a weapon out, Prey re-equips it as the load ends, which fixed it by itself. Empty-handed, nothing did until the next draw: 11 of the 12 such loads in the logs. The helmet and head lamp asked the IK for the player's character, so they went with it. The IK now always checks the player's current arms and rebinds when they change, and the helmet and head lamp read the player directly. PreyVR-138, worn OK 2026-11-07. See docs/LOAD-IK-OWNER-SCOPE-2026-11-07.md.
+- Can't initiate reload when two-handing the shotgun or Q-beam
+    > Any two-hand hold, on every weapon, dropped both reload presses as busy: a rule left over from the original layout, where the right grip was also the use button. X now reloads while the left hand holds the weapon (the selection is emptied first, so it never uses what the left hand points at), and the right grip reloads and holsters as it does one-handed. PreyVR-140, worn OK 2026-11-07.
 
 ### Rendering
 - The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision). (Archived)

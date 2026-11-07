@@ -232,6 +232,49 @@ void TestRightBusyAndPairs()
     Require(!out.down && out.owner == Owner::None, "paired squeeze does nothing");
 }
 
+// Two-handed, the left press (Prey's X) reloads: the selection is emptied
+// first, as for the right grip, so a can the left hand points at is not used.
+void TestLeftReloadsTwoHanded()
+{
+    UseButton b = Ready();
+    auto in = Base();
+    in.leftReloads = true;
+    in.target = true;
+    in.leftPress = true;
+    auto out = b.Update(in);
+    Require(!out.down && out.suppressTarget && out.owner == Owner::Reload, "two-handed X clears the selection");
+    in.target = false;
+    for (int i = 0; i < UseButton::kClearFrames; ++i) { out = b.Update(in); }
+    Require(out.down && out.pressed && out.owner == Owner::Reload, "then holds X: a reload");
+    // The right grip while X reloads is ignored and must be let go first.
+    in.rightPress = true;
+    Require(b.Update(in).down, "the right grip does not end the left's reload");
+    in.leftPress = false;
+    out = b.Update(in);
+    Require(!out.down && out.released, "let go with X");
+    int suppressed = 0;
+    for (int i = 0; i < 6; ++i) { suppressed += b.Update(in).suppressTarget ? 1 : 0; }
+    Require(suppressed == UseButton::kGuardFrames, "the release is guarded, as the right grip's");
+    Require(b.Update(in).owner == Owner::None, "the right grip held across it does not reload");
+    // Busy mid-reload (the recentre chord) lets go.
+    UseButton c = Ready();
+    in = Base();
+    in.leftReloads = true;
+    in.leftPress = true;
+    for (int i = 0; i <= UseButton::kClearFrames; ++i) { out = c.Update(in); }
+    Require(out.down, "reloading");
+    in.leftBusy = true;
+    out = c.Update(in);
+    Require(!out.down && out.released, "busy releases a left reload");
+    // Without the hold the same press is an ordinary use.
+    UseButton d = Ready();
+    in = Base();
+    in.target = true;
+    in.leftPress = true;
+    out = d.Update(in);
+    Require(out.down && out.owner == Owner::Use, "one-handed X still uses");
+}
+
 void TestOtherHandIgnored()
 {
     UseButton b = Ready();
@@ -604,6 +647,7 @@ int main()
     TestRightDrawsWhenHolstered();
     TestReloadGiveUp();
     TestRightBusyAndPairs();
+    TestLeftReloadsTwoHanded();
     TestOtherHandIgnored();
     TestMenuReleases();
     TestLegacy();

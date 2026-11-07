@@ -91,6 +91,10 @@ ButtonOutput UseButton::Update(const ButtonInput& in)
         } else if (leftEdge) {
             leftArmed_ = false;
             if (in.leftBusy || in.chord || in.rightPress) { out.busy = true; }
+            else if (in.leftReloads) {
+                // Two-handed: a reload, whatever the left hand points along.
+                owner_ = Owner::Reload; reloadLeft_ = true; clear_ = 0; waited_ = 0; out.suppressTarget = true;
+            }
             else if (guard_ == 0) {
                 // Prey's own X: with something selected it uses it, with
                 // nothing it reloads.
@@ -105,7 +109,7 @@ ButtonOutput UseButton::Update(const ButtonInput& in)
             rightArmed_ = false;
             if (in.rightBusy || in.chord || in.leftPress) { out.busy = true; }
             else if (in.holstered && !in.carrying) { owner_ = Owner::Draw; out.drawWeapon = true; }
-            else { owner_ = Owner::Reload; clear_ = 0; waited_ = 0; out.suppressTarget = true; }
+            else { owner_ = Owner::Reload; reloadLeft_ = false; clear_ = 0; waited_ = 0; out.suppressTarget = true; }
         }
         break;
     case Owner::Use:
@@ -143,11 +147,15 @@ ButtonOutput UseButton::Update(const ButtonInput& in)
         }
         if (in.rightPress) { rightArmed_ = false; }
         break;
-    case Owner::Reload:
+    case Owner::Reload: {
         out.suppressTarget = true;
-        if (in.leftPress) { leftArmed_ = false; }
+        // The press making the reload, and the other hand's, which acts only once let go.
+        const bool held = reloadLeft_ ? in.leftPress : in.rightPress;
+        const bool busy = reloadLeft_ ? in.leftBusy : in.rightBusy;
+        bool& pressArmed = reloadLeft_ ? leftArmed_ : rightArmed_;
+        if (reloadLeft_ ? in.rightPress : in.leftPress) { (reloadLeft_ ? rightArmed_ : leftArmed_) = false; }
         if (!down_) {
-            if (!in.rightPress || in.rightBusy) {
+            if (!held || busy) {
                 owner_ = Owner::None;   // let go before the selection cleared: nothing sent
                 break;
             }
@@ -161,12 +169,13 @@ ButtonOutput UseButton::Update(const ButtonInput& in)
                 owner_ = Owner::None;
                 out.gaveUp = true;
             }
-        } else if (!in.rightPress || in.rightBusy) {
+        } else if (!held || busy) {
             release();
             guard_ = kGuardFrames;
-            if (in.rightPress) { rightArmed_ = false; }
+            if (held) { pressArmed = false; }
         }
         break;
+    }
     case Owner::Legacy:
         release();
         break;

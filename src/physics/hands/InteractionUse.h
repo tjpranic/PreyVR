@@ -35,8 +35,10 @@ struct ButtonInput {
     // The left hand's grab and the right hand's reload (its grip), pressed.
     bool leftPress = false, rightPress = false;
     // Another lane owns that press this frame, or would take it on this press:
-    // left = medkit slot, two-hand hold, recentre chord; right = holster,
-    // two-hand hold, recentre chord, paired squeeze.
+    // left = medkit slot, recentre chord, a two-hand hold not yet under way
+    // when pressed (once it is, see leftReloads); right = holster,
+    // recentre chord, carrying, and in the original layout (use.hand 0) the
+    // two-hand hold and a paired squeeze. A two-hand hold leaves reload free.
     bool leftBusy = false, rightBusy = false;
     // Y is held, so a grip squeezed now starts the recentre chord: neither press
     // starts anything. Unlike busy, it lets nothing go -- Y does not drop what
@@ -68,6 +70,11 @@ struct ButtonInput {
     // instead of reloading -- the native draw is the trigger, which a VR
     // player expects to fire.
     bool holstered = false;
+    // The left hand is holding the weapon (a two-hand hold that began before
+    // this press). Its press is then a reload, made as the right grip's is --
+    // the selection emptied first -- since the hand points along the barrel,
+    // not at anything to use.
+    bool leftReloads = false;
 };
 
 // Hold: the left press is holding what it picked up; letting go lets go.
@@ -113,6 +120,7 @@ private:
     std::uint32_t pressedTarget_ = 0;   // what the press acted on (holdToHold)
     int tap_ = 0;                       // frames left of a tap (tapOnly)
     bool leftArmed_ = false, rightArmed_ = false;   // released since the last press
+    bool reloadLeft_ = false;   // Owner::Reload is the left press's (leftReloads)
     int clear_ = 0, waited_ = 0, guard_ = 0;
 };
 
