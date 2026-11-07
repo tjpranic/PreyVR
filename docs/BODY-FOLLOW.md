@@ -625,8 +625,10 @@ capsule while it moves and decides once it rests.
 ## The shoulders
 
 **The arm solver ([ARM-POSE-2026-10-06.md](ARM-POSE-2026-10-06.md)) reaches each hand from a
-shoulder joint on the torso: −9 cm forward, ±18.5 cm out and −23 cm up from a centre eye in the
-torso frame (`arm.shoulder`).** Which eye that is, and which torso, is the body's business.
+shoulder joint on the torso: −9 cm forward, ±19.7 cm out and −23 cm up from a centre eye in the
+torso frame (`arm.shoulder`).** Which eye that is, and which torso, is the body's business. The
+width was 18.5 until 2026-11-07, when it moved to Morgan's: a hanging arm read into his chest, and the
+torso avoidance pushed the elbows out ([ARM-POSE-2026-10-06.md](ARM-POSE-2026-10-06.md#2026-11-07-the-elbow-kept-down)).
 
 - **From the neck, not the eyes** (2026-10-19, PreyVR-41, committed as `079e55f`).
   `armpose::ShoulderFromHead` lays the offset out from `armpose::LevelEye`: the eye as it would be

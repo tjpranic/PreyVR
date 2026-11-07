@@ -301,11 +301,11 @@ worn OK (2026-10-25), as Body Follows You's commands had on 2026-10-24.
 |---|---|---|---|
 | `arm.torso <deg> <relax>` | 0–180, 0–10000 ‰/s | 35 600 | Torso yaw deadzone and settling, for the shoulders and the body slots. The same setting as `body.torso`. |
 | `arm.mode` | 0 native arm, 1 your shoulder | 1 | Where the arm is solved from. |
-| `arm.shoulder <fwd> <out> <up>` | mm | | The shoulder joint from the centre eye, with the head level and facing the torso, in the torso's frame. With the body pin it rides the drawn chest from there. |
+| `arm.shoulder <fwd> <out> <up>` | mm | −90 197 −230 | The shoulder joint from the centre eye, with the head level and facing the torso, in the torso's frame. With the body pin it rides the drawn chest from there. |
 | `arm.len <upper> <fore>` | 150–450 mm | 285 275 | Drawn arm segments. |
 | `arm.length <cm>` | 40–70 | 56 | Both segments at once, shoulder to wrist, split as the defaults are. **Menu** (Arm length). |
 | `arm.stretch <clavicle> <arm>` | 0–500 ‰, 1000–1300 ‰ | 150 1100 | How far the clavicle and the arm may stretch. |
-| `arm.prior <flexSd> <devRest> <devSd> <swivelSd>` | degrees | 45 −8 12 25 | The elbow solver's priors. |
+| `arm.prior <flexSd> <devRest> <devSd> <swivelSd>` | degrees | 45 −8 30 15 | The elbow solver's priors. Since 2026-11-07 they keep the elbow down (was 45 −8 12 25). |
 | `arm.rom <flex> <ext> <radial> <ulnar>` | 10–120 degrees | 75 65 20 35 | The wrist's range of motion. |
 | `arm.hold <sd> <tauMs>` | 0–360, 0–1000 | 45 60 | Elbow smoothing over time. |
 | `arm.knee <permille>` | 500–1000 | 920 | Exact reach up to this fraction of the stretched arm. |

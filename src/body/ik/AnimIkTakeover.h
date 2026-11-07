@@ -115,11 +115,11 @@ DWORD SetHandPoseWeaponRoll(unsigned int enabled);
 DWORD SetHandPoseStretchPercent(int percent);
 // The arm from the player's shoulder (docs/ARM-POSE-2026-10-06.md), arm.<what>:
 //   mode 0|1                     native arm / player's shoulder (default 1)
-//   shoulder <fwd> <out> <up>    shoulder joint from the centre eye, torso frame, mm
+//   shoulder <fwd> <out> <up>    shoulder joint from the centre eye, torso frame, mm (-90 197 -230)
 //   len <upper> <fore>           drawn segments, mm (default 285 275)
 //   length <cm>                  both segments, shoulder to wrist, 40-70 (default 56)
 //   stretch <clav> <arm>         permille the clavicle may stretch, arm stretch limit (150 1100)
-//   prior <flexSd> <devRest> <devSd> <swivelSd>  the elbow's MAP priors, degrees (45 -8 12 25)
+//   prior <flexSd> <devRest> <devSd> <swivelSd>  the elbow's MAP priors, degrees (45 -8 30 15)
 //   rom <flex> <ext> <radial> <ulnar>            the wrist's range of motion, degrees (75 65 20 35)
 //   hold <sd> <tauMs>            temporal prior on the elbow (deg) and pole smoothing (45 60)
 //   torso <deadzoneDeg> <relax>  torso yaw deadzone and relax per second, permille (35 600)

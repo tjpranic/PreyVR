@@ -38,6 +38,12 @@ How the mod's shoulder is placed:
 The result is about 5 cm higher, 2.5 cm further forward and 1.2 cm narrower than Morgan's own. The top of
 the upper arm moves; the mesh of his chest and armpit does not. No elbow choice can fix that part.
 
+**2026-11-07: the width now matches.** `arm.shoulder` out is 197 mm, and the drawn shoulder lands 0.4 cm
+from it. The narrow shoulder had a hanging arm reading into the chest, and the tracking held or pushed
+the elbow out in most frames with the hands at the chest
+([ARM-POSE-2026-10-06.md](ARM-POSE-2026-10-06.md#2026-11-07-the-elbow-kept-down)). The height and the
+depth are unchanged.
+
 Rig lengths for reference: Morgan's clavicle is 19.6 cm, his upper arm 23.3 cm and his forearm 28.4 cm.
 The drawn arm at the wearer's Arm Length of 60 cm is 30.5 + 29.5 cm.
 

@@ -20,8 +20,9 @@
 //    head's yaw with a deadzone (turning the head alone does not turn the
 //    shoulders) and relaxes towards it;
 //  * **the player's shoulder** -- an adult's glenohumeral centre relative to
-//    the centre eye in that frame (the anthropometry Dishonored VR uses),
-//    reached by rotating the rig's clavicle about its root;
+//    the centre eye in that frame (the anthropometry Dishonored VR uses, at
+//    Morgan's shoulder width), reached by rotating the rig's clavicle about
+//    its root;
 //  * **the elbow** -- of the circle of elbows that reach the wrist, the one
 //    whose wrist bends the way wrists can (little side deviation, flexion
 //    within its range), the anatomical direction (down, out, a little back)
@@ -35,9 +36,13 @@ using Side = int;
 
 struct Body {
     // The shoulder joint from the centre eye, in the torso frame (m):
-    // forward, outwards (to this arm's side) and up.
+    // forward, outwards (to this arm's side) and up. Out is near Morgan's own
+    // width (his rig: 20.1 cm; the drawn shoulder lands within 0.4 cm of it):
+    // at Dishonored VR's 18.5 a hanging arm read 1-2 cm into his chest, and the
+    // elbow was held or pushed out of it in most frames with the hands at the
+    // chest (2026-11-07, docs/ARM-POSE-2026-10-06.md).
     float shoulderForward = -0.09f;
-    float shoulderOut = 0.185f;
+    float shoulderOut = 0.197f;
     float shoulderUp = -0.23f;
     // The drawn arm's segments (m): shoulder -> elbow, elbow -> wrist.
     float upper = 0.285f;
@@ -122,8 +127,8 @@ float WristRadialDeg(const Vec3& forearm, const Vec3& length, const Vec3& palm, 
 struct WristLimits {
     float flexionSigmaDeg = 45.0f;
     float deviationRestDeg = -8.0f;   // ulnar
-    float deviationSigmaDeg = 12.0f;
-    float swivelSigmaDeg = 25.0f;
+    float deviationSigmaDeg = 30.0f;
+    float swivelSigmaDeg = 15.0f;
     // Range of motion, and how steep its wall is.
     float flexionMaxDeg = 75.0f, extensionMaxDeg = 65.0f;
     float radialMaxDeg = 20.0f, ulnarMaxDeg = 35.0f;
@@ -132,12 +137,15 @@ struct WristLimits {
     // near-equal choices from frame to frame.
     float holdSigmaDeg = 45.0f;
 };
-// Tuned offline against known arms (build/jordi-mock/elbowsim.py, 400 each):
-// natural arms (swivel, flexion, deviation spread as players make them) mean
-// elbow error 4.5 cm, p90 9.7, against 6.9 / 15.1 for the anatomical direction
-// alone; controllers held at the edge of the wrist's range with the elbow in
-// its natural place 4.6 / 8.7 (the anatomical direction, right by
-// construction there, 3.2 / 6.9) -- an impossible wrist does not raise it.
+// **Biased to keep the elbow down** (2026-11-07, worn): deviation 30 and swivel
+// 15, from 12 and 25. With deviation that stiff the elbow followed the hand's
+// radial-ulnar direction, so any gap between the hand assumed on the
+// controller (the grip pose and pose.tubeLean) and the real one swung the
+// elbow round as the hand rolled: offline, a 24-degree gap either way put
+// 6-18% of natural arms' elbows 5 cm or more too high. Now 0-0.7% for real
+// grips 5-39 degrees, the elbow still rising where the wrist runs out of
+// range. The cost: an elbow raised on purpose is followed less closely.
+// docs/ARM-POSE-2026-10-06.md has the numbers, and the 10-06 tuning before it.
 
 // **The elbow the hand allows.** Around the circle of elbows that reach the
 // wrist, the most likely one: the wrist bending as wrists do, within its

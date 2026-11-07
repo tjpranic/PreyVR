@@ -46,8 +46,6 @@
     Technically everything is working game wise, it would just be an improvement.
 - Can't grab when two-handing weapons
     Grabs are only allowed with the left hand, will need to rethink how this works
-- Arm IK should be biased to stay downwards
-    They tend to "chicken-wing" when I rotate my hands
 - The in-game cutscenes show on a flat plane but it needs to be adjusted downward a bit
     The first-time Typhon neuromod usage trigger 3 of these cutscenes in a row. It also causes the game to pause between each cutscene.
     Might also want to have the interface VR options apply to cutscenes if applicable.
@@ -181,6 +179,9 @@
     > The flashlight hung off Prey's eye joint, which VR never moves, so it pointed level along the body. It and the psychoscope's light now sit on the headset's eye at Prey's mount (17 mm behind and 35 mm below the eye) and point where you look. Always on. PreyVR-102, worn OK 2026-10-29. See docs/FLASHLIGHT-HEAD-SCOPE-2026-10-29.md.
 - Arms can clip into the player model
     > The elbow chooser didn't know the body was there: with the hands at the chest it could put the elbow 12–15 cm inside it (measured on PreyVR-103 against capsules fitted to the drawn torso). It now prefers elbows outside the body, and the drawn elbow goes round the body to them, never through it. PreyVR-104, worn OK 2026-10-29. See docs/ARM-TORSO-SCOPE-2026-10-29.md.
+- Arm IK should be biased to stay downwards
+    They tend to "chicken-wing" when I rotate my hands
+    > Two causes. The elbow followed the hand's sideways bend too closely, so any mismatch between the hand it assumed on the controller and your real one swung the elbow round as you rolled your hand. And the drawn shoulder was 1.2 cm narrower than Morgan's, so a hanging arm counted as inside his chest and the elbow was pushed out. The elbow priors are now 45 −8 30 15 (were 45 −8 12 25) and the shoulder is 197 mm out (was 185). Worn OK 2026-11-07 with `arm.prior` and `arm.shoulder`, now the defaults. See docs/ARM-POSE-2026-10-06.md, "2026-11-07: the elbow kept down".
 - Body IK seems to cause the body to twist a bit when leaning down
     > Not the IK, and not the zero-G work. Within 5° of straight down the play space's yaw went wrong, off by how far the head's heading had moved, which turned the chest, hands and aim about the head until the head came back out of that range. Bending over is what gets a head that far down. The yaw is now read from the view instead of worked back from the camera. PreyVR-118, worn OK 2026-10-31. See docs/BODY-FOLLOW.md, the four yaws.
 - Remove Q-Beam equip animation (?)

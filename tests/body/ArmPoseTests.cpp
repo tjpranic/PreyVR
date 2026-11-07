@@ -69,8 +69,8 @@ void TestShoulder()
     const TorsoFrame t = TorsoFromYaw(0.0f);
     const Vec3 eye{0, 1.6f, 0};
     const Vec3 r = ShoulderTarget(eye, t, +1, body), l = ShoulderTarget(eye, t, -1, body);
-    Require(NearVec(r, {0.185f, 1.37f, 0.09f}), "right shoulder: out, below and behind the eye");
-    Require(NearVec(l, {-0.185f, 1.37f, 0.09f}), "left shoulder mirrors");
+    Require(NearVec(r, {0.197f, 1.37f, 0.09f}), "right shoulder: out, below and behind the eye");
+    Require(NearVec(l, {-0.197f, 1.37f, 0.09f}), "left shoulder mirrors");
     // The clavicle reaches its target within its stretch, and stops short beyond it.
     const Vec3 root{0.03f, 1.38f, 0.025f};
     const Vec3 within = PlaceShoulder(root, 0.17f, r, 0.15f);
@@ -222,13 +222,28 @@ void TestElbowFollowsHand()
     const Vec3 thumbUp = ElbowFor(s, w, Vec3{0, 0, -1}, Vec3{-1, 0, 0});
     Require(std::fabs(thumbUp.y - w.y) < 0.06f, "thumb up: a level forearm");
     Require(thumbUp.x > 0.15f, "thumb up: the elbow at the side, outside the body");
-    // Palm down: the forearm close to the vertical plane of the hand -- the
-    // elbow behind the wrist, out only by the wrist's resting ulnar deviation.
+    // Palm down: the elbow stays down where it was, and the wrist takes the
+    // bend (2026-11-07: it used to swing in behind the wrist, so rolling the
+    // hands swung the elbow round -- up and out, chicken-winged).
     const Vec3 palmDown = ElbowFor(s, w, Vec3{0, 0, -1}, Vec3{0, -1, 0});
-    Require(std::fabs(palmDown.x - w.x) < 0.07f, "palm down: the elbow behind the wrist");
+    Require(Dist(palmDown, thumbUp) < 0.02f, "palm down: the elbow stays where it was");
     const Vec3 f2{(w.x - palmDown.x) / 0.275f, (w.y - palmDown.y) / 0.275f, (w.z - palmDown.z) / 0.275f};
     const float r2 = WristRadialDeg(f2, Vec3{0, 0, -1}, Vec3{0, -1, 0}, +1);
-    Require(r2 < 0.0f && r2 > -15.0f, "palm down: a little ulnar");
+    Require(r2 < 0.0f && r2 > -WristLimits{}.ulnarMaxDeg, "palm down: ulnar, within the wrist's range");
+    // Rolling the hand through half a turn about its length: the elbow stays
+    // within 2 cm (it moved 7.4 with the priors before).
+    float rolled = 0.0f;
+    for (int deg = -90; deg <= 90; deg += 10) {
+        const float r = static_cast<float>(deg) * kDeg;
+        rolled = std::max(rolled, Dist(ElbowFor(s, w, Vec3{0, 0, -1}, Vec3{-std::cos(r), -std::sin(r), 0}), thumbUp));
+    }
+    Require(rolled < 0.02f, "rolling the hand leaves the elbow down");
+    // Down, not pinned: a hand the wrist cannot reach from there (palm down,
+    // turned 75 degrees across the body) still raises the elbow.
+    const Vec3 natural = SolveElbow(s, w, 0.285f, 0.275f, BodyPole(TorsoFromYaw(0), +1), 1.1f).elbow;
+    const float across = 75.0f * kDeg;
+    const Vec3 crossed = ElbowFor(s, w, Vec3{-std::sin(across), 0, -std::cos(across)}, Vec3{0, -1, 0});
+    Require(crossed.y - natural.y > 0.08f, "an unreachable wrist still raises the elbow");
     for (const Vec3& e : {thumbUp, palmDown}) {
         Require(std::fabs(Dist(e, s) - 0.285f) < 1e-3f, "the elbow is on the arm");
     }
@@ -330,8 +345,10 @@ void TestArmClear()
 
 // The torso term moves an elbow the chooser put in the body out of it. The
 // hand pose is from an offline sweep (arm 60 cm, hand forward and down, palm
-// turned in): without the torso the elbow lands 5 cm from the midline at the
-// belly.
+// turned in): without the torso the elbow lands 5 cm into the belly. Since the
+// priors keep the elbow down (2026-11-07) the chooser takes it most of the way
+// out, near its natural place, and the tracking draws it clear: before, the
+// chooser alone swung it round to the far side of the circle.
 void TestChooserAvoidsTorso()
 {
     const StandingTorso torso;
@@ -347,8 +364,10 @@ void TestChooserAvoidsTorso()
     const auto clear = [&](Vec3 pole) {
         return ArmClear(s, SolveElbow(s, w, body.upper, body.fore, pole, body.armStretch).elbow, w, o);
     };
-    Require(clear(plain) < -0.05f, "without the torso the elbow is in the body");
-    Require(clear(kept) >= 0.0f, "with it, out of it");
+    Require(clear(plain) < -0.04f, "without the torso the elbow is in the body");
+    Require(clear(kept) > clear(plain) + 0.03f, "with it, the chooser takes it most of the way out");
+    const TrackedPole drawn = TrackElbowPole(s, w, body.upper, body.fore, body.armStretch, kept, nullptr, 1.0f, o);
+    Require(clear(drawn.pole) >= o.margin - 1e-4f, "and the tracking draws it clear by the margin");
     const ArmObstacle none{torso.part, 0, ArmThickness{}, 0.01f, 0.01f};
     Require(NearVec(ChooseElbowPole(s, w, body.upper, body.fore, body.armStretch, length, palm, 1, bodyPole, limits,
                                     nullptr, &none), plain, 1e-6f),
