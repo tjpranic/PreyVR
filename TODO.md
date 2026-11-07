@@ -52,7 +52,6 @@
 - Have container search interface on left hand laser hit
 - Going up or down the main lift causes body position jittering
     The actual body is moving up and down, might be a side-effect of all the body following and IK changes.
-- Going through loading screens can cause the hands to not be out
 - Might want to remove the Q-beam holding offset
     May not be necessary.
 - Can't initiate reload when two-handing the shotgun or Q-beam
@@ -60,7 +59,7 @@
 - Audit body holster implementation
     Not sure how much work has been done on this and how it works.
 - Aiming lasers can show briefly in-between loading screen and press A button screen (?)
-    Only sometimes?
+    Only sometimes? Can't replicate anymore.
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -195,6 +194,9 @@
 - Auto-break two-hand grip option
     To complement the auto-snap
     > Hands' Auto-Break Support Hand lets any hold go once the left hand moves Auto-Break Distance from where it attached, on any weapon and however it attached, so toggle grip needs no second press. It is the only thing that ends a hold by distance: with it off, nothing does. That retired the pistol's fixed 30 cm release, and Auto-Snap alone no longer lets go by distance. PreyVR-130, worn OK 2026-11-02.
+- Going through loading screens can cause the hands to not be out
+    Affects the space helmet too.
+    > A load replaces the player's arms with a new character. The IK held on to the old one and skipped every other character, the new arms included, until the weapon count changed. With a weapon out, Prey re-equips it as the load ends, which fixed it by itself. Empty-handed, nothing did until the next draw: 11 of the 12 such loads in the logs. The helmet and head lamp asked the IK for the player's character, so they went with it. The IK now always checks the player's current arms and rebinds when they change, and the helmet and head lamp read the player directly. PreyVR-138, worn OK 2026-11-07. See docs/LOAD-IK-OWNER-SCOPE-2026-11-07.md.
 
 ### Rendering
 - The starfield skybox displays at the wrong depth (?) or something to that effect (gives double vision). (Archived)

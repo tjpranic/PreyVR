@@ -166,7 +166,7 @@ void TestSharedOriginAndMuzzleSeparation()
 void TestCalibrationLifecycle()
 {
     CalibrationState state;
-    state.Bind(1,0,1);
+    state.Bind(1, 0, 1, 7);
     state.Request(3);
     Require(state.Pending(0) && state.Pending(1), "both hands requested");
     state.Commit(0, AxisAngle({0,0,1}, 0.4f));
@@ -182,7 +182,7 @@ void TestCalibrationLifecycle()
     // the original guarantees are kept -- no stale offset, no stale request --
     // but a hand that HAD a completed calibration is re-queued for a fresh one
     // rather than left half-driving.
-    Require(state.Bind(2,0,1) && state.calibrated == 0 && state.pending == 0,
+    Require(state.Bind(2, 0, 1, 7) && state.calibrated == 0 && state.pending == 0,
             "re-equip invalidates rotations AND outstanding requests even when pointers are reused");
     Require(state.Settling(0) && state.Settling(1),
             "both previously calibrated hands are queued for a re-take");
@@ -192,10 +192,10 @@ void TestCalibrationLifecycle()
 
     // The other half: a request that never completed belongs to the old rig.
     CalibrationState partial;
-    partial.Bind(1,0,1);
+    partial.Bind(1, 0, 1, 7);
     partial.Request(3);
     partial.Commit(0, AxisAngle({0,0,1}, 0.3f));   // only the right hand completed
-    partial.Bind(2,0,1);
+    partial.Bind(2, 0, 1, 7);
     for (unsigned int i = 0; i < CalibrationState::kSettleFrames; ++i) { partial.Tick(); }
     Require(partial.Pending(0), "the completed hand is re-taken");
     Require(!partial.Pending(1) && !partial.Settling(1),
@@ -205,12 +205,12 @@ void TestCalibrationLifecycle()
     // recovery intent inherited from a completed calibration. Keep the intent,
     // never the old offset or a manual request which has not completed.
     CalibrationState churn;
-    churn.Bind(1, 1, 1);
+    churn.Bind(1, 1, 1, 7);
     churn.Request(3);
     churn.Commit(0, AxisAngle({0,0,1}, 0.3f));
-    churn.Bind(2, 1, 1);
+    churn.Bind(2, 1, 1, 7);
     for (unsigned int i = 0; i < 20; ++i) { churn.Tick(); }
-    Require(churn.Bind(3, 1, 1) && churn.calibrated == 0 && churn.pending == 0,
+    Require(churn.Bind(3, 1, 1, 7) && churn.calibrated == 0 && churn.pending == 0,
             "rapid re-equip still discards old offsets and manual requests");
     Require(churn.Settling(0) && !churn.Settling(1),
             "second re-equip retains recovery only for previously calibrated hand");
@@ -218,7 +218,7 @@ void TestCalibrationLifecycle()
     Require(!churn.Pending(0), "settling restarts at the most recent rebind");
     churn.Tick();
     Require(churn.Pending(0), "rotation recovery survives equip churn");
-    churn.Bind(3, 2, 2);
+    churn.Bind(3, 2, 2, 7);
     Require(churn.Settling(0), "reference/epoch change also preserves recovery intent");
     churn.Invalidate();
     Require(!churn.Settling(0) && !churn.Pending(0),
@@ -227,10 +227,22 @@ void TestCalibrationLifecycle()
     Require(state.pending == 0 && state.calibrated == 2, "left-only request completes");
     state.Commit(99, {});
     Require(state.calibrated == 2, "invalid hand cannot shift outside mask");
-    Require(!state.Bind(2,0,1) && state.calibrated == 2, "same owner retains calibration");
-    Require(state.Bind(2,2,1) && state.calibrated == 0, "recenter invalidates calibration");
+    Require(!state.Bind(2, 0, 1, 7) && state.calibrated == 2, "same owner retains calibration");
+    Require(state.Bind(2, 2, 1, 7) && state.calibrated == 0, "recenter invalidates calibration");
     state.Request(1); state.Commit(0, {});
-    Require(state.Bind(2,2,2) && state.calibrated == 0, "XR focus/session epoch invalidates calibration");
+    Require(state.Bind(2, 2, 2, 7) && state.calibrated == 0, "XR focus/session epoch invalidates calibration");
+
+    // A level load rebuilds the player's arms under the same free-arms generation,
+    // reference and epoch (docs/LOAD-IK-OWNER-SCOPE-2026-11-07.md): a new rig.
+    CalibrationState load;
+    load.Bind(5, 1, 1, 7);
+    load.Request(3);
+    load.Commit(0, AxisAngle({0,0,1}, 0.3f));
+    Require(!load.Bind(5, 1, 1, 7) && load.calibrated == 1, "the same character keeps its binding");
+    Require(load.Bind(5, 1, 1, 8) && load.calibrated == 0 && load.pending == 0 && load.ownerCharacter == 8,
+            "a replaced character rebinds with nothing else changed, dropping its old offset");
+    Require(load.Settling(0) && !load.Settling(1), "and re-takes the hand that was calibrated, as a weapon switch does");
+    Require(!load.Bind(5, 1, 1, 8), "once");
 }
 
 void TestNativeFiringPositionLayout()

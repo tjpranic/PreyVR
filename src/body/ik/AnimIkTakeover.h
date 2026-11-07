@@ -160,7 +160,14 @@ std::string HandPoseReport();
 // "x1 y1 z1 x2 y2 z2 r g b" (the mock compositor draws them).
 std::string HandPoseMarks();
 
-// Last accepted identity/sample, and failed prerequisite/lock attempts.
+// The player's arms character this gameplay frame (PlayerArmsCharacter of
+// `player`), for the hook's fast pass-through, which must not skip them after a
+// level load has replaced them. Main thread, once a frame (FrameSchedule.cpp).
+void PublishAnimIkPlayer(unsigned long long player);
+// Last accepted identity/sample, and failed prerequisite/lock attempts. The
+// owner is the character the IK last bound; it can lag a replaced one by the
+// frames it takes to rebind, so a lane that needs the player's character reads
+// PlayerArmsCharacter instead.
 unsigned long long AnimIkOwnerCharacter();
 unsigned long long AnimIkOwnerGeneration();
 unsigned long long AnimIkPoseSequence();

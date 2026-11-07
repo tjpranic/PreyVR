@@ -21,10 +21,14 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
     // ~93/s on a ~132 fps game, a third of its frames skipped, which a wearer
     // would see as the hand flickering between goal and animation. Non-owners
     // pass straight through, except while the owner is unknown or the equipped
-    // weapon has changed since it was bound.
+    // weapon has changed since it was bound. The player's live arms are never
+    // passed: after a level load they are a new character, the owner is the
+    // destroyed one, and with no weapon drawn the equip count never moves
+    // (docs/LOAD-IK-OWNER-SCOPE-2026-11-07.md).
     {
         const auto knownOwner = gOwnerCharacter.load(std::memory_order_acquire);
-        if (knownOwner != 0 && reinterpret_cast<std::uintptr_t>(character) != knownOwner &&
+        const auto self = reinterpret_cast<std::uintptr_t>(character);
+        if (knownOwner != 0 && self != knownOwner && self != gPlayerArms.load(std::memory_order_acquire) &&
             WeaponEquipGeneration() == gOwnerGeneration.load(std::memory_order_acquire)) {
             const auto original = gOriginal.load(std::memory_order_acquire);
             if (original) { original(character, params); }
@@ -52,12 +56,20 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
     }
     if (mode != 0 && !stateLock.owns_lock()) { gBusy.fetch_add(1); }
     if (mode != 0 && stateLock.owns_lock() && !haveOwner) { gNoOwner.fetch_add(1); }
-    if (haveOwner && gCalibration.Bind(owner.generation, frame.referenceGeneration, frame.tracking.epoch)) {
+    if (haveOwner &&
+        gCalibration.Bind(owner.generation, frame.referenceGeneration, frame.tracking.epoch, owner.character)) {
         for (auto& flag : gCalibrated) { flag.store(false); }
         gRigSkeleton.store(0);
         gHandRig.skeleton = 0;   // re-identify the hand's joints with the rig
         gOwnerGeneration.store(owner.generation);
-        gOwnerCharacter.store(owner.character);
+        const auto previous = gOwnerCharacter.exchange(owner.character);
+        if (previous != 0 && previous != owner.character) {
+            char line[128];
+            std::snprintf(line, sizeof(line), "result=0 detail=owner_character_changed old=0x%llx new=0x%llx free=%d",
+                          static_cast<unsigned long long>(previous), static_cast<unsigned long long>(owner.character),
+                          free ? 1 : 0);
+            Log(line);
+        }
     }
     // The other characters' fast pass-through compares this with the equip
     // generation; the free owner holds until the next equip bumps it.
@@ -547,6 +559,11 @@ DWORD SetAnimIkSupportLatch(unsigned enabled)
 unsigned AnimIkSupportLatch() { return gSupportLatchOn.load(std::memory_order_relaxed) ? 1u : 0u; }
 
 unsigned AnimIkWideSupport() { return gWideSupport.load(std::memory_order_relaxed) ? 1u : 0u; }
+
+void PublishAnimIkPlayer(unsigned long long player)
+{
+    gPlayerArms.store(PlayerArmsCharacter(PreyBase(), static_cast<std::uintptr_t>(player)), std::memory_order_release);
+}
 
 unsigned long long AnimIkOwnerCharacter() { return gOwnerCharacter.load(); }
 

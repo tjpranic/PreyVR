@@ -118,14 +118,12 @@ bool TryGetFreeArms(std::uintptr_t player, EquippedRig& out)
     __try {
         if (*reinterpret_cast<std::uintptr_t*>(player + kPlayerInput) != base + kPlayerInputVtableRva ||
             *reinterpret_cast<int*>(player + kPlayerInput + kInputCinematic) != 0) { return false; }
-        const auto animated = *reinterpret_cast<std::uintptr_t*>(player + kPlayerAnimatedCharacter);
-        if (!animated) { return false; }
-        const auto character = *reinterpret_cast<std::uintptr_t*>(animated + kAnimatedCharacterInstance);
-        if (!character || *reinterpret_cast<std::uintptr_t*>(character) != base + kArmsCharacterVtableRva) { return false; }
-        out = {};
-        out.character = character;
-        return true;
     } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+    const auto character = PlayerArmsCharacter(base, player);
+    if (!character) { return false; }
+    out = {};
+    out.character = character;
+    return true;
 }
 
 bool IdentifyRig(std::uint8_t* character)

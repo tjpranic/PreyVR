@@ -1,5 +1,4 @@
 #include "equipment/head/HelmetLane.h"
-#include "body/ik/AnimIkTakeover.h"
 #include "body/ArmsLane.h"
 #include "engine/EngineAccess.h"
 #include "base/EnvSwitch.h"
@@ -35,7 +34,9 @@ void Log(const std::string& line) { lifecycle::Log("preyvr_helmet " + line); }
 static_assert(contract::Gated(hm::Contracts, hm::ModelRelative) && contract::Gated(hm::Contracts, hm::RelativeDefault) &&
               contract::Gated(hm::Contracts, hm::Hide) && contract::Gated(hm::Contracts, hm::EntityGetWorldTm));
 static_assert(contract::Gated(hm::Contracts, hm::CharacterRender) && contract::Gated(hm::Contracts, hm::RenderAttachment));
-static_assert(contract::Gated(sn::Contracts, sn::PlayerSingleton));
+// PlayerInstance calls the getter the gate checks.
+static_assert(contract::Gated(sn::Contracts, sn::PlayerSingleton) &&
+              sn::PlayerSingleton == engine::ArkPlayerLayout::getInstanceRva);
 static_assert(hm::CharacterVtable == engine::CharacterInstanceLayout::vtableRva);
 // The model transform is a QuatT as Prey lays it out: q xyzw, then t.
 static_assert(sizeof(Pose) == 28 && hm::AttachModel + sizeof(Pose) == hn::AttachK);
@@ -127,7 +128,12 @@ bool WriteHideBits(std::uintptr_t attachment, std::uint32_t bits)
     }
 }
 
-std::uint64_t (*gPlayerCharacter)() = AnimIkOwnerCharacter;
+// The player's character, read each frame rather than kept: a level load replaces
+// it, and the IK's owner can still be the destroyed one until it rebinds
+// (docs/LOAD-IK-OWNER-SCOPE-2026-11-07.md).
+std::uint64_t LivePlayerCharacter() { return PlayerArmsCharacter(gBase, PlayerInstance(gBase)); }
+
+std::uint64_t (*gPlayerCharacter)() = LivePlayerCharacter;
 std::uint64_t (*gFindAttachment)(std::uint64_t, std::string_view) = FindAttachment;
 AppliedView (*gLastView)() = LastAppliedView;
 bool (*gPlayerLocation)(Pose&, float&) = PlayerLocation;
@@ -253,11 +259,7 @@ void Unhide()
 bool GateBodies(std::uintptr_t base)
 {
     __try {
-        bool player = false;
-        for (const auto& row : sn::Contracts) {
-            if (row.rva == sn::PlayerSingleton) { player = contract::BodyMatches(base, row); }
-        }
-        return player && contract::BodiesMatch(base, hm::Contracts) &&
+        return BodyAtMatchesGuarded(base, sn::Contracts, sn::PlayerSingleton) && contract::BodiesMatch(base, hm::Contracts) &&
                SlotIs(base, hn::BoneVtable, hm::VtableModelRelative, hm::ModelRelative) &&
                SlotIs(base, hn::BoneVtable, hm::VtableRelativeDefault, hm::RelativeDefault) &&
                SlotIs(base, hn::BoneVtable, hm::VtableHide, hm::Hide) &&

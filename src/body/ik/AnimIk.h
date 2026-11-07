@@ -35,7 +35,7 @@ struct CalibrationState {
     unsigned int settleFrames = 0;
     unsigned int calibrated = 0;
     Quaternion offsets[2]{};
-    std::uint64_t ownerGeneration = 0, referenceGeneration = 0, trackingEpoch = 0;
+    std::uint64_t ownerGeneration = 0, referenceGeneration = 0, trackingEpoch = 0, ownerCharacter = 0;
     // Re-binding after a weapon change, a recentre or a focus loss invalidates
     // the rotation offset -- it maps the controller onto *this* weapon's
     // authored grip, and the next weapon's grip is different.
@@ -60,8 +60,14 @@ struct CalibrationState {
     // A manual `ik.calibrate` is deliberate and commits on the next frame.
     static constexpr unsigned int kSettleFrames = 90;
 
-    bool Bind(std::uint64_t owner, std::uint64_t reference, std::uint64_t epoch) {
-        if (ownerGeneration == owner && referenceGeneration == reference && trackingEpoch == epoch) { return false; }
+    // `character` is a key of its own: a level load rebuilds the player's arms
+    // under the same equip generation, and that is a new rig as much as a weapon
+    // switch is (docs/LOAD-IK-OWNER-SCOPE-2026-11-07.md).
+    bool Bind(std::uint64_t owner, std::uint64_t reference, std::uint64_t epoch, std::uint64_t character) {
+        if (ownerGeneration == owner && referenceGeneration == reference && trackingEpoch == epoch &&
+            ownerCharacter == character) {
+            return false;
+        }
         pending = 0;                 // whatever the old rig had outstanding
         // A second rebind may arrive before the first automatic retake. In
         // that interval calibrated is zero, but autoPending still records a
@@ -70,7 +76,7 @@ struct CalibrationState {
         autoPending = (ownerGeneration != 0) ? (calibrated | autoPending) : 0u;
         settleFrames = 0;
         calibrated = 0;
-        ownerGeneration = owner; referenceGeneration = reference; trackingEpoch = epoch;
+        ownerGeneration = owner; referenceGeneration = reference; trackingEpoch = epoch; ownerCharacter = character;
         return true;
     }
 

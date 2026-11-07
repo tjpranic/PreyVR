@@ -57,7 +57,7 @@ enum class Phase { off, preparing, settings, tracking, rendering, active, failed
 Phase phase=Phase::off;
 std::string failure;
 unsigned setting=0;
-unsigned long long deadline=0, consoleCount=0, calibratedOwner=0, calibratedReference=0;
+unsigned long long deadline=0, consoleCount=0, calibratedOwner=0, calibratedReference=0, calibratedCharacter=0;
 // The both-eyes and HUD-panel counters, logged once a minute while VR is active
 // so a headset session records them without a tuner command.
 unsigned long long nextStatusReport=0;
@@ -106,7 +106,7 @@ void Fail(const char* step) {
 }
 void EnableVrMode() {
     if(phase!=Phase::off && phase!=Phase::failed) return;
-    failure.clear(); calibratedOwner=0;
+    failure.clear(); calibratedOwner=0; calibratedCharacter=0;
     if(SetFrameObserverEnabled(true)!=2 || EnsureRenderHookInstalled()!=0) {
         Fail("render_hooks"); return;
     }
@@ -322,12 +322,17 @@ void TickVrMode() {
                 " } reticle={"+ReticleWorldReport()+SceneQueryReport()+" } "+MarkerDepthReport()+" "+StarfieldDepthReport()+" "+BodyDepthReport()+" "+ExamineCameraReport()+" "+HeadLampReport()+" "+HelmetReport()+" "+TimeStopAnimationReport()+" "+ScreenAimReport()+" "+TaaLaneReport()+" focus={"+
                 FocusHoldReport()+" } hold={"+XrHoldReport()+" } prompts={"+ControllerPromptsReport()+" }");
         }
+        // A new rig to calibrate: another weapon, a recentre, or the player's arms
+        // replaced by a level load under the same generation.
         const auto owner=AnimIkOwnerGeneration();
         const auto reference=HeadTrackingReferenceGeneration();
-        if(AnimIkOwnerCharacter()!=0 && !stereo::Recentering(reference) &&
-           (owner!=calibratedOwner || reference!=calibratedReference) && CalibrateAnimIk()==0) {
+        const auto character=AnimIkOwnerCharacter();
+        if(character!=0 && !stereo::Recentering(reference) &&
+           (owner!=calibratedOwner || reference!=calibratedReference || character!=calibratedCharacter) &&
+           CalibrateAnimIk()==0) {
             calibratedOwner=owner;
             calibratedReference=reference;
+            calibratedCharacter=character;
         }
         FollowNearFov();
         if(antialiasingPending.load()) {

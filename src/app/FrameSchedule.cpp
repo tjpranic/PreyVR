@@ -1,6 +1,7 @@
 #include "app/FrameSchedule.h"
 
 #include "body/ArmsLane.h"
+#include "body/ik/AnimIkTakeover.h"
 #include "controls/input/ActionMaps.h"
 #include "render/stereo/BodyDepthHook.h"
 #include "equipment/body/BodyEquipmentLane.h"
@@ -49,6 +50,9 @@ void TickGameplayLanes(const GameplayPoseFrame& frame, bool allowed, bool tracki
     ProbeRecord(ProbeStep::gameplay);
     // Before this frame's render: which slot is the player's, drawn in the world.
     PublishBodyDepthPlayer(frame.player);
+    // Before this frame's animation: the player's arms, which the IK must not pass
+    // over after a level load has replaced them (AnimIkTakeover.h).
+    PublishAnimIkPlayer(frame.player);
     UpdatePsiMedkit(frame, allowed);
     UpdatePsychoscopeGesture(frame, allowed);
     UpdateBodyEquipment(frame, allowed);

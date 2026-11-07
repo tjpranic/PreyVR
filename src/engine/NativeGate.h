@@ -30,6 +30,22 @@ bool BodiesMatchGuarded(std::uintptr_t base, const Table& table)
     }
 }
 
+// The one row of `table` at `rva`, guarded the same way; no such row is no
+// match. For a lane that calls a function another lane's table pins (the player
+// getter StickReread pins, say).
+template <class Table>
+bool BodyAtMatchesGuarded(std::uintptr_t base, const Table& table, std::uintptr_t rva)
+{
+    __try {
+        for (const auto& row : table) {
+            if (row.rva == rva) { return contract::BodyMatches(base, row); }
+        }
+        return false;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
 // Whether the vtable at `table` holds the function at `rva` at byte offset
 // `slot`. Both are RVAs into the module at `base`; a slot that cannot be read
 // does not match.

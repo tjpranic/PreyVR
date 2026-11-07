@@ -16,7 +16,6 @@ PREYVR_TEST_CAPTURE_LOG()
 PREYVR_TEST_STUB_MINHOOK()
 
 // What the lane reaches outside its file, replaced below.
-unsigned long long preyvr::dll::AnimIkOwnerCharacter() { return 0; }
 std::uint64_t preyvr::dll::FindAttachment(std::uint64_t, std::string_view) { return 0; }
 preyvr::dll::AppliedView preyvr::dll::LastAppliedView() { return {}; }
 unsigned long preyvr::dll::InputDrainThreadId() { return 0; }
@@ -174,7 +173,13 @@ void Binding(std::uint8_t* b, std::uint32_t entity)
     Put(Address(b) + hn::BindingEntity, entity);
     Put(Address(b) + hn::BindingScale, Vec3{1.0f, 1.0f, 1.0f});
 }
-std::uint64_t FakePlayer() { return Address(character); }
+// The lane reads the player when it meets a light, each time (a level load replaces it).
+int playerReads = 0;
+std::uint64_t FakePlayer()
+{
+    ++playerReads;
+    return Address(character);
+}
 std::uint64_t FakeFind(std::uint64_t owner, std::string_view name)
 {
     return owner == Address(character) && name == "#camera" ? Address(eyeAttachment) : 0;
@@ -314,7 +319,9 @@ void TestLane()
     Attachment(otherAttachment, lightName, otherManager, kLightRelative, kLightK, 98);
     Pass(lightBinding, otherAttachment);
     Attachment(otherAttachment, fxName, manager, kLightRelative, kLightK, 98);
+    const int readsBefore = playerReads;
     Pass(lightBinding, otherAttachment);
+    Check(playerReads == readsBefore, "an attachment that is not a light never looks the player up");
     Attachment(otherAttachment, lightName, manager, kLightRelative, kLightK, 98);
     Put(Address(otherAttachment), image + 0x1D20000);
     Pass(lightBinding, otherAttachment);

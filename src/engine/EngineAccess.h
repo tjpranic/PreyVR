@@ -66,6 +66,31 @@ inline std::uintptr_t PlayerInstance(std::uintptr_t base)
     }
 }
 
+// The player's first-person character (arms, body, legs: ArkPlayer's animated
+// character, then the CCharInstance it caches, checked by vtable), or 0. With a
+// weapon drawn it is also the weapon's owning character
+// (docs/ARMS-NO-WEAPON-2026-10-07.md). **Read it, never keep it:** a level load
+// replaces it, and a kept one is a destroyed character
+// (docs/LOAD-IK-OWNER-SCOPE-2026-11-07.md). `player` is an ArkPlayer, `base`
+// PreyDll's.
+inline std::uintptr_t PlayerArmsCharacter(std::uintptr_t base, std::uintptr_t player)
+{
+    if (base == 0 || player == 0) { return 0; }
+    __try {
+        const auto animated =
+            *reinterpret_cast<const std::uintptr_t*>(player + engine::ArkPlayerLayout::animatedCharacter);
+        if (animated == 0) { return 0; }
+        const auto character =
+            *reinterpret_cast<const std::uintptr_t*>(animated + engine::AnimatedCharacterLayout::characterInstance);
+        return character != 0 && *reinterpret_cast<const std::uintptr_t*>(character) ==
+                                     base + engine::CharacterInstanceLayout::vtableRva
+                   ? character
+                   : 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return 0;
+    }
+}
+
 // The entity with `id` (gEnv->pEntitySystem's GetEntity), or 0: no such entity,
 // no entity system yet, or a fault. `base` is PreyDll's.
 inline std::uintptr_t EntityById(std::uintptr_t base, std::uint32_t id)

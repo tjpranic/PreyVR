@@ -15,7 +15,6 @@ PREYVR_TEST_CAPTURE_LOG()
 PREYVR_TEST_STUB_MINHOOK()
 
 // What the lane reaches outside its file, replaced below.
-unsigned long long preyvr::dll::AnimIkOwnerCharacter() { return 0; }
 std::uint64_t preyvr::dll::FindAttachment(std::uint64_t, std::string_view) { return 0; }
 preyvr::dll::AppliedView preyvr::dll::LastAppliedView() { return {}; }
 

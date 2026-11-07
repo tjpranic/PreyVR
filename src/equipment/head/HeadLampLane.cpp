@@ -1,5 +1,4 @@
 #include "equipment/head/HeadLampLane.h"
-#include "body/ik/AnimIkTakeover.h"
 #include "body/ArmsLane.h"
 #include "engine/EngineAccess.h"
 #include "base/EnvSwitch.h"
@@ -12,6 +11,7 @@
 #include "equipment/head/HeadLampNative.h"
 #include "engine/NativeContract.h"
 #include "engine/NativeGate.h"
+#include "controls/input/StickRereadNative.h"
 
 #include <array>
 #include <atomic>
@@ -27,11 +27,15 @@
 namespace preyvr::dll {
 namespace {
 namespace hn = headlamp::native;
+namespace sn = stick::native;
 
 void Log(const std::string& line) { lifecycle::Log("preyvr_head_lamp " + line); }
 
 static_assert(contract::Gated(hn::Contracts, hn::ProcessAttachment));
 static_assert(contract::Gated(hn::Contracts, hn::BoneWorldAbsolute));
+// PlayerInstance calls the getter the gate checks.
+static_assert(contract::Gated(sn::Contracts, sn::PlayerSingleton) &&
+              sn::PlayerSingleton == engine::ArkPlayerLayout::getInstanceRva);
 // A QuatT as Prey lays it out: q xyzw, then t.
 static_assert(sizeof(Quaternion) == 16 && sizeof(Pose) == 28);
 
@@ -114,7 +118,12 @@ bool PlaceEntity(std::uint32_t id, const Vec3& position, const Quaternion& rotat
     }
 }
 
-std::uint64_t (*gPlayerCharacter)() = AnimIkOwnerCharacter;
+// The player's character, read when a light is met rather than kept: a level load
+// replaces it, and the IK's owner can still be the destroyed one until it rebinds
+// (docs/LOAD-IK-OWNER-SCOPE-2026-11-07.md).
+std::uint64_t LivePlayerCharacter() { return PlayerArmsCharacter(gBase, PlayerInstance(gBase)); }
+
+std::uint64_t (*gPlayerCharacter)() = LivePlayerCharacter;
 std::uint64_t (*gFindAttachment)(std::uint64_t, std::string_view) = FindAttachment;
 AppliedView (*gLastView)() = LastAppliedView;
 bool (*gWorldPlacement)(std::uintptr_t, Placement&) = WorldPlacement;
@@ -123,19 +132,21 @@ bool (*gMainThread)() = OnEngineMainThread;
 
 // --- the lights ---------------------------------------------------------------------
 // Which of the player's two lights `attachment` is, or -1: a bone attachment of
-// the player's character, by name.
-int LightOf(std::uintptr_t attachment, std::uint64_t player)
+// the player's character, by name; `player` is that character. The name first:
+// the player is looked up through the actor system, so only for a light.
+int LightOf(std::uintptr_t attachment, std::uint64_t& player)
 {
     std::uintptr_t vtable = 0, manager = 0, character = 0, name = 0;
-    if (player == 0 || !SafeRead(attachment, vtable) || vtable != gBase + hn::BoneVtable ||
+    if (!SafeRead(attachment, vtable) || vtable != gBase + hn::BoneVtable ||
         !SafeRead(attachment + hn::AttachManager, manager) || !SafeRead(manager + hn::ManagerCharacter, character) ||
-        character != player || !SafeRead(attachment + hn::AttachName, name) || name == 0) {
+        !SafeRead(attachment + hn::AttachName, name) || name == 0) {
         return -1;
     }
     for (std::size_t i = 0; i < kLights; ++i) {
         // With the terminator: "flashlight" is not "flashlight_fx".
         if (SafeEqual(reinterpret_cast<const void*>(name), kAttachments[i], std::strlen(kAttachments[i]) + 1)) {
-            return static_cast<int>(i);
+            player = gPlayerCharacter();
+            return player != 0 && character == player ? static_cast<int>(i) : -1;
         }
     }
     return -1;
@@ -221,7 +232,7 @@ bool ThisFramesView(const AppliedView& view)
 // True when the light was placed here, and Prey's placement is not wanted.
 bool PlaceOnView(std::uintptr_t binding, std::uintptr_t attachment)
 {
-    const std::uint64_t player = gPlayerCharacter();
+    std::uint64_t player = 0;
     const int light = LightOf(attachment, player);
     if (light < 0) { return false; }
     if (!gMainThread()) {
@@ -259,10 +270,11 @@ void __fastcall ProcessAttachmentDetour(void* binding, void* attachment)
 }
 
 // --- the gate and the hook (main thread) ----------------------------------------
-// The three bodies, and the two vtable slots that reach them.
+// The three bodies, the two vtable slots that reach them, and the player getter
+// StickReread pins (the light's owner is checked against the player's character).
 bool GateBodies(std::uintptr_t base)
 {
-    return BodiesMatchGuarded(base, hn::Contracts) &&
+    return BodiesMatchGuarded(base, hn::Contracts) && BodyAtMatchesGuarded(base, sn::Contracts, sn::PlayerSingleton) &&
            SlotIs(base, hn::BindingVtable, hn::VtableProcessAttachment, hn::ProcessAttachment) &&
            SlotIs(base, hn::BoneVtable, hn::VtableWorldAbsolute, hn::BoneWorldAbsolute);
 }

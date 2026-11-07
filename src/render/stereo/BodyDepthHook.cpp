@@ -290,25 +290,6 @@ void __fastcall NearestChangeDetour(void* renderer, std::uint32_t nearest)
 // Tests replace the module base here.
 std::uintptr_t (*gBase)() = PreyBase;
 
-// ArkPlayer -> its animated character -> the CCharInstance, checked by vtable.
-bool ReadPlayerCharacter(std::uintptr_t player, std::uintptr_t base, std::uintptr_t& out)
-{
-    __try {
-        const auto animated = *reinterpret_cast<const std::uintptr_t*>(player + engine::ArkPlayerLayout::animatedCharacter);
-        if (animated == 0) { return false; }
-        const auto character =
-            *reinterpret_cast<const std::uintptr_t*>(animated + engine::AnimatedCharacterLayout::characterInstance);
-        if (character == 0 ||
-            *reinterpret_cast<const std::uintptr_t*>(character) != base + engine::CharacterInstanceLayout::vtableRva) {
-            return false;
-        }
-        out = character;
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
-
 // --- the gate and the hooks (main thread) -------------------------------------------
 struct Targets {
     std::uintptr_t slotRender = 0, setViewport = 0, nearestChange = 0;
@@ -406,10 +387,7 @@ void EnsureBodyDepth()
 void PublishBodyDepthPlayer(std::uintptr_t player)
 {
     if (!gInstalled.load(std::memory_order_acquire)) { return; }
-    const auto base = gBase();
-    std::uintptr_t character = 0;
-    if (base == 0 || player == 0 || !ReadPlayerCharacter(player, base, character)) { character = 0; }
-    gCharacter.store(character, std::memory_order_release);
+    gCharacter.store(PlayerArmsCharacter(gBase(), player), std::memory_order_release);
 }
 
 std::string BodyDepthReport()

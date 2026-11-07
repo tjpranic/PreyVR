@@ -185,11 +185,13 @@ inline LatestSnapshot<handpose::FingerGrip> gFingerGrip;
 
 constexpr std::uint64_t kFreeGenerationBit = 1ull << 62;
 
-constexpr std::size_t kPlayerAnimatedCharacter = engine::ArkPlayerLayout::animatedCharacter;
-
-constexpr std::size_t kAnimatedCharacterInstance = engine::AnimatedCharacterLayout::characterInstance;
-
-constexpr std::uintptr_t kArmsCharacterVtableRva = engine::CharacterInstanceLayout::vtableRva;
+// **The player's arms as the main thread last read them** (PublishAnimIkPlayer,
+// once a gameplay frame; PlayerArmsCharacter). The fast pass-through never skips
+// this character: a level load replaces the player's arms, and until the slow
+// path rebinds, gOwnerCharacter is the destroyed one -- with no weapon drawn the
+// equip count does not move, so nothing else would ever send the new arms there
+// (docs/LOAD-IK-OWNER-SCOPE-2026-11-07.md). 0 until the first frame.
+inline std::atomic<std::uint64_t> gPlayerArms{0};
 
 // Not during a cinematic: ArkPlayerInput (player+0x8E0, vtable 0x1E580E0) +0x94,
 // the gate Funk's body holsters use (BodyEquipmentLane.cpp).
