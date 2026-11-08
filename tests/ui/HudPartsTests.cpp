@@ -3,6 +3,7 @@
 // is lifted. The native calls are faked; the transactions are the real ones.
 #include "ui/hud/NativeHudIsolation.h"
 #include "TestSupport.h"
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <map>
@@ -169,6 +170,18 @@ int main(){
         std::set<std::string> status=Set(hud::ExcludedFromStatus);
         for(const char* path:hud::SafeChildren)
             if(std::string(path)!="_root.safe.quadrant_SW")Require(status.count(path)==1,"the wrist leaves out safe's other children");
+        // What leaves the face is exactly what the wrist draws: quadrant_SW's clips less those its replay leaves out.
+        std::set<std::string> drawn;
+        for(const char* path:hud::QuadrantSWChildren)if(!status.count(path))drawn.insert(path);
+        Require(Set(hud::MovedToWrist)==drawn&&hud::MovedToWrist.size()==drawn.size(),
+            "every quadrant_SW clip the wrist draws leaves the face, and nothing else does");
+        Require(drawn.count("_root.safe.quadrant_SW.power_mc")==1,"the equipped psi power is on the wrist");
+        for(const char* path:hud::StatusMeters)Require(drawn.count(path)==1,"with the meters");
+        for(const char* path:hud::ExcludedFromStatus){
+            const std::string p=path;
+            Require(p.rfind("_root.safe.quadrant_SW.",0)!=0||Set(hud::QuadrantSWChildren).count(p)==1,
+                "the wrist leaves out only quadrant_SW clips the movie places");
+        }
     }
     // --- the wheel's replay ---------------------------------------------------
     {
@@ -269,6 +282,31 @@ int main(){
         Require(!lift.Decide(true,-1,2040*ms),"a gate gone unreadable drops it");
         lift.Reset();
         Require(!lift.Decide(true,0,2050*ms),"reset: nothing to trail");
+    }
+    // --- the corner groups: what HUD Width and Height move ----------------------
+    {
+        // Each of safe's nine edge quadrants, on the axes it is not centred on:
+        // corners on both, the middle of an edge on the one across it.
+        std::map<std::string,std::set<bool>> axes;
+        for(const auto& c:hud::CornerCoordinates){
+            const std::string path=c.path;
+            const auto dot=path.rfind('.');
+            const std::string clip=path.substr(0,dot),axis=path.substr(dot+1);
+            Require((axis=="_y")==c.vertical&&(axis=="_x"||axis=="_y"),"each names its own axis");
+            Require(Set(hud::SafeChildren).count(clip)==1,"each is one of safe's own quadrants");
+            Require(axes[clip].insert(c.vertical).second,"each coordinate once");
+        }
+        const std::map<std::string,std::set<bool>> expected{
+            {"_root.safe.quadrant_NW",{false,true}},{"_root.safe.quadrant_N",{true}},{"_root.safe.quadrant_N_2",{true}},
+            {"_root.safe.quadrant_NE",{false,true}},{"_root.safe.quadrant_W",{false}},{"_root.safe.quadrant_E",{false}},
+            {"_root.safe.quadrant_SW",{false,true}},{"_root.safe.quadrant_S",{true}},{"_root.safe.quadrant_SE",{false,true}}};
+        Require(axes==expected,"the nine edge quadrants, thirteen coordinates; never quadrant_C, the centre");
+        // Nothing a part moves is a corner coordinate: the reticle's replay keeps its own overrides.
+        for(const auto& o:hud::Reticle.overrides)for(const auto& c:hud::CornerCoordinates)
+            Require(std::string(o.path)!=c.path,"the reticle's overrides and the corners never touch the same value");
+        Require(hud::SpreadCoordinate(-864,100)==-864&&hud::SpreadCoordinate(-864,50)==-432&&
+                hud::SpreadCoordinate(864,30)==864*.3,"a coordinate goes to its percent of Prey's place, toward safe");
+        Require(hud::SpreadMinPercent==30&&hud::SpreadMaxPercent==100,"30% to Prey's own layout");
     }
     std::cout<<"HUD parts: wheel profile, exclusions and lifting passed\n";
 }

@@ -49,6 +49,20 @@ def verify():
         assert struct.unpack('<Q', at(slot, 8))[0] == 0x180000000+rva
     assert at(0x18B8ED0, 8).hex() == '488b8118010000c3'
     checks.append('concrete root/sprite vtables and sprite owner accessor')
+
+    # The equipped psi power on the wrist (NativeHudIsolation.h, 2026-11-08):
+    # PreyDll opens and closes power_mc only on whether a power is equipped,
+    # the index at +0x234, 15 for none -- never on a timer.
+    def names(site):
+        assert at(site, 3) == bytes.fromhex('488d15'), hex(site)
+        target = site + 7 + struct.unpack('<i', at(site + 3, 4))[0]
+        return at(target, 16).split(b'\0')[0].decode('ascii')
+    assert at(0x15B63A6, 10).hex() == 'c781340200000f000000' and names(0x15B63E2) == 'powerClose'
+    assert at(0x15BCC7A, 7).hex() == '486383340200' + '00' and at(0x15BCC89, 3).hex() == '83f80f'
+    assert names(0x15BCC9C) == 'powerClose'
+    assert at(0x15B7915, 7).hex() == '83be340200000f' and names(0x15B796A) == 'powerOpen'
+    checks.append('power_mc: powerClose on setting the equipped index to none (15) or finding none, '
+                  'powerOpen on equipping one from none')
     return dict(target_sha256=digest, checks=checks, game_launched=False,
                 limit='Byte identity and inspected static contracts, not native replay execution or headset acceptance.')
 

@@ -30,12 +30,18 @@ constexpr Spec specs[]={
  // Keeps the key it was saved under as Auto-Snap Break Distance.
  {"support_auto_break",L"AUTO-BREAK DISTANCE",L"How far your left hand must move from where it attached to let go. Always at least 5 cm past the distance it attached from. Needs Auto-Break Support Hand.",25,10,60,1,U::cm},
  {"psychoscope",L"PSYCHOSCOPE GESTURE",L"Left grip at forehead: pull down or lift up. Native unlock rules apply.",0,0,1,1},
- {"ui_scale",L"INTERFACE SIZE",L"Scales game panels and the HUD, as far as your view allows.",100,20,200,10,U::percent},
+ {"ui_scale",L"INTERFACE SIZE",L"Scales the game's menus, notes and books, subtitles and tutorial cards, as far as your view allows.",100,20,200,10,U::percent},
+ // The HUD's own (2026-11-07): its size and distance (XrSessionHost), its corners pulled in (HudLayer,
+ // hud::SpreadMinPercent..SpreadMaxPercent). 200% is the size Interface Size gave it before, which the wearer kept.
+ {"hud_size",L"HUD SIZE",L"How large the HUD and the weapon wheel look, as far as your view allows. The crosshair and its prompts follow it.",200,20,200,10,U::percent},
+ {"hud_width",L"HUD WIDTH",L"How far left and right the HUD reaches: ammo, objectives, pickups and prompts. 100% is Prey's own layout, at the edges of the HUD.",70,30,100,5,U::percent},
+ {"hud_height",L"HUD HEIGHT",L"How far up and down the HUD reaches. 100% is Prey's own layout; 55% spaces it as on a widescreen.",55,30,100,5,U::percent},
+ {"hud_distance",L"HUD DISTANCE",L"How far away the HUD, the weapon wheel, subtitles and tutorial cards float. They keep their apparent size; nearer, less of the world stands in front of them.",100,50,200,5,U::cm},
  {"holsters",L"BODY HOLSTERS",L"Right grip at right hip or left chest: store current weapon, then draw/stow. Assignments are not saved.",0,0,1,1},
- {"wrist",L"WRIST STATUS",L"Raise your left forearm and look at its back, like a watch: health, suit and psi.",1,0,1,1},
+ {"wrist",L"WRIST STATUS",L"Raise your left forearm and look at its back, like a watch: health, suit, psi and your equipped psi power.",1,0,1,1},
  {"wrist_size",L"WRIST DISPLAY SIZE",L"Adjust the status hologram size. Hidden in menus and during two-hand aiming.",100,80,140,10,U::percent},
  {"reticle_size",L"RETICLE SIZE",L"The crosshair in the world, against its size on the HUD.",100,50,200,10,U::percent},
- {"marker_size",L"MARKER SIZE",L"The markers in the world: objectives, repair and danger icons, enemy awareness and points of interest.",100,50,200,10,U::percent},
+ {"marker_size",L"MARKER SIZE",L"The markers in the world: objectives, repair and danger icons, enemy awareness and points of interest. Each is shown over what it marks, and not while that is out of view.",100,50,200,10,U::percent},
  {"haptics",L"CONTROLLER FEEDBACK",L"Short pulses for VR menu changes and attaching the support hand.",1,0,1,1},
  {"haptic_strength",L"FEEDBACK STRENGTH",L"Scale controller feedback intensity. Zero silences all pulses.",70,0,100,10,U::percent},
  {"free_swing",L"FREE-SWING WRENCH",L"Swing the wrench to strike what it hits: harder swings hit harder, and Prey's damage, knockback and stamina apply. The attack button does nothing with the wrench out.",1,0,1,1},
@@ -51,7 +57,7 @@ constexpr Spec specs[]={
  {"ui_distance",L"MENU DISTANCE",L"How far away the game's menus float. They keep their apparent size.",200,100,400,5,U::cm},
  {"ui_offset_right",L"MENU LEFT / RIGHT",L"Turns the game's menus around you, left or right of where you faced when they opened.",0,-90,90,1,U::degreesRightLeft,{},{},L"CENTRE"},
  {"ui_offset_up",L"MENU UP / DOWN",L"Raises or lowers the game's menus; they stay upright.",0,-45,45,1,U::degreesUpDown,{},{},L"CENTRE"},
- {"ui_text",L"TEXT PANEL DISTANCE",L"How far notes, books, subtitles and tutorial cards float. Nearer is larger and sharper.",140,100,200,5,U::cm},
+ {"ui_text",L"TEXT PANEL DISTANCE",L"How far notes and books float. Nearer is larger and sharper.",140,100,200,5,U::cm},
  {"pointer_hand",L"LASER HAND",L"Which hand points at menus. Buttons only turns the laser off.",1,0,2,1,U::none,pointerNames},
  {"move_deadzone",L"MOVE STICK DEADZONE",L"How far the left stick moves before you walk.",15,0,60,1,U::percent},
  {"turn_deadzone",L"TURN STICK DEADZONE",L"How far the right stick moves before you turn.",15,0,60,1,U::percent},
@@ -113,7 +119,7 @@ constexpr int movement[]={Turn,TurnSpeed,HeadRelative,MoveDeadzone,TurnDeadzone,
 constexpr int hands[]={AimLasers,ShotTrail,PsiHand,TwoHand,GripToggle,AutoSnap,AutoSnapAttach,AutoBreak,AutoBreakDistance,Psychoscope,FingerCurl,ArmLength,CarryHand,CarryHold,GrenadeHand,
     CarryThrowStrength,GrenadeThrowStrength,SurfaceStop,HeavyMass,PhysicalContact,PushStrength,FreeSwing,SwingSpeed,HeavySwingSpeed};
 constexpr int interface_[]={UiScale,UiDistance,UiOffsetRight,UiOffsetUp,UiText,ScreenPullback,
-    PointerHand,ReticleSize,MarkerSize,Helmet,HelmetHeight,HelmetForward,HelmetSize};
+    PointerHand,HudSize,HudWidth,HudHeight,HudDistance,ReticleSize,MarkerSize,Helmet,HelmetHeight,HelmetForward,HelmetSize};
 constexpr int equipment[]={Holsters,ClearHolsterSlots,WeaponDrawAnims,Wrist,WristSize,WristTick,WristAlong,WristHover,WristTilt};
 constexpr int feedback[]={Haptics,HapticStrength};
 constexpr int abilities[]={Medkit,BeltHints};

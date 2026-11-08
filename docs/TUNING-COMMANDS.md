@@ -140,15 +140,19 @@ this session. "Menu only" means no command reaches it.
 | Hands | Free-swing wrench (`free_swing`; replaces `physical_melee`, now retired) | on/off | on | menu only (`swing` reports) |
 | Hands | Minimum swing speed (`swing_speed`), at the point the wrench hits; at or above the heavy swing speed, every strike is heavy | 100–700 cm/s (a file saved at 80 or 90 loads as 100) | 120 | menu only |
 | Hands | Heavy swing speed (`heavy_swing_speed`): Prey's charged hit from here, its whole bonus 300 cm/s on | 300–1500 cm/s | 700 | menu only |
-| Interface | Interface size (`ui_scale`) | 20–200 % | 100 | `ui.scale <20..200>` |
+| Interface | Interface size (`ui_scale`): the game's menus, notes and books, subtitles and tutorial cards; the HUD has its own size since 2026-11-07 | 20–200 % | 100 | `ui.scale <20..200>` |
 | Interface | Menu distance (`ui_distance`) | 100–400 cm | 200 | `ui.distance <100..400>` |
 | Interface | Menu left / right (`ui_offset_right`) | −90–90 degrees, + is right | 0 | `ui.offset <right> <up>` |
 | Interface | Menu up / down (`ui_offset_up`) | −45–45 degrees, + is up | 0 | `ui.offset <right> <up>` |
-| Interface | Text panel distance (`ui_text`) | 100–200 cm | 140 | `ui.text <100..200>` |
+| Interface | Text panel distance (`ui_text`): notes and books; subtitles and tutorial cards follow HUD distance since 2026-11-08 | 100–200 cm | 140 | `ui.text <100..200>` |
 | Interface | Screen distance (`screen_pullback`): how far the view stays back from keypads, terminals and other screens you use, never further back than you stood; 0 is Prey's own camera ([keypad camera](KEYPAD-CAMERA-SCOPE-2026-10-26.md)) | 0–100 cm | 30 | `examine.pullback <cm>` |
 | Interface | Laser hand (`pointer_hand`) | left (0), right (1), buttons only (2) | right | `ui.pointer <0..2>` |
+| Interface | HUD size (`hud_size`): the HUD panel and the weapon wheel, as Interface Size sizes the menus; the world reticle keeps the HUD's apparent size ([HUD placement](HUD-PLACEMENT-2026-11-07.md)) | 20–200 % | 200 (what Interface Size 200 gave it before) | menu only (`hud.layer`) |
+| Interface | HUD width (`hud_width`): how far left and right the HUD's corner groups reach, in percent of Prey's layout | 30–100 % | 70 | menu only (`hud.layer` `spread`) |
+| Interface | HUD height (`hud_height`): the same up and down; 55 % spaces the corners as on a 16:9 screen | 30–100 % | 55 | menu only (`hud.layer` `spread`) |
+| Interface | HUD distance (`hud_distance`): how far the HUD panel, the wheel, subtitles and tutorial cards float; they keep their apparent size | 50–200 cm | 100 | menu only |
 | Interface | Reticle size (`reticle_size`) | 50–200% | 100 | `aim.reticlesize <percent>` |
-| Interface | Marker size (`marker_size`) | 50–200% | 100 | `markers.size <percent>` |
+| Interface | Marker size (`marker_size`); every marker is shown only over its target, none while the target is out of view (`vr.status` `markers` `hidden`, `onTarget`) | 50–200% | 100 | `markers.size <percent>` |
 | Interface | Space helmet (`helmet`): the helmet worn in zero-G and outside the station, on your head (shown) or not drawn (hidden); hidden takes it out of the render only, Prey's own state untouched ([zero-G scope](ZERO-G-SCOPE-2026-10-30.md#2-the-zero-g-helmet)) | hidden (0), shown (1) | shown | menu only (`helmet.report`) |
 | Interface | Helmet height (`helmet_height`): the helmet moved up or down along your eyes' own axes; lower it if you can see out of its bottom edge | −100–100 mm, + is up | 0 (Prey's own) | menu only (`helmet.report` `heightMm`) |
 | Interface | Helmet forward / back (`helmet_forward`): moved along your view; back brings its edges further round you | −100–100 mm, + is forward | 0 (Prey's own) | menu only (`forwardMm`) |

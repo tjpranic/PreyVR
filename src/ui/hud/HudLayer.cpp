@@ -54,7 +54,7 @@ constexpr std::uintptr_t kMovieRootVtableRva=0x1EB4B60,kMovieDisplayRva=0x18AB71
 constexpr std::uintptr_t kSpriteDisplaySlotRva=0x1EB5700+0xE8;
 
 struct Identity {std::uintptr_t proxy=0;std::uint64_t stamp=0;};
-struct Presentation {float width=0,height=0,distance=2;bool active=false;std::uint64_t stamp=0;};
+struct Presentation {float width=0,height=0,distance=1;bool active=false;std::uint64_t stamp=0;};
 LatestSnapshot<Identity> seenHud;
 LatestSnapshot<Presentation> presentation;
 std::atomic<unsigned long long> hudCaptured{0};
@@ -298,12 +298,10 @@ struct StatusOverride {
     }
 };
 
-// **The status meters leave the face** when the wrist shows them:
+// **The status leaves the face** when the wrist shows it (hud::MovedToWrist:
+// the meters, the equipped psi power, their backdrop and the status effects):
 // excluded from the gameplay HUD's normal draw, the rest of it unchanged.
-constexpr const char* kFaceExcluded[]={
-    "_root.safe.quadrant_SW.health_mc","_root.safe.quadrant_SW.psi_mc","_root.safe.quadrant_SW.armor_mc",
-    "_root.safe.quadrant_SW.bg_mc","_root.safe.quadrant_SW.bg2_mc","_root.safe.quadrant_SW.line_mc",
-    "_root.safe.quadrant_SW.status_effects"};
+constexpr const auto& kFaceExcluded=hud::MovedToWrist;
 using FaceFilter=hud::Exclusion<NativeHudApi>;
 thread_local FaceFilter* faceFilter=nullptr;
 std::atomic<unsigned long long> faceFrames{0},faceRefused{0};
@@ -472,6 +470,63 @@ struct PartOverrides {
         written=0;
     }
 };
+// **The corner groups pulled in** (HUD Width / HUD Height, hud::CornerCoordinates):
+// for one draw, each coordinate is read, moved toward safe and put back after,
+// as a part's overrides are, so the movie's logic and the wrist's replay only
+// ever see Prey's layout. Plain numbers only: refused whole if any is not one,
+// and whatever was written is put back.
+std::atomic<unsigned> hudWidthPercent{70},hudHeightPercent{55}; // options::Defaults(): hud_width, hud_height
+std::atomic<unsigned long long> spreadDraws{0},spreadRefused{0};
+// This thread is inside the gameplay HUD's callback, drawing it for its panel
+// (CaptureFlash with the HUD layer on): the only draws the corners move in.
+thread_local bool hudOnPanel=false;
+struct CornerSpread {
+    std::array<NativeHudValue,hud::CornerCoordinates.size()> original{};
+    std::size_t written=0;
+    bool Apply(void* root,std::uintptr_t base,unsigned across,unsigned up){
+        NativeHudApi api{root,base};
+        for(std::size_t i=0;i<hud::CornerCoordinates.size();++i){
+            NativeHudValue v{};
+            if(!GetValueGuarded(root,base,hud::CornerCoordinates[i].path,v))return false;
+            if(v.type!=3){api.Release(v);return false;}
+            original[i]=v;
+        }
+        for(std::size_t i=0;i<hud::CornerCoordinates.size();++i){
+            double at=0;std::memcpy(&at,&original[i].payload,sizeof(at));
+            if(!std::isfinite(at))return false;
+            const double moved=hud::SpreadCoordinate(at,hud::CornerCoordinates[i].vertical?up:across);
+            NativeHudValue v{};v.type=3;std::memcpy(&v.payload,&moved,sizeof(moved));
+            if(!SetValueGuarded(root,base,hud::CornerCoordinates[i].path,v))return false;
+            written=i+1;
+        }
+        return true;
+    }
+    void Restore(void* root,std::uintptr_t base){
+        for(std::size_t i=written;i-->0;)SetValueGuarded(root,base,hud::CornerCoordinates[i].path,original[i]);
+        written=0;
+    }
+};
+// The corners pulled in for the life of this scope, when `wanted` and either
+// percent is below Prey's own; put back when it ends, inside the same callback.
+class SpreadScope {
+public:
+    SpreadScope(void* root,bool wanted):root_(root){
+        const unsigned across=hudWidthPercent.load(std::memory_order_relaxed);
+        const unsigned up=hudHeightPercent.load(std::memory_order_relaxed);
+        if(!wanted||!root_||(across==100&&up==100))return;
+        base_=PreyBase();
+        if(spread_.Apply(root_,base_,across,up)){on_=true;spreadDraws.fetch_add(1,std::memory_order_relaxed);}
+        else {spread_.Restore(root_,base_);spreadRefused.fetch_add(1,std::memory_order_relaxed);}
+    }
+    ~SpreadScope(){if(on_)spread_.Restore(root_,base_);}
+    SpreadScope(const SpreadScope&)=delete;
+    SpreadScope& operator=(const SpreadScope&)=delete;
+private:
+    void* root_;
+    std::uintptr_t base_=0;
+    CornerSpread spread_;
+    bool on_=false;
+};
 void ReplayPart(NativeHudApi& api,void* root,PartState& part){
     hud::Isolation isolation(api,part.profile->replay);
     bool produced=false,drawn=false;
@@ -550,12 +605,19 @@ void DrawHudCapture(void* root,bool face){
     if(!valid){
         if(face)faceRefused.fetch_add(1,std::memory_order_relaxed);
         originalDisplay(root);
-    } else if(!DrawExcluding(api,root,face,lift))originalDisplay(root);
+    } else {
+        // The panel's draw with its corners pulled in, put back before the wrist's
+        // replay, which crops the meters where Prey puts them.
+        const SpreadScope spread(root,hudOnPanel);
+        if(!DrawExcluding(api,root,face,lift))originalDisplay(root);
+    }
     probes.phase=-1;
     if(root==wristRoot)CaptureNativeStatus(root);
     for(unsigned i=0;i<kParts;++i){
         if(lift[i]){
             if(&parts[i]==probed)probes.phase=1;
+            // The wheel's hotbar and controls box sit in the corner groups too, laid out as on the panel.
+            const SpreadScope spread(root,valid&&hudOnPanel&&parts[i].profile==&hud::Wheel);
             ReplayPart(api,root,parts[i]);
             probes.phase=-1;
         }
@@ -603,6 +665,7 @@ void __fastcall StereoDisplay(void* root) {
         // ONE native proxy callback and its locks; no extra Advance or release.
         DrawHudCapture(root,face);return;
     }
+    if(root==hudRoot && hudOnPanel){const SpreadScope spread(root,true);originalDisplay(root);return;}
     originalDisplay(root);
 }
 
@@ -845,8 +908,10 @@ void __fastcall CaptureFlash(void* proxy,bool release) {
         activeTarget=captureNormal?hudCapture.target.Get():saved[0];activeDepthView=captureNormal?hudCapture.depthView.Get():ds;
         originalTargets(context.Get(),1,&activeTarget,activeDepthView);
     } else refused.fetch_add(1);
+    hudOnPanel=ready&&captureNormal;
     // Exactly one outer call. The opt-in Display hook draws inside its locks.
     originalFlash(proxy,release);
+    hudOnPanel=false;
     wristRoot=nullptr;hudRoot=nullptr;
     if(ready) {
         activeContext=nullptr;originalDestination=nullptr;originalDepth=nullptr;
@@ -913,6 +978,10 @@ void RefuseHudLayer(const char* reason){
 std::string HudLayerReport(){
     std::string out="hudLayer="+std::to_string(enabled.load())+
         " refused="+std::to_string(refused.load());
+    // HUD Width / Height: draws made with the corners pulled in, and refusals
+    // (a coordinate not a plain number: that draw kept Prey's layout).
+    out+=" spread={width="+std::to_string(hudWidthPercent.load())+" height="+std::to_string(hudHeightPercent.load())+
+         " draws="+std::to_string(spreadDraws.load())+" refused="+std::to_string(spreadRefused.load())+"}";
     out+=" nativeWrist={captured="+std::to_string(wristCaptured.load())+" refused="+
         std::to_string(wristRefused.load())+" fault="+std::to_string(wristFault.load())+
         " layout="+std::to_string(overrideApplied.load())+"/"+std::to_string(overrideRefused.load())+
@@ -1069,4 +1138,16 @@ bool HudLayerReticle(float tanX,float tanY,float& x,float& y){
     const auto fraction=ui::PanelFraction(tanX,tanY,p.width,p.height,p.distance);
     if(!fraction)return false;x=(*fraction)[0];y=(*fraction)[1];return true;
 }
+namespace {
+DWORD SetSpread(std::atomic<unsigned>& to,unsigned percent,const char* name){
+    if(percent<hud::SpreadMinPercent||percent>hud::SpreadMaxPercent)return ERROR_INVALID_PARAMETER;
+    if(to.exchange(percent,std::memory_order_acq_rel)!=percent)
+        lifecycle::Log(std::string("preyvr_hud_layer ")+name+"="+std::to_string(percent));
+    return 0;
+}
+}
+DWORD SetHudWidthPercent(unsigned percent){return SetSpread(hudWidthPercent,percent,"width");}
+unsigned HudWidthPercent(){return hudWidthPercent.load(std::memory_order_acquire);}
+DWORD SetHudHeightPercent(unsigned percent){return SetSpread(hudHeightPercent,percent,"height");}
+unsigned HudHeightPercent(){return hudHeightPercent.load(std::memory_order_acquire);}
 }

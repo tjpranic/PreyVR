@@ -200,6 +200,33 @@ DWORD SetUiScalePercent(unsigned int percent)
 
 DWORD UiScalePercent() { return gUiScalePercent.load(std::memory_order_acquire); }
 
+// The HUD's panel is fitted afresh every frame, so a new value needs no refit.
+DWORD SetHudSizePercent(unsigned int percent)
+{
+    if (percent < 20 || percent > 200) {
+        Log("result=refused detail=hud_size_out_of_range");
+        return 1;
+    }
+    gHudScalePercent.store(percent, std::memory_order_release);
+    Log("result=0 detail=hud_size percent=" + std::to_string(percent));
+    return 0;
+}
+
+DWORD HudSizePercent() { return gHudScalePercent.load(std::memory_order_acquire); }
+
+DWORD SetHudDistanceCm(unsigned int centimetres)
+{
+    if (centimetres < 50 || centimetres > 200) {
+        Log("result=refused detail=hud_distance_out_of_range");
+        return 1;
+    }
+    gHudDistanceCm.store(centimetres, std::memory_order_release);
+    Log("result=0 detail=hud_distance cm=" + std::to_string(centimetres));
+    return 0;
+}
+
+DWORD HudDistanceCm() { return gHudDistanceCm.load(std::memory_order_acquire); }
+
 DWORD SetTextPanelDistanceCm(unsigned int centimetres)
 {
     if (centimetres < 100 || centimetres > 200) {

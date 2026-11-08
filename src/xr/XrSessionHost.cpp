@@ -444,8 +444,9 @@ void ServiceXrFrame(void* renderer)
     const FrameView view{views,inputHead,reference,frameState.predictedDisplayTime,rendered,haveViews,panelActive,
                          optionsActive};
     XrCompositionLayerQuad hudLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
-    float hudPanelWidth=0; // this frame's HUD panel at 2 m: what the world reticle keeps the size of
-    const bool hudActive=BuildHudLayer(view,hudTexture,hudLayer,hudPanelWidth);
+    // This frame's HUD panel, whose apparent size the world reticle keeps.
+    float hudPanelWidth=0,hudPanelDistance=1;
+    const bool hudActive=BuildHudLayer(view,hudTexture,hudLayer,hudPanelWidth,hudPanelDistance);
     // **The radial wheel.** Prey's Favorites Wheel, lifted out of the HUD while
     // it is open (HudLayer RequestHudPart) and held where it opened, as a book is
     // (ui::PopupHold): in front of where the wearer looked, at the HUD panel's
@@ -457,8 +458,8 @@ void ServiceXrFrame(void* renderer)
     // quick loot that follow it, lifted out of the HUD (HudPart::reticle) and
     // redrawn centred, then shown where the aim ray hits (ReticleFollow
     // PublishReticleTarget): its scene hit, else the fallback distance. The quad
-    // faces the eyes and is as wide, for its distance, as the HUD panel is at 2 m,
-    // times the size setting, so it looks the size it did on the HUD but at the
+    // faces the eyes and is as wide, for its distance, as the HUD panel is for its
+    // own, times the size setting, so it looks the size it did on the HUD but at the
     // depth it marks. Asked for only with the HUD on its panel and a fresh target;
     // otherwise the crosshair stays on the HUD panel. A frame Prey hides it (the
     // wheel, a menu) draws nothing.
@@ -467,19 +468,26 @@ void ServiceXrFrame(void* renderer)
     RequestHudPart(HudPart::reticle,HudLayerEnabled() && haveViews && !panelActive && reticleTargetFresh);
     XrCompositionLayerQuad reticleLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
     const bool reticleActive=BuildReticleLayer(view,reticleImage,reticleTargetFresh?&reticleTarget:nullptr,hudPanelWidth,
-                                               reticleLayer);
+                                               hudPanelDistance,reticleLayer);
     XrCompositionLayerQuad wheelLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
     const bool wheelActive=BuildWheelLayer(view,wheelImage,wheelLayer);
-    // The text and note panels' size and distance. The HUD panel's physical
-    // size, brought nearer: FitPanel's size is an angle, so the scale carries the
-    // 2 m width to the nearer distance. The fit's corner test still shrinks it
-    // back inside the margin if needed.
-    const float textDistance=static_cast<float>(gTextPanelCm.load(std::memory_order_relaxed))*.01f;
-    const float textScale=static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f*(2.0f/textDistance);
+    // **The note panel** (notes and books): at Text Panel Distance, the physical
+    // size Interface Size gives a panel at 2 m, brought nearer. FitPanel's size is
+    // an angle, so the scale carries the 2 m width to the nearer distance: nearer
+    // is larger and sharper. The fit's corner test still shrinks it back inside
+    // the margin if needed.
+    const float interfaceScale=static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f;
+    const float noteDistance=static_cast<float>(gTextPanelCm.load(std::memory_order_relaxed))*.01f;
     XrCompositionLayerQuad noteLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
-    const bool noteActive=BuildNoteLayer(view,noteTexture,textDistance,textScale,noteLayer);
+    const bool noteActive=BuildNoteLayer(view,noteTexture,noteDistance,interfaceScale*(2.0f/noteDistance),noteLayer);
+    // **The text panel** (subtitles and tutorial cards) is head-locked like the
+    // HUD, so it sits at HUD Distance with it (2026-11-08) and, like the HUD,
+    // keeps its apparent size there: the size it had at Text Panel Distance's
+    // default, 1.4 m, which Interface Size still scales.
+    constexpr float kTextSizedAtM=1.4f;
+    const float textDistance=static_cast<float>(gHudDistanceCm.load(std::memory_order_relaxed))*.01f;
     XrCompositionLayerQuad textLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
-    const bool textActive=BuildTextLayer(view,textTexture,textDistance,textScale,textLayer);
+    const bool textActive=BuildTextLayer(view,textTexture,textDistance,interfaceScale*(2.0f/kTextSizedAtM),textLayer);
     XrCompositionLayerQuad wristLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
     const bool wristActive=BuildWristLayer(view,nativeWristTexture,wristLayer);
     XrCompositionLayerQuad slotLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};

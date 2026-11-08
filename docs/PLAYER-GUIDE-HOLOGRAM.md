@@ -55,7 +55,7 @@ After the first launch, edit `PreyVR.json` beside the launcher:
 Restart Prey after changing these settings. The F10-F12 keys only work while the
 window has focus.
 
-Interface size and the laser hand are **VR Options** settings: hold the menu
+Interface size, the HUD's size, reach and distance, and the laser hand are **VR Options** settings: hold the menu
 button, then the Interface tab. They are saved in
 `%LOCALAPPDATA%\PreyVR\vr-options.ini`, the one place VR Options settings are
 kept. In button-only laser mode both triggers keep their

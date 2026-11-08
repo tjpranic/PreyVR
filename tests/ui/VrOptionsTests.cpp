@@ -237,6 +237,25 @@ void LayoutChecks(){
        !Valid(ScreenPullback,-5)&&KindOf(ScreenPullback)==Kind::range&&Display(ScreenPullback,30)==L"30 CM"&&
        Display(ScreenPullback,0)==L"PREY'S OWN"&&std::string(Describe(ScreenPullback).key)=="screen_pullback",
        "screen distance: 30 cm back by default, Prey's own (0) to 100 cm");
+ // The HUD's own size, reach and distance (2026-11-07), with the reticle and markers that follow it.
+ {const auto page=MenuEntries(3);const auto hud=std::find(page.begin(),page.end(),static_cast<int>(HudSize));
+  Check(hud!=page.end()&&page.end()-hud>=6&&hud[1]==HudWidth&&hud[2]==HudHeight&&hud[3]==HudDistance&&
+        hud[4]==ReticleSize&&hud[5]==MarkerSize,"interface: the HUD's size, width, height and distance, then the reticle and markers");}
+ Check(Defaults()[HudSize]==200&&Valid(HudSize,20)&&Valid(HudSize,200)&&!Valid(HudSize,10)&&!Valid(HudSize,210)&&
+       Display(HudSize,200)==L"200%"&&std::string(Describe(HudSize).key)=="hud_size",
+       "HUD size: the 200% Interface Size gave it, 20 to 200, apart from Interface Size");
+ Check(Defaults()[UiScale]==100&&Defaults()[HudSize]!=Defaults()[UiScale],"the menus keep their own default");
+ Check(Defaults()[HudWidth]==70&&Defaults()[HudHeight]==55&&Valid(HudWidth,30)&&Valid(HudWidth,100)&&!Valid(HudWidth,25)&&
+       !Valid(HudHeight,105)&&Display(HudWidth,70)==L"70%"&&std::string(Describe(HudWidth).key)=="hud_width"&&
+       std::string(Describe(HudHeight).key)=="hud_height",
+       "HUD width and height: 70% and 55% of Prey's layout by default, 30 to 100");
+ Check(Defaults()[HudDistance]==100&&Valid(HudDistance,50)&&Valid(HudDistance,200)&&!Valid(HudDistance,45)&&
+       !Valid(HudDistance,205)&&Display(HudDistance,100)==L"100 CM"&&std::string(Describe(HudDistance).key)=="hud_distance",
+       "HUD distance: a metre by default, half a metre to two");
+ {Values parsed{};Present marked{};
+  Check(Parse(std::string("version=1")+'\n'+"ui_scale=200"+'\n',parsed,&marked)&&parsed[UiScale]==200&&
+        !marked[HudSize]&&parsed[HudSize]==200,
+        "a file saved before the HUD had its own size loads at the size it had");}
  Check(Defaults()[MarkerSize]==100&&Valid(MarkerSize,50)&&Valid(MarkerSize,200)&&!Valid(MarkerSize,40)&&!Valid(MarkerSize,210)&&
        std::string(Describe(MarkerSize).key)=="marker_size"&&Display(MarkerSize,150)==L"150%",
        "marker size: Prey's size by default, half to double");

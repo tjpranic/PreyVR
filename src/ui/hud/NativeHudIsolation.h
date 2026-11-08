@@ -6,16 +6,35 @@
 namespace preyvr::hud {
 // Named, non-mask siblings in the patched Steam movie. No native visibility,
 // transforms, ActionScript variables or animation playlists are modified.
+// The equipped psi power (power_mc) is on the wrist since 2026-11-08: Prey lays
+// it out beside the meters, which EquippedPower.powerOpen moves 100 units right
+// to make room for it. PreyDll shows it while a power is equipped (powerOpen,
+// 0x15B78B0) and hides it when none is (powerClose, 0x15B63A0 / 0x15BCC50; the
+// equipped index at +0x234, 15 for none), never on the dynamic HUD's timer, so
+// the wrist draws it as Prey shows it.
 inline constexpr std::array ExcludedFromStatus{
     "_root.damage", "_root.ar_mc", "_root.safe.damage_mc", "_root.safe.awareness_mc",
     "_root.safe.reticle_mc", "_root.safe.quadrant_W", "_root.safe.quadrant_N",
     "_root.safe.quadrant_NE", "_root.safe.quadrant_E", "_root.safe.wheel_mc",
     "_root.safe.quadrant_NW", "_root.safe.quadrant_SE", "_root.safe.quadrant_S",
-    "_root.safe.quadrant_C", "_root.safe.quadrant_N_2", "_root.safe.quadrant_SW.power_mc",
+    "_root.safe.quadrant_C", "_root.safe.quadrant_N_2",
     "_root.safe.quadrant_SW.climb_mc", "_root.safe.quadrant_SW.flashlight_mc",
     "_root.safe.quadrant_SW.stealth", "_root.safe.quadrant_SW.pickup"};
 inline constexpr std::array StatusMeters{"_root.safe.quadrant_SW.health_mc",
     "_root.safe.quadrant_SW.psi_mc", "_root.safe.quadrant_SW.armor_mc"};
+// quadrant_SW's own clips, in draw order (map_hud_parts.py verify), and the ones
+// the wrist's replay draws, which leave the HUD's face while the wrist shows them
+// (HudLayer): every one of them the replay does not leave out.
+inline constexpr std::array QuadrantSWChildren{"_root.safe.quadrant_SW.bg_mc",
+    "_root.safe.quadrant_SW.bg2_mc", "_root.safe.quadrant_SW.line_mc", "_root.safe.quadrant_SW.power_mc",
+    "_root.safe.quadrant_SW.climb_mc", "_root.safe.quadrant_SW.health_mc",
+    "_root.safe.quadrant_SW.status_effects", "_root.safe.quadrant_SW.psi_mc",
+    "_root.safe.quadrant_SW.armor_mc", "_root.safe.quadrant_SW.flashlight_mc",
+    "_root.safe.quadrant_SW.stealth", "_root.safe.quadrant_SW.pickup"};
+inline constexpr std::array MovedToWrist{"_root.safe.quadrant_SW.health_mc",
+    "_root.safe.quadrant_SW.psi_mc", "_root.safe.quadrant_SW.armor_mc", "_root.safe.quadrant_SW.power_mc",
+    "_root.safe.quadrant_SW.bg_mc", "_root.safe.quadrant_SW.bg2_mc", "_root.safe.quadrant_SW.line_mc",
+    "_root.safe.quadrant_SW.status_effects"};
 
 // **What one replay draws.** Every path in `excluded` is left out with all it
 // holds; one of `observed` drawn proves the replay reached what it is for. Not
@@ -152,6 +171,33 @@ inline constexpr std::array<Override, 10> ReticleOverrides{{
     {"_root.safe.reticle_mc.interact_icons._x", 0.0}, {"_root.safe.reticle_mc.interact_icons._y", 0.0}}};
 inline constexpr Part Reticle{"reticle", ReticleRoots, {ReticleExcluded, ReticleRoots}, {}, ReticleProbes,
                               ReticleOverrides};
+
+// **Where the corner groups sit** (SafeFrame.initStage, read offline 2026-11-07;
+// map_hud_parts.py verify checks it). Prey always calls initStage(gameWidth,
+// gameHeight, stageWidth, stageHeight, SafeSize) with SafeSize 90. That puts each
+// of safe's nine edge quadrants round(extent * (100 - 90) / 200) - round(extent / 2)
+// from safe, which is 0.9 of the half-extent toward its edge, and at 0
+// on the axis it is centred on. The HUD's canvas in VR is square, so the corners
+// reach the panel's corners: much further round than on a 16:9 screen, where the
+// vertical extent is only 9/16 of the horizontal. These are the thirteen
+// coordinates that are not 0. quadrant_C, the centre, is not among them.
+//
+// HUD Width and HUD Height (HudLayer) scale them toward safe, for the HUD panel's
+// own draw and the wheel's replay only. Each value is read, set and put back
+// after the draw, as an Override is, so the movie's logic never sees the change.
+struct Corner { const char* path; bool vertical; };
+inline constexpr std::array CornerCoordinates{
+    Corner{"_root.safe.quadrant_NW._x", false}, Corner{"_root.safe.quadrant_NW._y", true},
+    Corner{"_root.safe.quadrant_N._y", true}, Corner{"_root.safe.quadrant_N_2._y", true},
+    Corner{"_root.safe.quadrant_NE._x", false}, Corner{"_root.safe.quadrant_NE._y", true},
+    Corner{"_root.safe.quadrant_W._x", false}, Corner{"_root.safe.quadrant_E._x", false},
+    Corner{"_root.safe.quadrant_SW._x", false}, Corner{"_root.safe.quadrant_SW._y", true},
+    Corner{"_root.safe.quadrant_S._y", true},
+    Corner{"_root.safe.quadrant_SE._x", false}, Corner{"_root.safe.quadrant_SE._y", true}};
+// HUD Width and HUD Height, in percent of Prey's own layout.
+inline constexpr unsigned SpreadMinPercent = 30, SpreadMaxPercent = 100;
+// A corner coordinate (or any offset from safe) moved to `percent` of where Prey put it.
+inline double SpreadCoordinate(double original, unsigned percent) { return original * percent / 100.0; }
 
 // **A part's gates as one**: open (1) when any reads open, closed (0) when none
 // does and at least one reads closed, unreadable (-1) when none can be read. A

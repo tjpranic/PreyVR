@@ -163,6 +163,13 @@ thread_local float tCanvasPerUnit = 0;
 thread_local bool tCanvasPerUnitFresh = false;
 
 std::atomic<unsigned long long> gProjections{0}, gPendingFull{0}, gNamed{0}, gUnmatched{0}, gBadArgs{0};
+// **World only** (MarkerDepth.h InFrame): inside OnPreRender, where Prey places
+// every marker, a projection that asks for Prey's edge clamp is shown over its
+// target or moved off the canvas. Outside it no projection is changed.
+// `gHidden` counts markers whose target was out of view, `gOnTarget` those Prey
+// had pinned in its 5% margin that went back over their target.
+thread_local bool tInPreRender = false;
+std::atomic<unsigned long long> gHidden{0}, gOnTarget{0};
 
 bool IsMarkersElement(const void* element)
 {
@@ -206,14 +213,36 @@ Projected* __fastcall ProjectDetour(Projected* out, const Vec3* world, bool clam
 {
     Projected* result = reinterpret_cast<ProjectFn>(gProjectOriginal)(out, world, clamp);
     tLast.valid = false;
-    if (!Recording() || result == nullptr || world == nullptr) { return result; }
+    const bool worldOnly = clamp && tInPreRender;
+    if ((!Recording() && !worldOnly) || result == nullptr || world == nullptr) { return result; }
     markers::HudMatrix m{};
+    markers::HudScale scale{};
     Vec3 point{};
-    if (SafeCopy(m.data(), reinterpret_cast<const void*>(gBase + kHudMatrixRva), sizeof(m)) &&
-        SafeRead(world, point) && markers::ScaleOf(m, tLast.scale)) {
+    if (!SafeCopy(m.data(), reinterpret_cast<const void*>(gBase + kHudMatrixRva), sizeof(m)) ||
+        !markers::ScaleOf(m, scale) || !SafeRead(world, point)) {
+        return result;
+    }
+    const Vec3 view = markers::ViewPoint(m, scale, point);
+    // Before anything reads it: the canvas conversion that follows (0x16658C0
+    // projects through here; 0x16657C0 converts this output), the depth pairing
+    // and the movie all see the same position. Prey's onScreen flag is left as
+    // Prey set it.
+    if (worldOnly) {
+        float nx = 0, ny = 0;
+        if (!markers::InFrame(scale, view, nx, ny)) {
+            result->x = result->y = markers::kOffCanvas;
+            gHidden.fetch_add(1, std::memory_order_relaxed);
+        } else if (std::fabs(nx - result->x) > 1e-4f || std::fabs(ny - result->y) > 1e-4f) {
+            result->x = nx;
+            result->y = ny;
+            gOnTarget.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
+    if (Recording()) {
+        tLast.scale = scale;
         tLast.nx = result->x;
         tLast.ny = result->y;
-        tLast.view = markers::ViewPoint(m, tLast.scale, point);
+        tLast.view = view;
         tLast.valid = true;
     }
     return result;
@@ -246,7 +275,9 @@ void __fastcall PreRenderDetour(void* hud)
     tPendingCount = 0;
     tCanvasPerUnitFresh = false;
     tLast.valid = false;
+    tInPreRender = true;
     reinterpret_cast<PreRenderFn>(gPreRenderOriginal)(hud);
+    tInPreRender = false;
 }
 
 // --- reading the call's arguments: SUIArguments / TUIData (static, 2026-10-21) ---
@@ -604,7 +635,9 @@ std::string MarkerDepthReport()
       << " badArgs=" << gBadArgs.load() << " pendingFull=" << gPendingFull.load() << " noted=" << gNoted.load()
       << " table=" << table << " full=" << gTableFull.load() << " frames=" << gFrames.load()
       << " moved=" << gMoved.load() << " last=" << gLastCount.load() << " unresolved=" << gUnresolved.load()
-      << " restoreFailed=" << gRestoreFailed.load() << " lastShiftCentipx=" << gLastShiftCentipx.load() << '}';
+      << " restoreFailed=" << gRestoreFailed.load() << " lastShiftCentipx=" << gLastShiftCentipx.load()
+      // World only: projections hidden with their target out of view, and those put back over it.
+      << " hidden=" << gHidden.load() << " onTarget=" << gOnTarget.load() << '}';
     return s.str();
 }
 

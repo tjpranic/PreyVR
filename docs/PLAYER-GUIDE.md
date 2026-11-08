@@ -178,18 +178,24 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   through walls. Each hit buzzes the controller. The attack button does nothing
   while the wrench is out).
 - **Interface:** size, where
-  the game's menus float (distance, left/right, up/down), the text panel's
-  distance, **Screen Distance** (how far your view stays back when you use a
+  the game's menus float (distance, left/right, up/down), how far notes and
+  books float, **Screen Distance** (how far your view stays back when you use a
   keypad, terminal, security station or fabricator; 30 cm by default, never
   further back than you were standing; Prey's own camera puts the screen a hand's
   width from your eyes; on a screen, zoomed or not, what highlights is what the
-  crosshair sits on), which hand's laser points at menus, the reticle's size, and
-  **Marker Size** (the markers in the world: objectives, repair and danger icons,
-  enemy awareness and points of interest).
+  crosshair sits on), which hand's laser points at menus, the HUD's own settings,
+  the reticle's size, and **Marker Size** (the markers in the world: objectives,
+  repair and danger icons, enemy awareness and points of interest). The HUD's
+  settings are **HUD Size** (the HUD and the weapon wheel; 200% by default, apart
+  from the menus' Interface Size), **HUD Width** and **HUD Height** (how far out its
+  corners reach: ammo, objectives, pickups and prompts; 70% and 55% of Prey's own
+  layout by default, so they sit inside your view instead of at its edge) and **HUD
+  Distance** (1 m by default; subtitles and tutorial cards float there too). Markers are shown only over what they mark, at its
+  depth, and not at all while it is out of view.
 - **Equipment:** optional body holsters, clear holster assignments, **Weapon Draw
   Animations**, wrist status, wrist-hologram size, the wrist tick, and the display's
-  position along the forearm, height and tilt. Health, suit and psi leave the HUD
-  while the wrist status is on. Holsters default off; the wrist status defaults on.
+  position along the forearm, height and tilt. Health, suit, psi and the equipped psi
+  power leave the HUD while the wrist status is on. Holsters default off; the wrist status defaults on.
   Weapon Draw Animations defaults off, so a weapon is in your hand at once. On plays
   Prey's animations for taking weapons out and putting them away, and your drawn hand
   turns with the weapon as they do.

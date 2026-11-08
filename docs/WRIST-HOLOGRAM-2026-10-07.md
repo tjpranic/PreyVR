@@ -54,7 +54,9 @@ While the wrist owns the status (`WristMovesStatusOffFace()`: the option is on a
 default), the gameplay HUD's normal draw goes through the same sprite hook with a per-draw filter. It
 excludes `health_mc`, `psi_mc`, `armor_mc`, `bg_mc`, `bg2_mc`, `line_mc` and `status_effects`. The handles
 are resolved for that one draw and released after it. If any path fails to resolve, the HUD draws unchanged.
-`climb_mc`, `flashlight_mc`, `stealth`, `pickup`, `power_mc` and the other quadrants stay on the face.
+`climb_mc`, `flashlight_mc`, `stealth`, `pickup` and the other quadrants stay on the face. Since 2026-11-08
+the equipped psi power (`power_mc`) is on the wrist too, drawn as Prey shows it (`hud::MovedToWrist`,
+[HUD placement](HUD-PLACEMENT-2026-11-07.md#after-the-first-wear-2026-11-08)).
 
 - The HUD capture is wanted for this filter even when the HUD layer is off.
 - The sprite hook is installed as soon as the wrist owns the status, not only at the first look.

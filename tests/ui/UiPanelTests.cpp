@@ -111,6 +111,15 @@ int main() {
     Require(tiny && floorPanel && std::abs(tiny->width-floorPanel->width)<.0001f,"clamped at 0.2");
     Require(!ui::FitPanel({},plain,16.f/9,2.0f,std::nanf("")),"a non-finite scale is refused");
 
+    // **The HUD comes to half a metre** (HUD Distance 50..200 cm): the fit is an
+    // angle, so a nearer panel is smaller in metres and the same to the eye.
+    auto nearHud=ui::FitPanel({},plain,1.f,.5f,2.f),farHud=ui::FitPanel({},plain,1.f,2.f,2.f);
+    Require(nearHud && farHud && std::abs(nearHud->width/.5f-farHud->width/2.f)<.0001f,
+            "at 0.5 m a panel covers the angle it does at 2 m");
+    Require(std::abs(nearHud->pose.position.z+.5f)<.0001f,"and sits half a metre ahead");
+    Require(!ui::FitPanel({},plain,1.f,.49f,1.f)&&!ui::FitPanel({},plain,1.f,4.01f,1.f)&&
+            ui::FitPanel({},plain,1.f,ui::kMaxPanelDistance,1.f),"0.5 to 4 m, nothing nearer or further");
+
     // The portrait aspect is the case that motivated the dial.
     auto wide=ui::FitPanel({},plain,2560.f/1440);
     auto square=ui::FitPanel({},plain,2688.f/2880);

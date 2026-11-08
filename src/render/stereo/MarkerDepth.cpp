@@ -51,4 +51,20 @@ float CanvasShiftPerMetre(const HudScale& scale, float depth, float canvasPerUni
     return -scale.p00 * canvasPerUnit / (2.0f * depth);
 }
 
+bool InFrame(const HudScale& scale, Vec3 view, float& nx, float& ny)
+{
+    if (!(scale.p00 > 0) || !(scale.p11 > 0) || !std::isfinite(scale.p00) || !std::isfinite(scale.p11) ||
+        !std::isfinite(view.x) || !std::isfinite(view.y) || !std::isfinite(view.z) || !(view.z > 1e-4f)) {
+        return false;
+    }
+    // 0x16659F0's own arithmetic, unclamped: nx = (x / w + 1) / 2, ny = 0.5 - y / (2 w),
+    // with x and y the view point scaled by P00 and P11 (ViewPoint undoes that).
+    const float x = 0.5f + 0.5f * scale.p00 * view.x / view.z;
+    const float y = 0.5f - 0.5f * scale.p11 * view.y / view.z;
+    if (!(x >= 0.0f && x <= 1.0f && y >= 0.0f && y <= 1.0f)) { return false; }
+    nx = x;
+    ny = y;
+    return true;
+}
+
 } // namespace preyvr::markers

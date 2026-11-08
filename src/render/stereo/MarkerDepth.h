@@ -22,12 +22,11 @@
 // vertically. The movie is drawn once per eye, so each marker's clip is moved
 // by that much, in canvas units, for its eye's draw.
 //
-// **Which depth.** On screen, the target's own view depth. A marker whose
-// target is off screen (or behind) is pinned by Prey near the screen edge, not
-// over its target; it is shown at the target's DISTANCE, along the direction it
-// is drawn in (decided 2026-10-21). One formula covers both: the depth a point
-// at the target's distance has in the marker's displayed direction, which on
-// screen is exactly the view depth. Markers behind walls keep their true depth.
+// **Which depth.** The target's own view depth: a marker is shown only over its
+// target (InFrame, world only since 2026-11-08). The formula is the depth a
+// point at the target's distance has in the marker's displayed direction, which
+// over the target is exactly the view depth. Markers behind walls keep their
+// true depth.
 //
 // The HUD matrix (RVA 0x228CAA0) is 16 floats, column-major: clip row r is
 // m[r], m[4+r], m[8+r], m[12+r]. 0x16659F0 uses rows 0 (x), 1 (y) and 3 (w,
@@ -66,5 +65,19 @@ bool DisplayedDepth(const HudScale& scale, Vec3 view, float nx, float ny, float&
 // the canvas width one normalized screen unit spans (Prey's own conversion,
 // 0x16657C0: canvas(1) - canvas(0)).
 float CanvasShiftPerMetre(const HudScale& scale, float depth, float canvasPerUnit);
+
+// **World only** (the wearer, 2026-11-08): a marker is shown over its target, or
+// not at all. Prey pins a marker that asks for it (clamp) to the [0.05, 0.95]
+// box of the head camera's frame, which in VR is the edge of the lenses; a
+// target behind the head is pinned there too. Here a marker whose target is
+// outside the frame is moved off the canvas, to kOffCanvas on both axes, and one
+// Prey pinned inside its 5% margin goes back over its target. Supersedes the
+// 2026-10-21 decision to keep pinned markers at their target's distance.
+inline constexpr float kOffCanvas = -4.0f;
+// Where the target of a marker is in the frame, normalized as 0x16659F0 gives
+// it (x right, y down, 0..1), from its view-space point (ViewPoint). False when
+// it is behind the head or outside the frame, or for a degenerate input: such
+// a marker is not shown.
+bool InFrame(const HudScale& scale, Vec3 view, float& nx, float& ny);
 
 } // namespace preyvr::markers

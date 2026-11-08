@@ -113,9 +113,10 @@ void FillPanelLayer(XrCompositionLayerQuad& layer, const ui::Panel& p, XrSwapcha
 namespace xrsession {
 
 // **The HUD on its panel** (HudLayer): the captured HUD, fitted to the head at
-// 2 m. `panelWidth` is that panel's width, which the world reticle keeps the
-// size of; it is left 0 without one.
-bool BuildHudLayer(const FrameView& view, ID3D11Texture2D* hudTexture, XrCompositionLayerQuad& layer, float& panelWidth)
+// HUD Distance and HUD Size. `panelWidth` and `panelDistance` are that panel's,
+// whose apparent size the world reticle keeps; the width is left 0 without one.
+bool BuildHudLayer(const FrameView& view, ID3D11Texture2D* hudTexture, XrCompositionLayerQuad& layer, float& panelWidth,
+                   float& panelDistance)
 {
     bool active=false;
     // A held eye may still contain the native reticle from before capture was
@@ -128,15 +129,17 @@ bool BuildHudLayer(const FrameView& view, ID3D11Texture2D* hudTexture, XrComposi
             // A refusal drops the swapchain, so the next VR start tries afresh.
             active=UploadPanelCapture(gHost.hudSwapchain,gHost.hudSwapchainLogged,captured,"hud_swapchain",
                                       RefuseHudLayer);
+            const float distance=static_cast<float>(gHudDistanceCm.load(std::memory_order_relaxed))*.01f;
             auto panel=ui::FitPanel(view.head,OpticalEyes(view.views),
-                static_cast<float>(desc.Width)/desc.Height,2.0f,
-                static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f);
+                static_cast<float>(desc.Width)/desc.Height,distance,
+                static_cast<float>(gHudScalePercent.load(std::memory_order_relaxed))*.01f);
             active=active && panel.has_value();
             if(active) {
                 const auto& p=*panel;
                 FillPanelLayer(layer,p,gHost.hudSwapchain->Handle(),desc);
-                SetHudLayerPresentation(true,p.width,p.height,2);
+                SetHudLayerPresentation(true,p.width,p.height,distance);
                 panelWidth=p.width;
+                panelDistance=distance;
             }
         }
     }
@@ -146,9 +149,9 @@ bool BuildHudLayer(const FrameView& view, ID3D11Texture2D* hudTexture, XrComposi
 
 // **The world reticle** (the comment at its RequestHudPart in ServiceXrFrame):
 // the crosshair lifted out of the HUD, as wide for its distance as the HUD panel
-// is at 2 m. `target` is this frame's aim target, null when it is not fresh.
+// is for its own. `target` is this frame's aim target, null when it is not fresh.
 bool BuildReticleLayer(const FrameView& view, const HudPartImage& image, const ReticleTarget* target,
-                       float hudPanelWidth, XrCompositionLayerQuad& layer)
+                       float hudPanelWidth, float hudPanelDistance, XrCompositionLayerQuad& layer)
 {
     bool active=false;
     if(view.rendered && view.haveViews && !view.panelActive && image.texture && image.drawn && target &&
@@ -161,7 +164,7 @@ bool BuildReticleLayer(const FrameView& view, const HudPartImage& image, const R
         const Vec3 point=viewzoom::ShownPoint(target->point,gHost.eyeHead,gHost.eyeZoom);
         const Vec3 offset{point.x-view.head.position.x,point.y-view.head.position.y,point.z-view.head.position.z};
         const float seen=std::sqrt(offset.x*offset.x+offset.y*offset.y+offset.z*offset.z);
-        const float width=ui::AngularWidth(seen,hudPanelWidth,2.0f,static_cast<float>(ReticleSizePercent())*.01f);
+        const float width=ui::AngularWidth(seen,hudPanelWidth,hudPanelDistance,static_cast<float>(ReticleSizePercent())*.01f);
         if(const auto quad=ui::FacingQuad(point,view.head.position,width,
                                           width*static_cast<float>(desc.Height)/desc.Width)) {
             FillPanelLayer(layer,*quad,gHost.reticleSwapchain->Handle(),desc);
@@ -173,7 +176,7 @@ bool BuildReticleLayer(const FrameView& view, const HudPartImage& image, const R
 }
 
 // **The radial wheel** (the comment at its RequestHudPart in ServiceXrFrame):
-// held where it opened, at the HUD panel's distance and size.
+// held where it opened, at the HUD panel's distance and size (HUD Distance, HUD Size).
 bool BuildWheelLayer(const FrameView& view, const HudPartImage& image, XrCompositionLayerQuad& layer)
 {
     bool active=false;
@@ -183,8 +186,9 @@ bool BuildWheelLayer(const FrameView& view, const HudPartImage& image, XrComposi
     if(anchor && UploadPanelCapture(gHost.wheelSwapchain,gHost.wheelSwapchainLogged,image.texture,
                                     "wheel_swapchain",[](const char* reason){RefuseHudPart(HudPart::wheel,reason);})) {
         D3D11_TEXTURE2D_DESC desc{};image.texture->GetDesc(&desc);
-        if(const auto panel=ui::PlacePopup(*anchor,static_cast<float>(desc.Width)/desc.Height,2.0f,
-                static_cast<float>(gUiScalePercent.load(std::memory_order_relaxed))*.01f)) {
+        if(const auto panel=ui::PlacePopup(*anchor,static_cast<float>(desc.Width)/desc.Height,
+                static_cast<float>(gHudDistanceCm.load(std::memory_order_relaxed))*.01f,
+                static_cast<float>(gHudScalePercent.load(std::memory_order_relaxed))*.01f)) {
             FillPanelLayer(layer,*panel,gHost.wheelSwapchain->Handle(),desc);
             active=true;
         }
@@ -220,8 +224,9 @@ bool BuildNoteLayer(const FrameView& view, ID3D11Texture2D* texture, float dista
 
 // **The text panel.** Subtitles and tutorial cards, lifted out of the scene
 // the same way (HudLayer TextLayerTexture) and fitted to the head every
-// frame, so each keeps the place it has on screen. Neither panel is tied to
-// the HUD layer's own capture: a frame may have text and no HUD.
+// frame, so each keeps the place it has on screen, at HUD Distance with the
+// HUD. Neither panel is tied to the HUD layer's own capture: a frame may have
+// text and no HUD.
 bool BuildTextLayer(const FrameView& view, ID3D11Texture2D* texture, float distance, float scale,
                     XrCompositionLayerQuad& layer)
 {

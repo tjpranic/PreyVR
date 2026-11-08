@@ -27,8 +27,21 @@ void RefuseNoteLayer(const char* reason);
 bool EnsureOverlayHooks();
 bool DrawRedirected(ID3D11DeviceContext* context, ID3D11RenderTargetView* from, ID3D11DepthStencilView* fromDepth,
                     ID3D11RenderTargetView* to, ID3D11DepthStencilView* toDepth, void (*draw)(void*), void* argument);
-void SetHudLayerPresentation(bool active, float width=0, float height=0, float distance=2);
+// The HUD panel as this frame shows it (XrOverlayLayers BuildHudLayer): its size
+// and its distance from the head, metres.
+void SetHudLayerPresentation(bool active, float width=0, float height=0, float distance=1);
 bool HudLayerReticle(float tanX, float tanY, float& x, float& y);
+// **HUD Width and HUD Height** (VR Options hud_width, hud_height): how far round
+// the HUD's corner groups reach (ammo, objectives, pickups, prompts), in percent
+// of Prey's own layout, hud::SpreadMinPercent..SpreadMaxPercent, default 70 and
+// 55. Prey pins them 5% in from the canvas edge, and the HUD's canvas is square
+// in VR, so on a large panel they sat at the edge of the view
+// (hud::CornerCoordinates). Applied to the HUD panel's draw and the wheel's
+// replay, never to the wrist's. Any thread; the next HUD draw takes them.
+DWORD SetHudWidthPercent(unsigned percent);
+unsigned HudWidthPercent();
+DWORD SetHudHeightPercent(unsigned percent);
+unsigned HudHeightPercent();
 // Additive native status copy. Request expires if XR stops consuming; no native
 // status is removed. Calls and borrowed texture consumption are render-thread only.
 void RequestNativeWristCapture(bool active);

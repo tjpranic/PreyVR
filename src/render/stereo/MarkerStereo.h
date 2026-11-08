@@ -18,6 +18,11 @@
 //     are drawn (HudLayer RedrawDisplay): each clip's `_x` is moved for the eye
 //     about to be drawn, then put back.
 // A clip the table does not name is drawn where Prey put it.
+//
+// The same main-thread hooks keep markers in the world: Prey pins a marker that
+// asks for it 5% in from the edge of the frame, the edge of the lenses in VR,
+// even for a target behind the head. Here one is shown only over its target and
+// is moved off the canvas while its target is out of view (MarkerDepth.h InFrame).
 namespace preyvr::dll {
 
 // 1 (default) on; 0 leaves every marker where Prey draws it (A/B).

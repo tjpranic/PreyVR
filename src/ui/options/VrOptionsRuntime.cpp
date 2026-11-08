@@ -7,6 +7,7 @@
 #include "equipment/psi/PsiMedkit.h"
 #include "controls/input/Haptics.h"
 #include "ui/hud/ReticleFollow.h"
+#include "ui/hud/HudLayer.h"
 #include "render/stereo/MarkerStereo.h"
 #include "aim/AimTakeover.h"
 #include "equipment/body/BodyEquipmentLane.h"
@@ -163,6 +164,10 @@ constexpr Wiring wiring[]={
  {options::AutoBreakDistance,Set<SetTwoHandBreakCm>,Get<TwoHandBreakCm>},
  {options::Psychoscope,[](int v){scope.store(v!=0);},[]{return static_cast<int>(scope.load());}},
  {options::UiScale,Set<SetUiScalePercent>,Get<UiScalePercent>},
+ {options::HudSize,Set<SetHudSizePercent>,Get<HudSizePercent>},
+ {options::HudWidth,Set<SetHudWidthPercent>,Get<HudWidthPercent>},
+ {options::HudHeight,Set<SetHudHeightPercent>,Get<HudHeightPercent>},
+ {options::HudDistance,Set<SetHudDistanceCm>,Get<HudDistanceCm>},
  // A change of mind clears the slots, so no weapon is left in a disabled one.
  {options::Holsters,[](int v){holsters.store(v!=0);ClearHolsters();},[]{return static_cast<int>(holsters.load());}},
  {options::Wrist,[](int v){wrist.store(v!=0);},[]{return static_cast<int>(wrist.load());}},

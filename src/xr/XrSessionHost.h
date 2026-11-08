@@ -197,12 +197,21 @@ void ServiceXrFrame(void* renderer);
 // are a comfort choice and the corner test measures the frustum the runtime
 // REPORTS, which is wider than a Quest 3's lenses actually show -- so where the
 // usable edge is cannot be derived, only worn. Applies to the menu panel and
-// the HUD together.
+// the note and text panels; the HUD has its own (SetHudSizePercent).
 DWORD SetUiScalePercent(unsigned int percent);
 DWORD UiScalePercent();
-// The text panel's distance (books/notes, subtitles, tutorial cards), 100..200 cm,
-// default 140. It keeps the HUD panel's physical size, so nearer is larger in
-// angle and its small text less minified. 200 matches the HUD panel exactly.
+// The HUD panel's and the wheel's size, as SetUiScalePercent is the menus':
+// 20..200 percent of FitPanel's caps, default 200. The world reticle keeps the
+// HUD's apparent size, times Reticle Size.
+DWORD SetHudSizePercent(unsigned int percent);
+DWORD HudSizePercent();
+// How far the HUD panel and the wheel float, 50..200 cm, default 100. They keep
+// their apparent size; nearer, less of the world stands in front of them.
+DWORD SetHudDistanceCm(unsigned int centimetres);
+DWORD HudDistanceCm();
+// The note panel's distance (notes and books), 100..200 cm, default 140. It keeps
+// a 2 m panel's physical size, so nearer is larger in angle and its small text
+// less minified. Subtitles and tutorial cards follow HUD Distance instead.
 DWORD SetTextPanelDistanceCm(unsigned int centimetres);
 DWORD TextPanelDistanceCm();
 // The native menu panel's distance (main/pause menus, options, save/load, the

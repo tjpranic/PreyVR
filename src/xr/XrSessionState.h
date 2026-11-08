@@ -455,15 +455,26 @@ inline std::atomic<unsigned long long> gEyeSkewSamples{0};
 // comfort default and the corner test uses the frustum the runtime REPORTS,
 // which on a Quest 3 is wider than the lenses show. Where the real edge sits is
 // not derivable -- only a wearer can find it -- so this is a knob rather than a
-// constant. Applied to the menu panel and the HUD alike, because they are the
-// same presentation and one dial is easier to reason about than two.
+// constant. Applied to the menu panel and the note and text panels. The HUD had
+// it too until 2026-11-07: at the 200% a menu wants, the HUD's corners sat 33
+// degrees out (43 at the corners) and were hard to see. It has its own now.
 inline std::atomic<unsigned int> gUiScalePercent{100};
 
-// **The text panel sits nearer than the HUD, at the HUD panel's physical size.**
+// **The HUD's own size and distance** (HUD Size, HUD Distance), for the HUD panel
+// and the wheel; the world reticle keeps the HUD's apparent size. Percent of
+// FitPanel's caps, 20..200, default 200: the size the menus' 200% gave it, which
+// the wearer kept. Centimetres, 50..200, default 100: head-locked things nearer
+// than the 2 m it was fixed at, so less of the world stands in front of them.
+// Its corners are pulled in separately (HudLayer HUD Width / Height).
+inline std::atomic<unsigned int> gHudScalePercent{200};
+inline std::atomic<unsigned int> gHudDistanceCm{100};
+
+// **The note panel sits nearer than a menu, at a 2 m panel's physical size.**
 // Its texture is the whole frame squeezed onto a panel about 38x40 degrees, so
-// book text and subtitles came out small and heavily minified (no mips) -- soft,
-// "out of focus". Nearer at the same size is larger in angle, so less minified.
-// Centimetres, 100..200; 200 is the HUD panel's own fit.
+// book text came out small and heavily minified (no mips) -- soft, "out of
+// focus". Nearer at the same size is larger in angle, so less minified.
+// Centimetres, 100..200. Notes and books only since 2026-11-08: subtitles and
+// tutorial cards are head-locked, so they sit at HUD Distance (gHudDistanceCm).
 inline std::atomic<unsigned int> gTextPanelCm{140};
 
 // **The menu panel's distance, centimetres, 100..400.** It was a fixed 2 m. The
@@ -555,9 +566,10 @@ void PlaceMenuPanel(const Pose& head, const XrView (&views)[2], unsigned long lo
 void FillMenuLayer(XrCompositionLayerQuad& quad, const ui::Panel& panel, XrSwapchain swapchain,
                    XrCompositionLayerFlags flags);
 // XrOverlayLayers.cpp
-bool BuildHudLayer(const FrameView& view, ID3D11Texture2D* hudTexture, XrCompositionLayerQuad& layer, float& panelWidth);
+bool BuildHudLayer(const FrameView& view, ID3D11Texture2D* hudTexture, XrCompositionLayerQuad& layer, float& panelWidth,
+                   float& panelDistance);
 bool BuildReticleLayer(const FrameView& view, const HudPartImage& image, const ReticleTarget* target,
-                       float hudPanelWidth, XrCompositionLayerQuad& layer);
+                       float hudPanelWidth, float hudPanelDistance, XrCompositionLayerQuad& layer);
 bool BuildWheelLayer(const FrameView& view, const HudPartImage& image, XrCompositionLayerQuad& layer);
 bool BuildNoteLayer(const FrameView& view, ID3D11Texture2D* texture, float distance, float scale,
                     XrCompositionLayerQuad& layer);

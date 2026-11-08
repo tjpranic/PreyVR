@@ -137,7 +137,7 @@ DWORD ReticleFollowLastY();
 
 // **The world reticle** (XrSessionHost): Prey's crosshair lifted out of the HUD
 // (HudPart::reticle) and shown in the world at the point it marks, instead of
-// on the HUD panel 2 m away, where it doubled whenever the eyes were on the
+// on the head-locked HUD panel, where it doubled whenever the eyes were on the
 // target. With no fresh target the crosshair stays on the HUD panel, where this
 // file's projection keeps placing it. Its depth is the aim's scene hit, so the
 // scene query always runs.

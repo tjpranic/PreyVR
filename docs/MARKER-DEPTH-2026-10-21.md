@@ -1,5 +1,9 @@
 # World markers at the depth they mark (2026-10-21)
 
+**2026-11-08: world only.** Markers are now shown only over their target, and moved off the canvas while it
+is out of view. That supersedes the decision below to keep an edge-pinned marker at its target's distance
+([HUD placement](HUD-PLACEMENT-2026-11-07.md#after-the-first-wear-2026-11-08)).
+
 Branch `custom`. TODO: "Objective markers don't display at the proper depth... Repair markers
 (and possibly enemy detection markers) also affected." Found statically (Ghidra and capstone over the
 Steam DLL, and the markers movie read offline). **Headset, 2026-10-21 (PreyVR-57): confirmed working

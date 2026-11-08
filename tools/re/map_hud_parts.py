@@ -206,6 +206,11 @@ class Movie:
                     elif t == 5: items.append(str(bool(b[r]))); r += 1
                     elif t == 7: items.append(str(struct.unpack_from("<i", b, r)[0])); r += 4
                     elif t == 4: items.append("r%d" % b[r]); r += 1
+                    elif t == 6:
+                        # A double, its two 32-bit halves stored high first.
+                        high, low = struct.unpack_from("<II", b, r); r += 8
+                        items.append(repr(struct.unpack("<d", struct.pack("<II", low, high))[0]))
+                    elif t == 1: items.append(repr(struct.unpack_from("<f", b, r)[0])); r += 4
                     else: items.append({2: "null", 3: "undefined"}.get(t, "num")); r += sizes.get(t, 0)
                 if inside: out.append("  push " + ", ".join(items))
             elif op == 0x8E:
@@ -267,7 +272,8 @@ def verify(movie):
     unnamed = [d for d, e in movie.children(movie.sprites[safe]).items() if not e["names"]]
     check(not unnamed, "safe places nothing unnamed (a replay leaves out everything it does not keep)")
     for quadrant, listed in (("quadrant_S", "QuadrantSChildren"), ("quadrant_SE", "QuadrantSEChildren"),
-                             ("quadrant_C", "QuadrantCChildren"), ("quadrant_W", "QuadrantWChildren")):
+                             ("quadrant_C", "QuadrantCChildren"), ("quadrant_W", "QuadrantWChildren"),
+                             ("quadrant_SW", "QuadrantSWChildren")):
         places = movie.sprites[movie.resolve("_root.safe." + quadrant)]
         names = ["_root.safe." + quadrant + "." + n for n, _, _ in movie.named_children(places)]
         bare = [d for d, e in movie.children(places).items() if not e["names"]]
@@ -389,6 +395,30 @@ def verify(movie):
           "'detailsMC', 'code' getVar push 'HUD' getMember push 'SpiralWheelDetails' getMember push 'Loc' "
           "getMember push 'details_mc'" in details,
           "wheelPrompt writes the details panel's prompt_mc (Loc.details_mc.detailsWeapon_mc.prompt_mc)")
+    # The corner groups' places (CornerCoordinates). SafeFrame.initStage takes
+    # (gameWidth, gameHeight, stageWidth, stageHeight, SafeSize) and sets each
+    # edge quadrant's _x / _y from safe: round(extent * margin) - half toward the
+    # near edge, round(extent - extent * margin) - half toward the far one, or 0.0
+    # on the axis it is centred on. margin = (100 - SafeSize) / 200, and every
+    # caller passes 90. HUD Width and Height scale exactly the non-zero ones.
+    frame = movie.listing(*movie.init_actions[movie.class_sprite("code.HUD.Common.SafeFrame")], [], None, True, [])
+    frame_text = " ".join(line.strip() for line in frame)
+    set_by_init = {}
+    for clip, axis, value in re.findall(r"push r2, 'safe' getMember push '(quadrant_\w+)' getMember push '(_[xy])', ([^']*?) "
+                                        r"(?:op0C|op0B|setMember)", frame_text):
+        set_by_init.setdefault(f"_root.safe.{clip}.{axis}", value.strip().rstrip(","))
+    corners = {f"_root.safe.{q}.{a}" for q in ("quadrant_NW", "quadrant_N", "quadrant_N_2", "quadrant_NE", "quadrant_W",
+                                              "quadrant_E", "quadrant_SW", "quadrant_S", "quadrant_SE") for a in ("_x", "_y")}
+    zero = {p for p in corners if set_by_init.get(p) == "0.0"}
+    moved = {p for p in corners if p in set_by_init and set_by_init[p] != "0.0"}
+    check(moved | zero == corners and moved == set(header_list("CornerCoordinates")),
+          f"CornerCoordinates: the {len(moved)} edge-quadrant coordinates initStage places off safe; the other {len(zero)} are 0.0")
+    check("push 100, r14 op0B push 200 op0D" in frame_text and "push r1, 'SafeFrameNum', r14 setMember" in frame_text,
+          "initStage's margin is (100 - SafeSize) / 200")
+    script_calls = re.findall(r"push (\S+?), (?:\S+?, ){4}5, 'sf' getVar push 'initStage' callMethod",
+                              " ".join(line.strip() for line in movie.root_script()))
+    check(script_calls and set(script_calls) == {"90"},
+          f"every initStage call passes SafeSize 90: margin 0.05, the corners at 0.9 of the half-extent ({len(script_calls)} calls)")
     return not failures
 
 

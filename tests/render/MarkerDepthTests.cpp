@@ -168,10 +168,44 @@ void TestNearest()
     Require(!DisplayedDepth(s, {0, 0, 1}, std::nanf(""), 0.5f, depth), "NaN position refused");
 }
 
+// World only: a marker over its target, or off the canvas (InFrame).
+void TestWorldOnly()
+{
+    const Camera head = Head();
+    const HudMatrix m = MatrixOf(head);
+    HudScale s{};
+    Require(ScaleOf(m, s), "scale");
+    float nx = 0, ny = 0, w = 0, px = 0, py = 0;
+    // On screen, inside Prey's box: exactly where 0x16659F0 puts it.
+    const Vec3 ahead = Add(head.position, Add(Scale(head.forward, 5.f), Scale(head.right, 1.f)));
+    Project(m, ahead, px, py, w);
+    Require(InFrame(s, ViewPoint(m, s, ahead), nx, ny) && Near(nx, px) && Near(ny, py), "a target in view: its own place");
+    // In Prey's 5% margin: Prey pins it to the box, world only puts it back over the target.
+    const float edge = 0.97f;  // nx at the target
+    const float across = (2.f * edge - 1.f) / s.p00 * 5.f;
+    const Vec3 margin = Add(head.position, Add(Scale(head.forward, 5.f), Scale(head.right, across)));
+    Project(m, margin, px, py, w);
+    float cx = px, cy = py;
+    Clamp(cx, cy, false);
+    Require(Near(px, edge, 1e-3f) && Near(cx, 0.95f, 1e-3f), "premise: Prey pins a target in its margin to 0.95");
+    Require(InFrame(s, ViewPoint(m, s, margin), nx, ny) && Near(nx, edge, 1e-3f), "world only: back over it");
+    // Off to the side, and behind: not shown.
+    const Vec3 side = Add(head.position, Add(Scale(head.forward, 2.f), Scale(head.right, 30.f)));
+    Require(!InFrame(s, ViewPoint(m, s, side), nx, ny), "a target outside the frame is not shown");
+    const Vec3 behind = Add(head.position, Scale(head.forward, -4.f));
+    Require(!InFrame(s, ViewPoint(m, s, behind), nx, ny), "nor one behind the head, which Prey would pin on screen");
+    const Vec3 above = Add(head.position, Add(Scale(head.forward, 1.f), Scale(head.up, 20.f)));
+    Require(!InFrame(s, ViewPoint(m, s, above), nx, ny), "nor one far overhead");
+    Require(!InFrame(s, {0, 0, std::nanf("")}, nx, ny) && !InFrame(HudScale{}, {0, 0, 1}, nx, ny),
+            "a degenerate point or scale is not shown");
+    Require(kOffCanvas < -1.f, "hidden markers go well off the canvas, labels and all");
+}
+
 } // namespace
 
 int main()
 {
+    TestWorldOnly();
     TestScale();
     TestOnScreenShift();
     TestOffScreenDepth();

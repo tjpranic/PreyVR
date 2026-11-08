@@ -79,13 +79,10 @@
 
 ### HUD/UI
 - Psi energy shows on wrist before installing first neuromod
-- Some UI elements still only display at the periphery of vision
-    It makes them hard to see. They need to be moved a little closer in. Will need some additional VR options menu settings to adjust them.
-- Will need to adjust UI element depths
-    Need to adjust for HUD and psychoscope.
 - 2D marker (objective, repair etc.) position jitter a lot (?)
     They could use some smoothing.
 - Remove the background from the wrist status HUD
+- Weapon wheel should open where I'm looking
 
 ### VR Options Menu
 - Have bindings section let you change your bindings (?)
@@ -146,6 +143,12 @@
 - Left hand laser doesn't hit at surface of objects unlike the right hand aim laser (?)
     Only sometimes? This might be intentional? Will need to investigate.
     > "Left hand laser doesn't hit at surface of objects" looks explained, from reading the code only. When something is selected, the left laser ends on the object's bounding box rather than its surface, and it only uses a real scene hit when nothing is selected. That would also fit the "only sometimes" in your note.
+- Some UI elements still only display at the periphery of vision
+    It makes them hard to see. They need to be moved a little closer in. Will need some additional VR options menu settings to adjust them.
+    > Interface Size also sized the HUD, and Prey pins its corner groups 5% in from the edge of a canvas that is square in VR, so at 200% they sat 33° out (43° at the corners). The HUD now has its own settings on the Interface tab: HUD Size (200%), HUD Width and HUD Height (70% and 55% of Prey's layout, which bring the corners to about 25° and 20°) and HUD Distance. The equipped psi power moved to the wrist with the meters, and markers show only over what they mark, none at the edge of the view. PreyVR-141 to PreyVR-143, worn OK 2026-11-08. See docs/HUD-PLACEMENT-2026-11-07.md.
+- Will need to adjust UI element depths
+    Need to adjust for HUD and psychoscope.
+    > The HUD was head-locked at 2 m, drawn over anything nearer, the helmet's rim included. It now floats at HUD Distance (1 m by default, 50-200 cm) with the wheel, subtitles and tutorial cards, and all keep their apparent size. It is not put at the helmet's depth, which is too close to focus on; pulling the corners in keeps them inside the visor instead. Markers, the crosshair, quick loot and prompts stay at world depth. The psychoscope needed nothing. PreyVR-141 to PreyVR-143, worn OK 2026-11-08. See docs/HUD-PLACEMENT-2026-11-07.md.
 
 ### UX/Immersion
 - Have Psi-powers aim with the left hand

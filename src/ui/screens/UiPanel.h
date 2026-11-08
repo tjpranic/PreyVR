@@ -29,6 +29,9 @@ struct Panel { Pose pose{}; float width=0, height=0; };
 // use the whole frustum, so only `scale` sizes them; VR Options and the slot card
 // ask for less. Clamped to [0.3, 1.0].
 inline constexpr float kDefaultFitMargin=1.f;
+// The distances a panel may be fitted at, metres: the HUD from half a metre
+// (HUD Distance), the menus out to 4 (Menu Distance). Outside them FitPanel refuses.
+inline constexpr float kMinPanelDistance=.5f, kMaxPanelDistance=4.f;
 std::optional<Panel> FitPanel(const Pose& head, const std::array<Eye,2>& eyes,
                              float aspect, float distance=2.0f, float scale=1.0f,
                              float margin=kDefaultFitMargin);

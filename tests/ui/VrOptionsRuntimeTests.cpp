@@ -59,6 +59,14 @@ DWORD SetTwoHandAutoBreak(unsigned v){applied[options::AutoBreak]=v;return 0;}
 bool TwoHandAutoBreak(){return applied[options::AutoBreak]!=0;}
 DWORD SetUiScalePercent(unsigned v){applied[options::UiScale]=v;return 0;}
 DWORD UiScalePercent(){return applied[options::UiScale];}
+DWORD SetHudSizePercent(unsigned v){applied[options::HudSize]=v;return 0;}
+DWORD HudSizePercent(){return applied[options::HudSize];}
+DWORD SetHudDistanceCm(unsigned v){applied[options::HudDistance]=v;return 0;}
+DWORD HudDistanceCm(){return applied[options::HudDistance];}
+DWORD SetHudWidthPercent(unsigned v){applied[options::HudWidth]=v;return 0;}
+unsigned HudWidthPercent(){return applied[options::HudWidth];}
+DWORD SetHudHeightPercent(unsigned v){applied[options::HudHeight]=v;return 0;}
+unsigned HudHeightPercent(){return applied[options::HudHeight];}
 unsigned menuDistance=200,distanceSets=0,offsetSets=0;int menuRight=0,menuUp=0;
 DWORD SetUiDistanceCm(unsigned v){if(v<100||v>400)return 1;menuDistance=v;++distanceSets;return 0;}
 DWORD UiDistanceCm(){return menuDistance;}
