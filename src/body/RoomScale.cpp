@@ -43,9 +43,10 @@ float LeanDrop(float lead, const Settings& s)
     return trunk - std::sqrt(std::max(0.0f, trunk * trunk - l * l));
 }
 
-Vec3 Follower::Update(const Vec3& offsetWorld, float drop, float dtSeconds, const Settings& s)
+Vec3 Follower::Update(const Vec3& offsetWorld, float drop, float dtSeconds, const Settings& s, bool riding)
 {
     jumped_ = false;
+    settleHeld_ = false;
     if (!Finite(offsetWorld) || !std::isfinite(dtSeconds)) {
         Reset();
         return {};
@@ -96,6 +97,11 @@ Vec3 Follower::Update(const Vec3& offsetWorld, float drop, float dtSeconds, cons
             const float lowered = std::isfinite(drop) ? restDrop_ - upright_ : 0.0f;
             settling_ = lowered < 0.5f * LeanDrop(distance, s) + s.uprightSlack;
         }
+        // On a moving floor a settle, begun or under way, waits for it to stop.
+        if (settling_ && riding) {
+            settling_ = false;
+            settleHeld_ = true;
+        }
         if (settling_) {
             step = std::min(distance - s.deadzone, std::max(0.0f, s.settleSpeed) * dtSeconds);
             if (!(step > s.jitter)) { settling_ = false; }
@@ -122,6 +128,7 @@ void Follower::Reset()
     restDrop_ = 0.0f;
     stillSeconds_ = 0.0f;
     settling_ = false;
+    settleHeld_ = false;
 }
 
 bool NoDeeper(float depthThere, float depthHere)
@@ -137,6 +144,17 @@ bool BodyMoving(const Vec3& velocity, const Vec3& requested)
     // A non-finite reading counts as moving: keeping the motion is the safe side.
     return !Finite(velocity) || !Finite(requested) || Length(velocity) > kMovingSpeed ||
            Length(requested) > kMovingSpeed;
+}
+
+bool FloorMoving(const Vec3& withFloor, const Vec3& own)
+{
+    return !Finite(withFloor) || !Finite(own) || Length(Sub(withFloor, own)) > kMovingSpeed;
+}
+
+Vec3 BodyReference(const Vec3& drawn, const Vec3& applied, bool moved)
+{
+    if (!moved || !Finite(applied)) { return drawn; }
+    return Add(drawn, applied);
 }
 
 } // namespace preyvr::roomscale

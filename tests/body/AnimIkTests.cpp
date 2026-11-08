@@ -393,6 +393,35 @@ void TestScaleReach()
             "a nonsense scale changes nothing rather than collapsing the arm");
 }
 
+// The lift (PreyVR-145's measurement): at 27 m/s the pose's location is 0.4 m on
+// from where the body stood when the frame's view was built.
+void TestCarryWithBody()
+{
+    const Vec3 eye{3.0f, -2.0f, 41.7f};           // frame N's view
+    const Vec3 then{3.0f, -2.0f, 40.0f};          // the body after frame N's render
+    const Vec3 rising{3.0f, -2.0f, 40.4f};        // the pose's location, frame N+1
+    Vec3 out{};
+    Require(CarryWithBody(eye, rising, then, 5.0f, out) && NearVec(out, Vec3{3.0f, -2.0f, 42.1f}),
+            "the head is posed where the lift has taken it, not 40 cm below");
+    // Uncarried, the body pin's head would stand 0.4 m from the head the location
+    // puts it: in model space, eye less location, it is the eye height carried.
+    const Location now{Quaternion{}, rising, 1.0f};
+    Require(Near(WorldToModel(now, out).z, 1.7f) && Near(WorldToModel(now, eye).z, 1.3f),
+            "carried, the model sees the eye height; uncarried, 40 cm short of it");
+    Require(CarryWithBody(eye, then, then, 5.0f, out) && NearVec(out, eye),
+            "standing still carries nothing");
+    const Vec3 walked{3.06f, -1.97f, 40.0f};
+    Require(CarryWithBody(eye, walked, then, 5.0f, out) && NearVec(out, Vec3{3.06f, -1.97f, 41.7f}),
+            "a walk's step is carried level with it");
+    out = Vec3{9.0f, 9.0f, 9.0f};
+    Require(!CarryWithBody(eye, Vec3{3.0f, -2.0f, 140.0f}, then, 5.0f, out) && NearVec(out, Vec3{9.0f, 9.0f, 9.0f}),
+            "a jump past the limit (a load, a teleport) is not carried");
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    Require(!CarryWithBody(eye, Vec3{nan, 0.0f, 0.0f}, then, 5.0f, out) &&
+            !CarryWithBody(Vec3{nan, 0.0f, 0.0f}, rising, then, 5.0f, out),
+            "a non-finite body or point is refused");
+}
+
 int main()
 {
     TestLocationRoundTrip();
@@ -401,6 +430,7 @@ int main()
     TestHandDoesNotSwingWithHeadYaw();
     TestClampToReach();
     TestScaleReach();
+    TestCarryWithBody();
     TestRotationCalibration();
     TestSharedOriginAndMuzzleSeparation();
     TestCalibrationLifecycle();

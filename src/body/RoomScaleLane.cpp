@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string_view>
@@ -64,7 +65,8 @@ static_assert(contract::Gated(rn::Contracts, rn::LivingSetParams) &&
               contract::Gated(rn::Contracts, rn::PhysicsChangeRequest));
 static_assert(contract::Gated(cn::Contracts, cn::LivingGetStatus) && contract::Gated(cn::Contracts, cn::StaticGetStatus) &&
               contract::Gated(cn::Contracts, cn::LivingGetParams) && contract::Gated(cn::Contracts, cn::StaticGetParams));
-static_assert(cn::LivingStatusSize <= 0x100 && rn::LivingRequested + sizeof(Vec3) <= cn::LivingStatusSize);
+static_assert(cn::LivingStatusSize <= 0x100 && rn::LivingRequested + sizeof(Vec3) <= cn::LivingStatusSize &&
+              rn::LivingVelocityWithFloor + sizeof(Vec3) <= rn::LivingVelocity);
 
 constexpr int kFitIterations = 6;          // within 1/64 of a move from the first contact
 constexpr float kStepSettling = 0.001f;    // m of step-up smoothing: the body is climbing
@@ -98,7 +100,18 @@ Counter gServices{0}, gNotGameplay{0}, gNoFrame{0}, gNotPlayer{0}, gNoLiving{0},
 Counter gBlocked{0}, gRefused{0}, gStartOverlap{0}, gBusy{0}, gKeptMotion{0}, gStartKept{0}, gRestMoves{0};
 Counter gStepSettling{0}, gJumps{0}, gRaced{0}, gReferenceBusy{0}, gHeadOutEvents{0}, gHeadOutFrames{0};
 Counter gSettleMoves{0};
+// On a moving floor (a lift): frames serviced there, moves made there (each one
+// keeping the motion), and frames a settle waited for the floor to stop.
+Counter gFloorFrames{0}, gFloorMoves{0}, gSettleHeld{0};
 std::atomic<int> gLastMoveMm{0}, gResidualMm{0}, gDropMm{0}, gAllowanceMm{0}, gUprightMm{0};
+
+// BodyAfterFrame: written here once a frame, read by the body pass.
+std::mutex gAfterFrameMutex;
+struct AfterFrame {
+    std::uint64_t publishedNs = 0;
+    Vec3 position{};
+    bool valid = false;
+} gAfterFrame;
 
 int Mm(float metres) { return std::isfinite(metres) ? static_cast<int>(std::lround(metres * 1000.0f)) : 0; }
 
@@ -188,11 +201,11 @@ bool CallSetPos(void* entity, const Vec3* position)
     }
 }
 
-// What the living body's movement is doing: its own velocity, the velocity its
-// movement asks for (pe_action_move), and camOffset, non-zero while a step-up
-// is being smoothed.
+// What the living body's movement is doing: its velocity with its floor's and
+// its own (relative to the floor), the velocity its movement asks for
+// (pe_action_move), and camOffset, non-zero while a step-up is being smoothed.
 struct Living {
-    Vec3 velocity{}, requested{}, stance{};
+    Vec3 withFloor{}, own{}, requested{}, stance{};
 };
 
 bool ReadLiving(void* physics, Living& out)
@@ -206,7 +219,8 @@ bool ReadLiving(void* physics, Living& out)
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
-    std::memcpy(&out.velocity, status + rn::LivingVelocity, sizeof(Vec3));
+    std::memcpy(&out.withFloor, status + rn::LivingVelocityWithFloor, sizeof(Vec3));
+    std::memcpy(&out.own, status + rn::LivingVelocity, sizeof(Vec3));
     std::memcpy(&out.requested, status + rn::LivingRequested, sizeof(Vec3));
     std::memcpy(&out.stance, status + cn::LivingCamOffset, sizeof(Vec3));
     return true;
@@ -312,6 +326,16 @@ void Stand()
     gHeadOut.store(false, std::memory_order_release);
 }
 
+// The frame done with: where its body stood for its view (BodyAfterFrame,
+// roomscale::BodyReference).
+void PublishAfterFrame(const GameplayPoseFrame& pose, const Vec3& position, bool valid)
+{
+    const std::lock_guard lock(gAfterFrameMutex);
+    gAfterFrame.publishedNs = pose.publishedNs;
+    gAfterFrame.position = position;
+    gAfterFrame.valid = valid && Finite(position);
+}
+
 } // namespace
 
 void ServiceRoomScale(void* player, float torsoYaw, float dt, bool gameplay)
@@ -354,8 +378,21 @@ void ServiceRoomScale(void* player, float torsoYaw, float dt, bool gameplay)
         table != gLivingVtable || !ReadLiving(physics, living)) {
         gNoLiving.fetch_add(1, std::memory_order_relaxed);
         gFollower.Reset();
+        Vec3 feet{};
+        const bool read = CallGetPos(entity, feet);
+        PublishAfterFrame(pose, feet, read);
         return;
     }
+    // On a moving floor -- a lift -- the floor carries the body: a move then
+    // always keeps the motion, never the teleport, which would drop the floor
+    // as the body's ground for a step and leave it behind. A settle waits for
+    // the floor to stop.
+    const bool riding = roomscale::FloorMoving(living.withFloor, living.own);
+    if (riding) { gFloorFrames.fetch_add(1, std::memory_order_relaxed); }
+    // Where this frame drew the body: what the next pose's carry starts from,
+    // with the move below that the view's origin takes up.
+    Vec3 drawn{};
+    const bool haveDrawn = CallGetPos(entity, drawn);
     // The point followed: the eye as it would be with the head level and
     // facing the torso, so a glance moves nothing; and how far below its
     // calibrated height it is, which tells a lean from a step.
@@ -374,8 +411,9 @@ void ServiceRoomScale(void* player, float torsoYaw, float dt, bool gameplay)
         residual = std::hypot(offset.x, offset.y);   // until a move takes some of it off
         // Within the lean zone the capsule stays and the body pin bends the
         // torso; past it, or once the head came to rest upright, it moves.
-        const Vec3 move = gFollower.Update(offset, drop, dt, settings);
+        const Vec3 move = gFollower.Update(offset, drop, dt, settings, riding);
         settling = gFollower.Settling();
+        if (gFollower.SettleHeld()) { gSettleHeld.fetch_add(1, std::memory_order_relaxed); }
         if (gFollower.Jumped()) { gJumps.fetch_add(1, std::memory_order_relaxed); }
         const float length = std::hypot(move.x, move.y);
         if (!(length > 1e-5f)) { return std::nullopt; }
@@ -395,8 +433,9 @@ void ServiceRoomScale(void* player, float torsoYaw, float dt, bool gameplay)
         // queued behind a physics step would put it back where it was before
         // that step, undoing the walk's own movement. Otherwise the move waits a
         // frame. At rest the entity's SetPos alone, whose teleport lets the
-        // next step settle the body on what is under it.
-        const bool bodyMoving = roomscale::BodyMoving(living.velocity, living.requested);
+        // next step settle the body on what is under it. Carried by a moving
+        // floor, it is moving whatever its own velocity says.
+        const bool bodyMoving = riding || roomscale::BodyMoving(living.withFloor, living.requested);
         const bool starting = !bodyMoving && MoveLaneStickStarted(now, kWalkStartNs);
         const bool moving = bodyMoving || starting;
         Vec3 base = feet;
@@ -445,6 +484,7 @@ void ServiceRoomScale(void* player, float torsoYaw, float dt, bool gameplay)
             }
             gKeptMotion.fetch_add(1, std::memory_order_relaxed);
             if (starting) { gStartKept.fetch_add(1, std::memory_order_relaxed); }
+            if (riding) { gFloorMoves.fetch_add(1, std::memory_order_relaxed); }
         } else {
             gRestMoves.fetch_add(1, std::memory_order_relaxed);
         }
@@ -486,6 +526,18 @@ void ServiceRoomScale(void* player, float torsoYaw, float dt, bool gameplay)
     gUprightMm.store(Mm(gFollower.Upright()), std::memory_order_relaxed);
     gActiveNs.store(now, std::memory_order_release);
     if (!gFault.load(std::memory_order_acquire)) { HeadCheck(pose, entity); }
+    // Drawn plus the move, never the entity after it: a moving body was moved
+    // from its physics, a step on, and that step is the next pose's to carry.
+    PublishAfterFrame(pose, roomscale::BodyReference(drawn, applied, result == 0),
+                      haveDrawn && !gFault.load(std::memory_order_acquire));
+}
+
+bool BodyAfterFrame(std::uint64_t publishedNs, Vec3& position)
+{
+    const std::lock_guard lock(gAfterFrameMutex);
+    if (!gAfterFrame.valid || publishedNs == 0 || gAfterFrame.publishedNs != publishedNs) { return false; }
+    position = gAfterFrame.position;
+    return true;
 }
 
 bool BodyHeadOut()
@@ -515,6 +567,8 @@ std::string RoomScaleReport()
         << " startOverlap=" << gStartOverlap.load() << " busy=" << gBusy.load() << " referenceBusy=" << gReferenceBusy.load()
         << " keptMotion=" << gKeptMotion.load() << " startKept=" << gStartKept.load() << " restMoves=" << gRestMoves.load()
         << " stepSettling=" << gStepSettling.load() << " jumps=" << gJumps.load() << " raced=" << gRaced.load()
+        << " floorFrames=" << gFloorFrames.load() << " floorMoves=" << gFloorMoves.load()
+        << " settleHeld=" << gSettleHeld.load()
         << " headOut=" << BodyHeadOut() << " headOutEvents=" << gHeadOutEvents.load()
         << " headOutFrames=" << gHeadOutFrames.load() << " fadeFrames=" << XrFadeFrames();
     return out.str();

@@ -50,8 +50,6 @@
     The first-time Typhon neuromod usage trigger 3 of these cutscenes in a row. It also causes the game to pause between each cutscene.
     Might also want to have the interface VR options apply to cutscenes if applicable.
 - Have container search interface on left hand laser hit
-- Going up or down the main lift causes body position jittering
-    The actual body is moving up and down, might be a side-effect of all the body following and IK changes.
 - Might want to remove the Q-beam holding offset
     May not be necessary.
 - Can't switch to some weapons when using the Psychoscope
@@ -151,6 +149,12 @@
     > The HUD was head-locked at 2 m, drawn over anything nearer, the helmet's rim included. It now floats at HUD Distance (1 m by default, 50-200 cm) with the wheel, subtitles and tutorial cards, and all keep their apparent size. It is not put at the helmet's depth, which is too close to focus on; pulling the corners in keeps them inside the visor instead. Markers, the crosshair, quick loot and prompts stay at world depth. The psychoscope needed nothing. PreyVR-141 to PreyVR-143, worn OK 2026-11-08. See docs/HUD-PLACEMENT-2026-11-07.md.
 
 ### UX/Immersion
+- The whole player body sometimes jumps out of place for an instant, then back, while walking with the stick
+    Intermittent, can't reproduce on command.
+    > A regression from the lift fix. When room-scale moves the capsule after a walking body, it moves it from its physics, a step ahead of where the body was drawn, and the lift fix took the body after that move as where the next pose starts from: the next pose then carried nothing while the view moved a step, so the body stood a step behind for a frame. The pose now starts from where the body was drawn plus room-scale's own move. Found with a glitch recorder (PreyVR-147: 62 such frames, one step each, no IK pass ever skipped); fixed in PreyVR-148, worn OK 2026-11-08. See docs/BODY-FOLLOW.md.
+- Going up or down the main lift causes body position jittering
+    The actual body is moving up and down, might be a side-effect of all the body following and IK changes.
+    > Two causes, both the mod's. The view: room-scale took a body standing on the moving lift for one at rest (its own velocity is relative to the floor), and its at-rest move, the engine's teleport, dropped the lift as the body's ground for a step. A body its floor carries now counts as moving, and settles wait for the floor to stop (PreyVR-144). The body: the IK pass places the body, arms and hands from the last frame's view, and the main lift moves at 27 m/s, 40 cm a frame; that view is now carried with the body to the pose, which also stops the hands trailing a step when walking (PreyVR-146, measured with PreyVR-145). Worn OK 2026-11-08. See docs/BODY-FOLLOW.md.
 - Have Psi-powers aim with the left hand
     > Hands' Psi Aim Hand picks the hand: Right (the default) is Prey's own aim, which already follows the right hand; Left aims from the left index finger, and the left laser turns violet while aiming. The left trigger is Prey's own psi button either way, so psi hypos still work from the wheel (worn OK too). It replaced Abilities' Psychic Targeting (Original / Head / Left Controller); the mod's own psi trigger and the head aim are gone. PreyVR-135 and PreyVR-136 (the cleanup), worn OK 2026-11-07. See docs/PSI-MEDKIT-2026-09-30.md.
 - Hands don't move when aiming a Typhon ability

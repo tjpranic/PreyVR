@@ -1,4 +1,5 @@
 #include "body/RoomScale.h"
+#include "body/ik/AnimIk.h"
 #include "render/camera/StereoCamera.h"
 #include "TestGeometry.h"
 #include "TestSupport.h"
@@ -7,6 +8,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 
 using namespace preyvr;
 using namespace preyvr::roomscale;
@@ -67,10 +69,11 @@ struct World {
     Follower follower;
     Settings settings;
     Vec3 eye(const Vec3& head) const { return Add(Add(capsule, Vec3{0, 0, 1.7f}), HeadOffsetWorld(head, origin, yaw, scale)); }
-    // `drop`: how far the head is below its calibrated height.
-    Vec3 Step(const Vec3& head, float dt, float drop = 0.0f)
+    // `drop`: how far the head is below its calibrated height; `riding`: the
+    // floor is moving.
+    Vec3 Step(const Vec3& head, float dt, float drop = 0.0f, bool riding = false)
     {
-        const Vec3 move = follower.Update(HeadOffsetWorld(head, origin, yaw, scale), drop, dt, settings);
+        const Vec3 move = follower.Update(HeadOffsetWorld(head, origin, yaw, scale), drop, dt, settings, riding);
         capsule = Add(capsule, move);
         origin = Add(origin, OriginShift(move, yaw, scale));
         follower.Applied(move);
@@ -358,7 +361,92 @@ void TestBodyMoving()
     Require(BodyMoving({NAN, 0, 0}, {0, 0, 0}), "an unreadable velocity keeps the motion");
 }
 
+// **On a lift** (docs/BODY-FOLLOW.md, the capsule's physics) the body's own
+// velocity is relative to the floor: standing still it reads zero, and only
+// its velocity with the floor's says it is moving. The lane took the first for
+// the second, and moved a body riding the lift with the engine's teleport.
+void TestCarriedByTheFloor()
+{
+    const Vec3 own{0, 0, 0}, up{0, 0, 2.0f}, down{0, 0, -2.0f};
+    Require(!BodyMoving(own, {}), "its own velocity alone reads rest on a moving lift: the defect");
+    Require(BodyMoving(Add(own, up), {}) && BodyMoving(Add(own, down), {}), "with the floor's, it is moving");
+    Require(FloorMoving(Add(own, up), own) && FloorMoving(Add(own, down), own), "a lift going up or down: the floor moves");
+    const Vec3 walk{1.5f, 0, 0};
+    Require(!FloorMoving(walk, walk), "walking on a still floor: the floor does not move");
+    Require(FloorMoving(Add(walk, up), walk), "walking on a moving lift: it does");
+    Require(!FloorMoving({0.02f, 0, 0}, {}), "a floor at a crawl is not a lift");
+    Require(FloorMoving({NAN, 0, 0}, {}) && FloorMoving({}, {0, NAN, 0}), "an unreadable floor: the safe side");
+}
+
+// On a moving floor a settle waits for it to stop; the lean zone is still kept.
+void TestSettleWaitsForTheFloor()
+{
+    const float dt = 1.0f / 90.0f;
+    World w;
+    const Vec3 at{0.22f, 1.6f, 0.0f};
+    bool held = false;
+    for (int i = 0; i <= 150; ++i) {
+        // A 22 cm step in a third of a second, then standing there, all riding.
+        const Vec3 head{0.22f * std::fmin(i / 30.0f, 1.0f), 1.6f, 0.0f};
+        Require(Length(w.Step(head, dt, 0.0f, true)) == 0.0f, "riding: within the lean zone nothing moves");
+        Require(!w.follower.Settling(), "riding: no settle under way");
+        held = held || w.follower.SettleHeld();
+    }
+    Require(held, "the settle it would have begun waited");
+    Require(w.Away(at) > 0.21f, "and the body is where the step left it");
+    // The floor stops: the head has long been still, so the settle begins at once.
+    Require(Length(w.Step(at, dt)) > 0.0f && w.follower.Settling() && !w.follower.SettleHeld(),
+            "the floor stopped: the settle begins");
+    for (int i = 0; i < 90; ++i) { w.Step(at, dt); }
+    Require(w.Away(at) <= w.settings.deadzone + 0.012f, "and the body ends under the head");
+    // Past the lean zone, riding or not, the capsule follows at once.
+    World r;
+    float moved = 0.0f;
+    for (int i = 0; i <= 40; ++i) {
+        moved += Length(r.Step({0.4f * std::fmin(i / 36.0f, 1.0f), 1.6f, 0.0f}, dt, 0.0f, true));
+    }
+    Require(moved > 0.1f && r.Away({0.4f, 1.6f, 0.0f}) <= r.settings.leanZone + 0.01f,
+            "riding, a head beyond the lean zone is still followed");
+}
+
 } // namespace
+
+// PreyVR-147's glitch lines, walking at about 5 m/s: on a frame the capsule
+// followed the walk, the next pose stood a step behind the view. The frame
+// model they showed: after the render the physics is a step ahead of the drawn
+// body; a moving body is moved from its physics; the next frame's start brings
+// the entity to the physics, which no step has moved yet.
+void TestReferenceExcludesTheCatchUp()
+{
+    const Vec3 drawn{10.0f, 4.0f, 0.0f};             // the entity this frame drew
+    const Vec3 step{-0.075f, 0.003f, 0.0f};          // one frame of the walk
+    const Vec3 physics = Add(drawn, step);           // a step ahead, after the render
+    const Vec3 move{0.004f, -0.002f, 0.0f};          // room-scale's follow, level
+    const Vec3 eye{0.1f, 0.0f, 1.7f};
+    // Moving: moved from the physics; the view's origin takes up the move alone.
+    const Vec3 movedTo = Add(physics, move);
+    const Vec3 applied = Sub(movedTo, physics);
+    const Vec3 viewNow = Add(drawn, eye);
+    const Vec3 entityNext = movedTo;                 // the next frame's start
+    const Vec3 viewNext = Sub(Add(entityNext, eye), applied);
+    Vec3 anchor{};
+    // The old reference, the entity after the move: nothing left to carry.
+    Require(animik::CarryWithBody(viewNow, entityNext, movedTo, 5.0f, anchor) && Near(anchor, viewNow) &&
+                Length(Sub(anchor, viewNext)) > 0.07f,
+            "the entity after the move left the pose a whole step behind the view");
+    const Vec3 reference = roomscale::BodyReference(drawn, applied, true);
+    Require(animik::CarryWithBody(viewNow, entityNext, reference, 5.0f, anchor) && Near(anchor, viewNext),
+            "drawn plus the move the origin took: the walk's step is carried, the move is not");
+    // At rest the move is made from where the body was drawn: the same either way.
+    const Vec3 restTo = Add(drawn, move);
+    Require(Near(roomscale::BodyReference(drawn, Sub(restTo, drawn), true), restTo),
+            "an at-rest move's reference is where the body went");
+    Require(Near(roomscale::BodyReference(drawn, Vec3{9.0f, 9.0f, 9.0f}, false), drawn),
+            "no move: where it was drawn");
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    Require(Near(roomscale::BodyReference(drawn, Vec3{nan, 0.0f, 0.0f}, true), drawn),
+            "a non-finite move is not added");
+}
 
 int main()
 {
@@ -376,6 +464,9 @@ int main()
     TestFitFraction();
     TestNoDeeper();
     TestBodyMoving();
+    TestCarriedByTheFloor();
+    TestSettleWaitsForTheFloor();
+    TestReferenceExcludesTheCatchUp();
     std::cout << "room_scale: all tests passed\n";
     return 0;
 }

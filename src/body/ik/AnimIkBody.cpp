@@ -4,6 +4,7 @@
 #include "body/RoomScaleLane.h"
 #include "body/BodyRig.h"
 
+#include <cmath>
 #include <cstdlib>
 
 // The rest of the body in the IK pass: the body pin (bodyrig::SolvePin), which
@@ -305,9 +306,10 @@ void PlanBody(const GameplayPoseFrame& frame, const animik::Location& location, 
     plan.chestTurn = bodyrig::TurnAbout(Vec3{0.0f, 1.0f, 0.0f}, chest);
     plan.apply = true;
     // How far the game's eye this frame's view was built on (the view less the
-    // head offset it added) lies from the camera joint as this pose has it: the
-    // anchor and the pose describe the same frame when it is near zero, and a
-    // walk would show a stale anchor as about its step.
+    // head offset it added, carried with the body to this pose) lies from the
+    // camera joint as this pose has it: the anchor and the pose describe the
+    // same frame when it is near zero. Uncarried, it was one frame's movement:
+    // a walk's step, 40 cm on the main lift (PreyVR-145).
     Vec3 offset{};
     if (frame.cameraCentreValid && ViewPositionOffset(offset)) {
         const int gap = Mm(Length(Sub(Sub(frame.cameraCentre, offset), animik::ModelToWorld(location, eye.t))));
@@ -387,7 +389,9 @@ std::string BodyPinReport()
         << " sinkMm=" << gBodySinkMm.load() << " shortMm=" << gBodyShortMm.load()
         << " throatPushMaxMm=" << gBodyPushMaxMm.exchange(0) << " sinkMaxMm=" << gBodySinkMaxMm.exchange(0)
         << " shortMaxMm=" << gBodyShortMaxMm.exchange(0) << " eyeGapMm=" << gBodyEyeGapMm.load()
-        << " eyeGapMaxMm=" << gBodyEyeGapMaxMm.exchange(0);
+        << " eyeGapMaxMm=" << gBodyEyeGapMaxMm.exchange(0) << " carried=" << gCarried.load()
+        << " carryMissed=" << gCarryMissed.load() << " carryRefused=" << gCarryRefused.load()
+        << " carryMaxMm=" << gCarryMaxMm.exchange(0);
     return out.str();
 }
 

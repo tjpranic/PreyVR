@@ -94,15 +94,20 @@ float LeanDrop(float lead, const Settings& settings);
 // offset beyond the allowance, at once; or, settling, a glide towards it. Never
 // faster than maxSpeed. A frame whose offset jumped from the last one -- less
 // the move applied since (Applied) -- by more than maxJump is refused. `drop` is
-// how far the head is below its calibrated height.
+// how far the head is below its calibrated height. `riding`: the floor is moving
+// (FloorMoving). A settle waits for it to stop -- a glide is only tidying up, and
+// every move on a moving floor is one the engine must keep the floor through --
+// while the lean zone is still kept.
 class Follower {
 public:
-    Vec3 Update(const Vec3& offsetWorld, float drop, float dtSeconds, const Settings& settings);
+    Vec3 Update(const Vec3& offsetWorld, float drop, float dtSeconds, const Settings& settings, bool riding = false);
     // The move the capsule actually made: the next offset is less by it.
     void Applied(const Vec3& applied);
     bool Jumped() const { return jumped_; }
     // Gliding under a head that came to rest upright.
     bool Settling() const { return settling_; }
+    // This frame's settle waited for the floor to stop.
+    bool SettleHeld() const { return settleHeld_; }
     // The drop learnt for standing upright over the body (m).
     float Upright() const { return upright_; }
     // Forgets the frames before: the next is a first. What upright is stays.
@@ -122,6 +127,7 @@ private:
     float stillSeconds_ = 0.0f;
     float upright_ = 0.0f;
     bool settling_ = false;
+    bool settleHeld_ = false;
 };
 
 // **How much of a move fits** (docs/BODY-FOLLOW.md, the capsule's physics): the
@@ -147,12 +153,30 @@ template <class Fits> float FitFraction(Fits&& fits, int iterations)
 inline constexpr float kDepthSlack = 0.001f;   // m
 bool NoDeeper(float depthThere, float depthHere);
 
-// **Whether the body is moving** -- walking, falling or pushed: its own
-// velocity or the velocity its movement asks for is more than a crawl. A move
-// must then keep that motion. At rest the engine's teleport costs nothing and
-// lets the next physics step settle the body on what is under it, which a move
-// that keeps its motion would not.
+// **Whether the body is moving** -- walking, falling, pushed, or carried by what
+// it stands on: its velocity with its floor's, or the velocity its movement
+// asks for, is more than a crawl. A move must then keep that motion. At rest
+// the engine's teleport costs nothing and lets the next physics step settle the
+// body on what is under it, which a move that keeps its motion would not. On a
+// moving lift the teleport would drop the lift as the body's ground for a step
+// (docs/BODY-FOLLOW.md, the capsule's physics).
 inline constexpr float kMovingSpeed = 0.05f;   // m/s
 bool BodyMoving(const Vec3& velocity, const Vec3& requested);
+
+// **Whether the floor under the body is moving** (a lift): the body's velocity
+// with its floor's, less its own, is more than a crawl. The engine adds the
+// floor's only while the floor is the body's ground, so this is the floor
+// carrying it. A reading that is not finite counts as moving: the safe side.
+bool FloorMoving(const Vec3& withFloor, const Vec3& own);
+
+// **Where the body stood for this frame's view, once room-scale is done** (the
+// lane's BodyAfterFrame, which the next pose carries the view from): where the
+// frame drew it, plus the move the view's origin took up when it `moved`. Not
+// the entity after the move. A moving body is moved from its physics, a step
+// ahead of where it was drawn; that catch-up is the walk's own step, which the
+// view shows, and taking it as the reference left the next pose a step behind
+// the view: the whole body jumped back for a frame as the capsule followed a
+// walk (PreyVR-147's glitch lines; fixed in PreyVR-148).
+Vec3 BodyReference(const Vec3& drawn, const Vec3& applied, bool moved);
 
 } // namespace preyvr::roomscale

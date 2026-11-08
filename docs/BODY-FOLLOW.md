@@ -85,7 +85,7 @@ hips stand in VR Options (Setup → **Lean Zone**, **Hips and Legs Back**).
   `arm_pose`; `scheme_review` drives `MoveLane.cpp`'s walk start; `body_depth`, `body_depth_hook`
   and `near_clip` for how it is drawn. **Static contracts**, run by `ctest re_verifiers`:
   `tools/re/verify_view_rotation.py` (27 checks: the setter, the entity's transform),
-  `tools/re/verify_room_scale_physics.py` (52: the living body's calls) and
+  `tools/re/verify_room_scale_physics.py` (65: the living body's calls) and
   `tools/re/verify_body_depth.py` (94: the slot render, the near pass's depth slice and its two
   writers, the packer's matrices).
 - **Commands** ([TUNING-COMMANDS.md](TUNING-COMMANDS.md#body)): `body.report` (the torso and the
@@ -104,6 +104,15 @@ hips stand in VR Options (Setup → **Lean Zone**, **Hips and Legs Back**).
 - **Move a walking body with the plain `SetPos`.** It is the engine's teleport
   ([the capsule's physics](#the-capsules-physics)): room-scale keeps the motion while the body
   moves, and uses it only at rest.
+- **Take a body on a lift for one at rest.** Its own velocity is relative to the floor, so standing
+  still on a moving lift it reads zero; the teleport would then drop the lift as its ground for a
+  step ([the capsule's physics](#the-capsules-physics), PreyVR-144).
+- **Place a pose with the frame's view as it was.** The pass poses the next frame's body before
+  the render that publishes that frame, so the anchor is the last frame's view; carry it with the
+  body to the pose ([the frame it is placed in](#the-frame-it-is-placed-in-preyvr-146)). On the
+  main lift, uncarried, the body trailed the view by 40 cm (PreyVR-145). Measure the carry from
+  where the body was drawn plus room-scale's move, never from the entity after the move: that has
+  a walking body's next step in it already (PreyVR-147).
 - **Move the capsule without the stance test.** Put into a desk, it is pushed back out by physics,
   and the view with it.
 - **Write the camera joint** (`camera_jnt`, 98) or what hangs from it in the drawn pose. `#camera`,
@@ -366,6 +375,12 @@ applied, so the view never moves.
 - **Keeps the motion:** a walking body is moved with `pe_params_pos` (`bRecalcBounds = 0x21`),
   from its physics position, only while physics is idle; at rest the entity's `SetPos` alone. A
   walk's first 150 ms count as walking.
+- **On a lift** (PreyVR-144): a body its floor carries is moving, whatever its own velocity says, so
+  it too is moved keeping the motion, and the lift stays its ground. A settle waits for the floor
+  to stop; past the lean zone the capsule still follows. Before, room-scale took a body standing
+  on the moving Lobby lift for one at rest, and its teleport left the body behind the floor for a
+  step each move: pushed down riding up, up riding down (`body.report`'s `floorFrames`,
+  `floorMoves`, `settleHeld`).
 - **Level only:** height stays the view's and the engine's. **Stairs** need nothing of it: a step
   lower than the capsule's bottom (0.53 m above the feet) never overlaps it, so the move fits and
   the living step climbs the stair. (The PreyVR-87 notes said the fit test would refuse a physical
@@ -420,10 +435,16 @@ applied, so the view never moves.
 - **The move that keeps the motion.** First `pe_params_pos{pos}` with `bRecalcBounds = 0x21`: bit
   `0x20` skips the living branch, and the base `SetParams` (`0xB88AA0`) still recomputes the bounds.
   The entity's `SetPos` that follows finds the position already there, so it skips the branch too.
-  Only while the body is moving: its own velocity (`pe_status_living` `+0x30`, from `+0x168`) or the
+  Only while the body is moving: its velocity with its floor's (`pe_status_living` `+0x18`) or the
   movement's request (`+0x3C`, from `+0x174`; the living `GetStatus` `0xB475D0`) above 5 cm/s
   (`roomscale::BodyMoving`), or the stick pushed within 150 ms (`MoveLaneStickStarted`: a walk's
-  first frames read as rest, because both velocities are last frame's). **At rest the teleport has
+  first frames read as rest, because both velocities are last frame's), or the floor moving
+  (`roomscale::FloorMoving`: `+0x18` less `+0x30` above 5 cm/s). **The body's own velocity is
+  relative to its floor:** `GetStatus` copies `+0x168` to `+0x18` and adds the ground collider's
+  velocity (`+0x2E8`) only while it holds one (`+0x2C8`, `0xB478E2`); `+0x30` is `+0x168` alone and
+  `+0x48` the floor's. Room-scale read `+0x30` until PreyVR-144, so a body standing on a moving
+  lift read as at rest, and the teleport's first act, the release `0xB49390` (called at
+  `0xB49A52`), cleared `+0x2C8` and `+0x2D0`: the lift. **At rest the teleport has
   a job:** the living step runs only on a body that is moving, airborne or climbing a step, and the
   airborne flag is what makes the next step settle a body moved while standing onto the floor,
   ramp or stair under it. So at rest the entity's `SetPos` alone.
@@ -608,6 +629,50 @@ do. The view, the capsule and the shadow keep the game's.
   everything; this line once read "a desk hides the legs", which was wrong. Since PreyVR-91 the
   world hides it ([how the body is drawn](#how-the-body-is-drawn)).
 
+### The frame it is placed in (PreyVR-146)
+
+**The pass poses frame N+1's body with frame N's view.** The gameplay frame (the anchor: the view
+camera's centre, which the head, the arms and the hands are all placed from) is published at
+frame N's render; the IK pass runs in frame N+1's animation, before that frame's view exists. In
+between, at the frame's start, the entity takes the position of frame N's physics step, and the
+pass's location (`+0x21C`, the entity's own position) with it. Within one frame the entity, the
+location and the view agree; the physics is a step ahead of all three. So the anchor is one
+frame's movement behind the location the pose is made for.
+
+Measured on the main lift (PreyVR-145, run of 2026-11-08, `body.report`'s `lift*` keys, a ride down
+then up, standing still; the keys were removed in PreyVR-149):
+
+| Reading | Floor moving | Still |
+|---|---|---|
+| The lift's speed | 27.0 m/s | |
+| The posed head as drawn, less the view (`liftDrift`) | +379 mm riding down, −397 mm riding up | −15 to +13 mm |
+| The entity less its physics (`liftEntityPhysics`) | +380 / −398 mm | −9 to +9 mm |
+| The location the pose was made for, less the entity (`liftLocationEntity`) | 0 | −10 to 0 mm |
+| The view less the entity (`liftViewEntity`) | 1555 to 1722 mm | 1660 to 1743 mm |
+| Prey's eye less the pose's camera joint (`liftEyeGap`) | +380 / −397 mm | −7 to +12 mm |
+| The pose's pelvis (`liftPelvis`) | 936 mm | 877 to 941 mm |
+
+40 cm is 27 m/s for one frame. Prey's own pose did not change (the pelvis), the body was drawn
+where it was posed for (the location is the entity), and the view kept its height over the
+entity: only the anchor was a frame old. Pushed up riding down, down riding up, as reported.
+Walking it was the walk's step, a few cm.
+
+**The fix:** the pass's own copy of the frame has its camera centre (and reticle origin) carried by
+the location less where the body stood for frame N's view (`RoomScaleLane`'s `BodyAfterFrame`):
+where frame N drew it, plus room-scale's move that frame, which the view's origin took up and so is
+not carried twice (`roomscale::BodyReference`). `animik::CarryWithBody` refuses more than 5 m in one
+pass, a load or a teleport.
+
+**Not the entity after room-scale's move** (PreyVR-146 took that; fixed in PreyVR-148). A moving
+body is moved from its physics, which after the render is a step ahead of where the body was drawn,
+so the move also brings the entity up to the physics. The next frame's start then has nothing to
+move, the location equals that reference, and nothing was carried, while the view had moved the
+step. PreyVR-147's glitch probe (removed in PreyVR-149) caught it walking with the stick: 62 frames, each with the posed
+head drawn one step behind the view (`driftMm` the reverse of `stepMm`, 60 to 90 mm at about 5 m/s),
+in runs while the capsule followed the walk (`keptMotion` 71), and none with a pass skipped
+(`glitchUnpinned` 0, `ownerBusy` 0). Worn, the whole body jumped back a step for an instant. `body.report`: `carried`, `carryMissed` (no body position for the frame:
+the service did not reach it), `carryRefused`, `carryMaxMm`.
+
 **It replaced the torso lift** (`arm.lift`, 2026-10-19 to 10-25). Calibrated seated then standing,
 the shoulders had risen off a torso left at the calibrated height. The lift stretched the spine by
 the neck's rise since calibration, shared up `spine1` to `spine4` by their heights (about 20% to
@@ -777,13 +842,16 @@ Collected from the sections above, with how each was established.
 | Prey's eye: entity rotation × `#camera`, plus the entity position; `UpdateView`; `CView::Update` | `0x1489010`; `0x148B820`; `0x3D9B9D` | decompile, measured (PreyVR-79) |
 | Frame order: `CSystem::Update`, `PrePhysicsUpdate`, `EntitySystem::Update`; the player's update | `0xDF5640`, `0x923BF0`, `0x926520`; `0x15806E0` | decompile, measured (PreyVR-81) |
 | `StartAnimationProcessing` copies the location to `+0xA90`; ADIK pass | `0x82F910`; `0x877B50` | decompile, measured |
+| AnimatedCharacter's location `+0x21C`: the entity's rotation and position, read by `0x4FB770`; equal to the entity at the frame's render, the physics a step ahead | `0x4FB770`, `0x4F9A80` | decompile, measured (PreyVR-145) |
+| No PoseAligner for the player: its factory skips entity id `0x7777` (the local player) | `0x2C7180` | decompile |
 | Entity transform: `SetPos`, `GetPos`, `SetRotation`, `GetWorldTM`, `GetPhysics` | `0x90AF40`, `0x10EA250`, `0x90B220`, `0x10EA260`, `0x9042B0` | bytes (`verify_view_rotation.py`) |
 | Transform update; skips the event on `whyFlags` bit 18 | `0x905480` (`0x9059A0 bt r14d,12h`) | listing |
 | Physics component XForm → `pe_params_pos` (pos or q, `bRecalcBounds = 1`); physics → entity sync | `0x96BE00` (call `0x96BFA3`); `0x96C010` | listing |
 | Living `SetParams`; its teleport branch, skipped when `bRecalcBounds & 0x20` | `0xB49610`; `0xB499CE`–`0xB49A8E` | bytes (`verify_room_scale_physics.py`) |
 | Base `SetParams` (pos, q, sim class, bounds) | `0xB88AA0` | bytes |
 | Change request: at once only while the step lock, `+0x57B0` and the world lock are clear and nothing is queued | `0xB1BCD0` | bytes |
-| `pe_status_living`: velocity `+0x30`, request `+0x3C`; `pe_player_dimensions` | living `GetStatus` `0xB475D0`; `GetParams` `0xB46AA0` | bytes |
+| `pe_status_living`: velocity with the floor's `+0x18` (`+0x168`, plus `+0x2E8` while the ground collider `+0x2C8` is held), own velocity `+0x30` (relative to the floor), request `+0x3C`, floor's velocity `+0x48`; `pe_player_dimensions` | living `GetStatus` `0xB475D0` (`0xB478B6`–`0xB4795D`); `GetParams` `0xB46AA0` | bytes (`verify_room_scale_physics.py`) |
+| The teleport's ground release: clears both ground colliders (`+0x2C8`, `+0x2D0`) | `0xB49390`, called at `0xB49A52` | bytes |
 | Stance test `pe_status_check_stance` (type `0x15`) and its part filter | `0xB56900` | bytes |
 | Living step; overlap test; push-out (`pushable_by_players`, up to 2.5·r) | `0xB4BF60` (slot `+0x100`); `0xB4ED4A`; `0xB4F41D`–`0xB4F548`, constant `0x1C85B60` | bytes |
 | Living constructor: one part, `flagsCollider` 2, `m_flags` `0x643` | `0xB441D0` (`0xB4472D`, `0xB4473B`, `0xB44819`) | bytes |
@@ -837,6 +905,12 @@ Collected from the sections above, with how each was established.
 | 10-25 | PreyVR-92 | Setup → Near Clip Distance (1–10 cm, default 3): the view's near plane | "Tested and verified working." |
 | 10-28 | PreyVR-101 | The near pass at the world's depth (`body.depth 1`, the new default; PreyVR-91's way kept as 2): the stun gun's sparks and charge meter had broken with the body drawn in the world | "Tested and verified working"; also fixed the PDA drawn over the hand |
 | 10-31 | PreyVR-118 | P read from the view instead of camera yaw − head yaw: the chest, hands and aim no longer turn about the head, bending to look straight down | "Tested and confirmed working." Run `player-20261031-121500`: the old yaw was up to 13.7° off at 85° of pitch (a temporary `yaw_gap` log, sampled at most once a second, since removed); snap turning played in that run, smooth turning not shown |
+| 11-08 | PreyVR-144 | A body on a moving floor counts as moving (velocity with the floor's, `+0x18`), so room-scale keeps the lift as its ground; settles wait for the floor to stop. From the Lobby lift report (TODO: body and camera pushed down riding up, up riding down; run `player-20261101-134824`, three rides) | Worn 11-08: the view no longer moves on the lift (`floorFrames` 688/684, `floorMoves` 0, no capsule move riding); the drawn body still drifted, below |
+| 11-08 | PreyVR-145 | Measurement only: the `lift*` keys in `body.report` | A ride down and up: the body's anchor a frame old, 40 cm at the lift's 27 m/s ([the frame it is placed in](#the-frame-it-is-placed-in-preyvr-146)) |
+| 11-08 | PreyVR-146 | The frame's view carried with the body to the pose (`animik::CarryWithBody`); the `lift*` keys kept to check it | Worn 11-08: the body no longer drifts on the lift. Walking with the stick, the whole body sometimes jumped out of place for an instant and back; not known whether that is new |
+| 11-08 | PreyVR-147 | Measurement only: the body glitch probe (`glitch*` keys in `body.report`, `preyvr_body glitch` log lines): per rendered frame, whether the body's own IK pass ran and posed it, and how far from the view the posed head was drawn | Walking with the stick: 62 frames with the posed head a step behind the view, during the capsule's moves; no pass skipped ([why](#the-frame-it-is-placed-in-preyvr-146)) |
+| 11-08 | PreyVR-148 | The carry's reference is where the body was drawn plus room-scale's move (`roomscale::BodyReference`), not the entity after the move | "Tested and verified working" 11-08: no jumps walking with the stick, the lift still fine |
+| 11-08 | PreyVR-149 | The lift and glitch measurements removed (`LiftProbe.h`, the `lift*`, `glitch*` and `owner*` keys); the carry's `carried`, `carryMissed`, `carryRefused`, `carryMaxMm` kept | Awaiting a sanity check |
 
 ## Open
 

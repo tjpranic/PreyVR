@@ -125,6 +125,16 @@ Vec3 WorldToModel(const Location& location, const Vec3& world);
 Quaternion WorldToModel(const Location& location, const Quaternion& world);
 Vec3 ModelToWorld(const Location& location, const Vec3& model);
 
+// **The frame's anchor carried with the body to this pose** (the lift fix,
+// PreyVR-146; docs/BODY-FOLLOW.md). The pass poses frame N+1's body with
+// frame N's view: the gameplay frame is published at the render, after the
+// pass. Between the two, the physics step's movement reaches the entity, and
+// the pose's location with it. A head-relative world point of frame N moves
+// with that: `point` plus `bodyNow - bodyThen`, the location less where the
+// body stood after frame N's render. On a lift at 27 m/s that is 40 cm a frame.
+// False, `out` untouched, for a non-finite reading or one past `maxMetres`.
+bool CarryWithBody(const Vec3& point, const Vec3& bodyNow, const Vec3& bodyThen, float maxMetres, Vec3& out);
+
 // The controller placed relative to the HEAD, at the engine's eye point.
 //
 //   world = eye + Rz(yaw) * ToEngine(controller - head)

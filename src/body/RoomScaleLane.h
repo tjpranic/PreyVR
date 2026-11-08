@@ -1,5 +1,8 @@
 #pragma once
 
+#include "base/VrMath.h"
+
+#include <cstdint>
 #include <string>
 
 // **Room-scale** (docs/BODY-FOLLOW.md, room-scale): the capsule follows the
@@ -40,6 +43,14 @@ bool BodyHeadOut();
 bool RoomScaleActive();
 // Frames moved and why not, as body.report reports it.
 std::string RoomScaleReport();
+// **Where the body stood for the gameplay frame published at `publishedNs`**:
+// where its render drew it, plus room-scale's move that frame
+// (roomscale::BodyReference). The next pose is measured from here to carry that
+// frame's view with the body (animik::CarryWithBody): the capsule's moves, which
+// the view's origin already took up, are not carried twice, and a moving body's
+// catch-up to its physics, a step on, is carried as the walk it is. False when
+// the service did not reach that frame (no gameplay, no frame, a fault).
+bool BodyAfterFrame(std::uint64_t publishedNs, Vec3& position);
 // Lean Zone (VR Options, Setup): how far the head may lead the capsule before
 // it follows, cm (0..50, default 25; more is taken as 50). 0 is no zone: the
 // capsule follows past the 2 cm deadzone, as before there was one.

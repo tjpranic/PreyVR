@@ -239,6 +239,16 @@ inline std::atomic<int> gLocMm[3]{0, 0, 0};
 
 inline std::atomic<int> gLocYawMilli{0};
 
+// The frame's view carried with the body to the pose (animik::CarryWithBody):
+// passes carried, passes with no body position for their frame (the service did
+// not reach it), carries refused (past kMaxCarry, or not finite), and the
+// farthest carried since the last report, mm.
+inline std::atomic<unsigned long long> gCarried{0}, gCarryMissed{0}, gCarryRefused{0};
+inline std::atomic<int> gCarryMaxMm{0};
+// Farther than this in one pass is a load or a teleport, not movement: 27 m/s
+// (the main lift) at 10 fps is 2.7 m.
+inline constexpr float kMaxCarry = 5.0f;
+
 // **One coherent per-hand record from inside the IK callback.**
 //
 // Separate latest-value counters cannot reconstruct a transformation chain: by

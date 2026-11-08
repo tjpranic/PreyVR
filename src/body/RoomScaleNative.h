@@ -33,9 +33,13 @@ inline constexpr int RecalcBoundsKeepMotion=0x21;
 // The engine's "unused" markers: a float and an int.
 inline constexpr std::uint32_t UnusedFloat=0xFFBFFFFF,UnusedInt=0x80000000;
 // pe_status_living (type 2), as the living GetStatus (0xB475D0) copies it:
-// the body's own velocity +0x30 (from +0x168) and the velocity the movement
-// asks for +0x3C (from +0x174, pe_action_move). camOffset +0x0C is ContactNative's.
-inline constexpr std::size_t LivingVelocity=0x30,LivingRequested=0x3C;
+// - +0x18: the body's velocity with its floor's -- +0x168, plus the ground
+//   collider's velocity (+0x2E8) while it holds one (+0x2C8);
+// - +0x30: the body's own velocity, +0x168 alone, which is relative to what it
+//   stands on: a player standing still on a moving lift reads zero here;
+// - +0x3C: the velocity the movement asks for (from +0x174, pe_action_move).
+// camOffset +0x0C is ContactNative's.
+inline constexpr std::size_t LivingVelocityWithFloor=0x18,LivingVelocity=0x30,LivingRequested=0x3C;
 // pe_status_check_stance (type 0x15): the base GetStatus leaves it to the
 // living one, which tests the collider at pos +0x04 (the body's own position
 // +0xA8 when unused), q +0x10, sizeCollider +0x20, heightCollider +0x2C and

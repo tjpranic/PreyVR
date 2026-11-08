@@ -1,10 +1,39 @@
 #include "body/ik/AnimIkTakeover.h"
 #include "body/ik/AnimIkState.h"
 
+#include "body/RoomScaleLane.h"
+
+#include <cmath>
+
 namespace preyvr::dll {
 using namespace ik;
 
 namespace {
+
+// **The lift fix (PreyVR-146).** This pass poses the next frame's body with the
+// last frame's view: the gameplay frame is published at the render, after this
+// pass. The physics step between them moves the body, and the location with
+// it, so the frame's anchor is carried by the same amount (animik::CarryWithBody):
+// the body, the arms and the hands all place from it. Without it they trail the
+// player by one frame's movement, 40 cm a frame on the main lift.
+void CarryFrameWithBody(GameplayPoseFrame& frame, const animik::Location& location)
+{
+    Vec3 then{};
+    if (!BodyAfterFrame(frame.publishedNs, then)) {
+        gCarryMissed.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    Vec3 centre{}, reticle{};
+    if (!frame.cameraCentreValid || !animik::CarryWithBody(frame.cameraCentre, location.t, then, kMaxCarry, centre)) {
+        gCarryRefused.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    if (animik::CarryWithBody(frame.reticleOrigin, location.t, then, kMaxCarry, reticle)) { frame.reticleOrigin = reticle; }
+    const int mm = static_cast<int>(std::lround(Length(Sub(centre, frame.cameraCentre)) * 1000.0f));
+    if (mm > gCarryMaxMm.load(std::memory_order_relaxed)) { gCarryMaxMm.store(mm, std::memory_order_relaxed); }
+    frame.cameraCentre = centre;
+    gCarried.fetch_add(1, std::memory_order_relaxed);
+}
 
 void __fastcall ProcessAdikWithTakeover(void* character, void* params)
 {
@@ -118,6 +147,7 @@ void __fastcall ProcessAdikWithTakeover(void* character, void* params)
                 gLocMm[2].store(static_cast<int>(loc[6] * 1000.0f), std::memory_order_relaxed);
                 gLocYawMilli.store(static_cast<int>(animik::YawOf(location.q) * 57295.78f),
                                    std::memory_order_relaxed);
+                CarryFrameWithBody(frame, location);
             }
             if (free) {
                 gFreeFrames.fetch_add(1, std::memory_order_relaxed);

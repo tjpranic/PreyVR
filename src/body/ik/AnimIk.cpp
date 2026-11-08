@@ -46,6 +46,18 @@ Vec3 ModelToWorld(const Location& location, const Vec3& model)
     return Vec3{turned.x + location.t.x, turned.y + location.t.y, turned.z + location.t.z};
 }
 
+bool CarryWithBody(const Vec3& point, const Vec3& bodyNow, const Vec3& bodyThen, float maxMetres, Vec3& out)
+{
+    const Vec3 carry{bodyNow.x - bodyThen.x, bodyNow.y - bodyThen.y, bodyNow.z - bodyThen.z};
+    const float length = std::sqrt(carry.x * carry.x + carry.y * carry.y + carry.z * carry.z);
+    if (!std::isfinite(point.x) || !std::isfinite(point.y) || !std::isfinite(point.z) || !std::isfinite(length) ||
+        !(length <= maxMetres)) {
+        return false;
+    }
+    out = Vec3{point.x + carry.x, point.y + carry.y, point.z + carry.z};
+    return true;
+}
+
 Pose ControllerWorldFromHead(float yawRadians, const Vec3& eyeWorld,
                              const Pose& openXrHead, const Pose& openXrController)
 {

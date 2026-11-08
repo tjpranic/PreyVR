@@ -1,7 +1,8 @@
 """Read-only Steam contracts for room-scale's physics calls on the player's living body:
 moving it without the engine's teleport (pe_params_pos, bRecalcBounds 0x21), reading
-its velocities (pe_status_living) and asking whether its collider fits somewhere
-(pe_status_check_stance). docs/BODY-FOLLOW.md, the capsule's physics. Never attaches."""
+its velocities (pe_status_living: with its floor's, and its own relative to the floor)
+and asking whether its collider fits somewhere (pe_status_check_stance).
+docs/BODY-FOLLOW.md, the capsule's physics. Never attaches."""
 import json,struct,sys
 from pathlib import Path
 from preydll import DEFAULT_MODULE,Image,fnv1a64 as fnv,native_rows
@@ -50,9 +51,22 @@ def verify():
         'proxy clears bEntGridUseOBB (+0x40)':(0x96be79,'884517'),
         'proxy calls SetParams with bThreadSafe 0':(0x96bf9d,'4533c0'),
         'proxy calls the physics SetParams slot +0x20':(0x96bfa3,'ff5020'),
-        # pe_status_living: the body's velocity and the requested one.
+        # pe_status_living: the body's velocity with its floor's (+0x18), its own,
+        # relative to the floor (+0x30), and the requested one. On a lift the
+        # floor's is the lift's: room-scale must read +0x18 to see the body move.
+        "living status starts the velocity with the floor's from the body's own +0x168":(0xb478b6,'f20f108368010000'),
+        'living status writes that at +0x18':(0xb478be,'f20f114718'),
+        'living status adds the floor only while it holds a ground collider (+0x2C8)':(0xb478e2,'4883bbc802000000'),
+        "living status adds the floor's velocity x (+0x2E8)":(0xb478fe,'f30f5893e8020000'),
+        "living status adds the floor's velocity y (+0x2EC)":(0xb47906,'f30f108bec020000'),
+        "living status adds the floor's velocity z (+0x2F0)":(0xb478ec,'f30f1083f0020000'),
         'living status reads the velocity at +0x168':(0xb47929,'f20f108368010000'),
         'living status writes it at +0x30':(0xb47931,'f20f114730'),
+        "living status writes the floor's velocity +0x2E8 at +0x48":(0xb47955,'f20f1083e8020000'),
+        # The teleport's first act: the ground colliders let go -- on a lift, the lift.
+        'the teleport releases the ground colliders first':(0xb49a52,'e8'),
+        'the release clears the ground collider (+0x2C8)':(0xb493ab,'48c783c802000000000000'),
+        'the release clears the second ground collider (+0x2D0)':(0xb493c8,'48c783d002000000000000'),
         'living status reads the requested velocity at +0x174':(0xb4793f,'f20f108374010000'),
         'living status writes it at +0x3C':(0xb47947,'f20f11473c'),
         # pe_status_check_stance.
@@ -83,6 +97,13 @@ def verify():
     checks.append('the call at 0xB47E61 reaches 0xB56900')
     assert rip(0xb4967e,5)==0xb1bcd0
     checks.append('the call at 0xB4967E reaches the change request 0xB1BCD0')
+    assert rip(0xb49a52,5)==0xb49390
+    checks.append('the call at 0xB49A52 reaches the ground release 0xB49390')
+    assert at(0xb478ea,1)==b'\x74' and 0xb478ea+2+at(0xb478eb,1)[0]==0xb47929
+    checks.append("with no ground collider the floor's velocity is skipped: 0xB478EA jumps to 0xB47929")
+    header=(ROOT/'src/body/RoomScaleNative.h').read_text(encoding='utf-8')
+    assert 'LivingVelocityWithFloor=0x18,LivingVelocity=0x30,LivingRequested=0x3C' in header
+    checks.append("RoomScaleNative.h reads the velocity with the floor's at +0x18, its own at +0x30, the request at +0x3C")
     overlap=struct.unpack('<f',at(rip(0xb577ea,9),4))[0]
     assert overlap!=0
     checks.append(f'an overlapping living body reports depth {overlap:g}: not zero, so it never fits')
