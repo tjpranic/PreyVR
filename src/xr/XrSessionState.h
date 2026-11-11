@@ -575,7 +575,7 @@ bool BuildNoteLayer(const FrameView& view, ID3D11Texture2D* texture, float dista
                     XrCompositionLayerQuad& layer);
 bool BuildTextLayer(const FrameView& view, ID3D11Texture2D* texture, float distance, float scale,
                     XrCompositionLayerQuad& layer);
-bool BuildWristLayer(const FrameView& view, ID3D11Texture2D* nativeWristTexture, XrCompositionLayerQuad& layer);
+bool BuildWristLayer(const FrameView& view, const NativeWristImage& nativeWrist, XrCompositionLayerQuad& layer);
 bool BuildSlotLayer(const FrameView& view, XrCompositionLayerQuad& layer);
 bool BuildFadeLayer(const FrameView& view, XrCompositionLayerQuad& layer);
 // XrHoldFrames.cpp

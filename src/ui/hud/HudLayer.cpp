@@ -18,6 +18,7 @@
 #include "ui/hud/NativeHudIsolation.h"
 #include "render/camera/StereoCamera.h"
 #include "ui/hud/NativeHudValue.h"
+#include "ui/hud/WristFrame.h"
 #include <MinHook.h>
 #include <wrl/client.h>
 #include <array>
@@ -133,6 +134,7 @@ thread_local bool redrawn=false;
 thread_local bool redrawMarkers=false;
 Capture& redrawDepth=NeverDestroyed<Capture>(); // the stencil the native draw started from; depth fields only
 Capture& nativeWrist=NeverDestroyed<Capture>();
+float nativeWristFrame[4]{}; // the wrist frame in nativeWrist's capture (wrist::Layout::rect); render thread
 std::atomic<std::uint64_t> wristRequest{0};
 std::atomic<unsigned long long> wristCaptured{0},wristRefused{0};
 std::atomic<bool> wristFault{false};
@@ -253,43 +255,86 @@ bool SetValueGuarded(void* root,std::uintptr_t base,const char* path,const Nativ
     __except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 
-// **The wrist's own presentation of the native status, for its replay only.**
-// The quadrant is authored tilted (-15/-15 deg, Health's init) at half scale,
-// and the game closes the meters (_visible false) a few seconds after a change
-// when "player state" is dynamic -- the profile default here. For the one
-// filtered replay the wrist draws, the quadrant is flattened, enlarged and the
-// meters shown; every value is read first and written back right after, so the
-// gameplay HUD and the movie's own logic never see the difference.
+// **The wrist's own layout of the native status, for its replay only**
+// (ui/hud/WristFrame.h, docs/WRIST-HUD-SCOPE-2026-11-11.md). The quadrant is
+// authored tilted (-15/-15 deg, Health's init) at the widget scale, where
+// SafeFrame puts it, and the engine's HUD sway and shake move safe with all it
+// holds; the game also closes the meters (_visible false) a few seconds after a
+// change when "player state" is dynamic -- the profile default here. For the one
+// filtered replay the wrist draws:
+//   safe at the stage centre, where HUDPos(0, 0) puts it (as the reticle's replay
+//   has it), so no sway reaches the wrist;
+//   the quadrant flat, scaled and placed by wrist::Place, so the wrist frame
+//   lands in one known rectangle of the capture, and that rectangle is the card;
+//   the meters shown -- psi only while Prey would show it (WristPsiShown) --
+//   and Prey's backdrop and top line hidden.
+// Every value is read first and written back right after, so the gameplay HUD
+// and the movie's own logic never see the difference.
 constexpr const char* kStatusOverride[]={
     "_root.safe.quadrant_SW._xrotation","_root.safe.quadrant_SW._yrotation",
     "_root.safe.quadrant_SW._xscale","_root.safe.quadrant_SW._yscale",
+    "_root.safe.quadrant_SW._x","_root.safe.quadrant_SW._y","_root.safe._x","_root.safe._y",
     "_root.safe.quadrant_SW.health_mc._visible","_root.safe.quadrant_SW.psi_mc._visible",
     "_root.safe.quadrant_SW.armor_mc._visible","_root.safe.quadrant_SW.bg_mc._visible",
     "_root.safe.quadrant_SW.bg2_mc._visible","_root.safe.quadrant_SW.line_mc._visible"};
 constexpr std::size_t kStatusOverrides=sizeof(kStatusOverride)/sizeof(kStatusOverride[0]);
-std::atomic<unsigned long long> overrideApplied{0},overrideRefused{0};
+constexpr std::size_t kStatusNumbers=8; // the rest are booleans
+// Read only (wrist::Stage): the stage's half size and safe's own scale.
+constexpr const char* kStatusStage[]={"_root.cam.m_halfStageWidth","_root.cam.m_halfStageHeight",
+    "_root.safe._xscale","_root.safe._yscale"};
+// PsiMeter's own state: true while Prey has the meter open (psiOpen).
+constexpr const char* kPsiOpen="_root.psiM.isOpen";
+std::atomic<unsigned long long> overrideApplied{0},overrideRefused{0},psiShownFrames{0},psiHiddenFrames{0};
+// The last placed replay's inputs and result, for hud.layer's nativeWrist stage=:
+// half stage width and height, safe's scale, the capture, the cover scale and the
+// frame's pixels per unit. Render thread writes, any thread reads.
+std::array<std::atomic<float>,8> wristStage{};
 struct StatusOverride {
     std::array<NativeHudValue,kStatusOverrides> original{};
     std::size_t written=0;
-    // `background`: keep the meters' own backdrop and top line (bg_mc, bg2_mc,
-    // line_mc); off, the hologram's glass stands in for them and the framing
-    // closes on the meters.
-    bool Apply(void* root,std::uintptr_t base,float scale,bool background){
+    // `width`, `height`: the capture's. `psiShown`: WristPsiShown (1, 0, -1
+    // unknown). False, with nothing written, when a value is not a plain number
+    // or boolean, or the stage cannot be read: the frame would crop the wrong place.
+    bool Apply(void* root,std::uintptr_t base,unsigned width,unsigned height,int psiShown,wrist::Layout& placed){
+        double stage[4]{};
+        for(std::size_t i=0;i<4;++i){
+            NativeHudValue v{};
+            if(!GetValueGuarded(root,base,kStatusStage[i],v))return false;
+            if(v.type!=3){NativeHudApi{root,base}.Release(v);return false;}
+            std::memcpy(&stage[i],&v.payload,sizeof(double));
+        }
+        const wrist::Stage read{stage[0],stage[1],stage[2],stage[3],width,height};
+        placed=wrist::Place(read);
+        const float seen[8]{float(read.halfWidth),float(read.halfHeight),float(read.safeScaleX),float(read.safeScaleY),
+            float(width),float(height),float(wrist::CoverScale(read)),float(placed.pixelsPerUnit)};
+        for(std::size_t i=0;i<8;++i)wristStage[i].store(seen[i],std::memory_order_relaxed);
+        if(!placed.valid)return false;
+        bool psi=psiShown!=0;
+        if(!psi){
+            NativeHudValue v{};
+            if(GetValueGuarded(root,base,kPsiOpen,v)){
+                psi=(v.type&0x3F)==2&&(v.payload&0xFF);
+                NativeHudApi{root,base}.Release(v);
+            }
+        }
         for(std::size_t i=0;i<kStatusOverrides;++i){
             NativeHudValue v{};
             if(!GetValueGuarded(root,base,kStatusOverride[i],v))return false;
             // Plain numbers and booleans only: nothing to release, safe to replay.
-            if(v.type!=(i<4?3u:2u))return false;
+            if(v.type!=(i<kStatusNumbers?3u:2u)){NativeHudApi{root,base}.Release(v);return false;}
             original[i]=v;
         }
+        const double number[kStatusNumbers]={0,0,placed.quadrantScaleX,placed.quadrantScaleY,
+            placed.quadrantX,placed.quadrantY,placed.safeX,placed.safeY};
+        const bool shown[kStatusOverrides-kStatusNumbers]={true,psi,true,false,false,false};
         for(std::size_t i=0;i<kStatusOverrides;++i){
             NativeHudValue v{};
-            if(i<2){v.type=3;const double zero=0;std::memcpy(&v.payload,&zero,sizeof(zero));}
-            else if(i<4){v.type=3;double s=0;std::memcpy(&s,&original[i].payload,sizeof(s));s*=scale;std::memcpy(&v.payload,&s,sizeof(s));}
-            else {v.type=2;v.payload=i<7||background?1:0;}
+            if(i<kStatusNumbers){v.type=3;std::memcpy(&v.payload,&number[i],sizeof(double));}
+            else {v.type=2;v.payload=shown[i-kStatusNumbers]?1:0;}
             if(!SetValueGuarded(root,base,kStatusOverride[i],v))return false;
             written=i+1;
         }
+        (psi?psiShownFrames:psiHiddenFrames).fetch_add(1,std::memory_order_relaxed);
         return true;
     }
     void Restore(void* root,std::uintptr_t base){
@@ -378,24 +423,30 @@ bool DrawStatusGuarded(void* root){
 }
 void CaptureNativeStatus(void* root){
     NativeHudApi api{root,PreyBase()};
-    if(!api.Valid()){++wristRefused;return;}
+    if(!api.Valid()||!nativeWrist.texture){++wristRefused;return;}
+    D3D11_TEXTURE2D_DESC capture{};nativeWrist.texture->GetDesc(&capture);
     hud::Isolation isolation(api);
-    bool produced=false,coverage=false;
-    if(isolation.Begin()){
-        const RedirectInto into(nativeWrist);
-        StatusOverride layout;
-        if(layout.Apply(root,api.base,WristNativeScalePercent()*.01f,WristNativeBackground()))overrideApplied.fetch_add(1,std::memory_order_relaxed);
-        else {layout.Restore(root,api.base);overrideRefused.fetch_add(1,std::memory_order_relaxed);}
-        replayFilter=&isolation;
-        produced=DrawStatusGuarded(root);
-        replayFilter=nullptr;
-        layout.Restore(root,api.base);
-        // Require traversal below the common SW ancestor; cached ancestors
-        // could otherwise contribute pixels without passing the sprite filter.
-        coverage=isolation.Complete();
+    const bool begun=isolation.Begin();
+    bool placed=false,produced=false,coverage=false;
+    wrist::Layout layout{};
+    if(begun){
+        StatusOverride status;
+        placed=status.Apply(root,api.base,capture.Width,capture.Height,WristPsiShown(),layout);
+        // Not placed, not drawn: the frame would crop the wrong place.
+        (placed?overrideApplied:overrideRefused).fetch_add(1,std::memory_order_relaxed);
+        if(placed){
+            const RedirectInto into(nativeWrist);
+            replayFilter=&isolation;
+            produced=DrawStatusGuarded(root);
+            replayFilter=nullptr;
+            // Require traversal below the common SW ancestor; cached ancestors
+            // could otherwise contribute pixels without passing the sprite filter.
+            coverage=isolation.Complete();
+        }
+        status.Restore(root,api.base);
     }
     const bool restored=isolation.Release();
-    if(!restored||!produced){
+    if(!restored||!begun||(placed&&!produced)){
         ++wristRefused;
         // A failed transaction disables replay until the XR session restarts.
         // Release attempts ALL handles. A faulting native release is never retried.
@@ -405,7 +456,9 @@ void CaptureNativeStatus(void* root){
     }
     // Native visibility may hide every meter. Retry on a future requested frame;
     // missing traversal is not a process fault or proof that the HUD is empty.
-    if(!coverage){++wristRefused;return;}
+    // Unplaced, likewise: nothing was drawn.
+    if(!placed||!coverage){++wristRefused;return;}
+    std::memcpy(nativeWristFrame,layout.rect,sizeof(nativeWristFrame));
     nativeWrist.stamp=MonotonicNanoseconds();nativeWrist.thread=GetCurrentThreadId();++wristCaptured;
 }
 
@@ -985,6 +1038,14 @@ std::string HudLayerReport(){
     out+=" nativeWrist={captured="+std::to_string(wristCaptured.load())+" refused="+
         std::to_string(wristRefused.load())+" fault="+std::to_string(wristFault.load())+
         " layout="+std::to_string(overrideApplied.load())+"/"+std::to_string(overrideRefused.load())+
+        " psi="+std::to_string(psiShownFrames.load())+"/"+std::to_string(psiHiddenFrames.load())+
+        [] {
+            char b[160];
+            std::snprintf(b,sizeof(b)," stage=%.0fx%.0f safe=%.0f,%.0f capture=%.0fx%.0f cover=%.3f ppu=%.3f",
+                2*wristStage[0].load(),2*wristStage[1].load(),wristStage[2].load(),wristStage[3].load(),
+                wristStage[4].load(),wristStage[5].load(),wristStage[6].load(),wristStage[7].load());
+            return std::string(b);
+        }()+
         " faceFrames="+std::to_string(faceFrames.load())+" faceRefused="+std::to_string(faceRefused.load())+"}";
     // Per part: requested now, frames lifted and replayed, frames the replay
     // drew it, the gate as last read (1 open, 0 closed, -1 unread or unreadable).
@@ -1068,10 +1129,14 @@ void RequestNativeWristCapture(bool active){
     if(!active){wristRequest=0;return;}
     if(!wristFault.load())wristRequest=MonotonicNanoseconds();
 }
-ID3D11Texture2D* NativeWristLayerTexture(){
+NativeWristImage NativeWristLayerTexture(){
     const bool fresh=nativeWrist.thread==GetCurrentThreadId()&&FreshSample(MonotonicNanoseconds(),nativeWrist.stamp);
     nativeWrist.stamp=0;
-    return fresh&&!wristFault.load()?nativeWrist.texture.Get():nullptr;
+    NativeWristImage image{};
+    if(!fresh||wristFault.load())return image;
+    image.texture=nativeWrist.texture.Get();
+    std::memcpy(image.frame,nativeWristFrame,sizeof(image.frame));
+    return image;
 }
 DWORD QueueHudVariable(const std::string& path,bool set,double value){
     if(path.empty()||path.size()>200||(set&&!std::isfinite(value)))return 1;

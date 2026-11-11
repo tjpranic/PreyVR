@@ -5,6 +5,8 @@
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 #include <array>
+#include <cmath>
+#include <cstring>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -55,6 +57,7 @@ void Transactions(){
         CHECK(api.live==0&&api.released==Api::count);
     }
 }
+struct Rect {unsigned x0,y0,x1,y1;};
 struct Graphics {
     ComPtr<ID3D11Device> device;ComPtr<ID3D11DeviceContext> context;ComPtr<ID3D11InfoQueue> debug;
     Graphics(){
@@ -64,43 +67,47 @@ struct Graphics {
             D3D11_SDK_VERSION,&device,nullptr,&context);
         CHECK(SUCCEEDED(hr));device.As(&debug);
     }
-    ComPtr<ID3D11Texture2D> Source(unsigned w,unsigned h,DXGI_FORMAT format,bool blank=false){
+    // Coloured premultiplied rectangles: unless `blank`, one touching the
+    // bottom-left input edge, and any `extra`.
+    ComPtr<ID3D11Texture2D> Source(unsigned w,unsigned h,DXGI_FORMAT format,bool blank=false,std::vector<Rect> extra={}){
         std::vector<std::uint32_t> pixels(w*h);
-        // Coloured premultiplied rectangle touching the bottom-left input edge.
         const bool bgra=format==DXGI_FORMAT_B8G8R8A8_UNORM||format==DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-        if(!blank)for(unsigned y=h-50;y<h;++y)for(unsigned x=0;x<100;++x)
+        std::vector<Rect> rects;if(!blank)rects.push_back({0,h-50,100,h});
+        for(auto r:extra)rects.push_back(r);
+        for(auto r:rects)for(unsigned y=r.y0;y<r.y1;++y)for(unsigned x=r.x0;x<r.x1;++x)
             pixels[y*w+x]=bgra?0x80643219u:0x80193264u;
         D3D11_TEXTURE2D_DESC d{};d.Width=w;d.Height=h;d.Format=format;d.ArraySize=d.MipLevels=1;
         d.SampleDesc.Count=1;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
         D3D11_SUBRESOURCE_DATA data{pixels.data(),w*4,0};ComPtr<ID3D11Texture2D> texture;
         CHECK(SUCCEEDED(device->CreateTexture2D(&d,&data,&texture)));return texture;
     }
-    void Inspect(ID3D11Texture2D* texture,bool blank){
+    std::vector<std::uint32_t> Read(ID3D11Texture2D* texture){
         CHECK(texture);D3D11_TEXTURE2D_DESC d{};texture->GetDesc(&d);
         CHECK(d.Width==dll::NativeWristWidth&&d.Height==dll::NativeWristHeight&&d.Format==DXGI_FORMAT_R8G8B8A8_UNORM);
         d.Usage=D3D11_USAGE_STAGING;d.BindFlags=0;d.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
         ComPtr<ID3D11Texture2D> staging;CHECK(SUCCEEDED(device->CreateTexture2D(&d,nullptr,&staging)));
         context->CopyResource(staging.Get(),texture);D3D11_MAPPED_SUBRESOURCE m{};
         CHECK(SUCCEEDED(context->Map(staging.Get(),0,D3D11_MAP_READ,0,&m)));
-        unsigned x0=d.Width,y0=d.Height,x1=0,y1=0;
-        bool allZero=true;std::uint32_t center=0;
-        for(unsigned y=0;y<d.Height;++y){
-            const auto row=reinterpret_cast<const std::uint32_t*>(static_cast<const char*>(m.pData)+y*m.RowPitch);
-            if(y==d.Height/2)center=row[d.Width/2];
-            for(unsigned x=0;x<d.Width;++x){
-                allZero=allZero&&row[x]==0;
-                if((row[x]>>24)>16){x0=std::min(x0,x);y0=std::min(y0,y);x1=std::max(x1,x);y1=std::max(y1,y);}
-            }
-        }
-        context->Unmap(staging.Get(),0);
-        if(blank)CHECK(allZero);
-        else {
-            CHECK(center==0x80193264u); // Exact swizzle, alpha and gamma-byte preservation.
-            CHECK(x0>10&&y0>10&&x1<d.Width-10&&y1<d.Height-10);
-            CHECK(std::abs(static_cast<int>(x0+x1)-static_cast<int>(d.Width-1))<=2);
-            CHECK(std::abs(static_cast<int>(y0+y1)-static_cast<int>(d.Height-1))<=2);
-            const float ratio=float(x1-x0+1)/float(y1-y0+1);CHECK(ratio>1.97f&&ratio<2.03f);
-        }
+        std::vector<std::uint32_t> out(d.Width*d.Height);
+        for(unsigned y=0;y<d.Height;++y)
+            std::memcpy(&out[y*d.Width],static_cast<const char*>(m.pData)+y*m.RowPitch,d.Width*4);
+        context->Unmap(staging.Get(),0);return out;
+    }
+    // The frame used below: the source's bottom-left 275 x 120, the card's aspect,
+    // eight card pixels per source pixel. The block (100 x 50) covers card
+    // x 0..800, y 560..960.
+    static void Frame(unsigned h,float (&frame)[4]){frame[0]=0;frame[1]=float(h-120);frame[2]=275;frame[3]=float(h);}
+    void Inspect(ID3D11Texture2D* texture,bool blank){
+        const auto pixels=Read(texture);
+        const unsigned w=dll::NativeWristWidth,h=dll::NativeWristHeight;
+        if(blank){for(auto v:pixels)CHECK(v==0);return;}
+        CHECK(pixels[760*w+400]==0x80193264u); // Exact swizzle, alpha and gamma-byte preservation.
+        CHECK(pixels[760*w+1200]==0&&pixels[200*w+400]==0); // beside and above the block: nothing
+        unsigned x0=w,y0=h,x1=0,y1=0;
+        for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x)
+            if((pixels[y*w+x]>>24)>16){x0=std::min(x0,x);y0=std::min(y0,y);x1=std::max(x1,x);y1=std::max(y1,y);}
+        CHECK(x0==0&&y1==h-1);                     // the frame's corner is the block's
+        CHECK(x1>=796&&x1<=806&&y0>=552&&y0<=562); // mapped, not fitted: 8x, wherever it is
     }
     void NoErrors(){
         if(!debug)return;
@@ -111,37 +118,65 @@ struct Graphics {
         }
     }
 };
-// The hologram's presentation: the fade scales all four (premultiplied)
-// channels; the panel is glass under the meters, clear outside its corners.
-void PanelAndFade(){
-    Graphics g;dll::NativeWristTexture fitter;
+// **No resizing**: whatever else the capture holds, inside the frame or out of
+// it, the block keeps its place and size on the card, pixel for pixel.
+void FixedFrame(){
+    Graphics g;dll::NativeWristTexture fitter;float frame[4];Graphics::Frame(480,frame);
+    auto alone=g.Source(640,480,DXGI_FORMAT_R8G8B8A8_UNORM);
+    const auto before=g.Read(fitter.Fit(g.context.Get(),alone.Get(),frame));
+    // An effect above, outside the frame, and a power beside it, inside: the old
+    // fit shrank the block to make room for them.
+    auto busy=g.Source(640,480,DXGI_FORMAT_R8G8B8A8_UNORM,false,{{300,0,400,50},{180,400,260,440}});
+    const auto after=g.Read(fitter.Fit(g.context.Get(),busy.Get(),frame));
+    const unsigned w=dll::NativeWristWidth,h=dll::NativeWristHeight;
+    for(unsigned y=0;y<h;++y)for(unsigned x=0;x<800;++x)CHECK(before[y*w+x]==after[y*w+x]);
+    CHECK(after[480*w+1760]==0x80193264u); // the one inside shows, where it is
+    // A frame that is not one: nothing.
+    const float nan[4]{0,0,NAN,1},empty[4]{10,10,10,20};
+    CHECK(!fitter.Fit(g.context.Get(),alone.Get(),nan)&&!fitter.Fit(g.context.Get(),alone.Get(),empty));
+    g.NoErrors();
+}
+// The fade scales all four (premultiplied) channels; a refit is the same pixels
+// with a new fade. No glass: around the meters the card is clear.
+void Fade(){
+    Graphics g;dll::NativeWristTexture fitter;float frame[4];Graphics::Frame(480,frame);
     auto input=g.Source(640,480,DXGI_FORMAT_R8G8B8A8_UNORM);
-    auto read=[&](ID3D11Texture2D* texture,unsigned x,unsigned y){
-        CHECK(texture);D3D11_TEXTURE2D_DESC d{};texture->GetDesc(&d);
-        d.Usage=D3D11_USAGE_STAGING;d.BindFlags=0;d.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
-        ComPtr<ID3D11Texture2D> staging;CHECK(SUCCEEDED(g.device->CreateTexture2D(&d,nullptr,&staging)));
-        g.context->CopyResource(staging.Get(),texture);D3D11_MAPPED_SUBRESOURCE m{};
-        CHECK(SUCCEEDED(g.context->Map(staging.Get(),0,D3D11_MAP_READ,0,&m)));
-        const auto v=reinterpret_cast<const std::uint32_t*>(static_cast<const char*>(m.pData)+y*m.RowPitch)[x];
-        g.context->Unmap(staging.Get(),0);return v;
-    };
-    const unsigned cx=dll::NativeWristWidth/2,cy=dll::NativeWristHeight/2;
-    const auto half=read(fitter.Fit(g.context.Get(),input.Get(),.5f,false),cx,cy);
+    const unsigned w=dll::NativeWristWidth;
+    const auto half=g.Read(fitter.Fit(g.context.Get(),input.Get(),frame,.5f))[760*w+400];
     for(int k=0;k<4;++k){
         const int full=(0x80193264u>>(8*k))&0xFF,got=(half>>(8*k))&0xFF;
         CHECK(std::abs(got-full/2)<=1);
     }
-    auto panel=fitter.Fit(g.context.Get(),input.Get(),1.f,true);
-    CHECK((read(panel,0,0)>>24)==0);                      // outside the rounded corner
-    const auto glass=read(panel,40,cy)>>24;                // inside, beside the meters
-    CHECK(glass>90&&glass<200);
-    CHECK((read(panel,cx,cy)>>24)>=0x80);                  // the meters over the glass
-    const auto dimmed=read(fitter.Refit(g.context.Get(),.25f,true),40,cy)>>24;
-    CHECK(std::abs(static_cast<int>(dimmed)-static_cast<int>(glass)/4)<=1); // refit: same pixels, new fade
+    const auto card=g.Read(fitter.Refit(g.context.Get(),1.f));
+    CHECK(card[760*w+400]==0x80193264u&&card[0]==0&&card[760*w+1600]==0&&card[200*w+400]==0);
+    const auto quarter=g.Read(fitter.Refit(g.context.Get(),.25f))[760*w+400]>>24;
+    CHECK(std::abs(static_cast<int>(quarter)-0x80/4)<=1);
+    g.NoErrors();
+}
+// wrist.report's content=: the box the capture really held, read back on a later
+// frame without waiting, with the rectangle that capture was mapped with.
+void Content(){
+    Graphics g;dll::NativeWristTexture fitter;float frame[4];Graphics::Frame(480,frame);
+    CHECK(!fitter.LastContent().valid);
+    auto input=g.Source(640,480,DXGI_FORMAT_R8G8B8A8_UNORM,false,{{300,0,400,50}});
+    CHECK(fitter.Fit(g.context.Get(),input.Get(),frame));
+    for(int i=0;i<500&&!fitter.LastContent().valid;++i){g.context->Flush();fitter.Refit(g.context.Get(),1.f);}
+    const auto c=fitter.LastContent();
+    CHECK(c.valid&&!c.empty&&c.serial==1);
+    CHECK(c.box[0]==0&&c.box[1]==0&&c.box[2]==400&&c.box[3]==480); // what lies outside the frame counts
+    CHECK(c.frame[0]==frame[0]&&c.frame[1]==frame[1]&&c.frame[2]==frame[2]&&c.frame[3]==frame[3]);
+    // One capture in kContentEvery is sampled: the ones between are not.
+    auto blank=g.Source(640,480,DXGI_FORMAT_R8G8B8A8_UNORM,true);
+    for(unsigned i=1;i<dll::NativeWristTexture::kContentEvery;++i)CHECK(fitter.Fit(g.context.Get(),blank.Get(),frame));
+    for(int i=0;i<50;++i){g.context->Flush();fitter.Refit(g.context.Get(),1.f);}
+    CHECK(fitter.LastContent().serial==1);
+    CHECK(fitter.Fit(g.context.Get(),blank.Get(),frame));
+    for(int i=0;i<500&&fitter.LastContent().serial==1;++i){g.context->Flush();fitter.Refit(g.context.Get(),1.f);}
+    CHECK(fitter.LastContent().serial==2&&fitter.LastContent().empty);
     g.NoErrors();
 }
 void Pixels(){
-    Graphics g;dll::NativeWristTexture fitter;
+    Graphics g;dll::NativeWristTexture fitter;float frame[4];Graphics::Frame(480,frame);
     auto sentinel=g.Source(640,480,DXGI_FORMAT_R8G8B8A8_UNORM);
     ComPtr<ID3D11ShaderResourceView> view;CHECK(SUCCEEDED(g.device->CreateShaderResourceView(sentinel.Get(),nullptr,&view)));
     auto v=view.Get();g.context->CSSetShaderResources(0,1,&v);g.context->CSSetShaderResources(1,1,&v);
@@ -159,7 +194,7 @@ void Pixels(){
     g.context->Begin(predicate.Get());g.context->End(predicate.Get());g.context->SetPredication(predicate.Get(),TRUE);
     for(auto format:{DXGI_FORMAT_R8G8B8A8_UNORM,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
                      DXGI_FORMAT_B8G8R8A8_UNORM,DXGI_FORMAT_B8G8R8A8_UNORM_SRGB}){
-        auto input=g.Source(640,480,format);g.Inspect(fitter.Fit(g.context.Get(),input.Get()),false);
+        auto input=g.Source(640,480,format);g.Inspect(fitter.Fit(g.context.Get(),input.Get(),frame),false);
         ComPtr<ID3D11ShaderResourceView> before0,before1;
         g.context->CSGetShaderResources(0,1,&before0);g.context->CSGetShaderResources(1,1,&before1);
         CHECK(before0.Get()==view.Get()&&before1.Get()==view.Get());
@@ -171,16 +206,30 @@ void Pixels(){
         CHECK(previousPredicate.Get()==predicate.Get()&&condition==TRUE);
     }
     g.context->SetPredication(nullptr,FALSE);
-    auto bigger=g.Source(1280,720,DXGI_FORMAT_R8G8B8A8_UNORM);g.Inspect(fitter.Fit(g.context.Get(),bigger.Get()),false);
-    auto clear=g.Source(1280,720,DXGI_FORMAT_R8G8B8A8_UNORM,true);g.Inspect(fitter.Fit(g.context.Get(),clear.Get()),true);
-    CHECK(!fitter.Fit(nullptr,clear.Get())&&!fitter.Fit(g.context.Get(),nullptr));
+    // A larger capture with its frame in the same corner: the same card.
+    float tall[4];Graphics::Frame(720,tall);
+    auto bigger=g.Source(1280,720,DXGI_FORMAT_R8G8B8A8_UNORM);g.Inspect(fitter.Fit(g.context.Get(),bigger.Get(),tall),false);
+    auto clear=g.Source(1280,720,DXGI_FORMAT_R8G8B8A8_UNORM,true);g.Inspect(fitter.Fit(g.context.Get(),clear.Get(),tall),true);
+    CHECK(!fitter.Fit(nullptr,clear.Get(),tall)&&!fitter.Fit(g.context.Get(),nullptr,tall));
     Graphics other;auto otherInput=other.Source(640,480,DXGI_FORMAT_R8G8B8A8_UNORM);
-    CHECK(!fitter.Fit(g.context.Get(),otherInput.Get()));
-    other.Inspect(fitter.Fit(other.context.Get(),otherInput.Get()),false);
-    g.Inspect(fitter.Fit(g.context.Get(),bigger.Get()),false); // Recreate on device change.
+    CHECK(!fitter.Fit(g.context.Get(),otherInput.Get(),frame));
+    other.Inspect(fitter.Fit(other.context.Get(),otherInput.Get(),frame),false);
+    g.Inspect(fitter.Fit(g.context.Get(),bigger.Get(),tall),false); // Recreate on device change.
     other.NoErrors();
     g.NoErrors();
 }
+// **Minifying**: a capture too small for the layout's density gives each card
+// pixel more than one source pixel, four taps each, still where the frame says.
+void Minify(){
+    Graphics g;dll::NativeWristTexture fitter;
+    auto input=g.Source(4096,2048,DXGI_FORMAT_R8G8B8A8_UNORM,true,{{0,1280,1600,2048}});
+    const float frame[4]{0,512,3520,2048}; // 1.6 source pixels per card pixel
+    const auto pixels=g.Read(fitter.Fit(g.context.Get(),input.Get(),frame));
+    const unsigned w=dll::NativeWristWidth;
+    CHECK(pixels[760*w+400]==0x80193264u&&pixels[760*w+1200]==0&&pixels[200*w+400]==0);
+    g.NoErrors();
 }
-int main(){try{Transactions();Pixels();PanelAndFade();std::cout<<"native wrist isolation and GPU pixels PASS\n";return 0;}
+}
+int main(){try{Transactions();Pixels();FixedFrame();Fade();Content();Minify();
+    std::cout<<"native wrist isolation and GPU pixels PASS\n";return 0;}
 catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

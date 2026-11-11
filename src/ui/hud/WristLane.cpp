@@ -10,6 +10,11 @@
 #include "base/LatestSnapshot.h"
 #include "render/camera/StereoCamera.h"
 #include "ui/hud/WristHolo.h"
+#include "ui/hud/WristFrame.h"
+#include "ui/hud/NativeWristNative.h"
+#include "engine/EngineAccess.h"
+#include "engine/NativeContract.h"
+#include "controls/input/InputPost.h"
 
 #include <algorithm>
 #include <array>
@@ -26,21 +31,18 @@ using wrist::Card;
 
 // ---- settings (command channel; read on every thread) ----------------------
 std::atomic<unsigned> gAnchor{1};          // 1 the drawn forearm, 0 Funk's grip card
-std::atomic<int> gAlongMm{75}, gHoverMm{42}, gWidthMm{125}, gTiltDeg{40};
+std::atomic<int> gAlongMm{75}, gHoverMm{42}, gTiltDeg{40};
 std::atomic<int> gEnterFacing{500}, gExitFacing{220}, gEnterViewing{820}, gExitViewing{620};  // permille
 std::atomic<int> gDwellMs{80};
 std::atomic<unsigned> gForce{0};           // 1: skip the look test (captures from any pose)
-std::atomic<unsigned> gNativeScale{400};   // percent of the movie's own scale
-std::atomic<unsigned> gNativeBackground{0}; // the meters' own backdrop/line (0: the glass instead)
 std::atomic<unsigned> gOcclusion{3};       // 1 scene segments, 2 the right hand and its weapon
-std::atomic<unsigned> gHaptic{1};          // a faint tick on the left controller as it unfolds
+std::atomic<unsigned> gHaptic{1};          // a faint tick on the left controller as it appears
 
 wrist::Placement ReadPlacement()
 {
     wrist::Placement p{};
     p.along = gAlongMm.load() * 0.001f;
     p.hover = gHoverMm.load() * 0.001f;
-    p.width = gWidthMm.load() * 0.001f;
     p.maxTiltDeg = static_cast<float>(gTiltDeg.load());
     return p;
 }
@@ -122,6 +124,52 @@ struct Last {
 std::mutex gLastMutex;
 Last gLast;
 
+// ---- what a capture held (XR thread -> report) --------------------------------
+struct ContentSeen {
+    bool valid = false, empty = true;
+    wrist::Box box{};
+    unsigned long long samples = 0, outside = 0, serial = 0;
+};
+std::mutex gContentMutex;
+ContentSeen gContent;
+
+// ---- whether the wrist shows the psi meter (main thread) ---------------------
+// Prey's own predicate (NativeWristNative.h PsiShown) on the player's psi owner,
+// a few times a second: it walks the 16 power slots and builds a list.
+namespace native = hud::native;
+static_assert(contract::Gated(native::PsiShownContracts, native::GetPlayer) &&
+              contract::Gated(native::PsiShownContracts, native::PsiShown));
+std::atomic<int> gPsiShown{-1};
+std::atomic<unsigned> gPsiGate{0};   // 0 unchecked, 1 bodies match, 2 refused (or faulted)
+unsigned gPsiTick = 0;
+bool PsiBodiesMatch(std::uintptr_t base)
+{
+    __try { return base && contract::BodiesMatch(base, native::PsiShownContracts); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+}
+// 1 shown, 0 not, -1 no player yet, -2 faulted.
+int ReadPsiShown(std::uintptr_t base)
+{
+    __try {
+        const auto player = reinterpret_cast<std::uintptr_t(__fastcall*)()>(base + native::GetPlayer)();
+        if (!player) { return -1; }
+        const auto owner = *reinterpret_cast<const std::uintptr_t*>(player + native::PlayerPsiOwner);
+        if (!owner) { return -1; }
+        return reinterpret_cast<bool(__fastcall*)(std::uintptr_t)>(base + native::PsiShown)(owner) ? 1 : 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return -2; }
+}
+void UpdatePsiShown()
+{
+    if (!WristDisplayEnabled() || !OnEngineMainThread() || gPsiTick++ % 15 != 0) { return; }
+    const auto base = PreyBase();
+    if (!base) { return; }
+    if (gPsiGate.load() == 0) { gPsiGate.store(PsiBodiesMatch(base) ? 1u : 2u); }
+    if (gPsiGate.load() != 1) { gPsiShown.store(-1); return; }
+    const int shown = ReadPsiShown(base);
+    if (shown == -2) { gPsiGate.store(2); }   // never again this session
+    gPsiShown.store(shown < 0 ? -1 : shown);
+}
+
 }  // namespace
 
 void PublishWristArm(const WristArmFrame& frame)
@@ -134,6 +182,7 @@ void PublishWristArm(const WristArmFrame& frame)
 
 void UpdateWristLane(const GameplayPoseFrame& frame, bool tracking)
 {
+    UpdatePsiShown();
     if (!(gOcclusion.load() & 1) || !gCandidate.load() || !tracking || !frame.cameraCentreValid) {
         gScene.Publish({false, MonotonicNanoseconds()});
         return;
@@ -143,7 +192,7 @@ void UpdateWristLane(const GameplayPoseFrame& frame, bool tracking)
     const Card card = wrist::PlaceCard(ToArm(arm), frame.tracking.head, ReadPlacement());
     if (!card.valid) { return; }
     const Vec3 eye = frame.cameraCentre;
-    const float half = ReadPlacement().width * 0.45f;
+    const float half = wrist::MetersHalfSpan(WristSizePercent());
     bool occluded = false;
     // The centre and both ends along the forearm: an arm half in a wall shows
     // the card over the wall from one end.
@@ -169,7 +218,7 @@ void UpdateWristLane(const GameplayPoseFrame& frame, bool tracking)
 }
 
 WristDecision DecideWrist(bool eligible, const TrackingFrame& latest, long long submittedTime,
-                          long long frameTime, float aspect)
+                          long long frameTime)
 {
     WristDecision decision{};
     float dt = gLastFrameTime ? static_cast<float>(frameTime - gLastFrameTime) * 1e-9f : 0.0f;
@@ -223,12 +272,20 @@ WristDecision DecideWrist(bool eligible, const TrackingFrame& latest, long long 
     gWasShowing = gPresenter.Showing();
     gCandidate.store(gPresenter.Candidate() || gPresenter.Alpha() > 0.0f);
 
-    const float size = WristSizePercent() * 0.01f;
+    // The frame's size at Wrist Display Size, and nothing else: no fitting, no
+    // unfold. Its centre is moved off the placed point so the meters, not the
+    // frame, sit where Wrist Display Position and Height put them.
+    const wrist::CardSize size = wrist::Size(WristSizePercent());
     decision.active = card.valid && gPresenter.Alpha() > 0.004f;
     decision.alpha = gPresenter.Alpha();
     decision.pose = card.pose;
-    decision.width = ReadPlacement().width * size * gPresenter.Scale();
-    decision.height = aspect > 0.0f ? decision.width / aspect : decision.width;
+    if (card.valid) {
+        const Vec3 across = Rotate(card.pose.orientation, {1.0f, 0.0f, 0.0f});
+        const Vec3 up = Rotate(card.pose.orientation, {0.0f, 1.0f, 0.0f});
+        decision.pose.position = Add(card.pose.position, Add(Scale(across, size.offsetX), Scale(up, size.offsetY)));
+    }
+    decision.width = size.width;
+    decision.height = size.height;
     // Warm the native capture while the look is forming, so the first faded-in
     // frame already has this frame's meters.
     decision.capture = eligible && card.valid && (gPresenter.Candidate() || decision.active);
@@ -236,7 +293,7 @@ WristDecision DecideWrist(bool eligible, const TrackingFrame& latest, long long 
     if (card.valid) {
         const auto t = ReadThresholds();
         const bool shown = gPresenter.Showing();
-        DebugOverlayWristCard(conditions.eligible && !conditions.occluded, decision.active, card.pose, decision.width,
+        DebugOverlayWristCard(conditions.eligible && !conditions.occluded, decision.active, decision.pose, decision.width,
                               decision.height, view.distance, view.facing, view.viewing,
                               shown ? t.exitFacing : t.enterFacing, shown ? t.exitViewing : t.enterViewing);
     }
@@ -264,8 +321,19 @@ WristDecision DecideWrist(bool eligible, const TrackingFrame& latest, long long 
 
 bool WristLegacyAnchor() { return gAnchor.load() == 0; }
 void NoteWristGate(unsigned bits) { gGateBits.store(bits, std::memory_order_relaxed); }
-unsigned WristNativeScalePercent() { return gNativeScale.load(); }
-bool WristNativeBackground() { return gNativeBackground.load() != 0; }
+void NoteWristContent(bool empty, const float (&box)[4], const float (&frame)[4], unsigned long long serial)
+{
+    std::lock_guard lock(gContentMutex);
+    if (serial == gContent.serial) { return; }
+    gContent.serial = serial;
+    gContent.valid = true;
+    gContent.empty = empty;
+    ++gContent.samples;
+    if (empty) { return; }
+    gContent.box = wrist::ToFrameUnits(frame, box);
+    if (wrist::Outside(gContent.box)) { ++gContent.outside; }
+}
+int WristPsiShown() { return gPsiShown.load(std::memory_order_relaxed); }
 bool WristMovesStatusOffFace() { return WristDisplayEnabled(); }
 DWORD SetWristTick(unsigned enabled)
 {
@@ -312,15 +380,30 @@ std::string WristReport()
         std::lock_guard lock(gLastMutex);
         l = gLast;
     }
-    char b[1024];
+    ContentSeen c{};
+    {
+        std::lock_guard lock(gContentMutex);
+        c = gContent;
+    }
+    // content=: what the last sampled capture held, in quadrant units, against
+    // frame= (wrist::kFrame); outside= counts samples that reached past it.
+    char content[96] = "none";
+    if (c.valid && c.empty) { std::snprintf(content, sizeof(content), "empty"); }
+    else if (c.valid) {
+        std::snprintf(content, sizeof(content), "%.0f,%.0f,%.0f,%.0f", c.box.left, c.box.top, c.box.right, c.box.bottom);
+    }
+    const auto size = wrist::Size(WristSizePercent());
+    char b[1280];
     std::snprintf(b, sizeof(b),
-        " enabled=%d anchor=%u place=%d,%d,%d,%d gate=%d,%d,%d,%d dwell=%d force=%u nativeScale=%u/%u occlusion=%u"
+        " enabled=%d anchor=%u place=%d,%d,%d gate=%d,%d,%d,%d dwell=%d force=%u occlusion=%u psi=%d"
+        " sizeMm=%.0f,%.0f frame=%.0f,%.0f,%.0f,%.0f content=%s samples=%llu outside=%llu"
         " | gate=%u eligible=%d arm=%d card=%d alpha=%.2f facing=%.2f viewing=%.2f dist=%.3f tilt=%.1f roll=%.1f speed=%.2f"
         " sceneOcc=%d handOcc=%d | centre=%.4f,%.4f,%.4f axis=%.3f,%.3f,%.3f dorsal=%.3f,%.3f,%.3f"
         " | armLagMs=%.1f published=%llu exact=%llu older=%llu missing=%llu shown=%llu openings=%llu sceneQ=%llu sceneHits=%llu",
-        WristDisplayEnabled() ? 1 : 0, gAnchor.load(), gAlongMm.load(), gHoverMm.load(), gWidthMm.load(), gTiltDeg.load(),
+        WristDisplayEnabled() ? 1 : 0, gAnchor.load(), gAlongMm.load(), gHoverMm.load(), gTiltDeg.load(),
         gEnterFacing.load(), gExitFacing.load(), gEnterViewing.load(), gExitViewing.load(), gDwellMs.load(),
-        gForce.load(), gNativeScale.load(), gNativeBackground.load(), gOcclusion.load(),
+        gForce.load(), gOcclusion.load(), gPsiShown.load(), size.width * 1000.0f, size.height * 1000.0f,
+        wrist::kFrame.left, wrist::kFrame.top, wrist::kFrame.right, wrist::kFrame.bottom, content, c.samples, c.outside,
         gGateBits.load(), l.eligible ? 1 : 0, l.armValid ? 1 : 0, l.cardValid ? 1 : 0, l.alpha, l.view.facing, l.view.viewing,
         l.view.distance, l.tilt, l.roll, l.speed, l.sceneOccluded ? 1 : 0, l.handOccluded ? 1 : 0,
         l.centre.x, l.centre.y, l.centre.z, l.axis.x, l.axis.y, l.axis.z, l.dorsal.x, l.dorsal.y, l.dorsal.z,
@@ -341,11 +424,10 @@ bool ExecuteWristCommand(const std::vector<std::string>& args, std::ostringstrea
         if (args.size() > 1) { gAnchor = num(1, 1) ? 1u : 0u; }
         out << "wrist.anchor result=0 anchor=" << gAnchor.load();
     } else if (verb == "wrist.place") {
-        // wrist.place <along mm> <hover mm> <width mm> <max tilt deg>
+        // wrist.place <along mm> <hover mm> <max tilt deg>: the size is Wrist Display Size's.
         gAlongMm = std::clamp(num(1, gAlongMm.load()), -50, 200);
         gHoverMm = std::clamp(num(2, gHoverMm.load()), 0, 150);
-        gWidthMm = std::clamp(num(3, gWidthMm.load()), 40, 300);
-        gTiltDeg = std::clamp(num(4, gTiltDeg.load()), 0, 90);
+        gTiltDeg = std::clamp(num(3, gTiltDeg.load()), 0, 90);
         out << "wrist.place result=0" << WristReport();
     } else if (verb == "wrist.gate") {
         // wrist.gate <enter facing> <exit facing> <enter viewing> <exit viewing> [dwell ms]   (permille)
@@ -358,13 +440,6 @@ bool ExecuteWristCommand(const std::vector<std::string>& args, std::ostringstrea
     } else if (verb == "wrist.force") {
         if (args.size() > 1) { gForce = num(1, 1) ? 1u : 0u; }
         out << "wrist.force result=0 force=" << gForce.load();
-    } else if (verb == "wrist.native") {
-        // wrist.native <scale % of the movie's own> [background 0/1]
-        if (args.size() > 1) {
-            gNativeScale = static_cast<unsigned>(std::clamp(num(1, 400), 100, 600));
-            gNativeBackground = num(2, static_cast<int>(gNativeBackground.load())) ? 1u : 0u;
-        }
-        out << "wrist.native result=0 scale=" << gNativeScale.load() << " background=" << gNativeBackground.load();
     } else if (verb == "wrist.haptic") {
         if (args.size() > 1) { gHaptic = num(1, 1) ? 1u : 0u; }
         out << "wrist.haptic result=0 haptic=" << gHaptic.load();

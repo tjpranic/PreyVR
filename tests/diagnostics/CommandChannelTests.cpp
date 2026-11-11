@@ -232,7 +232,6 @@ const Case kCases[] = {
     {"wrist.occlusion 9", "wrist.occlusion result=0 mask=3", nullptr, processed},   // clamped
     {"wrist.force", "wrist.force result=0 force=0", nullptr, processed},
     {"wrist.haptic", "wrist.haptic result=0 haptic=1", nullptr, processed},
-    {"wrist.native", "wrist.native result=0 scale=400 background=0", nullptr, processed},
     {"wrist.place", "wrist.place result=0", WristReport, processed},   // no bare form: re-stores, clamped
     {"wrist.gate", "wrist.gate result=0", WristReport, processed},
 

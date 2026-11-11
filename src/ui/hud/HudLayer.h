@@ -45,7 +45,11 @@ unsigned HudHeightPercent();
 // Additive native status copy. Request expires if XR stops consuming; no native
 // status is removed. Calls and borrowed texture consumption are render-thread only.
 void RequestNativeWristCapture(bool active);
-ID3D11Texture2D* NativeWristLayerTexture();
+struct NativeWristImage {
+    ID3D11Texture2D* texture = nullptr; // this frame's capture, borrowed; null when none
+    float frame[4]{};                   // the wrist frame in it, pixels (wrist::Layout::rect)
+};
+NativeWristImage NativeWristLayerTexture();
 void ResetNativeWristCapture(); // render-thread session teardown
 // **HUD parts with a layer of their own** (ui/hud/NativeHudIsolation.h Part).
 // While its consumer requests it, a part leaves the gameplay HUD's own draw and

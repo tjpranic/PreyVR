@@ -8,6 +8,11 @@ and the VR option WRIST STATUS turns the whole feature off.
 Evidence: [`data/evidence/wrist-hologram-2026-10-07/`](../data/evidence/wrist-hologram-2026-10-07/)
 (`report.txt`, in git; `wrist_hologram_sheet.jpg`, nine cases, on disk only: images are git-ignored).
 
+> **Since 2026-11-11** ([wrist HUD scope](WRIST-HUD-SCOPE-2026-11-11.md)) there is no glass, no fitting and no
+> unfold. The replay pins the layout and the card shows one fixed frame of it at Wrist Display Size, so the
+> meters never change size. `wrist.native` is gone, and `wrist.place` has no width. Sections 1 and 4 below
+> describe the earlier version.
+
 ## Why the wrist never showed anything
 
 The card never appeared on the mock (`wristLayerFrames=0`). The reason is in the game, not the replay:

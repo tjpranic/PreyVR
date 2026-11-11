@@ -12,7 +12,7 @@
 //
 // **Shown only when looked at.** A watch check: the back of the forearm
 // turned towards the eyes AND the card near the centre of the gaze, held for a
-// moment, then a short fade and unfold. Leaving either condition fades it out;
+// moment, then a short fade in. Leaving either condition fades it out;
 // anything that would make it draw over the scene wrongly (the arm in a wall,
 // the other hand or its weapon in front) hides it quickly.
 namespace preyvr::wrist {
@@ -27,7 +27,6 @@ struct Arm {
 struct Placement {
     float along = 0.075f;     // from the wrist joint towards the elbow, metres
     float hover = 0.042f;     // from the forearm's axis, out through its back, metres
-    float width = 0.125f;     // card width at 100 % (metres)
     float maxTiltDeg = 40.0f; // turned about the forearm towards the eye, at most
     // The text's reading direction: 0 along the forearm (towards the hand);
     // 1 along the forearm while that is near the viewer's horizontal, turning
@@ -98,9 +97,8 @@ struct Conditions {
 class Presenter {
 public:
     void Update(const View& view, const Conditions& conditions, float dt, const Thresholds& t = {});
+    // The card only fades: its size is Wrist Display Size's (wrist::Size).
     float Alpha() const { return alpha_; }
-    // 0.9 -> 1 as it fades in (an unfold); 1 while shown or fading out.
-    float Scale() const;
     bool Showing() const { return target_; }
     // The looser condition the card keeps while shown (for the occlusion query:
     // it only needs to run while this holds).
@@ -111,7 +109,6 @@ private:
     float alpha_ = 0.0f;
     float held_ = 0.0f;
     bool target_ = false;
-    bool rising_ = false;
     bool candidate_ = false;
 };
 

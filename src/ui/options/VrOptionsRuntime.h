@@ -57,10 +57,8 @@ std::wstring VrSetupMessage();
 bool PsychoscopeGestureEnabled();
 bool HolstersEnabled();
 bool WristDisplayEnabled();
+// Wrist Display Size, percent: the wrist card's only size (ui/hud/WristFrame.h wrist::Size).
 unsigned WristSizePercent();
-// The wrist card's width, metres: 18 cm at WRIST SIZE 100. Its height keeps the
-// native wrist texture's aspect.
-inline float WristCardWidthMetres() { return .18f * static_cast<float>(WristSizePercent()) * .01f; }
 bool BeltHintsEnabled();
 std::string VrOptionsReport();
 }

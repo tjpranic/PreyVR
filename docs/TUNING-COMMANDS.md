@@ -159,11 +159,11 @@ this session. "Menu only" means no command reaches it.
 | Interface | Helmet size (`helmet_size`): scaled around its centre, by the character-render hook; on its own it changes how near the helmet looks, not how much of the view it covers | 50–200 % | 100 | menu only (`sizePct`) |
 | Equipment | Body holsters (`holsters`) | on/off | off | menu only |
 | Equipment | Wrist status (`wrist`) | on/off | on | menu only |
-| Equipment | Wrist display size (`wrist_size`) | 80–140 % | 100 | menu only |
+| Equipment | Wrist display size (`wrist_size`) | 50–200 % | 100 | menu only. The card's only size. |
 | Equipment | Wrist tick (`wrist_tick`) | on/off | on | `wrist.haptic <0\|1>` |
-| Equipment | Wrist display position (`wrist_along`) | −50–200 mm | 75 | `wrist.place <along> <hover> <width> <tilt>` |
+| Equipment | Wrist display position (`wrist_along`) | −50–200 mm | 75 | `wrist.place <along> <hover> <tilt>` |
 | Equipment | Wrist display height (`wrist_hover`) | 0–150 mm | 42 | `wrist.place` (second value) |
-| Equipment | Wrist display tilt (`wrist_tilt`) | 0–90 degrees | 40 | `wrist.place` (fourth value) |
+| Equipment | Wrist display tilt (`wrist_tilt`) | 0–90 degrees | 40 | `wrist.place` (third value) |
 | Feedback | Controller feedback (`haptics`) | on/off | on | `haptics <0\|1> [strength]` |
 | Feedback | Feedback strength (`haptic_strength`) | 0–100 % | 70 | `haptics <0\|1> <strength>` |
 | Abilities | Left-hip medkit slot (`medkit_slot`) | on/off | off | `medkit.slot <0\|1>` |
@@ -184,9 +184,8 @@ A few rows behave differently from their commands:
 | Command | Values | Default | What it does |
 |---|---|---|---|
 | `body.torso <deg> <relax>` | 0–180, 0–10000 ‰/s | 35, 600 | How far you look away before the torso turns, and how fast it settles. The shoulders and the holster and medkit slots sit on it. The same setting as `arm.torso`. |
-| `wrist.place <along> <hover> <width> <tilt>` | mm, mm, 40–300 mm, degrees | 75, 42, 125, 40 | Where the wrist card sits. Width is multiplied by the menu's wrist size. |
+| `wrist.place <along> <hover> <tilt>` | mm, mm, degrees | 75, 42, 40 | Where the wrist card sits. Its size is the menu's Wrist display size alone. |
 | `wrist.gate <enterFacing> <exitFacing> <enterViewing> <exitViewing> [dwellMs]` | ‰ −1000..1000, 0–2000 ms | 500, 220, 820, 620, 80 | How squarely you must look at the wrist before the card shows. |
-| `wrist.native <scale> [background]` | 100–600 %, 0/1 | 400, 0 | Scale of the game's own status on the card; 1 keeps the game's backdrop. |
 | `wrist.occlusion <mask>` | 0–3 | 3 | Hide the card behind 1 scene geometry, 2 your right hand or weapon. |
 | `pose.curl <percent>` | 0–300 | 100 | Finger curl of the relaxed free hand. |
 | `dual.overlay <0\|1>` | | 1 | Fades, markers, fullscreen videos and other overlays in both eyes; 0 right eye only, for comparison. |
@@ -368,12 +367,12 @@ worn OK (2026-10-25), as Body Follows You's commands had on 2026-10-24.
 
 | Command | Values | Default | What it does |
 |---|---|---|---|
-| `wrist.haptic` | 0/1 | 1 | Tick as the card unfolds. **Menu** (Wrist tick). |
-| `wrist.place <along> <hover> <width> <tilt>` | | 75 42 125 40 | Card placement. **Menu** (along, hover, tilt). |
-| `wrist.gate` / `wrist.native` / `wrist.occlusion` | see above | | When the card shows, the game status's scale, what hides it. |
+| `wrist.haptic` | 0/1 | 1 | Tick as the card appears. **Menu** (Wrist tick). |
+| `wrist.place <along> <hover> <tilt>` | | 75 42 40 | Card placement. **Menu** (along, hover, tilt). |
+| `wrist.gate` / `wrist.occlusion` | see above | | When the card shows, what hides it. |
 | `wrist.anchor` | 0/1 | 1 | On the drawn forearm (0: the old grip-anchored card). |
 | `wrist.force` | 0/1 | 0 | Shows the card from any pose, for captures. |
-| `wrist.report` | report | | Gate, look test, counters. `gate=` adds up the conditions that hold: 1 the option, 2 views, 4 rendered, 8 no menu panel, 16 VR Options closed, 32 gameplay input, 64 no two-hand aim, 128 not recentering, 256 tracking. 511 is open (`wrist::Gate`, ui/hud/WristHolo.h). |
+| `wrist.report` | report | | Gate, look test, counters. `gate=` adds up the conditions that hold: 1 the option, 2 views, 4 rendered, 8 no menu panel, 16 VR Options closed, 32 gameplay input, 64 no two-hand aim, 128 not recentering, 256 tracking. 511 is open (`wrist::Gate`, ui/hud/WristHolo.h). `psi=` 1 or 0 is Prey's own test for showing the psi meter, -1 while it cannot be read (then shown). `sizeMm=` is the card at Wrist display size. `content=` is what one sampled capture held, in quadrant_SW units against `frame=` (ui/hud/WristFrame.h); `outside=` counts the samples, of `samples=`, that reached past the frame. |
 
 ### Aim, reticle and shots
 

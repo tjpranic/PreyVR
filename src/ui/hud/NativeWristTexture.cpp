@@ -9,8 +9,8 @@ namespace {
 using Microsoft::WRL::ComPtr;
 constexpr char shaders[]=R"(
 Texture2D<float4> sourceImage : register(t0);
-Buffer<uint> boundsRead : register(t1);
 #ifdef FIND_BOUNDS
+// Diagnostics only (wrist.report content=): the box around everything drawn.
 RWBuffer<uint> boundsWrite : register(u0);
 groupshared uint x0,y0,x1,y1;
 [numthreads(16,16,1)]
@@ -28,24 +28,8 @@ void main(uint3 id:SV_DispatchThreadID,uint index:SV_GroupIndex) {
         InterlockedMax(boundsWrite[2],x1);InterlockedMax(boundsWrite[3],y1);
     }
 }
-#elif defined(HOLD_BOUNDS)
-// One thread. held = x0,y0,x1,y1,frames-smaller. Grow at once, shrink only
-// after the new bounds have stayed inside for 60 frames (~0.7 s).
-RWBuffer<uint> held : register(u0);
-[numthreads(1,1,1)]
-void main() {
-    uint4 n=uint4(boundsRead[0],boundsRead[1],boundsRead[2],boundsRead[3]);
-    uint4 h=uint4(held[0],held[1],held[2],held[3]);uint c=held[4];
-    if(n.z>n.x&&n.w>n.y) {
-        if(!(h.z>h.x&&h.w>h.y)) {h=n;c=0;}
-        else if(n.x<h.x||n.y<h.y||n.z>h.z||n.w>h.w) {h=uint4(min(h.xy,n.xy),max(h.zw,n.zw));c=0;}
-        else if(any(n!=h)) {c=c+1;if(c>60){h=n;c=0;}}
-        else c=0;
-    }
-    held[0]=h.x;held[1]=h.y;held[2]=h.z;held[3]=h.w;held[4]=c;
-}
 #else
-cbuffer Presentation : register(b0) {float fade;float panel;float2 unused;};
+cbuffer Presentation : register(b0) {float fade;float3 unused;float4 frame;};
 RWTexture2D<float4> outputImage : register(u0);
 float4 samplePixel(int2 p,uint w,uint h) {
     if(p.x<0||p.y<0||p.x>=int(w)||p.y>=int(h))return 0;
@@ -56,57 +40,30 @@ float4 bilinear(float2 p,uint w,uint h) {
     return lerp(lerp(samplePixel(low,w,h),samplePixel(low+int2(1,0),w,h),f.x),
                 lerp(samplePixel(low+int2(0,1),w,h),samplePixel(low+int2(1,1),w,h),f.x),f.y);
 }
-// Signed distance to a rounded rectangle centred at 0 (negative inside).
-float roundedBox(float2 p,float2 extent,float radius) {
-    float2 q=abs(p)-extent+radius;
-    return length(max(q,0))+min(max(q.x,q.y),0)-radius;
-}
 [numthreads(16,16,1)]
 void main(uint3 id:SV_DispatchThreadID) {
     uint ow,oh;outputImage.GetDimensions(ow,oh);
     if(id.x>=ow||id.y>=oh)return;
-    uint4 b=uint4(boundsRead[0],boundsRead[1],boundsRead[2],boundsRead[3]);
-    float4 colour=0;
-    if(b.z>b.x&&b.w>b.y) {
-        uint w,h;sourceImage.GetDimensions(w,h);
-        float2 extent=float2(b.z-b.x,b.w-b.y);
-        // With the panel, the meters sit inside the glass with a fixed margin
-        // (output pixels), whatever their size in the eye target.
-        float scale=panel>0?min((ow-120)/extent.x,(oh-84)/extent.y):
-                            min(ow/(extent.x+16),oh/(extent.y+16))*.94;
-        float2 p=(float2(id.xy)+.5-float2(ow,oh)*.5)/scale+(float2(b.xy)+float2(b.zw))*.5-.5;
-        if(scale<.9) {
-            // Minifying (a large eye target): four taps, no shimmer.
-            float d=.25/scale;
-            colour=(bilinear(p+float2(-d,-d),w,h)+bilinear(p+float2(d,-d),w,h)+
-                    bilinear(p+float2(-d,d),w,h)+bilinear(p+float2(d,d),w,h))*.25;
-        } else colour=bilinear(p,w,h);
-    }
-    if(panel>0) {
-        // The hologram's glass: dark, translucent, a thin bright edge and a
-        // faint scan, under the meters (premultiplied "over").
-        float2 c=float2(id.xy)+.5-float2(ow,oh)*.5;
-        float2 halfSize=float2(ow,oh)*.5-6;
-        float dist=roundedBox(c,halfSize,30);
-        float inside=saturate(.5-dist);
-        float edge=saturate(1-abs(dist+1.5)/1.6)*.55+saturate(1-abs(dist+1.5)/9)*.12;
-        float t=float(id.y)/float(oh);
-        float scan=.93+.07*sin(float(id.y)*1.0472);
-        float glassA=inside*lerp(.62,.50,t)*scan;
-        float4 glass=float4(float3(.012,.030,.042)*glassA,glassA);
-        float4 rim=float4(float3(.60,.86,.96)*edge,edge*.9)*inside;
-        float4 back=rim+glass*(1-rim.a);
-        colour=colour+back*(1-colour.a);
-    }
+    uint w,h;sourceImage.GetDimensions(w,h);
+    // The frame's rectangle onto the whole output. At one source pixel per
+    // output pixel (the replay's layout) this is an exact copy.
+    float2 step=float2(frame.z-frame.x,frame.w-frame.y)/float2(ow,oh);
+    float2 p=frame.xy+(float2(id.xy)+.5)*step-.5;
+    float4 colour;
+    if(max(step.x,step.y)>1.1) {
+        // Minifying (a capture too small for the layout's density): four taps, no shimmer.
+        float2 d=.25*step;
+        colour=(bilinear(p+float2(-d.x,-d.y),w,h)+bilinear(p+float2(d.x,-d.y),w,h)+
+                bilinear(p+float2(-d.x,d.y),w,h)+bilinear(p+float2(d.x,d.y),w,h))*.25;
+    } else colour=bilinear(p,w,h);
     outputImage[id.xy]=colour*fade;
 }
 #endif
 )";
-bool Compile(ID3D11Device* device,int pass,ID3D11ComputeShader** result) {
-    const D3D_SHADER_MACRO bounds[]={{"FIND_BOUNDS","1"},{nullptr,nullptr}};
-    const D3D_SHADER_MACRO hold[]={{"HOLD_BOUNDS","1"},{nullptr,nullptr}};
+bool Compile(ID3D11Device* device,bool bounds,ID3D11ComputeShader** result) {
+    const D3D_SHADER_MACRO macros[]={{"FIND_BOUNDS","1"},{nullptr,nullptr}};
     ComPtr<ID3DBlob> code,error;
-    return SUCCEEDED(D3DCompile(shaders,std::strlen(shaders),"NativeWristTexture",pass==0?bounds:pass==1?hold:nullptr,
+    return SUCCEEDED(D3DCompile(shaders,std::strlen(shaders),"NativeWristTexture",bounds?macros:nullptr,
         nullptr,"main","cs_5_0",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&code,&error))&&
         SUCCEEDED(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,result));
 }
@@ -135,35 +92,26 @@ struct ComputeState {
 }
 bool NativeWristTexture::Prepare(ID3D11Device* device,const D3D11_TEXTURE2D_DESC& d){
     if(device_.Get()!=device){
-        device_=device;attempted_=false;source_.Reset();sourceView_.Reset();output_.Reset();outputWrite_.Reset();
-        boundsShader_.Reset();holdShader_.Reset();fitShader_.Reset();bounds_.Reset();boundsView_.Reset();boundsWrite_.Reset();
-        held_.Reset();heldView_.Reset();heldWrite_.Reset();constants_.Reset();
+        device_=device;attempted_=false;retained_=false;pending_=false;content_={};fits_=0;
+        source_.Reset();sourceView_.Reset();output_.Reset();outputWrite_.Reset();
+        boundsShader_.Reset();fitShader_.Reset();bounds_.Reset();boundsWrite_.Reset();staging_.Reset();constants_.Reset();
     }
     if(!attempted_){
         attempted_=true;
-        if(!Compile(device,0,boundsShader_.ReleaseAndGetAddressOf())||
-           !Compile(device,1,holdShader_.ReleaseAndGetAddressOf())||
-           !Compile(device,2,fitShader_.ReleaseAndGetAddressOf()))return false;
-        D3D11_BUFFER_DESC b{};b.ByteWidth=16;b.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
+        if(!Compile(device,true,boundsShader_.ReleaseAndGetAddressOf())||
+           !Compile(device,false,fitShader_.ReleaseAndGetAddressOf()))return false;
+        D3D11_BUFFER_DESC b{};b.ByteWidth=16;b.BindFlags=D3D11_BIND_UNORDERED_ACCESS;
         if(FAILED(device->CreateBuffer(&b,nullptr,bounds_.ReleaseAndGetAddressOf())))return false;
-        D3D11_SHADER_RESOURCE_VIEW_DESC s{};s.Format=DXGI_FORMAT_R32_UINT;s.ViewDimension=D3D11_SRV_DIMENSION_BUFFER;s.Buffer.NumElements=4;
         D3D11_UNORDERED_ACCESS_VIEW_DESC u{};u.Format=DXGI_FORMAT_R32_UINT;u.ViewDimension=D3D11_UAV_DIMENSION_BUFFER;u.Buffer.NumElements=4;
-        if(FAILED(device->CreateShaderResourceView(bounds_.Get(),&s,boundsView_.ReleaseAndGetAddressOf()))||
-           FAILED(device->CreateUnorderedAccessView(bounds_.Get(),&u,boundsWrite_.ReleaseAndGetAddressOf())))return false;
-        D3D11_BUFFER_DESC hb=b;hb.ByteWidth=32;
-        if(FAILED(device->CreateBuffer(&hb,nullptr,held_.ReleaseAndGetAddressOf())))return false;
-        D3D11_UNORDERED_ACCESS_VIEW_DESC hu=u;hu.Buffer.NumElements=8;
-        if(FAILED(device->CreateShaderResourceView(held_.Get(),&s,heldView_.ReleaseAndGetAddressOf()))||
-           FAILED(device->CreateUnorderedAccessView(held_.Get(),&hu,heldWrite_.ReleaseAndGetAddressOf())))return false;
-        D3D11_BUFFER_DESC cb{};cb.ByteWidth=16;cb.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+        if(FAILED(device->CreateUnorderedAccessView(bounds_.Get(),&u,boundsWrite_.ReleaseAndGetAddressOf())))return false;
+        D3D11_BUFFER_DESC s{};s.ByteWidth=16;s.Usage=D3D11_USAGE_STAGING;s.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+        if(FAILED(device->CreateBuffer(&s,nullptr,staging_.ReleaseAndGetAddressOf())))return false;
+        D3D11_BUFFER_DESC cb{};cb.ByteWidth=32;cb.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
         if(FAILED(device->CreateBuffer(&cb,nullptr,constants_.ReleaseAndGetAddressOf())))return false;
-        reset_=true;
     }
-    if(!boundsShader_||!holdShader_||!fitShader_||!boundsView_||!boundsWrite_||!heldView_||!heldWrite_||!constants_)return false;
+    if(!boundsShader_||!fitShader_||!boundsWrite_||!staging_||!constants_)return false;
     if(source_&&sourceView_&&output_&&outputWrite_&&d.Width==description_.Width&&d.Height==description_.Height&&d.Format==description_.Format)return true;
     source_.Reset();sourceView_.Reset();output_.Reset();outputWrite_.Reset();description_=d;retained_=false;
-    // New source dimensions: the held framing (source pixels) no longer applies.
-    reset_=true;
     // Copy bytes to UNORM views. Do not decode gamma here: preserve the game's
     // current pixel encoding, inherited by the wrist XR swapchain at submission.
     auto input=d;input.MiscFlags=0;input.CPUAccessFlags=0;input.Usage=D3D11_USAGE_DEFAULT;
@@ -177,8 +125,10 @@ bool NativeWristTexture::Prepare(ID3D11Device* device,const D3D11_TEXTURE2D_DESC
         SUCCEEDED(device->CreateTexture2D(&output,nullptr,&output_))&&
         SUCCEEDED(device->CreateUnorderedAccessView(output_.Get(),nullptr,&outputWrite_));
 }
-ID3D11Texture2D* NativeWristTexture::Fit(ID3D11DeviceContext* context,ID3D11Texture2D* source,float alpha,bool panel){
+ID3D11Texture2D* NativeWristTexture::Fit(ID3D11DeviceContext* context,ID3D11Texture2D* source,const float (&frame)[4],float alpha){
     if(!context||!source||context->GetType()!=D3D11_DEVICE_CONTEXT_IMMEDIATE)return nullptr;
+    for(const float v:frame)if(!std::isfinite(v))return nullptr;
+    if(!(frame[2]>frame[0])||!(frame[3]>frame[1]))return nullptr;
     D3D11_TEXTURE2D_DESC d{};source->GetDesc(&d);
     if(d.Width==0||d.Height==0||d.Width>8192||d.Height>8192||d.ArraySize!=1||d.MipLevels!=1||
        d.SampleDesc.Count!=1||d.SampleDesc.Quality!=0)return nullptr;
@@ -190,36 +140,57 @@ ID3D11Texture2D* NativeWristTexture::Fit(ID3D11DeviceContext* context,ID3D11Text
     ID3D11ShaderResourceView* nulls[2]{};ID3D11UnorderedAccessView* nullUav=nullptr;
     context->CSSetShaderResources(0,2,nulls);context->CSSetUnorderedAccessViews(0,1,&nullUav,nullptr);
     context->CopyResource(source_.Get(),source);
+    std::memcpy(frame_,frame,sizeof(frame_));
     retained_=true;
-    return Run(context,alpha,panel);
+    CollectContent(context);
+    if(fits_++%kContentEvery==0)SampleContent(context);
+    return Run(context,alpha);
 }
-ID3D11Texture2D* NativeWristTexture::Refit(ID3D11DeviceContext* context,float alpha,bool panel){
+ID3D11Texture2D* NativeWristTexture::Refit(ID3D11DeviceContext* context,float alpha){
     if(!context||!retained_||!source_||!output_||context->GetType()!=D3D11_DEVICE_CONTEXT_IMMEDIATE)return nullptr;
     ComPtr<ID3D11Device> device;context->GetDevice(&device);
     if(device.Get()!=device_.Get())return nullptr;
     ComputeState saved(context);
-    return Run(context,alpha,panel);
+    CollectContent(context);
+    return Run(context,alpha);
 }
-ID3D11Texture2D* NativeWristTexture::Run(ID3D11DeviceContext* context,float alpha,bool panel){
-    const auto& d=description_;
+// One capture's content box into the staging buffer, read on a later frame.
+void NativeWristTexture::SampleContent(ID3D11DeviceContext* context){
+    if(pending_)return;
     ID3D11ShaderResourceView* nulls[2]{};ID3D11UnorderedAccessView* nullUav=nullptr;
-    context->CSSetShaderResources(0,2,nulls);context->CSSetUnorderedAccessViews(0,1,&nullUav,nullptr);
     const UINT initial[4]={~0u,~0u,0,0};context->UpdateSubresource(bounds_.Get(),0,nullptr,initial,0,0);
     auto srv=sourceView_.Get();auto uav=boundsWrite_.Get();
     context->CSSetShaderResources(0,1,&srv);context->CSSetUnorderedAccessViews(0,1,&uav,nullptr);
-    context->CSSetShader(boundsShader_.Get(),nullptr,0);context->Dispatch((d.Width+15)/16,(d.Height+15)/16,1);
-    context->CSSetUnorderedAccessViews(0,1,&nullUav,nullptr);
-    if(reset_){const UINT none[8]{};context->UpdateSubresource(held_.Get(),0,nullptr,none,0,0);reset_=false;}
-    auto bounds=boundsView_.Get();context->CSSetShaderResources(1,1,&bounds);
-    auto hold=heldWrite_.Get();context->CSSetUnorderedAccessViews(0,1,&hold,nullptr);
-    context->CSSetShader(holdShader_.Get(),nullptr,0);context->Dispatch(1,1,1);
-    context->CSSetUnorderedAccessViews(0,1,&nullUav,nullptr);
-    context->CSSetShaderResources(1,1,nulls);
-    bounds=heldView_.Get();context->CSSetShaderResources(1,1,&bounds);
-    const float fade[4]{std::clamp(std::isfinite(alpha)?alpha:0.f,0.f,1.f),panel?1.f:0.f,0,0};
-    context->UpdateSubresource(constants_.Get(),0,nullptr,fade,0,0);
+    context->CSSetShader(boundsShader_.Get(),nullptr,0);
+    context->Dispatch((description_.Width+15)/16,(description_.Height+15)/16,1);
+    context->CSSetUnorderedAccessViews(0,1,&nullUav,nullptr);context->CSSetShaderResources(0,2,nulls);
+    context->CopyResource(staging_.Get(),bounds_.Get());
+    std::memcpy(pendingFrame_,frame_,sizeof(pendingFrame_));
+    pending_=true;
+}
+// Never waits: a sample the GPU has not finished is read next time.
+void NativeWristTexture::CollectContent(ID3D11DeviceContext* context){
+    if(!pending_)return;
+    D3D11_MAPPED_SUBRESOURCE m{};
+    const HRESULT hr=context->Map(staging_.Get(),0,D3D11_MAP_READ,D3D11_MAP_FLAG_DO_NOT_WAIT,&m);
+    if(hr==DXGI_ERROR_WAS_STILL_DRAWING)return;
+    pending_=false;
+    if(FAILED(hr))return;
+    UINT b[4]{};std::memcpy(b,m.pData,sizeof(b));
+    context->Unmap(staging_.Get(),0);
+    content_.valid=true;
+    content_.empty=!(b[2]>b[0]&&b[3]>b[1]);
+    for(int i=0;i<4;++i){content_.box[i]=content_.empty?0.f:static_cast<float>(b[i]);content_.frame[i]=pendingFrame_[i];}
+    ++content_.serial;
+}
+ID3D11Texture2D* NativeWristTexture::Run(ID3D11DeviceContext* context,float alpha){
+    ID3D11ShaderResourceView* nulls[2]{};ID3D11UnorderedAccessView* nullUav=nullptr;
+    context->CSSetShaderResources(0,2,nulls);context->CSSetUnorderedAccessViews(0,1,&nullUav,nullptr);
+    const float constants[8]{std::clamp(std::isfinite(alpha)?alpha:0.f,0.f,1.f),0,0,0,frame_[0],frame_[1],frame_[2],frame_[3]};
+    context->UpdateSubresource(constants_.Get(),0,nullptr,constants,0,0);
     auto cbuffer=constants_.Get();context->CSSetConstantBuffers(0,1,&cbuffer);
-    uav=outputWrite_.Get();context->CSSetUnorderedAccessViews(0,1,&uav,nullptr);
+    auto srv=sourceView_.Get();context->CSSetShaderResources(0,1,&srv);
+    auto uav=outputWrite_.Get();context->CSSetUnorderedAccessViews(0,1,&uav,nullptr);
     context->CSSetShader(fitShader_.Get(),nullptr,0);
     context->Dispatch((NativeWristWidth+15)/16,(NativeWristHeight+15)/16,1);
     context->CSSetShaderResources(0,2,nulls);

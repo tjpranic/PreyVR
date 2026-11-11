@@ -43,33 +43,39 @@ void UpdateWristLane(const GameplayPoseFrame& frame, bool tracking);
 
 struct WristDecision {
     bool active = false;     // composite a card this frame
-    Pose pose{};             // OpenXR quad pose (app space)
+    Pose pose{};             // OpenXR quad pose (app space): the frame's centre
     float width = 0, height = 0;
     float alpha = 0;         // fade, applied to the texture
     bool capture = false;    // ask the HUD for the native status this frame
 };
 // XR thread, once per submitted frame. `eligible` carries the host's gates
 // (gameplay input, no menu/panel, not aiming two-handed, tracking usable);
-// `submittedTime` is the display time the eye images were rendered for.
+// `submittedTime` is the display time the eye images were rendered for. The
+// card's size is the wrist frame's at Wrist Display Size (wrist::Size), and its
+// centre is placed so the meters sit where the placement puts them.
 WristDecision DecideWrist(bool eligible, const TrackingFrame& latest, long long submittedTime,
-                          long long frameTime, float aspect);
+                          long long frameTime);
 // Legacy grip-anchored card (Funk's prototype) instead of the hologram.
 bool WristLegacyAnchor();
 // XR thread: the host's gate as bits (1 option, 2 views, 4 rendered, 8 no menu
 // panel, 16 no VR options, 32 gameplay input, 64 not two-handed, 128 no
 // recentre in flight, 256 head and left hand tracked), for wrist.report.
 void NoteWristGate(unsigned bits);
-// The native status capture's presentation: scale of the movie's own (percent).
-unsigned WristNativeScalePercent();
-// Keep the native meters' backdrop and top line on the wrist (else the glass).
-bool WristNativeBackground();
+// XR thread: a capture's content box as the texture read it back
+// (NativeWristTexture::Content), for wrist.report content= and outside=.
+void NoteWristContent(bool empty, const float (&box)[4], const float (&frame)[4], unsigned long long serial);
+// Whether the wrist shows the psi meter, as Prey would (NativeWristNative.h
+// PsiShown, read on the main thread): 1, 0, or -1 while it cannot be read
+// (shown then, as before). Any thread.
+int WristPsiShown();
 // The status meters leave the gameplay HUD while the wrist shows them.
 bool WristMovesStatusOffFace();
-// wrist.haptic: the faint tick as the display unfolds.
+// wrist.haptic: the faint tick as the display appears.
 DWORD SetWristTick(unsigned enabled);
 unsigned WristTickEnabled();
 // wrist.place, one value each: along the forearm (mm, -50..200), above it
-// (mm, 0..150), and the most it turns toward the eyes (degrees, 0..90).
+// (mm, 0..150), and the most it turns toward the eyes (degrees, 0..90). Its
+// size is Wrist Display Size's alone.
 DWORD SetWristAlongMm(int mm);
 DWORD SetWristHoverMm(int mm);
 DWORD SetWristTiltDegrees(int degrees);

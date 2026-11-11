@@ -81,7 +81,7 @@ void ServiceXrFrame(void* renderer)
     ID3D11Texture2D* noteTexture = NoteLayerTexture();
     const HudPartImage wheelImage = TakeHudPart(HudPart::wheel);
     const HudPartImage reticleImage = TakeHudPart(HudPart::reticle);
-    ID3D11Texture2D* nativeWristTexture = NativeWristLayerTexture();
+    const NativeWristImage nativeWrist = NativeWristLayerTexture();
     RequestNativeWristCapture(false);
     if (gStatus.load(std::memory_order_acquire) != static_cast<DWORD>(XrSessionStatus::running)) {
         return; // the hot path
@@ -489,7 +489,7 @@ void ServiceXrFrame(void* renderer)
     XrCompositionLayerQuad textLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
     const bool textActive=BuildTextLayer(view,textTexture,textDistance,interfaceScale*(2.0f/kTextSizedAtM),textLayer);
     XrCompositionLayerQuad wristLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
-    const bool wristActive=BuildWristLayer(view,nativeWristTexture,wristLayer);
+    const bool wristActive=BuildWristLayer(view,nativeWrist,wristLayer);
     XrCompositionLayerQuad slotLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};
     const bool slotActive=BuildSlotLayer(view,slotLayer);
     XrCompositionLayerQuad fadeLayer{XR_TYPE_COMPOSITION_LAYER_QUAD};

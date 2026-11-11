@@ -220,8 +220,9 @@ dd::OverlayFrame Gather(unsigned mask)
         f.wrist.viewing = m.viewing;
         f.wrist.facingNeeded = equipment::WristFacingNeeded(f.wrist.visible);
         f.wrist.viewingNeeded = equipment::WristViewingNeeded(f.wrist.visible);
-        f.wrist.width = WristCardWidthMetres();
-        f.wrist.height = f.wrist.width * static_cast<float>(NativeWristHeight) / static_cast<float>(NativeWristWidth);
+        const auto size = wrist::Size(WristSizePercent());
+        f.wrist.width = size.width;
+        f.wrist.height = size.height;
     } else if (f.wrist.enabled) {
         f.wrist.card.position = {NAN, NAN, NAN};
     }

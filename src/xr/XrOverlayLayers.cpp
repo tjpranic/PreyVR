@@ -244,9 +244,12 @@ bool BuildTextLayer(const FrameView& view, ID3D11Texture2D* texture, float dista
 }
 
 // **The wrist card** (WristLane): the hologram on the drawn forearm, or the
-// grip-anchored card, gated on `wrist::Gate` and shown while looked at.
-bool BuildWristLayer(const FrameView& view, ID3D11Texture2D* nativeWristTexture, XrCompositionLayerQuad& layer)
+// grip-anchored card, gated on `wrist::Gate` and shown while looked at. Either
+// shows the wrist frame of the native status capture (`nativeWrist.frame`), with
+// no glass behind it, at Wrist Display Size.
+bool BuildWristLayer(const FrameView& view, const NativeWristImage& nativeWrist, XrCompositionLayerQuad& layer)
 {
+    ID3D11Texture2D* const nativeWristTexture=nativeWrist.texture;
     bool active=false;
     TrackingFrame wristFrame{};
     // Each condition as a bit (wrist.report shows which one closed the gate).
@@ -265,8 +268,7 @@ bool BuildWristLayer(const FrameView& view, ID3D11Texture2D* nativeWristTexture,
     WristDecision hologramDecision{};
     auto wristPose=equipment::WristPose(wristFrame.hands[0].gripPose);
     if(hologram){
-        hologramDecision=DecideWrist(wristInput,wristFrame,gHost.eyeDisplayTime[0],view.displayTime,
-            static_cast<float>(NativeWristWidth)/NativeWristHeight);
+        hologramDecision=DecideWrist(wristInput,wristFrame,gHost.eyeDisplayTime[0],view.displayTime);
         gHost.wristVisible=hologramDecision.active;
         wristPose=hologramDecision.pose;
     } else gHost.wristVisible=wristInput&&equipment::WristVisible(wristFrame.head,wristPose,gHost.wristVisible);
@@ -282,8 +284,11 @@ bool BuildWristLayer(const FrameView& view, ID3D11Texture2D* nativeWristTexture,
             if(!gHost.wristFitter)gHost.wristFitter=std::make_unique<NativeWristTexture>();
             const auto context=ImmediateContext(gHost.device);
             const float wristAlpha=hologram?hologramDecision.alpha:1.f;
-            if(auto fitted=nativeWristTexture?gHost.wristFitter->Fit(context.Get(),nativeWristTexture,wristAlpha,hologram):
-                                              gHost.wristFitter->Refit(context.Get(),wristAlpha,hologram)){
+            auto fitted=nativeWristTexture?gHost.wristFitter->Fit(context.Get(),nativeWristTexture,nativeWrist.frame,wristAlpha):
+                                           gHost.wristFitter->Refit(context.Get(),wristAlpha);
+            const auto content=gHost.wristFitter->LastContent();
+            if(content.valid)NoteWristContent(content.empty,content.box,content.frame,content.serial);
+            if(fitted){
                 if(!gHost.wristSwapchain)gHost.wristSwapchain=SessionLayerSwapchain();
                 D3D11_TEXTURE2D_DESC d{};fitted->GetDesc(&d);
                 // GPU fitting swizzles BGRA to RGBA, but preserves encoded colour
@@ -300,12 +305,12 @@ bool BuildWristLayer(const FrameView& view, ID3D11Texture2D* nativeWristTexture,
         }
         active=active&&view.reference==HeadTrackingReferenceGeneration();
         if(active){
-            const float width=WristCardWidthMetres();
+            const auto size=wrist::Size(WristSizePercent());
             // On the drawn forearm, which a zoom magnifies as it does the reticle's point.
             wristPose.position=viewzoom::ShownPoint(wristPose.position,gHost.eyeHead,gHost.eyeZoom);
             FillQuad(layer,gHost.space,wristPose,
                      hologram?XrExtent2Df{hologramDecision.width,hologramDecision.height}:
-                              XrExtent2Df{width,width*NativeWristHeight/NativeWristWidth},
+                              XrExtent2Df{size.width,size.height},
                      gHost.wristSwapchain->Handle(),{{0,0},{NativeWristWidth,NativeWristHeight}},
                      XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT);
         }

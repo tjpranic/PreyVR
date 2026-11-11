@@ -187,7 +187,8 @@ the wrist (`StatusOverride`).
   `map_hud_parts.py verify` (41 of 41) checks `QuadrantSWChildren` against the movie.
 - The card frames what it is given. Equipping a power widens it at once; unequipping shrinks it
   after about 0.7 s (NativeWristTexture's held bounds). With the icon the meters are a little
-  smaller on the same card; Wrist Display Size makes up for it.
+  smaller on the same card; Wrist Display Size makes up for it. (Since 2026-11-11 the card shows
+  one fixed frame, and the meters keep their size: [wrist HUD scope](WRIST-HUD-SCOPE-2026-11-11.md).)
 
 ### 3. Subtitles at HUD Distance (PreyVR-143)
 

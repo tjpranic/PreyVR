@@ -105,25 +105,16 @@ void Presenter::Update(const View& view, const Conditions& c, float dt, const Th
         if (!keep || c.occluded) { target_ = false; }
     } else {
         held_ = enter ? held_ + dt : 0.0f;
-        if (held_ >= t.dwell) {
-            target_ = true;
-            rising_ = alpha_ < 0.5f;
-        }
+        if (held_ >= t.dwell) { target_ = true; }
     }
     if (!target_) { held_ = std::min(held_, t.dwell); }
     if (target_) {
         alpha_ = std::min(1.0f, alpha_ + dt / std::max(t.fadeIn, 1e-3f));
-        if (alpha_ >= 1.0f) { rising_ = false; }
     } else {
         const float out = fast ? t.fastOut : t.fadeOut;
         alpha_ = std::max(0.0f, alpha_ - dt / std::max(out, 1e-3f));
         if (fast && !c.eligible) { alpha_ = 0.0f; }
     }
-}
-
-float Presenter::Scale() const
-{
-    return rising_ ? 0.9f + 0.1f * SmoothStep(alpha_) : 1.0f;
 }
 
 bool SegmentNearPoint(Vec3 a, Vec3 b, Vec3 point, float radius)

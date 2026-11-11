@@ -2,7 +2,7 @@
 #include "base/LatestSnapshot.h"
 #include <algorithm>
 namespace preyvr::haptics {
-// WristOpened: the status hologram unfolding, a smartwatch's faint tick.
+// WristOpened: the status display appearing, a smartwatch's faint tick.
 // WeaponStrike: the free-swing wrench landing a strike, the strongest pulse.
 enum class Event { MenuChange, ForegripAttached, WeaponContact, ObjectGrabbed, ObjectThrown, WristOpened, WeaponStrike };
 struct Request {

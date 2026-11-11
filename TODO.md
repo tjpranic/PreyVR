@@ -52,8 +52,6 @@
 - Have container search interface on left hand laser hit
 - Might want to remove the Q-beam holding offset
     May not be necessary.
-- Can't switch to some weapons when using the Psychoscope
-    Not supposed to; the game restricts this.
 - Audit body holster implementation
     Not sure how much work has been done on this and how it works.
 - Aiming lasers can show briefly in-between loading screen and press A button screen (?)
@@ -76,10 +74,8 @@
     Also need to update any out of date comments.
 
 ### HUD/UI
-- Psi energy shows on wrist before installing first neuromod
 - 2D marker (objective, repair etc.) position jitter a lot (?)
     They could use some smoothing.
-- Remove the background from the wrist status HUD
 - Weapon wheel should open where I'm looking
 
 ### VR Options Menu
@@ -147,6 +143,13 @@
 - Will need to adjust UI element depths
     Need to adjust for HUD and psychoscope.
     > The HUD was head-locked at 2 m, drawn over anything nearer, the helmet's rim included. It now floats at HUD Distance (1 m by default, 50-200 cm) with the wheel, subtitles and tutorial cards, and all keep their apparent size. It is not put at the helmet's depth, which is too close to focus on; pulling the corners in keeps them inside the visor instead. Markers, the crosshair, quick loot and prompts stay at world depth. The psychoscope needed nothing. PreyVR-141 to PreyVR-143, worn OK 2026-11-08. See docs/HUD-PLACEMENT-2026-11-07.md.
+- Can't switch to some weapons when using the Psychoscope
+    Not supposed to; the game restricts this.
+- Remove the background from the wrist status HUD
+    Also remove the resizing
+    > The glass panel behind the meters is gone, and so is the fit that stretched them to fill the card: a status effect, an equipped power or a longer bar after an upgrade used to shrink every meter. The wrist now shows one fixed region of Prey's status, with room for all of those, and Wrist Display Size (now 50-200%) is the only thing that sizes it. It no longer grows as it fades in. The status holds still when Prey sways the HUD. PreyVR-150 to PreyVR-152, worn OK 2026-11-11. See docs/WRIST-HUD-SCOPE-2026-11-11.md.
+- Psi energy shows on wrist before installing first neuromod
+    > The wrist forced the psi meter on. It now asks Prey's own test, the one its HUD uses, so the meter shows from the first neuromod on, as it does in Prey, or while Prey has it open. PreyVR-150, worn OK 2026-11-11. See docs/WRIST-HUD-SCOPE-2026-11-11.md.
 
 ### UX/Immersion
 - The whole player body sometimes jumps out of place for an instant, then back, while walking with the stick
