@@ -10,9 +10,9 @@ namespace preyvr::options {
 // **Every VR Options setting.** The save file names each by its Spec key, so
 // these ids are this build's alone and their order is free to change.
 enum Setting : unsigned { Turn, HeadRelative, TurnSpeed, TwoHand, GripToggle, AutoSnap, AutoSnapAttach, AutoBreak,
-    AutoBreakDistance, Psychoscope, UiScale, HudSize, HudWidth, HudHeight, HudDistance, Holsters, Wrist, WristSize,
+    AutoBreakDistance, Psychoscope, UiScale, HudSize, HudWidth, HudHeight, HudDistance, Wrist, WristSize,
     ReticleSize, MarkerSize, Haptics, HapticStrength, FreeSwing, SwingSpeed, HeavySwingSpeed, PhysicalContact, PushStrength,
-    PsiHand, Medkit, BeltHints, DebugOverlay,
+    PsiHand, DebugOverlay,
     UiDistance, UiOffsetRight, UiOffsetUp, UiText, PointerHand,
     MoveDeadzone, TurnDeadzone, StrafeSpeed, BackwardSpeed,
     CarryHold, GrenadeHand, CarryThrowStrength, GrenadeThrowStrength,
@@ -68,7 +68,7 @@ bool Parse(std::string_view text, Values& result, Present* present = nullptr);
 constexpr unsigned Width = 1400, Height = 1100;
 // **The panel's buttons**, which act rather than set: the negative entries of
 // MenuEntries, beside the settings.
-enum Button : int { RecenterView = -1, ClearHolsterSlots = -2, CalibratePosture = -3 };
+enum Button : int { RecenterView = -1, CalibratePosture = -3 };
 // **The panel's layout**: its tabs and the rows on each, any number per tab
 // (the list scrolls). Every setting appears exactly once, each button once.
 unsigned MenuPages();
@@ -92,7 +92,7 @@ struct Input {
 struct Change {
     int setting = -1;
     int value = 0;
-    bool recenter = false, clearHolsters = false, calibrate = false;
+    bool recenter = false, calibrate = false;
 };
 // **When VR Options is open, and who has the controls.** A long hold of left
 // Menu (or RequestOpen) opens it over whatever is shown: the running game or a

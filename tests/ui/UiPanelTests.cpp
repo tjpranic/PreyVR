@@ -396,17 +396,17 @@ int main() {
         return true;
     };
     ui::FrameShown play;
-    play.hud=play.reticle=play.wheel=play.note=play.text=play.beam=play.cursor=play.wrist=play.slot=play.fade=true;
+    play.hud=play.reticle=play.wheel=play.note=play.text=play.beam=play.cursor=play.wrist=play.fade=true;
     Require(is(ui::ComposeFrame(play),{L::world,L::hud,L::reticle,L::wheel,L::note,L::text,L::beam,L::cursor,L::wrist,
-        L::slot,L::fade}),
-        "gameplay: the world, then the HUD, the reticle, the wheel over them, note and text, the laser, wrist, slot and fade");
+        L::fade}),
+        "gameplay: the world, then the HUD, the reticle, the wheel over them, note and text, the laser, wrist and fade");
     Require(ui::ComposeFrame(play).count<=ui::FrameLayers{}.layers.size(),"every gameplay layer at once fits");
-    auto over=play;over.options=true;over.wrist=over.slot=over.fade=false; // paused by their callers meanwhile
+    auto over=play;over.options=true;over.wrist=over.fade=false; // paused by their callers meanwhile
     Require(is(ui::ComposeFrame(over),{L::world,L::options,L::beam,L::cursor}),
         "VR Options over the running game: the world under it, the laser over it, the HUD, wheel, note and text out");
-    over.wrist=over.slot=over.fade=true;
-    Require(is(ui::ComposeFrame(over),{L::world,L::options,L::beam,L::cursor,L::wrist,L::slot,L::fade}),
-        "the wrist, slot and fade are their callers' to gate: what is shown is drawn");
+    over.wrist=over.fade=true;
+    Require(is(ui::ComposeFrame(over),{L::world,L::options,L::beam,L::cursor,L::wrist,L::fade}),
+        "the wrist and fade are their callers' to gate: what is shown is drawn");
     ui::FrameShown menu;menu.menu=menu.beam=menu.cursor=true;
     Require(is(ui::ComposeFrame(menu),{L::menu,L::beam,L::cursor}),"a game menu, under the laser");
     auto options=menu;options.options=true;
@@ -418,8 +418,8 @@ int main() {
         "VR Options over a game menu, no HUD, wheel, note or text");
     ui::FrameShown everything;
     everything.hud=everything.text=true;
-    everything.beam=everything.cursor=everything.wrist=everything.slot=everything.fade=true;
-    Require(is(ui::ComposeFrame(everything),{L::world,L::hud,L::text,L::beam,L::cursor,L::wrist,L::slot,L::fade}),
+    everything.beam=everything.cursor=everything.wrist=everything.fade=true;
+    Require(is(ui::ComposeFrame(everything),{L::world,L::hud,L::text,L::beam,L::cursor,L::wrist,L::fade}),
         "with no menu up, the world under everything shown");
 
     // **VR Options dragged by the laser**, round the inside of a cylinder about the head.

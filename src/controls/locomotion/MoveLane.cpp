@@ -4,13 +4,11 @@
 #include "engine/hooks/HookInstall.h"
 #include "body/ArmsLane.h"
 #include "aim/AimTakeover.h"
-#include "equipment/body/BodyEquipmentLane.h"
 #include "controls/input/ActionMaps.h"
 #include "physics/hands/InteractionLane.h"
 #include "body/RoomScaleLane.h"
 #include "physics/hands/CarryLane.h"
 #include "physics/hands/GrenadeLane.h"
-#include "equipment/psi/PsiMedkit.h"
 #include "equipment/psi/Psychoscope.h"
 
 #include "controls/input/InputPost.h"
@@ -555,7 +553,6 @@ void UpdateTurnAndFireLanes()
     // The recenter chord's button: Menu (pause), whose own actions wait for its
     // release or a long hold, so the chord can claim it (VrOptions' Menu).
     const bool menuHeld = haveInput && inputFrame.system.pause;
-    UpdateHolsterInput(inputFrame,haveInput&&gActionsEnabled.load());
     // The frame a menu closes is still the menu's (ReleaseGate.h): the Back
     // that closed the inventory was posted, and the menu sampled as closed,
     // before this ran, so the B that did it must not crouch.
@@ -757,12 +754,11 @@ void UpdateTurnAndFireLanes()
         useIn.leftPress = play.grabPressed;
         useIn.rightPress = play.reloadPressed;
         useIn.chord = menuHeld;
-        // The hip slot's trigger is the medkit's, and a hand holding the
-        // foregrip is not free. The foregrip region and the psychoscope
-        // gesture are the grip's: they stop a press only while the grip is
-        // squeezed too -- a press rebound to the grip, or both at once. The
-        // same list keeps psi (the left trigger) off the left hand's other jobs.
-        const bool leftBusy = gRecenterHeld || MedkitZoneHasLeftHand() || TwoHandedAimHeld() ||
+        // A hand holding the foregrip is not free. The foregrip region and the
+        // psychoscope gesture are the grip's: they stop a press only while the
+        // grip is squeezed too -- a press rebound to the grip, or both at once.
+        // The same list keeps psi (the left trigger) off the left hand's other jobs.
+        const bool leftBusy = gRecenterHeld || TwoHandedAimHeld() ||
                               (leftHand.gripPressed && (SupportGripNear() || PsychoscopeZoneHasLeftHand()));
         // **Two-handed, the left press (Prey's X) reloads** instead of being
         // dropped as busy: the hand is on the weapon, so there is nothing for
@@ -776,7 +772,7 @@ void UpdateTurnAndFireLanes()
         useIn.leftReloads = twoHand && twoHandBefore && !leftGripEdge;
         twoHandBefore = twoHand;
         leftGripBefore = leftHand.gripPressed;
-        useIn.leftBusy = useIn.leftReloads ? gRecenterHeld || MedkitZoneHasLeftHand() : leftBusy;
+        useIn.leftBusy = useIn.leftReloads ? gRecenterHeld : leftBusy;
         // A paired squeeze is a hold, not use/reload -- in the original layout,
         // where the right grip is also use. With use.hand left it only
         // reloads (and holsters, held), which a two-hand hold leaves free:
@@ -784,7 +780,7 @@ void UpdateTurnAndFireLanes()
         // While something is carried the button drops it: the left grip lets
         // go, and the right one (reload) has nothing to do.
         const bool carrying = UseCarrying();
-        useIn.rightBusy = gRecenterHeld || HolsterOwnsGrip() ||
+        useIn.rightBusy = gRecenterHeld ||
                           (!useIn.leftHand && (TwoHandedAimHeld() ||
                                                (haveLeftHand && leftHand.squeezeValue >= .45f))) ||
                           (carrying && useIn.leftHand);

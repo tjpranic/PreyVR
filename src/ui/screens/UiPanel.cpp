@@ -339,7 +339,6 @@ FrameLayers ComposeFrame(const FrameShown& s)
     if(s.beam)add(FrameLayer::beam);
     if(s.cursor)add(FrameLayer::cursor);
     if(s.wrist)add(FrameLayer::wrist);
-    if(s.slot)add(FrameLayer::slot);
     if(s.fade)add(FrameLayer::fade);
     return out;
 }

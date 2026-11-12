@@ -10,18 +10,18 @@
 
 // What the in-game debug overlay shows, decided from plain state.
 //
-// The DLL gathers snapshots from the systems that own them (aim, holsters,
-// medkit slot, wrist, two-hand solver) and converts every position into the
-// app's OpenXR space. This file only decides how that state looks, so the
-// choice of colours and what counts as "inside a slot" is testable offline and
-// cannot drift from the numbers the systems themselves use.
+// The DLL gathers snapshots from the systems that own them (aim, wrist,
+// two-hand solver, contact, arms) and converts every position into the app's
+// OpenXR space. This file only decides how that state looks, so the choice of
+// colours and what counts as "inside a region" is testable offline and cannot
+// drift from the numbers the systems themselves use.
 namespace preyvr::debugdraw {
 
 // `dbg.draw` mask bits.
 enum Layer : unsigned {
     kRays = 1u << 0,      // each hand's ray as the game uses it, with its target
     kRaw = 1u << 1,       // controller grip axes and the raw aim ray, dashed
-    kBody = 1u << 2,      // holster and medkit slots, hand tethers
+    // 1u << 2 was kBody, the holster and medkit slots (removed 2026-11-12).
     kWrist = 1u << 3,     // wrist card frame and its visibility test
     kForegrip = 1u << 4,  // two-hand support region and socket
     kLabels = 1u << 5,    // text beside each primitive
@@ -53,7 +53,6 @@ inline constexpr Color kNear{255, 220, 70, 230};
 inline constexpr Color kActive{90, 235, 120, 245};
 inline constexpr Color kWarn{255, 150, 40, 245};
 inline constexpr Color kDenied{255, 70, 70, 245};
-inline constexpr Color kStored{110, 160, 255, 235};
 inline constexpr Color kMuted{150, 150, 150, 140};
 
 enum class RayRole : std::uint8_t { None, Weapon, Psi, Pointer, Use };
@@ -108,22 +107,6 @@ struct Controller {
     bool gripPressed = false, triggerPressed = false;
 };
 
-enum class Notice : std::uint8_t { None, Ready, Success, Empty, Denied };
-// One body slot as the gesture that owns it measures it.
-struct Slot {
-    bool valid = false;        // the gesture is live and has a torso estimate
-    Vec3 centre{};
-    float radius = .14f;
-    Vec3 hand{};               // the controller grip that slot measures
-    bool gripPressed = false;
-    bool armed = false;        // grip released since the last action: a squeeze will act
-    bool owned = false;        // this slot currently owns the grip
-    bool stored = false;       // a holster has a weapon assigned
-    bool triggerArmed = false; // medkit: trigger released since selection
-    Notice notice = Notice::None;
-    float noticeAge = 0;       // seconds
-    std::string name;          // "HIP R", "CHEST L", "MEDKIT"
-};
 struct Wrist {
     bool enabled = false;
     bool gate = false;         // every precondition except where the wrist is held
@@ -215,9 +198,6 @@ struct OverlayFrame {
     std::array<Controller, 2> hands{};   // 0 = left, 1 = right
     std::array<HandRay, 2> rays{};
     ShotMark shot{};
-    bool holstersEnabled = false, medkitEnabled = false;
-    std::array<Slot, 2> holsters{};      // 0 = right hip, 1 = left chest
-    Slot medkit{};
     Wrist wrist{};
     Foregrip foregrip{};
     Physical physical{};
@@ -231,9 +211,5 @@ struct OverlayFrame {
 void BuildOverlayScene(const OverlayFrame& frame, unsigned mask, Scene& scene);
 // The status panel's text, also used by `dbg.report`.
 std::string OverlayStatusText(const OverlayFrame& frame, unsigned mask);
-// Which colour a slot is drawn in, the core of the slot legend.
-Color SlotColor(const Slot& slot);
-// Distance from a slot's hand to its centre, metres.
-float SlotHandDistance(const Slot& slot);
 
 }  // namespace preyvr::debugdraw

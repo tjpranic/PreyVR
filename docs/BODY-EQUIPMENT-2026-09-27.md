@@ -1,5 +1,10 @@
 # Optional body holsters and wrist status
 
+> **2026-11-12: the holsters were removed**, with the medkit slot and Body Slot Feedback; this page is
+> history. `holsters` loads as a retired key. Prey's own holster on the right grip (hold to put the weapon
+> away, press to draw) covers one weapon. `EquipmentNative.h` moved to `src/equipment/weapon/` with the three
+> rows the weapon draw skip hashes, and the wrist card's geometry to `src/ui/hud/WristCard.h`.
+
 Built on `codex/vr-options`, following commit `14c1075`. No Prey launch,
 injection, game attachment or headset testing was performed in this batch.
 

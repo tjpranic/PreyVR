@@ -55,7 +55,7 @@ struct Case {
 // Tails of more than one report, or of a report and the channel's text after it.
 std::string DualReports() { return DualSceneReport() + DualOverlayReport(); }
 std::string WorldReticleReports() { return ReticleWorldReport() + " scene:" + SceneQueryReport(); }
-std::string VrOptionsReports() { return VrOptionsReport() + PsychoscopeReport() + BodyEquipmentReport(); }
+std::string VrOptionsReports() { return VrOptionsReport() + PsychoscopeReport(); }
 std::string BodyReports() { return TorsoLaneReport() + BodyPinReport() + RoomScaleReport(); }
 std::string BodyDepthReports() { return BodyDepthReport() + " " + ViewNearClipReport(); }
 
@@ -385,7 +385,6 @@ const Case kCases[] = {
     {"HUD_BOBHUD 1 2", "console result=1 command=\"HUD_BOBHUD 1 2\"", nullptr, processed},
     {"console hud_bobHud 0", "console result=0 command=\"hud_bobHud 0\"", nullptr, processed},
     {"psi.hand", "psi.hand result=0", PsiMedkitReport, processed},
-    {"medkit.slot", "medkit.slot result=0", PsiMedkitReport, processed},
     {"aim.scene", "aim.scene result=0", SceneQueryReport, processed},
     {"haptics", "haptics result=0", HapticsReport, processed},
     {"aim.reticle", "aim.reticle result=0 note=no_value_nothing_changed", nullptr, processed},
@@ -451,7 +450,7 @@ const Case kCases[] = {
 //   refused before the setter runs are pinned): observer, near.fov, near.enable,
 //   near.fxhide, aim.shotprobe, aim.reticle, aim.enable, weapon.observe,
 //   view.observe, ik.mode, move.mode, use.hand, xr.stereo,
-//   psi.hand, medkit.slot, dual.observe, dual.mode, dual.overlay,
+//   psi.hand, dual.observe, dual.mode, dual.overlay,
 //   dual.vr, frame.probe, cull.prepare; near.fx,
 //   markers.depth, stars.depth, body.depth and window.hold given 1; aim.beam and dual.capture
 //   even bare; hud.var, hud.setvar, hud.call, hud.fit and hud.probe given

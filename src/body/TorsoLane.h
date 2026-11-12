@@ -8,7 +8,7 @@
 
 // **The player's torso**, estimated once a frame and shared: the head's yaw
 // behind a deadzone, relaxing toward it (armpose::TorsoYaw). The arm solver's
-// shoulders and the holster and medkit slots all read this one copy.
+// shoulders read this one copy.
 //
 // On the main thread, at the entry of ArkPlayer::Update (R-021's function,
 // vtable slot 19), where a snap turn queued last frame also lands

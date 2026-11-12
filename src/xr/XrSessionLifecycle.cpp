@@ -16,8 +16,6 @@
 #include "engine/RendererAccess.h"
 #include "ui/options/VrOptionsLayer.h"
 #include "ui/options/VrOptionsRuntime.h"
-#include "equipment/body/BodyEquipmentLane.h"
-#include "equipment/body/SlotFeedbackLane.h"
 #include "ui/hud/WristLane.h"
 #include "aim/AimTakeover.h"
 #include "diagnostics/overlay/DebugOverlay.h"
@@ -458,15 +456,12 @@ void Teardown()
     gHost.wheelHold.Reset();
     gHost.reticleSwapchain.reset();
     gHost.optionsLayer.Reset();
-    gHost.slotImage.Reset();
     gHost.fadeImage.Reset();
-    ClearSlotFeedback();
     gHost.wristSwapchain.reset();
     gHost.wristFitter.reset();
     ResetNativeWristCapture();
     ResetHudParts();
     ResetWristLane();
-    ClearHolsters();
     ResetVrOptionsSession();
     DestroyXrInput();
     ResetHeadTrackingReference();

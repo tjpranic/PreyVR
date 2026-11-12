@@ -1,5 +1,4 @@
 #include "equipment/psi/PsiTargeting.h"
-#include "equipment/body/MedkitSlot.h"
 #include "TestSupport.h"
 #include <iostream>
 #include <cstdlib>
@@ -32,16 +31,5 @@ int main(){
  Check(!psi::Override(&ctx,101+0x40,&buffer.ray)&&buffer.ray.origin.x==7,"other receiver unaffected");
  Check(psi::Override(&ctx,100+0x40,&buffer.ray)&&buffer.guard==0xABCDEF&&ctx.reads==1,"only 24 getter output bytes replaced");
  Check(!psi::Override(nullptr,100+0x40,&buffer.ray),"getter outside psi scope unaffected");
- equipment::MedkitSlot slot;hand.orientation={};hand.position={-.25f,1.f,.02f};
- auto tick=[&](bool grip,bool fire,bool ok=true,float dt=.01f){return slot.Update(head,hand.position,grip,fire,ok,dt);};
- tick(false,false);Check(!tick(true,false)&&slot.OwnsGrip(),"fresh hip grab claims slot without consuming");
- hand.position={-.3f,1.3f,-.4f};Check(tick(true,true),"trigger while holding consumes once after leaving belt");
- for(int i=0;i<5;++i){Check(!tick(true,false)&&!tick(true,true),"one transaction per grip, even repeated trigger pulls");}
- tick(false,false);hand.position={-.25f,1.f,.02f};tick(true,true);
- Check(!tick(true,true),"held trigger cannot consume on acquisition");tick(true,false);Check(tick(true,true),"neutral trigger rearms deliberate confirmation");
- tick(true,false,false);Check(!slot.OwnsGrip(),"tracking/menu invalidation releases slot");
- tick(true,false);Check(!tick(true,true),"held grip after cancellation cannot reacquire");
- tick(false,false);hand.position={-.5f,1.3f,-.4f};tick(true,false);hand.position={-.25f,1.f,.02f};
- Check(!tick(true,true)&&!slot.OwnsGrip(),"drifting into belt with grip held cannot consume");
- std::cout<<"Psi ray, preview provenance and single-use medkit slot passed\n";
+ std::cout<<"Psi ray and preview provenance passed\n";
 }

@@ -8,8 +8,8 @@
 //    both-eyes first-eye hold and its overlay window;
 //  - XrMenuPanel.cpp: the game menu's panel, the menu anchor, the laser, and
 //    the panel settings;
-//  - XrOverlayLayers.cpp: the HUD, reticle, wheel, note, text, wrist, slot and
-//    fade layers;
+//  - XrOverlayLayers.cpp: the HUD, reticle, wheel, note, text, wrist and fade
+//    layers;
 //  - XrHoldFrames.cpp: hold frames and the loading screen;
 //  - XrSessionReports.cpp: timing, coverage and the resolution chain.
 // The state is as it was in XrSessionHost.cpp, one instance of each (`inline`).
@@ -39,9 +39,7 @@
 #include "ui/screens/LoadingScreen.h"
 #include "ui/options/VrOptionsLayer.h"
 #include "ui/options/VrOptionsRuntime.h"
-#include "equipment/body/BodyEquipmentLane.h"
 #include "body/RoomScaleLane.h"
-#include "equipment/body/SlotFeedbackLane.h"
 #include "ui/hud/NativeWristTexture.h"
 #include "ui/hud/WristLane.h"
 #include "aim/AimTakeover.h"
@@ -185,7 +183,7 @@ struct FrameLayerSet {
         hud{XR_TYPE_COMPOSITION_LAYER_QUAD}, reticle{XR_TYPE_COMPOSITION_LAYER_QUAD},
         wheel{XR_TYPE_COMPOSITION_LAYER_QUAD}, note{XR_TYPE_COMPOSITION_LAYER_QUAD}, text{XR_TYPE_COMPOSITION_LAYER_QUAD},
         options{XR_TYPE_COMPOSITION_LAYER_QUAD}, beam{XR_TYPE_COMPOSITION_LAYER_QUAD}, cursor{XR_TYPE_COMPOSITION_LAYER_QUAD},
-        wrist{XR_TYPE_COMPOSITION_LAYER_QUAD}, slot{XR_TYPE_COMPOSITION_LAYER_QUAD}, fade{XR_TYPE_COMPOSITION_LAYER_QUAD};
+        wrist{XR_TYPE_COMPOSITION_LAYER_QUAD}, fade{XR_TYPE_COMPOSITION_LAYER_QUAD};
 
     std::vector<const XrCompositionLayerBaseHeader*> Ordered() {
         world.views=views;
@@ -210,7 +208,6 @@ private:
         case ui::FrameLayer::beam:return as(beam);
         case ui::FrameLayer::cursor:return as(cursor);
         case ui::FrameLayer::wrist:return as(wrist);
-        case ui::FrameLayer::slot:return as(slot);
         case ui::FrameLayer::fade:return as(fade);
         }
         return nullptr;
@@ -273,9 +270,6 @@ struct Host {
     // after the tracking space changes; kept through setting changes.
     std::optional<ui::MenuAnchor> menuAnchor;
     std::uint64_t menuAnchorReference=0;
-    PaintedLayer slotImage{"slot_swapchain",SlotFeedbackWidth,SlotFeedbackHeight};
-    bool slotReady=false;
-    equipment::SlotNotice slotPainted=equipment::SlotNotice::None;
     // The head-in-wall fade (RoomScaleLane.h): a black quad in front of the eyes,
     // repainted only when its quantised alpha changes. 640x480: the first fade,
     // at 4x4, was refused at creation and never drew (the layers' size floor).
@@ -576,7 +570,6 @@ bool BuildNoteLayer(const FrameView& view, ID3D11Texture2D* texture, float dista
 bool BuildTextLayer(const FrameView& view, ID3D11Texture2D* texture, float distance, float scale,
                     XrCompositionLayerQuad& layer);
 bool BuildWristLayer(const FrameView& view, const NativeWristImage& nativeWrist, XrCompositionLayerQuad& layer);
-bool BuildSlotLayer(const FrameView& view, XrCompositionLayerQuad& layer);
 bool BuildFadeLayer(const FrameView& view, XrCompositionLayerQuad& layer);
 // XrHoldFrames.cpp
 bool LockForRenderThread(std::unique_lock<std::timed_mutex>& lock);

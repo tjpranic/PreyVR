@@ -4,7 +4,6 @@
 #include "body/ik/AnimIkTakeover.h"
 #include "controls/input/ActionMaps.h"
 #include "render/stereo/BodyDepthHook.h"
-#include "equipment/body/BodyEquipmentLane.h"
 #include "physics/hands/CarryLane.h"
 #include "engine/console/ConsoleBridgeWin32.h"
 #include "physics/contact/ContactLane.h"
@@ -22,7 +21,6 @@
 #include "physics/hands/InteractionLane.h"
 #include "controls/locomotion/MoveLane.h"
 #include "diagnostics/capture/OverflowCapture.h"
-#include "equipment/psi/PsiMedkit.h"
 #include "equipment/psi/Psychoscope.h"
 #include "physics/contact/SurfaceStopLane.h"
 #include "physics/swing/SwingLane.h"
@@ -53,9 +51,7 @@ void TickGameplayLanes(const GameplayPoseFrame& frame, bool allowed, bool tracki
     // Before this frame's animation: the player's arms, which the IK must not pass
     // over after a level load has replaced them (AnimIkTakeover.h).
     PublishAnimIkPlayer(frame.player);
-    UpdatePsiMedkit(frame, allowed);
     UpdatePsychoscopeGesture(frame, allowed);
-    UpdateBodyEquipment(frame, allowed);
     // Before contact: a strike tells contact what not to push.
     UpdateSwingLane(frame, allowed);
     UpdateContactLane(frame, allowed);

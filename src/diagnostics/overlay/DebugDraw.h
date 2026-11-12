@@ -12,8 +12,7 @@
 // The pure half of the in-game debug overlay (`dbg.draw`).
 //
 // **What a tester needs to see, drawn where it is.** Rays from each hand, the
-// body slots the holsters and the medkit measure against, the wrist card's
-// visibility test, the foregrip region. Every primitive is described in the
+// wrist card's visibility test, the foregrip region. Every primitive is described in the
 // app's OpenXR space -- the space the controllers, the head and the submitted
 // eye poses already share -- and is projected with the exact pose and frustum
 // that rendered the eye image it is drawn into. Drawn that way an overlay point

@@ -3,7 +3,6 @@
 #include "body/HandWorld.h"
 #include "controls/input/Haptics.h"
 #include "ui/screens/UiMode.h"
-#include "equipment/psi/PsiMedkit.h"
 #include "aim/WeaponAttachment.h"
 #include "controls/input/XrInput.h"
 #include "base/LatestSnapshot.h"
@@ -75,7 +74,7 @@ void SolveTwoHandedFrame(GameplayPoseFrame& frame, bool tracking)
     }
     gTwoHandRegionReady.store(region);
     // Each gate as a bit, for aim.twohand: which one released a held foregrip.
-    const unsigned gates=(region?0u:1u)|(tracking?0u:2u)|(MedkitOwnsGrip()?4u:0u)|
+    const unsigned gates=(region?0u:1u)|(tracking?0u:2u)|
         (frame.headYawUsable?0u:8u)|(frame.cameraCentreValid?0u:16u)|
         (AimTakeoverEnabled()&&gTwoHandEnabled.load()?0u:32u)|(HudGameplayInputAllowed()?0u:64u)|
         (IsPoseUsable(right.aimPose,right.aimValidity,kMaxPoseAgeNs)&&
@@ -149,7 +148,7 @@ std::string TwoHandedAimStatus() {
        <<" autoBreak="<<gTwoHandAutoBreak.load()
        <<" snapAttachCm="<<gTwoHandSnapAttachCm.load()<<" breakCm="<<gTwoHandBreakCm.load()
        <<" regionReady="<<gTwoHandRegionReady.load()<<" frames="<<gTwoHandFrames.load()
-       // 1 region 2 tracking 4 medkit 8 headYaw 16 camera 32 disabled 64 hud 128 poses
+       // 1 region 2 tracking 8 headYaw 16 camera 32 disabled 64 hud 128 poses (4 was the medkit slot)
        <<" gates="<<gTwoHandGates.load()<<" gatesSeen="<<gTwoHandGatesSeen.exchange(0);
     SupportGripGeometry geometry{};
     if(gSupportGeometry.TryRead(geometry)) out<<" owner="<<geometry.owner

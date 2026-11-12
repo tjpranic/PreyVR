@@ -13,7 +13,6 @@
 #include "physics/contact/PhysicalInteractionsLane.h"
 #include "physics/contact/PhysicalLane.h"
 #include "physics/contact/PhysicsCalls.h"
-#include "equipment/psi/PsiMedkit.h"
 #include "physics/contact/SceneQueryLane.h"
 #include "physics/swing/SwingLane.h"
 #include "controls/input/XrInput.h"
@@ -792,13 +791,12 @@ void HandProxy(const GameplayPoseFrame& f, Hand hand, ProxyNow& out)
     out.basis = PlaySpaceRotation(f);
     out.active = true;
 }
-// The left hand is not free while it carries, holds the foregrip, works the
-// medkit slot or aims psi: those are its jobs, and a push would fight them.
+// The left hand is not free while it carries, holds the foregrip or aims psi:
+// those are its jobs, and a push would fight them.
 const char* LeftHandBusy()
 {
     if (UseCarrying() || CarryHoldingInHand()) { return "carrying"; }
     if (TwoHandedAimHeld()) { return "foregrip"; }
-    if (MedkitZoneHasLeftHand()) { return "medkit"; }
     if (PsiButtonHeld()) { return "psi"; }
     return nullptr;
 }

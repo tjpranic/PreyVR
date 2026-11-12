@@ -60,7 +60,6 @@ bool WriteReticleScreenPosition(void*, const Vec3& origin, const Vec3& direction
 // What the aim frame reads, at rest: a weapon with no muzzle read, no two-handed
 // hold, no shot ray or scene hit, so the published ray is the takeover's own.
 bool HudGameplayInputAllowed() { return true; }
-bool MedkitOwnsGrip() { return false; }
 bool TryGetEquippedRig(std::uintptr_t, EquippedRig& out) {
     if (weaponDrawn) out.generation = 7;
     return weaponDrawn;

@@ -63,9 +63,6 @@ DWORD QueueSnapTurn(int, unsigned) { return 0; }
 void ApplyQueuedSnapTurn(bool) {}
 bool BodyHeadOut() { return false; }
 bool ArmsHolstered() { return false; }
-bool HolsterOwnsGrip() { return false; }
-void UpdateHolsterInput(const TrackingFrame&, bool) {}
-bool MedkitZoneHasLeftHand() { return false; }
 bool PsychoscopeZoneHasLeftHand() { return false; }
 bool SupportGripNear() { return false; }
 bool TwoHandedAimHeld() { return false; }

@@ -25,7 +25,7 @@ The notebook separates evidence from plans so implementation follows demonstrate
 > view-rotation setter without moving the view, and the one bad frame when a smooth turn stopped;
 > room-scale, the capsule following the player across the room, fitted by the engine's own stance
 > test and moved without its teleport; the body posed under the player's head; the shoulders the
-> arms hang from; posture calibration and the body slots: [`BODY-FOLLOW.md`](BODY-FOLLOW.md).
+> arms hang from; posture calibration: [`BODY-FOLLOW.md`](BODY-FOLLOW.md).
 > Why the player stopped while walking and turning, from the first report to the fix: room-scale
 > moved the capsule with the engine's teleport, and Prey re-read the stick from the physical
 > gamepad: [`MOVE-STOP-2026-10-24.md`](MOVE-STOP-2026-10-24.md).

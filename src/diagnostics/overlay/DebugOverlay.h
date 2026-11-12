@@ -2,7 +2,6 @@
 
 #include "diagnostics/overlay/DebugOverlayScene.h"
 #include "render/camera/RenderContract.h"
-#include "equipment/body/SlotFeedback.h"
 #include "aim/TwoHandedAim.h"
 #include "aim/WeaponAim.h"
 
@@ -15,8 +14,8 @@ struct ID3D11Device;
 struct ID3D11DeviceContext;
 struct ID3D11Texture2D;
 
-// In-game debug overlay (`dbg.draw`): each hand's ray, the body slots, the
-// wrist card test and the foregrip region, drawn into the submitted eye images.
+// In-game debug overlay (`dbg.draw`): each hand's ray, the wrist card test and
+// the foregrip region, drawn into the submitted eye images.
 //
 // **Drawn into the eye image, with the contract that rendered it.** Every
 // primitive is in the app's OpenXR space and is projected with the same eye
@@ -53,15 +52,6 @@ void DebugOverlayGameFrame(const GameplayPoseFrame& frame, bool tracking);
 // Main thread, from the two-hand solver.
 void DebugOverlayForegrip(const GameplayPoseFrame& frame, const twohand::Input& input,
                           const twohand::Output& output, bool regionReady);
-// Holster input lane. `centres`/`valid` describe the gesture's torso estimate.
-void DebugOverlayHolsters(bool live, const std::array<Vec3, 2>& centres, Vec3 hand, bool gripPressed,
-                          bool armed, bool owned);
-void DebugOverlayHolsterSlots(bool hipStored, bool chestStored);
-// Medkit lane.
-void DebugOverlayMedkit(bool live, Vec3 centre, Vec3 hand, bool gripPressed, bool armed, bool owned,
-                        bool triggerArmed);
-// Any slot notice, whether or not belt hints are shown.
-void DebugOverlayNotice(equipment::SlotNotice notice);
 // Physical-contact sweep (PhysicalInteractions), main thread, once
 // per gameplay frame while DebugOverlayWantsPhysical(). Engine world space.
 struct PhysicalOverlayState {

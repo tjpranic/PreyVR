@@ -7,7 +7,7 @@
 // Two lists say where that does not hold offline, and why:
 //  - kStartOff: three lanes start off, and VR start sets them to their defaults
 //    (VrMode.cpp, options::Default).
-//  - kNeedsPrey: four setters install a hook or reach Prey to turn on, so here,
+//  - kNeedsPrey: three setters install a hook or reach Prey to turn on, so here,
 //    with no Prey, they take off and refuse anything else.
 //
 // Offline and inert, like command_channel: PreyDll is never loaded, MinHook is
@@ -36,8 +36,7 @@ using namespace preyvr::dll;
 using preyvr::test::Require;
 
 constexpr options::Setting kStartOff[] = {options::GrenadeHand, options::CarryHand, options::AimLasers};
-constexpr options::Setting kNeedsPrey[] = {options::PsiHand, options::Medkit, options::GrenadeHand,
-                                           options::CarryHand};
+constexpr options::Setting kNeedsPrey[] = {options::PsiHand, options::GrenadeHand, options::CarryHand};
 
 template <std::size_t N>
 bool In(const options::Setting (&list)[N], unsigned id)

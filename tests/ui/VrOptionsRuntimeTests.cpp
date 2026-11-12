@@ -6,7 +6,7 @@
 #include "TestSupport.h"
 namespace {
 preyvr::options::Values applied=preyvr::options::Defaults();
-bool nativeModal=true;unsigned pauseTaps=0,recenters=0,calibrations=0,clears=0,holsterClears=0;
+bool nativeModal=true;unsigned pauseTaps=0,recenters=0,calibrations=0,clears=0;
 DWORD viewResultForTest=0;
 bool supersedeViewForTest=false;
 preyvr::dll::TrackingFrame currentFrame{};
@@ -15,7 +15,6 @@ using preyvr::test::Check;
 PREYVR_TEST_DROP_LOG()
 namespace preyvr::dll {
 DWORD SetPsiAimHand(unsigned v){applied[options::PsiHand]=v;return 0;}unsigned PsiAimHand(){return applied[options::PsiHand];}
-DWORD SetMedkitSlot(unsigned v){applied[options::Medkit]=v;return 0;}unsigned MedkitSlotEnabled(){return applied[options::Medkit];}
 void SetFreeSwing(unsigned v){applied[options::FreeSwing]=v;}unsigned FreeSwingEnabled(){return applied[options::FreeSwing];}
 void SetPhysicalContact(unsigned v){applied[options::PhysicalContact]=v;}unsigned PhysicalContactEnabled(){return applied[options::PhysicalContact];}
 void SetPushStrength(unsigned v){applied[options::PushStrength]=v;}unsigned PushStrength(){return applied[options::PushStrength];}
@@ -40,7 +39,6 @@ void SetHapticStrength(unsigned v){applied[options::HapticStrength]=v;}
 unsigned HapticStrength(){return applied[options::HapticStrength];}
 DWORD SetMarkerSizePercent(unsigned v){applied[options::MarkerSize]=v;return 0;}
 unsigned MarkerSizePercent(){return applied[options::MarkerSize];}
-void ClearHolsters(){++holsterClears;}
 DWORD SetDebugOverlay(unsigned v){applied[options::DebugOverlay]=v?1:0;return 0;}
 unsigned DebugOverlayMask(){return applied[options::DebugOverlay];}
 DWORD SetSnapTurnDegrees(unsigned v){applied[options::Turn]=v;return 0;}
@@ -137,7 +135,7 @@ int main(){
   change.setting=static_cast<int>(id);change.value=value;result.changes.push_back(change);
   ApplyVrOptionsUi(result);ServiceVrOptions();};
  const auto press=[](options::Button button){VrOptionsUiResult result;options::Change change;
-  change.recenter=button==options::RecenterView;change.clearHolsters=button==options::ClearHolsterSlots;
+  change.recenter=button==options::RecenterView;
   change.calibrate=button==options::CalibratePosture;result.changes.push_back(change);ApplyVrOptionsUi(result);};
  const auto readFile=[&]{std::ifstream file(sandbox/L"PreyVR"/L"vr-options.ini");
   std::string text((std::istreambuf_iterator<char>(file)),{});return text;};
@@ -171,10 +169,7 @@ int main(){
   Check(data.find("\nturn=")==std::string::npos&&data.find("ui_scale")==std::string::npos,
         "a tuner change is not saved by the next menu save");}
  set(options::Psychoscope,1);Check(PsychoscopeGestureEnabled(),"gesture opt-in through menu reaches consumer");
- set(options::Holsters,1);Check(HolstersEnabled(),"holster opt-in reaches input consumer");
  set(options::Wrist,0);Check(!WristDisplayEnabled()&&WristSizePercent()==100,"wrist toggle (on by default) reaches layer consumer");
- const auto clearBefore=holsterClears;press(options::ClearHolsterSlots);
- Check(holsterClears==clearBefore+1,"clear holsters invokes its own action");
  set(options::ReticleSize,150);Check(ReticleSizePercent()==150,"the reticle's size reaches the reticle lane");
  set(options::MarkerSize,170);Check(MarkerSizePercent()==170,"the marker size reaches the markers");
  set(options::Haptics,0);Check(!HapticsEnabled(),"haptics disable reaches XR adapter");
@@ -192,10 +187,9 @@ int main(){
  set(options::SurfaceStop,1);Check(SurfaceStopEnabled(),"and on again");
  Check(SurfaceHeavyMass()==10,"heavy objects from 10 kg by default");
  set(options::HeavyMass,25);Check(SurfaceHeavyMass()==25,"the heavy mass reaches the surface stop lane");
- Check(PsiAimHand()==0&&!MedkitSlotEnabled(),"psi aims with the right hand and the medkit slot is off by default");
+ Check(PsiAimHand()==0,"psi aims with the right hand by default");
  set(options::PsiHand,1);Check(PsiAimHand()==1,"left-hand psi aim reaches the psi lane");
  set(options::PsiHand,0);Check(PsiAimHand()==0,"and the right hand again");
- set(options::Medkit,1);Check(MedkitSlotEnabled(),"medkit opt-in reaches adapter");
  press(options::CalibratePosture);
  viewResultForTest=3;ServiceVrOptions();
  Check(calibrations==1&&recenters==0&&VrSetupMessage()==L"WAITING FOR CURRENT HEADSET POSE","height calibration retries a busy reference");

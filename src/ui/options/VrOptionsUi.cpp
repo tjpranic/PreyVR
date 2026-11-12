@@ -57,8 +57,6 @@ ActionText ActionFor(int id)
     switch (id) {
     case options::RecenterView: return {"RESET VR VIEW", "Recenter",
                      "Look straight ahead and select to reset the view and controller reference together."};
-    case options::ClearHolsterSlots: return {"CLEAR HOLSTER ASSIGNMENTS", "Clear",
-                     "Forget both session holsters. Your weapons stay in the native inventory."};
     case options::CalibratePosture: return {"CALIBRATE CURRENT POSTURE", "Calibrate",
                      "Sit or stand comfortably, look straight ahead, then select. Sets this posture as your height "
                      "baseline and resets the view. Repeat after changing posture."};
@@ -288,7 +286,6 @@ private:
         if (ImGui::Button(ActionFor(id).button, ImVec2(-FLT_MIN, 0))) {
             options::Change change;
             change.recenter = id == options::RecenterView;
-            change.clearHolsters = id == options::ClearHolsterSlots;
             change.calibrate = id == options::CalibratePosture;
             Push(change);
         }

@@ -26,8 +26,7 @@ struct Panel { Pose pose{}; float width=0, height=0; };
 // every corner sits within it, so once the margin binds, raising `scale` changes
 // nothing at all: at 0.72, a wearer at 2688x2880 found the panel stopped growing
 // at about 130 percent and reasonably read that as the maximum. The game's panels
-// use the whole frustum, so only `scale` sizes them; VR Options and the slot card
-// ask for less. Clamped to [0.3, 1.0].
+// use the whole frustum, so only `scale` sizes them; VR Options asks for less. Clamped to [0.3, 1.0].
 inline constexpr float kDefaultFitMargin=1.f;
 // The distances a panel may be fitted at, metres: the HUD from half a metre
 // (HUD Distance), the menus out to 4 (Menu Distance). Outside them FitPanel refuses.
@@ -200,15 +199,15 @@ float LaserFade(float along);
 // of it unseen. The reticle is over the HUD it came out of and under the wheel,
 // which hides it anyway; the note panel under the text panel: a subtitle reads
 // over an open book.
-// The wrist, slot and fade layers are their callers' to gate: they pause while
+// The wrist and fade layers are their callers' to gate: they pause while
 // VR Options has the controls, which is more than not being drawn.
 enum class FrameLayer : unsigned char {
-    world, menu, hud, reticle, wheel, note, text, options, beam, cursor, wrist, slot, fade };
+    world, menu, hud, reticle, wheel, note, text, options, beam, cursor, wrist, fade };
 struct FrameShown {
     bool menu=false,hud=false,reticle=false,wheel=false,note=false;
-    bool text=false,options=false,beam=false,cursor=false,wrist=false,slot=false,fade=false;
+    bool text=false,options=false,beam=false,cursor=false,wrist=false,fade=false;
 };
-struct FrameLayers { std::array<FrameLayer,12> layers{}; unsigned count=0; };
+struct FrameLayers { std::array<FrameLayer,11> layers{}; unsigned count=0; };
 FrameLayers ComposeFrame(const FrameShown& shown);
 // **The head-in-wall fade** (XrSessionHost, BodyHeadOut): black over 0.1 s while
 // `wanted`, clear again over 0.2 s. `now` is the frame's display time (ns);

@@ -55,10 +55,8 @@ options::Values VrOptionsValues();
 bool VrOptionsSaveFailed();
 std::wstring VrSetupMessage();
 bool PsychoscopeGestureEnabled();
-bool HolstersEnabled();
 bool WristDisplayEnabled();
 // Wrist Display Size, percent: the wrist card's only size (ui/hud/WristFrame.h wrist::Size).
 unsigned WristSizePercent();
-bool BeltHintsEnabled();
 std::string VrOptionsReport();
 }

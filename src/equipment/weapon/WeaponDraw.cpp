@@ -3,7 +3,7 @@
 #include "engine/hooks/HookInstall.h"
 #include "base/Logger.h"
 #include "equipment/weapon/WeaponSound.h"
-#include "equipment/body/EquipmentNative.h"
+#include "equipment/weapon/EquipmentNative.h"
 #include "engine/NativeContract.h"
 #include "engine/NativeGate.h"
 #include "equipment/weapon/WeaponDrawNative.h"

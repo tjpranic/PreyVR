@@ -37,7 +37,6 @@ constexpr Spec specs[]={
  {"hud_width",L"HUD WIDTH",L"How far left and right the HUD reaches: ammo, objectives, pickups and prompts. 100% is Prey's own layout, at the edges of the HUD.",70,30,100,5,U::percent},
  {"hud_height",L"HUD HEIGHT",L"How far up and down the HUD reaches. 100% is Prey's own layout; 55% spaces it as on a widescreen.",55,30,100,5,U::percent},
  {"hud_distance",L"HUD DISTANCE",L"How far away the HUD, the weapon wheel, subtitles and tutorial cards float. They keep their apparent size; nearer, less of the world stands in front of them.",100,50,200,5,U::cm},
- {"holsters",L"BODY HOLSTERS",L"Right grip at right hip or left chest: store current weapon, then draw/stow. Assignments are not saved.",0,0,1,1},
  {"wrist",L"WRIST STATUS",L"Raise your left forearm and look at its back, like a watch: health, suit, psi and your equipped psi power.",1,0,1,1},
  {"wrist_size",L"WRIST DISPLAY SIZE",L"How large the status display on your forearm is. Hidden in menus and during two-hand aiming.",100,50,200,10,U::percent},
  {"reticle_size",L"RETICLE SIZE",L"The crosshair in the world, against its size on the HUD.",100,50,200,10,U::percent},
@@ -51,9 +50,7 @@ constexpr Spec specs[]={
  {"push_strength",L"PUSH STRENGTH",L"How hard your weapon and hands push. Light objects keep up either way; heavier ones move sooner with more.",100,25,200,25,U::percent},
  // Right is Prey's own aim, which follows the right hand; Left aims from the left index finger (PsiMedkit.h).
  {"psi_hand",L"PSI AIM HAND",L"Which hand aims your psi powers. The left trigger uses them either way: hold to aim, let go to use. Right: where your weapon or right hand points. Left: where your left hand points; its laser turns violet while you aim.",0,0,1,1,U::none,psiHandNames},
- {"medkit_slot",L"LEFT-HIP MEDKIT SLOT",L"Squeeze left grip at left hip, then press left trigger while holding grip. One medkit per grab; native use rules apply.",0,0,1,1},
- {"belt_hints",L"BODY SLOT FEEDBACK",L"Brief feedback for holster requests and medkit selection/use. Requires the corresponding body slot feature.",1,0,1,1},
- {"debug_overlay",L"DEBUG OVERLAY (TESTING)",L"Draws each hand's ray and target, body slots, the wrist test, the foregrip region and the weapon's contact sweep in the world.",0,0,1,1},
+ {"debug_overlay",L"DEBUG OVERLAY (TESTING)",L"Draws each hand's ray and target, the wrist test, the foregrip region and the weapon's contact sweep in the world.",0,0,1,1},
  {"ui_distance",L"MENU DISTANCE",L"How far away the game's menus float. They keep their apparent size.",200,100,400,5,U::cm},
  {"ui_offset_right",L"MENU LEFT / RIGHT",L"Turns the game's menus around you, left or right of where you faced when they opened.",0,-90,90,1,U::degreesRightLeft,{},{},L"CENTRE"},
  {"ui_offset_up",L"MENU UP / DOWN",L"Raises or lowers the game's menus; they stay upright.",0,-45,45,1,U::degreesUpDown,{},{},L"CENTRE"},
@@ -120,15 +117,14 @@ constexpr int hands[]={AimLasers,ShotTrail,PsiHand,TwoHand,GripToggle,AutoSnap,A
     CarryThrowStrength,GrenadeThrowStrength,SurfaceStop,HeavyMass,PhysicalContact,PushStrength,FreeSwing,SwingSpeed,HeavySwingSpeed};
 constexpr int interface_[]={UiScale,UiDistance,UiOffsetRight,UiOffsetUp,UiText,ScreenPullback,
     PointerHand,HudSize,HudWidth,HudHeight,HudDistance,ReticleSize,MarkerSize,Helmet,HelmetHeight,HelmetForward,HelmetSize};
-constexpr int equipment[]={Holsters,ClearHolsterSlots,WeaponDrawAnims,Wrist,WristSize,WristTick,WristAlong,WristHover,WristTilt};
+constexpr int equipment[]={WeaponDrawAnims,Wrist,WristSize,WristTick,WristAlong,WristHover,WristTilt};
 constexpr int feedback[]={Haptics,HapticStrength};
-constexpr int abilities[]={Medkit,BeltHints};
 // CONTROLS holds no setting: the panel draws what each action is bound to there.
-constexpr unsigned kControlsPage=7;
-constexpr std::span<const int> menuPages[]={setup,movement,hands,interface_,equipment,feedback,abilities,
+constexpr unsigned kControlsPage=6;
+constexpr std::span<const int> menuPages[]={setup,movement,hands,interface_,equipment,feedback,
     std::span<const int>{}};
 constexpr const wchar_t* menuNames[]={L"SETUP",L"MOVEMENT",L"HANDS",L"INTERFACE",L"EQUIPMENT",L"FEEDBACK",
-    L"ABILITIES",L"CONTROLS"};
+    L"CONTROLS"};
 static_assert(kControlsPage<std::size(menuPages)&&menuPages[kControlsPage].empty());
 static_assert(std::size(menuPages)==std::size(menuNames));
 }
@@ -214,6 +210,8 @@ bool Parse(std::string_view text,Values& result,Present* present){
   // the controller's aim instead (handpose::kTubeLeanDegrees).
   // psi_target: Psychic Targeting (Original, Head, Left Controller), 2026-11-07, for Psi Aim
   // Hand (psi_hand): Left Controller carries over as Left, the others as Right.
+  // holsters, medkit_slot, belt_hints: Body Holsters, the Left-Hip Medkit Slot and Body
+  // Slot Feedback, 2026-11-12, with the body slots: the right grip holsters and draws.
   if(key=="psi_target"){psiTarget=value;continue;}
   if(key=="scene_reticle"||key=="physical_contacts"||key=="contact_strength"||key=="physical_melee"||
      key=="body_follow"||key=="body_turn_deadzone"||key=="body_step"||key=="body_glide"||
@@ -221,7 +219,7 @@ bool Parse(std::string_view text,Values& result,Present* present){
      key=="reticle_world"||key=="reticle_fallback_mm"||key=="wrist_on_hud"||key=="grenade_deploy"||
      key=="long_reach"||key=="muzzle_aim"||key=="ui_margin"||key=="ui_curve"||key=="ui_guide"||
      key=="inventory_layer"||key=="inventory_stereo"||key=="inventory_depth"||
-     key=="zoom_limit"||key=="laser_direction")continue;
+     key=="zoom_limit"||key=="laser_direction"||key=="holsters"||key=="medkit_slot"||key=="belt_hints")continue;
   // swing_speed took 80-250 until 2026-10-18; a file saved at 80 or 90 rises to the new minimum.
   if(key=="swing_speed"&&value>=80&&value<100)value=100;
   unsigned i=0;for(;i<Count&&key!=specs[i].key;++i){}

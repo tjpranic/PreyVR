@@ -73,7 +73,7 @@ void TestLeftBusy()
     in.leftBusy = true;
     in.leftPress = true;
     auto out = b.Update(in);
-    Require(!out.down && out.busy, "a medkit or foregrip squeeze is not a use");
+    Require(!out.down && out.busy, "a foregrip squeeze is not a use");
     in.leftBusy = false;
     Require(!b.Update(in).down, "still the same squeeze");
     // Busy arriving mid-hold (the foregrip latched) releases.
@@ -221,7 +221,7 @@ void TestRightBusyAndPairs()
     auto in = Base();
     in.rightBusy = true;
     in.rightPress = true;
-    Require(b.Update(in).busy, "holster squeeze is not a reload");
+    Require(b.Update(in).busy, "a busy right press (the recentre chord, carrying) is not a reload");
     in.rightPress = false;
     in.rightBusy = false;
     b.Update(in);

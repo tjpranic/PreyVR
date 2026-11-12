@@ -3,7 +3,7 @@
 // hash (SelectItem, the weapon lookup and the player, EquipmentNative.h's) stays
 // theirs, and every weapon class's slots lead to gated bodies.
 #include "physics/contact/ContactNative.h"
-#include "equipment/body/EquipmentNative.h"
+#include "equipment/weapon/EquipmentNative.h"
 #include "engine/NativeContract.h"
 #include "physics/contact/PhysicalNative.h"
 #include "physics/contact/SceneQueryNative.h"

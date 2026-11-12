@@ -14,11 +14,10 @@
 #include "xr/XrPose.h"
 #include "ui/options/VrOptionsLayer.h"
 #include "ui/options/VrOptionsRuntime.h"
-#include "equipment/body/BodyEquipmentLane.h"
 #include "body/RoomScaleLane.h"
-#include "equipment/body/SlotFeedbackLane.h"
 #include "ui/hud/NativeWristTexture.h"
 #include "ui/hud/WristLane.h"
+#include "ui/hud/WristCard.h"
 #include "aim/AimTakeover.h"
 #include "ui/hud/ReticleFollow.h"
 #include "diagnostics/overlay/DebugOverlay.h"
@@ -58,7 +57,7 @@
 
 // The overlay layers of Prey's frames, over the world (XrSessionState.h): the
 // HUD panel, the world reticle, the wheel, the note and text panels, the wrist
-// card, the slot card and the head-in-wall fade. ServiceXrFrame calls them in
+// card and the head-in-wall fade. ServiceXrFrame calls them in
 // this order; each fills its layer and says whether it is shown.
 
 namespace preyvr::dll {
@@ -266,12 +265,12 @@ bool BuildWristLayer(const FrameView& view, const NativeWristImage& nativeWrist,
     // card (wrist.anchor 0). Both composite the same native status texture.
     const bool hologram=!WristLegacyAnchor();
     WristDecision hologramDecision{};
-    auto wristPose=equipment::WristPose(wristFrame.hands[0].gripPose);
+    auto wristPose=wrist::WristPose(wristFrame.hands[0].gripPose);
     if(hologram){
         hologramDecision=DecideWrist(wristInput,wristFrame,gHost.eyeDisplayTime[0],view.displayTime);
         gHost.wristVisible=hologramDecision.active;
         wristPose=hologramDecision.pose;
-    } else gHost.wristVisible=wristInput&&equipment::WristVisible(wristFrame.head,wristPose,gHost.wristVisible);
+    } else gHost.wristVisible=wristInput&&wrist::WristVisible(wristFrame.head,wristPose,gHost.wristVisible);
     DebugOverlayWristDecision(wristInput,gHost.wristVisible);
     RequestNativeWristCapture(hologram?hologramDecision.capture:gHost.wristVisible);
     if(nativeWristTexture)gHost.wristCapturedNs=MonotonicNanoseconds();
@@ -313,41 +312,6 @@ bool BuildWristLayer(const FrameView& view, const NativeWristImage& nativeWrist,
                               XrExtent2Df{size.width,size.height},
                      gHost.wristSwapchain->Handle(),{{0,0},{NativeWristWidth,NativeWristHeight}},
                      XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT);
-        }
-    }
-    return active;
-}
-
-// **The slot card** (SlotFeedback): a holster or medkit notice, painted by GDI
-// and repainted only when the notice changes.
-bool BuildSlotLayer(const FrameView& view, XrCompositionLayerQuad& layer)
-{
-    bool active=false;
-    equipment::SlotMessage slotMessage{};TrackingFrame slotFrame{};
-    if(view.rendered&&view.haveViews&&!view.panelActive&&!view.optionsActive&&TryGetTrackingFrame(slotFrame)&&ReadSlotFeedback(slotFrame,slotMessage)){
-        const auto panel=equipment::SlotPanel(view.head,OpticalEyes(view.views));
-        // GDI pixels are sRGB, independently of the scene's colour encoding. The
-        // card is shorter than the default floor (480); its own size is the floor.
-        if(panel)gHost.slotImage.Ensure(SessionSwapchainApi(),gHost.session,gHost.device,Log);
-        if(panel&&gHost.slotImage.Ready()){
-            if(!gHost.slotReady||gHost.slotPainted!=slotMessage.kind){
-                auto pixels=DrawSlotFeedback(slotMessage.kind);
-                if(gHost.slotImage.Format()==DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)
-                    for(size_t n=0;n+3<pixels.size();n+=4)std::swap(pixels[n],pixels[n+2]);
-                const auto context=ImmediateContext(gHost.device);
-                if(context&&!pixels.empty()){
-                    const auto upload=gHost.slotImage.Paint(context.Get(),pixels.data());
-                    gHost.slotReady=upload==LayerSwapchain::Upload::ready;
-                    if(upload==LayerSwapchain::Upload::sessionFault)gStopRequested.store(true);
-                    if(gHost.slotReady)gHost.slotPainted=slotMessage.kind;
-                }
-            }
-            active=gHost.slotReady&&stereo::ReferenceCurrent(view.reference,HeadTrackingReferenceGeneration())&&
-                slotMessage.Current(MonotonicNanoseconds(),slotFrame.epoch,view.reference,HudMenuEpoch());
-            if(active){const auto& p=*panel;
-                FillQuad(layer,gHost.space,p.pose,{p.width,p.height},gHost.slotImage.Handle(),
-                         {{0,0},{SlotFeedbackWidth,SlotFeedbackHeight}},0);
-            }
         }
     }
     return active;

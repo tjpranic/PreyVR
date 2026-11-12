@@ -52,10 +52,10 @@
 - Have container search interface on left hand laser hit
 - Might want to remove the Q-beam holding offset
     May not be necessary.
-- Audit body holster implementation
-    Not sure how much work has been done on this and how it works.
 - Aiming lasers can show briefly in-between loading screen and press A button screen (?)
-    Only sometimes? Can't replicate anymore.
+    Only sometimes? Can't replicate on demand.
+- The screen on the bulkhead doors between areas shows at the wrong depth
+    I'm not sure if this is actually correct or if there is a depth rendering issue.
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -76,13 +76,12 @@
 ### HUD/UI
 - 2D marker (objective, repair etc.) position jitter a lot (?)
     They could use some smoothing.
+- Objective markers display at the wrong depth when entering and exiting grav lifts
 - Weapon wheel should open where I'm looking
 
 ### VR Options Menu
 - Have bindings section let you change your bindings (?)
 - Group related options in the tabs into sections
-- Development tab
-    This tab will be used to run input tuning commands because sending commands through the "Tune Prey VR.cmd" script is way too annoying to use properly.
 - The arms length option doesn't affect the whole arm, just the forearm
 
 ### Engine Instability
@@ -150,6 +149,11 @@
     > The glass panel behind the meters is gone, and so is the fit that stretched them to fill the card: a status effect, an equipped power or a longer bar after an upgrade used to shrink every meter. The wrist now shows one fixed region of Prey's status, with room for all of those, and Wrist Display Size (now 50-200%) is the only thing that sizes it. It no longer grows as it fades in. The status holds still when Prey sways the HUD. PreyVR-150 to PreyVR-152, worn OK 2026-11-11. See docs/WRIST-HUD-SCOPE-2026-11-11.md.
 - Psi energy shows on wrist before installing first neuromod
     > The wrist forced the psi meter on. It now asks Prey's own test, the one its HUD uses, so the meter shows from the first neuromod on, as it does in Prey, or while Prey has it open. PreyVR-150, worn OK 2026-11-11. See docs/WRIST-HUD-SCOPE-2026-11-11.md.
+
+### VR Options Menu
+- Audit body holster implementation
+    Not sure how much work has been done on this and how it works.
+    > Removed instead, with the left-hip medkit slot and Body Slot Feedback: none of them had been used in a headset, and the right grip already holsters and draws. Equipment loses Body Holsters and its clear button, and the Abilities tab is gone, so there are seven tabs. A settings file that still has their lines loads as before. PreyVR-153, worn OK 2026-11-12.
 
 ### UX/Immersion
 - The whole player body sometimes jumps out of place for an instant, then back, while walking with the stick

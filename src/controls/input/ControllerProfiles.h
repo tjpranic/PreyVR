@@ -26,8 +26,8 @@ enum class Role : unsigned char {
     // common
     gripPose, aimPose,
     // The hands' trigger and grip as such, for what reads a hand rather than
-    // a button: the laser's click, menu pages and tabs, the foregrip, holsters,
-    // the medkit slot, the psychoscope gesture and the recenter chord.
+    // a button: the laser's click, menu pages and tabs, the foregrip, the
+    // psychoscope gesture and the recenter chord.
     trigger, squeeze,
     haptic,
     // Capacitive touch, for the fingers' shape (HandPose): the thumb on any

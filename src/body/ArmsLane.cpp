@@ -11,7 +11,7 @@
 #include "diagnostics/commands/MemoryCommands.h"
 #include "aim/WeaponAttachment.h"
 #include "engine/EngineMap.h"
-#include "equipment/body/EquipmentNative.h"
+#include "equipment/weapon/EquipmentNative.h"
 
 #include <cstdint>
 #include <cstdlib>
@@ -30,8 +30,8 @@ void Log(const std::string& line) { lifecycle::Log("preyvr_arms " + line); }
 // is the game's own holster (UnequipWeapon): no weapon, the arms lowered out of
 // view (the IK's free arms bring them back to the controllers). The game draws
 // again on the trigger, which a VR player would expect to fire, so a right-grip
-// press with nothing drawn draws the last weapon: the native Equip, with the
-// gates Funk's body holsters use (BodyEquipmentLane.cpp, EquipmentNative.h).
+// press with nothing drawn draws the last weapon: the native Equip, behind the
+// game's own gates (EquipmentNative.h).
 //   ArkPlayerWeaponComponent = player+0x14B8: +0x48 player, +0x58 equipped id,
 //   +0x5C last equipped id, +0x64 id to re-equip (set while carrying),
 //   +0x78 unequip in progress. Equip 0x1274820 (component, id),

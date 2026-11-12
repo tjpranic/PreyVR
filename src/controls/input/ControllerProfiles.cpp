@@ -13,8 +13,8 @@ using K = Kind;
 constexpr std::array<Action, kRoleCount> kActions{{
     {R::gripPose, S::common, K::pose, "grip_pose", "Hand Pose (Grip)", true},
     {R::aimPose, S::common, K::pose, "aim_pose", "Hand Pose (Aim)", true},
-    {R::trigger, S::common, K::analog, "trigger", "Hand Trigger (Laser Click, Menu Pages, Medkit Slot)", true},
-    {R::squeeze, S::common, K::analog, "squeeze", "Hand Grip (Foregrip, Holsters, Tabs, Recenter)", true},
+    {R::trigger, S::common, K::analog, "trigger", "Hand Trigger (Laser Click, Menu Pages)", true},
+    {R::squeeze, S::common, K::analog, "squeeze", "Hand Grip (Foregrip, Tabs, Recenter)", true},
     {R::haptic, S::common, K::haptic, "feedback", "Controller Feedback", false},
     {R::thumbTouch, S::common, K::touch, "thumb_touch", "Thumb Resting (Finger Shape)", false},
     {R::indexTouch, S::common, K::touch, "index_touch", "Index Finger on the Trigger (Finger Shape)", false},

@@ -283,11 +283,10 @@ void QueueHaptic(Hand hand, haptics::Event event, const TrackingFrame&)
     Check(event == haptics::Event::WeaponContact, "a push pulses as a contact");
     ++(hand == Hand::left ? leftPulses : pulses);
 }
-bool carrying = false, foregrip = false, medkit = false, psi = false;
+bool carrying = false, foregrip = false, psi = false;
 bool UseCarrying() { return carrying; }
 bool CarryHoldingInHand() { return false; }
 bool TwoHandedAimHeld() { return foregrip; }
-bool MedkitZoneHasLeftHand() { return medkit; }
 bool PsiButtonHeld() { return psi; }
 bool SwingRecentlyStruck(const void*) { return false; }
 }
@@ -655,8 +654,8 @@ int main()
     logSecondNs = 0;
     hands({0, -.01f, 0});
     Check(!sets.empty() && leftPulses == 1 && Logged("push entity=", "proxy=left_hand"), "the free left hand pushes, and pulses itself");
-    // A busy left hand pushes nothing: carrying, the foregrip, the medkit slot, psi.
-    for (bool* busy : {&carrying, &foregrip, &medkit, &psi}) {
+    // A busy left hand pushes nothing: carrying, the foregrip, psi.
+    for (bool* busy : {&carrying, &foregrip, &psi}) {
         *busy = true;
         sets.clear();
         hands({0, -.01f, 0});

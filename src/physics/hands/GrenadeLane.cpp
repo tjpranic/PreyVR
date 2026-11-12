@@ -20,7 +20,7 @@
 #include "physics/hands/HandCarry.h"
 #include "base/LatestSnapshot.h"
 #include "render/camera/StereoCamera.h"
-#include "equipment/body/EquipmentNative.h"
+#include "equipment/weapon/EquipmentNative.h"
 
 #include <MinHook.h>
 #include <intrin.h>

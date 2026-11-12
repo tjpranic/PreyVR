@@ -10,7 +10,6 @@
 #include "ui/hud/HudLayer.h"
 #include "render/stereo/MarkerStereo.h"
 #include "aim/AimTakeover.h"
-#include "equipment/body/BodyEquipmentLane.h"
 #include "equipment/weapon/WeaponDraw.h"
 #include "render/camera/HeadTrackingHook.h"
 #include "equipment/head/HelmetLane.h"
@@ -45,8 +44,7 @@ namespace {
 options::Menu menu; // XR thread only
 std::array<std::atomic<int>,options::Count> values{};
 std::atomic<bool> ready{false},open{false},owned{false},saveFailed{false},scope{false};
-std::atomic<bool> holsters{false},wrist{true}; // wrist: options::Defaults()
-std::atomic<bool> beltHints{true};
+std::atomic<bool> wrist{true}; // options::Defaults()
 std::atomic<unsigned> wristSize{100};
 // One changed-flag per setting: no cap on how many there are.
 std::array<std::atomic<bool>,options::Count> dirty{};
@@ -86,7 +84,6 @@ void HandleChange(const options::Change& change,const TrackingFrame& f,Hand hand
  if(change.recenter||change.calibrate){
   QueueViewRequest(change.calibrate?2:1,f.epoch);
  }
- if(change.clearHolsters)ClearHolsters();
  if(change.setting>=0){
   const auto id=static_cast<unsigned>(change.setting);
   // A value outside the setting's range is refused: not applied, not saved.
@@ -168,8 +165,6 @@ constexpr Wiring wiring[]={
  {options::HudWidth,Set<SetHudWidthPercent>,Get<HudWidthPercent>},
  {options::HudHeight,Set<SetHudHeightPercent>,Get<HudHeightPercent>},
  {options::HudDistance,Set<SetHudDistanceCm>,Get<HudDistanceCm>},
- // A change of mind clears the slots, so no weapon is left in a disabled one.
- {options::Holsters,[](int v){holsters.store(v!=0);ClearHolsters();},[]{return static_cast<int>(holsters.load());}},
  {options::Wrist,[](int v){wrist.store(v!=0);},[]{return static_cast<int>(wrist.load());}},
  {options::WristSize,[](int v){wristSize=static_cast<unsigned>(v);},[]{return static_cast<int>(wristSize.load());}},
  {options::ReticleSize,Set<SetReticleSizePercent>,Get<ReticleSizePercent>},
@@ -182,8 +177,6 @@ constexpr Wiring wiring[]={
  {options::PhysicalContact,Set<SetPhysicalContact>,Get<PhysicalContactEnabled>},
  {options::PushStrength,Set<SetPushStrength>,Get<PushStrength>},
  {options::PsiHand,Set<SetPsiAimHand>,Get<PsiAimHand>},
- {options::Medkit,Set<SetMedkitSlot>,Get<MedkitSlotEnabled>},
- {options::BeltHints,[](int v){beltHints=v!=0;},[]{return static_cast<int>(beltHints.load());}},
  // On is every layer; the menu's row cannot pick layers (dbg.draw can).
  {options::DebugOverlay,[](int v){SetDebugOverlay(v?debugdraw::kAllLayers:0u);},
   []{return static_cast<int>(DebugOverlayMask()!=0);}},
@@ -433,12 +426,10 @@ std::wstring VrSetupMessage(){
  return L"NO CURRENT HEADSET POSE / TRY AGAIN";
 }
 bool PsychoscopeGestureEnabled(){return scope.load();}
-bool HolstersEnabled(){return holsters.load();}
 bool WristDisplayEnabled(){return wrist.load();}
 unsigned WristSizePercent(){return wristSize.load();}
-bool BeltHintsEnabled(){return beltHints.load();}
 std::string VrOptionsReport(){return std::string(" open=")+std::to_string(open.load())+" inputOwned="+std::to_string(owned.load())+
  " saved="+std::to_string(!saveFailed.load())+" psychoscope="+std::to_string(scope.load())+
- " holsters="+std::to_string(holsters.load())+" wrist="+std::to_string(wrist.load())+
+ " wrist="+std::to_string(wrist.load())+
  " wristSize="+std::to_string(wristSize.load());}
 }

@@ -24,8 +24,8 @@ void UseButton::Reset()
 ButtonOutput UseButton::Update(const ButtonInput& in)
 {
     ButtonOutput out{};
-    // A hand acts only on a fresh press: a press still held from a menu, a
-    // medkit or a foregrip does nothing until it has been let go once.
+    // A hand acts only on a fresh press: a press still held from a menu or a
+    // foregrip does nothing until it has been let go once.
     const bool leftEdge = in.leftPress && leftArmed_;
     const bool rightEdge = in.rightPress && rightArmed_;
     if (!in.leftPress) { leftArmed_ = true; }

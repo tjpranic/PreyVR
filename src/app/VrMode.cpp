@@ -282,7 +282,7 @@ void TickVrMode() {
         // motion (GrenadeLane.h). Not fatal: without the hooks the game's own
         // charged throw along the view stays.
         if(SetGrenadeHand(options::Default(options::GrenadeHand))!=0) Log("grenade_hand=native reason=hooks_unavailable");
-        // The shared torso the shoulders and body slots sit on (TorsoLane.h).
+        // The shared torso the shoulders sit on (TorsoLane.h).
         // Not fatal: without the hook each keeps its own estimate, and a snap
         // turn lands at the view instead.
         if(SetTorsoLaneActive(1)!=0) Log("torso=unavailable shoulders=own_estimate");

@@ -3,7 +3,6 @@
 #include "app/VrMode.h"
 #include "ui/options/VrOptionsRuntime.h"
 #include "equipment/psi/Psychoscope.h"
-#include "equipment/body/BodyEquipmentLane.h"
 #include "body/RoomScaleLane.h"
 #include "body/TorsoLane.h"
 
@@ -517,7 +516,7 @@ constexpr Verb kVerbs[] = {
     {"arm.capsule", Audience::tuning, 0, ArmCapsuleSetting},
     {"arm.avoid", Audience::tuning, 0, ArmSetting},
     {"body.report", Audience::tuning, 0, [](const Args&, std::ostringstream& out) {
-        // The shared torso the shoulders and body slots sit on and the body's
+        // The shared torso the shoulders sit on and the body's
         // turns (TorsoLane.h), the body pin (AnimIkTakeover.h) and room-scale
         // (RoomScaleLane.h).
         out << "body.report result=0" << TorsoLaneReport() << BodyPinReport() << RoomScaleReport();
@@ -785,7 +784,7 @@ constexpr Verb kVerbs[] = {
     // capture, movement and input.
     {"vr.options", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
         if(Valued(args))RequestVrOptions(Arg(args, 1,0)!=0);
-        out << "vr.options result=0" << VrOptionsReport() << PsychoscopeReport() << BodyEquipmentReport();
+        out << "vr.options result=0" << VrOptionsReport() << PsychoscopeReport();
     }},
     {"vr.enable", Audience::player, 0, [](const Args&, std::ostringstream& out) {
         EnableVrMode(); out << "vr.enable result=0 " << VrModeReport();
@@ -1025,10 +1024,6 @@ constexpr Verb kVerbs[] = {
     {"psi.hand", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
         const auto result=Valued(args)?SetPsiAimHand(Arg(args, 1,0)):0;
         out<<"psi.hand result="<<result<<PsiMedkitReport();
-    }},
-    {"medkit.slot", Audience::player, 0, [](const Args& args, std::ostringstream& out) {
-        const auto result=Valued(args)?SetMedkitSlot(Arg(args, 1,0)):0;
-        out<<"medkit.slot result="<<result<<PsiMedkitReport();
     }},
     {"aim.scene", Audience::research, 0, [](const Args& args, std::ostringstream& out) {
         if(Valued(args))SetSceneReticle(Arg(args, 1,0));

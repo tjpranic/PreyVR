@@ -24,7 +24,7 @@ def verify():
     tables={h:{rva for rva,_,_,_ in native_rows(next((ROOT/'src').rglob(h)))}
             for h in ('EquipmentNative.h','PhysicalNative.h','SwingNative.h','ContactNative.h','SceneQueryNative.h')}
     assert {0x12748d0,0x16a5650,0x157c990}<=tables['EquipmentNative.h']
-    for rva,size,expected,name in native_rows(ROOT/'src/equipment/body/EquipmentNative.h'):
+    for rva,size,expected,name in native_rows(ROOT/'src/equipment/weapon/EquipmentNative.h'):
         if rva in (0x12748d0,0x16a5650,0x157c990):assert fnv(at(rva,size))==expected,name
     mine={rva for rva,_,_,_ in entries}
     assert not any(mine&t for t in tables.values())

@@ -41,7 +41,7 @@ void UpdateMoveLane();
 // Turn and fire, driven from the right controller. Same thread and frame.
 void UpdateTurnAndFireLanes();
 // The psi button (the left trigger) is held this frame, in play and with the
-// left hand free (not at the medkit slot or the foregrip): what MoveLane posts
+// left hand free (not on the foregrip): what MoveLane posts
 // as Prey's psi button.
 bool PsiButtonHeld();
 

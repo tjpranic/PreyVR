@@ -16,8 +16,6 @@
 #include "xr/XrPose.h"
 #include "ui/options/VrOptionsLayer.h"
 #include "ui/options/VrOptionsRuntime.h"
-#include "equipment/body/BodyEquipmentLane.h"
-#include "equipment/body/SlotFeedbackLane.h"
 #include "ui/hud/WristLane.h"
 #include "aim/AimTakeover.h"
 #include "ui/hud/ReticleFollow.h"

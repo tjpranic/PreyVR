@@ -4,7 +4,6 @@
 #include "xr/FrameTiming.h"
 #include "xr/FrustumCoverage.h"
 
-#include "equipment/body/SlotFeedbackLane.h"
 #include "diagnostics/overlay/DebugOverlay.h"
 #include "base/LatestSnapshot.h"
 

@@ -8,22 +8,6 @@
 namespace preyvr::debugdraw {
 namespace {
 
-constexpr float kNoticeSeconds = 1.2f;
-
-
-bool NoticeLive(const Slot& slot) { return slot.notice != Notice::None && slot.noticeAge >= 0 && slot.noticeAge < kNoticeSeconds; }
-
-const char* NoticeText(Notice notice)
-{
-    switch (notice) {
-    case Notice::Ready: return "READY";
-    case Notice::Success: return "OK";
-    case Notice::Empty: return "EMPTY";
-    case Notice::Denied: return "DENIED";
-    default: return "";
-    }
-}
-
 // A laser line from the hand, easing in (kLaserFadeIn).
 Line Laser(Vec3 from, Vec3 to, Color color, float width, float minPixels)
 {
@@ -124,62 +108,6 @@ void AddRay(Scene& scene, const HandRay& ray, Color color, unsigned mask, bool r
         label.text = std::string(role) + (ray.hit ? Fixed(ray.distance, 2) + " m" : "no hit " + Fixed(ray.distance, 0) + " m");
         label.minPixels = 18.0f;
         label.maxPixels = 30.0f;
-        scene.labels.push_back(label);
-    }
-}
-
-void AddSlot(Scene& scene, const Slot& slot, unsigned mask)
-{
-    if (!slot.valid || !Finite(slot.centre)) { return; }
-    const Color color = SlotColor(slot);
-    const float distance = SlotHandDistance(slot);
-    const bool inside = distance <= slot.radius;
-    Sphere sphere{};
-    sphere.centre = slot.centre;
-    sphere.radius = slot.radius;
-    sphere.outline = color;
-    sphere.fill = WithAlpha(slot.stored ? kStored : color, slot.owned || NoticeLive(slot) ? 70 : inside ? 55 : 24);
-    scene.spheres.push_back(sphere);
-    if (slot.stored) {
-        Marker stored{};
-        stored.centre = slot.centre;
-        stored.radius = .025f;
-        stored.color = kStored;
-        scene.markers.push_back(stored);
-    }
-    // The hand that slot measures, and a tether once it is within reach.
-    if (Finite(slot.hand)) {
-        Marker hand{};
-        hand.centre = slot.hand;
-        hand.radius = .012f;
-        hand.color = inside ? color : kIdle;
-        hand.minPixels = 4.0f;
-        scene.markers.push_back(hand);
-        if (distance < slot.radius * 3) {
-            Line tether{slot.hand, slot.centre, WithAlpha(color, 200), .002f, 1.5f};
-            tether.dash = inside ? 0.0f : .015f;
-            scene.lines.push_back(tether);
-        }
-    }
-    if (mask & kLabels) {
-        Label label{};
-        label.anchor = Add(slot.centre, Vec3{0, slot.radius + .02f, 0});
-        label.color = color;
-        label.centred = true;
-        label.offsetY = -2.3f;
-        // What the slot will do next, in the words of its own gesture.
-        const bool medkit = slot.name == "MEDKIT";
-        std::string state;
-        if (NoticeLive(slot)) { state = NoticeText(slot.notice); }
-        else if (slot.owned) { state = medkit ? (slot.triggerArmed ? "TRIGGER: USE" : "RELEASE TRIGGER") : "HELD"; }
-        else if (inside) {
-            state = slot.gripPressed && !slot.armed ? "RELEASE GRIP"
-                    : medkit ? "SQUEEZE: SELECT" : slot.stored ? "SQUEEZE: DRAW/STOW" : "SQUEEZE: STORE";
-        }
-        else { state = medkit ? "" : slot.stored ? "STORED" : "EMPTY"; }
-        label.text = slot.name + (state.empty() ? "" : "  " + state) + "\n" + Fixed(distance * 100, 0) + " cm";
-        label.minPixels = 18.0f;
-        label.maxPixels = 32.0f;
         scene.labels.push_back(label);
     }
 }
@@ -481,31 +409,6 @@ Color ClearanceColor(float clear)
     return clear < 0 ? kDenied : clear < kArmNear ? kWarn : kActive;
 }
 
-float SlotHandDistance(const Slot& slot)
-{
-    const float d = Length(Sub(slot.hand, slot.centre));
-    return std::isfinite(d) ? d : 1e9f;
-}
-
-Color SlotColor(const Slot& slot)
-{
-    if (NoticeLive(slot)) {
-        switch (slot.notice) {
-        case Notice::Success: case Notice::Ready: return kActive;
-        case Notice::Empty: return kWarn;
-        case Notice::Denied: return kDenied;
-        default: break;
-        }
-    }
-    if (slot.owned) { return kActive; }
-    if (SlotHandDistance(slot) <= slot.radius) {
-        // Inside with grip already held: the gesture refuses on purpose (no
-        // activation by drifting in), which is worth showing, not hiding.
-        return slot.gripPressed && !slot.armed ? kWarn : kNear;
-    }
-    return slot.stored ? kStored : kIdle;
-}
-
 void AddShot(Scene& scene, const ShotMark& shot, unsigned mask)
 {
     if (!shot.valid || !(shot.age >= 0) || shot.age > kShotSeconds || !Finite(shot.spawn) || !Finite(shot.target)) {
@@ -561,12 +464,6 @@ void BuildOverlayScene(const OverlayFrame& frame, unsigned mask, Scene& scene)
             scene.lines.push_back(aim);
         }
     }
-    if (mask & kBody) {
-        if (frame.holstersEnabled) {
-            for (const auto& slot : frame.holsters) { AddSlot(scene, slot, mask); }
-        }
-        if (frame.medkitEnabled) { AddSlot(scene, frame.medkit, mask); }
-    }
     if (mask & kWrist) { AddWrist(scene, frame.wrist, mask); }
     if (mask & kForegrip) { AddForegrip(scene, frame.foregrip, mask); }
     if (mask & kPhysical) { AddPhysical(scene, frame.physical, mask); }
@@ -592,14 +489,6 @@ std::string OverlayStatusText(const OverlayFrame& f, unsigned mask)
         if (!r.valid) { return "-"; }
         return (r.hit ? "hit " + Fixed(r.distance, 2) + " m" : "no hit (" + Fixed(r.distance, 0) + " m)");
     };
-    auto slot = [](const Slot& s) -> std::string {
-        if (!s.valid) { return s.name + " -"; }
-        const float d = SlotHandDistance(s);
-        std::string state = s.owned ? "held" : d <= s.radius ? "IN" : "out";
-        if (s.stored) { state += "+stored"; }
-        if (NoticeLive(s)) { state += std::string(" ") + NoticeText(s.notice); }
-        return s.name + " " + state + " " + Fixed(d * 100, 0) + "cm";
-    };
     char head[64];
     std::snprintf(head, sizeof(head), "PREYVR DEBUG  dbg.draw %u", mask);
     std::string text = head;
@@ -609,10 +498,6 @@ std::string OverlayStatusText(const OverlayFrame& f, unsigned mask)
                                                                   : ray(f.rays[0]));
     text += "   psi " + std::string(f.psiLeftHand ? "left" : "right");
     if (f.sceneQueryFault) { text += "  QUERY FAULT"; }
-    text += "\nHolsters " + std::string(f.holstersEnabled ? "on  " + slot(f.holsters[0]) + "  " + slot(f.holsters[1]) : "off");
-    text += "\nMedkit " + std::string(f.medkitEnabled ? "on  " + slot(f.medkit) +
-                                                            (f.medkit.owned ? (f.medkit.triggerArmed ? " trig:armed" : " trig:release") : "")
-                                                      : "off");
     text += "\nWrist " + std::string(!f.wrist.enabled ? "off" : f.wrist.visible ? "VISIBLE" : f.wrist.gate ? "hidden" : "gated") +
             (f.wrist.enabled ? "  face " + Fixed(f.wrist.facing, 2) + " view " + Fixed(f.wrist.viewing, 2) +
                                    " d " + Fixed(f.wrist.distance, 2)

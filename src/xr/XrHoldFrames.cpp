@@ -18,8 +18,6 @@
 #include "ui/screens/LoadingScreen.h"
 #include "ui/options/VrOptionsLayer.h"
 #include "ui/options/VrOptionsRuntime.h"
-#include "equipment/body/BodyEquipmentLane.h"
-#include "equipment/body/SlotFeedbackLane.h"
 #include "aim/AimTakeover.h"
 #include "diagnostics/overlay/DebugOverlay.h"
 #include "ui/screens/UiPanel.h"

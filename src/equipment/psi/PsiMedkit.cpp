@@ -2,18 +2,13 @@
 #include "engine/hooks/HookInstall.h"
 #include "engine/EngineAccess.h"
 #include "aim/GameplayFrame.h"
-#include "body/TorsoLane.h"
 #include "render/camera/HeadTrackingHook.h"
 #include "ui/screens/UiMode.h"
 #include "controls/input/InputPost.h"
-#include "controls/input/Haptics.h"
-#include "equipment/body/SlotFeedbackLane.h"
-#include "diagnostics/overlay/DebugOverlay.h"
 #include "engine/hooks/MinHookInit.h"
 #include "aim/ReticleRayHook.h"
 #include "equipment/psi/PsiTargeting.h"
 #include "render/camera/StereoCamera.h"
-#include "equipment/body/MedkitSlot.h"
 #include "engine/NativeContract.h"
 #include "equipment/psi/PsiMedkitNative.h"
 #include "equipment/psi/PsychoscopeNative.h"
@@ -27,11 +22,10 @@
 namespace preyvr::dll {
 namespace {
 namespace native=abilities::native;
-std::atomic<unsigned> leftHand{0},medkit{0}; // leftHand: Psi Aim Hand is Left
+std::atomic<unsigned> leftHand{0}; // Psi Aim Hand is Left
 std::atomic<std::uint64_t> generation{1};
-std::atomic<bool> installed{false},fault{false},medkitGrip{false},medkitZone{false};
-std::atomic<unsigned long long> previews{0},rayReads{0},casts{0},rejectedCasts{0},currentRayCasts{0},
-    medkitUsed{0},medkitAbsent{0},medkitDenied{0};
+std::atomic<bool> installed{false},fault{false};
+std::atomic<unsigned long long> previews{0},rayReads{0},casts{0},rejectedCasts{0},currentRayCasts{0};
 // When Prey's targeting last read a VR ray for a selected power (PsiAimingLeftHand).
 std::atomic<std::uint64_t> aimingNs{0};
 std::atomic<DWORD> lastError{0};
@@ -47,7 +41,7 @@ CandidateFn originalCandidate=nullptr;
 thread_local psi::Context* context=nullptr;
 thread_local psi::Sample preview{};
 
-struct Owner {std::uintptr_t player=0,power=0,focus=0,inventory=0;int selected=-1;std::uintptr_t selectedPower=0;};
+struct Owner {std::uintptr_t player=0,power=0;int selected=-1;std::uintptr_t selectedPower=0;};
 DWORD ReadOwner(Owner* out){
  __try {
     if(!OnEngineMainThread())return ERROR_INVALID_THREAD_ID;
@@ -59,8 +53,6 @@ DWORD ReadOwner(Owner* out){
     if(!psiOwner)return ERROR_NOT_READY;
     out->power=reinterpret_cast<std::uintptr_t(__fastcall*)(std::uintptr_t)>(base+native::GetPower)(out->player);
     if(out->power!=psiOwner+8)return ERROR_INVALID_ADDRESS;
-    out->focus=reinterpret_cast<std::uintptr_t(__fastcall*)(std::uintptr_t)>(base+native::GetFocus)(out->player+0x678);
-    out->inventory=*reinterpret_cast<const std::uintptr_t*>(out->player+0x1810);
     out->selected=*reinterpret_cast<const int*>(out->power+0x230);
     if(out->selected>=0&&out->selected<16)
         out->selectedPower=*reinterpret_cast<const std::uintptr_t*>(out->power+0x40+8*out->selected);
@@ -163,7 +155,7 @@ constexpr bool AllGated(const std::uintptr_t (&rvas)[N]){
     return true;
 }
 constexpr std::uintptr_t kCalled[]={native::Update,native::Activate,native::Select,native::Reticle,
-    native::Consume,native::MedkitArchetype,native::GetPower,native::GetFocus,native::GetPlayer,native::Candidate};
+    native::GetPower,native::GetPlayer,native::Candidate};
 static_assert(AllGated(kCalled));
 DWORD Gate(){
  __try {
@@ -196,26 +188,6 @@ DWORD Install(){
     installed=true;return 0;
 }
 
-equipment::MedkitSlot slot;
-std::uint64_t inputOwner=0,inputEpoch=0,inputReference=0,inputGeneration=0,inputMenu=0;
-long long previousTime=0;
-DWORD ConsumeMedkit(const GameplayPoseFrame& frame,int* result){
- __try {
-    Owner current{};const auto error=ReadOwner(&current);if(error)return error;
-    if(current.player!=frame.player||!current.inventory||!current.focus||
-       *reinterpret_cast<const unsigned char*>(current.focus+0x390)||
-       *reinterpret_cast<const unsigned char*>(current.player+0x7BC))return ERROR_NOT_READY;
-    const auto input=current.player+scope::InputOffset;
-    const auto base=PreyBase();
-    if(*reinterpret_cast<const std::uintptr_t*>(input)!=base+scope::InputVtableRva||
-       *reinterpret_cast<const std::uintptr_t*>(input+0x70)!=current.player)return ERROR_INVALID_ADDRESS;
-    if(*reinterpret_cast<const int*>(input+0x94))return ERROR_NOT_READY;
-    const auto id=reinterpret_cast<std::uint64_t(__fastcall*)()>(base+native::MedkitArchetype)();
-    if(!id)return ERROR_NOT_READY;
-    *result=reinterpret_cast<int(__fastcall*)(std::uint64_t)>(base+native::Consume)(id);
-    return *result>=0&&*result<=2?ERROR_SUCCESS:ERROR_INVALID_DATA;
- }__except(EXCEPTION_EXECUTE_HANDLER){return GetExceptionCode();}
-}
 void Error(DWORD result){
     if(result)lastError=result;
     if(result&&result!=ERROR_NOT_READY&&result!=ERROR_INVALID_THREAD_ID)fault=true;
@@ -230,68 +202,9 @@ unsigned PsiAimHand(){return leftHand.load();}
 bool PsiAimingLeftHand(){
     return PsiAimHand()&&FreshSample(MonotonicNanoseconds(),aimingNs.load(std::memory_order_relaxed),100000000);
 }
-DWORD SetMedkitSlot(unsigned value){
-    if(value>1)return ERROR_INVALID_PARAMETER;
-    if(value){const auto result=Install();Error(result);if(result)return result;}
-    medkit=value;generation.fetch_add(1);return 0;
-}
-unsigned MedkitSlotEnabled(){return medkit.load();}
-bool MedkitOwnsGrip(){return medkitGrip.load();}
-bool MedkitZoneHasLeftHand(){return medkitZone.load()||medkitGrip.load();}
-void UpdatePsiMedkit(const GameplayPoseFrame& frame,bool valid){
-    if(!OnEngineMainThread())return;
-    const auto& f=frame.tracking;const auto ref=frame.referenceGeneration,gen=generation.load();
-    valid=valid&&!fault.load()&&HudGameplayInputAllowed()&&!frame.twoHand.held&&
-        FreshSample(MonotonicNanoseconds(),f.publishedNs,100000000)&&
-        IsPoseUsable(f.head,f.headValidity,100000000)&&
-        IsPoseUsable(f.hands[0].gripPose,f.hands[0].gripValidity,100000000)&&
-        stereo::ReferenceCurrent(ref,HeadTrackingReferenceGeneration());
-    const auto menuEpoch=HudMenuEpoch();
-    const bool changed=inputOwner!=frame.player||inputEpoch!=f.epoch||inputReference!=ref||inputGeneration!=gen||inputMenu!=menuEpoch;
-    if(!valid||changed){
-        slot.Reset();medkitGrip=false;medkitZone=false;previousTime=0;
-        inputOwner=frame.player;inputEpoch=f.epoch;inputReference=ref;inputGeneration=gen;inputMenu=menuEpoch;
-        if(!valid)return;
-    }
-    if(previousTime==f.displayTime)return;
-    const float dt=StepSeconds(previousTime,f.displayTime);
-    previousTime=f.displayTime;
-    if(!std::isfinite(dt)||dt<=0||dt>.2f){
-        slot.Reset();medkitGrip=false;return;
-    }
-    const auto& left=f.hands[0];
-    const bool slotAllowed=valid&&medkit.load()&&!FaceButtonHeld(left)&&!f.hands[1].gripPressed;
-    const bool wasOwned=slot.OwnsGrip();
-    float torso=0;const bool shared=BodyTorsoYaw(torso);
-    const bool use=slot.Update(f.head,left.gripPose.position,left.gripPressed,left.triggerPressed,slotAllowed,dt,
-                               shared?&torso:nullptr);
-    medkitGrip=slot.OwnsGrip();
-    {
-        // Inside the slot's sphere, owned or not: a squeeze there is the medkit's.
-        const auto centre=slot.Zone().ZoneCentre(f.head.position,0);
-        const Vec3 d{left.gripPose.position.x-centre.x,left.gripPose.position.y-centre.y,left.gripPose.position.z-centre.z};
-        medkitZone=slotAllowed&&slot.Zone().BodyValid()&&
-            std::sqrt(d.x*d.x+d.y*d.y+d.z*d.z)<=equipment::HolsterGesture::Radius;
-    }
-    if(medkit.load())DebugOverlayMedkit(slot.Zone().BodyValid(),slot.Zone().ZoneCentre(f.head.position,0),
-        left.gripPose.position,left.gripPressed,slot.Zone().Armed(),slot.OwnsGrip(),slot.TriggerArmed());
-    if(!wasOwned&&slot.OwnsGrip()){
-        QueueHaptic(Hand::left,haptics::Event::ForegripAttached,f);
-        PublishSlotFeedback(equipment::SlotNotice::MedkitReady,frame);
-    }
-    if(use){
-        int result=-1;const auto error=ConsumeMedkit(frame,&result);Error(error);
-        if(!error&&result==2){++medkitUsed;QueueHaptic(Hand::left,haptics::Event::WeaponContact,f);}
-        else if(!error&&result==0)++medkitAbsent;else ++medkitDenied;
-        PublishSlotFeedback(!error&&result==2?equipment::SlotNotice::MedkitUsed:
-            !error&&result==0?equipment::SlotNotice::MedkitEmpty:equipment::SlotNotice::MedkitDenied,frame);
-    }
-}
-std::string PsiMedkitReport(){return " aimHand="+std::string(leftHand.load()?"left":"right")+" medkitSlot="+std::to_string(medkit.load())+
+std::string PsiMedkitReport(){return " aimHand="+std::string(leftHand.load()?"left":"right")+
     " installed="+std::to_string(installed.load())+" previews="+std::to_string(previews.load())+
     " rayReads="+std::to_string(rayReads.load())+" casts="+std::to_string(casts.load())+
     " castsCurrentRay="+std::to_string(currentRayCasts.load())+" aimingLeft="+std::to_string(PsiAimingLeftHand())+
-    " castRefused="+std::to_string(rejectedCasts.load())+" medkitGrip="+std::to_string(medkitGrip.load())+
-    " medkitUsed="+std::to_string(medkitUsed.load())+" medkitAbsent="+std::to_string(medkitAbsent.load())+
-    " medkitDenied="+std::to_string(medkitDenied.load())+" fault="+std::to_string(fault.load())+" error="+std::to_string(lastError.load());}
+    " castRefused="+std::to_string(rejectedCasts.load())+" fault="+std::to_string(fault.load())+" error="+std::to_string(lastError.load());}
 }

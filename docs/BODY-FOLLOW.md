@@ -25,9 +25,10 @@ Kept separate, because their main subject is something else:
   recenter and the calibrated height. Where it says the snap pivots about the head, it is
   superseded by [rule 1](#when-the-body-is-turned-and-why).
 - [BODY-EQUIPMENT-2026-09-27.md](BODY-EQUIPMENT-2026-09-27.md) and
-  [PSI-MEDKIT-2026-09-30.md](PSI-MEDKIT-2026-09-30.md): the holster and medkit slots. Both describe
-  a torso of their own (a 45° deadband, at most 90°/s); since 2026-10-24 that is only the fallback
-  for [the shared torso](#the-four-yaws). PSI-MEDKIT's bytes are pinned too.
+  [PSI-MEDKIT-2026-09-30.md](PSI-MEDKIT-2026-09-30.md): the holster and medkit slots, removed
+  2026-11-12 (the second's psi targeting stays). Both describe a torso of their own (a 45°
+  deadband, at most 90°/s), which from 2026-10-24 was only their fallback for
+  [the shared torso](#the-four-yaws).
 - [PHYSICAL-CONTACT-SCOPE-2026-10-18.md](PHYSICAL-CONTACT-SCOPE-2026-10-18.md): the capsule against
   props: the feet, `heightPivot` and the stance's smoothing offset.
 
@@ -150,10 +151,9 @@ hands and the panels, does not move**. The rules that follow from it:
 - **Level.** The written rotation is yaw only: native pitch bends the torso mesh, and nothing in
   VR reads it.
 - **One torso.** `armpose::TorsoYaw` (the head's yaw behind a 35° deadzone, relaxing towards it at
-  0.6/s), estimated once a frame by TorsoLane, is what the body, the arm solver's shoulders and
-  the holster and medkit slots all read. A recenter resets it. While TorsoLane has no torso from
-  the last 100 ms, two fallbacks stand in: the arms' own filter, with the same settings, and the
-  slots' head-following estimate (a 45° deadband, at most 90°/s).
+  0.6/s), estimated once a frame by TorsoLane, is what the body and the arm solver's shoulders
+  read. A recenter resets it. While TorsoLane has no torso from the last 100 ms, the arms' own
+  filter, with the same settings, stands in.
 
 **What each consumer does** (from a survey of every yaw-coupled site, 2026-10-11):
 
@@ -163,7 +163,6 @@ hands and the panels, does not move**. The rules that follow from it:
 | IK world goals; the rig's model space from the ADIK `location` | P; G | Re-expressed in the turned rig; the shoulders sit on the visible body |
 | Head-relative movement | `H − R` | Relative to the torso the body faces |
 | Heavy carry | native target (G) plus a P-based shift | The shift's neutral offset turns with `P + R` (= G), the frame the native target turns in |
-| Holster and medkit slots | the shared torso | They follow the torso while the hand is outside them, so a turn cannot drag a reached slot away |
 
 **P is read, not worked back** (2026-10-31, PreyVR-118). The gameplay frame takes P from the basis
 the view hook composed the eye on (`AppliedView::basis`), as zero-G already did. It used to be
@@ -807,7 +806,7 @@ what the near pass drew for the body.
 - **Measured** (PreyVR-92, run `player-20261025-183819`): `world=7024 kept=30303
   keptFlags=0xae5de others=105 characterNear=0 paramsNear=0 unread=0`.
 
-## Height, posture and the body slots
+## Height and posture
 
 - **The body stands at the height you calibrate at.** VR start calibrates, and Setup → **Calibrate
   Current Posture** (`view.calibrate`) retakes it: it records the head's height as the baseline
@@ -821,15 +820,6 @@ what the near pass drew for the body.
   allowance reads (`HeadDropBelowCalibrated`).
 - **Physical crouching does not change Prey's stance:** the capsule stays standing until you
   crouch with B. That is planned for after the overhaul.
-- **The body slots.** The holster and medkit slots sit on the shared torso, relative to the head,
-  so they follow the head down when you crouch (DEBUG-OVERLAY). **Body Slot Feedback**
-  (Abilities, `belt_hints`, on by default) shows brief cards low in the view, only while the
-  matching slot feature is on: medkit selection, confirmed use, no stock or refusal; holster
-  assignment and the stow or draw request accepted. They are messages, not a claim that the equip
-  animation finished. They have their own sRGB swapchain, framed against both eyes' frusta with a
-  margin, expire after 1.5 s, and hide across menus and tracking, session and reference changes; an
-  unused medkit selection hides when the grip is let go. (Built 2026-10-04 with 57/57 offline
-  checks; not checked in a headset then.)
 
 ## Engine facts (Steam hash)
 
@@ -911,6 +901,7 @@ Collected from the sections above, with how each was established.
 | 11-08 | PreyVR-147 | Measurement only: the body glitch probe (`glitch*` keys in `body.report`, `preyvr_body glitch` log lines): per rendered frame, whether the body's own IK pass ran and posed it, and how far from the view the posed head was drawn | Walking with the stick: 62 frames with the posed head a step behind the view, during the capsule's moves; no pass skipped ([why](#the-frame-it-is-placed-in-preyvr-146)) |
 | 11-08 | PreyVR-148 | The carry's reference is where the body was drawn plus room-scale's move (`roomscale::BodyReference`), not the entity after the move | "Tested and verified working" 11-08: no jumps walking with the stick, the lift still fine |
 | 11-08 | PreyVR-149 | The lift and glitch measurements removed (`LiftProbe.h`, the `lift*`, `glitch*` and `owner*` keys); the carry's `carried`, `carryMissed`, `carryRefused`, `carryMaxMm` kept | Awaiting a sanity check |
+| 11-12 | | The holster and medkit slots and Body Slot Feedback removed: never worn, and the right grip holsters and draws | Offline |
 
 ## Open
 
@@ -938,6 +929,5 @@ Collected from the sections above, with how each was established.
   ([ARM-TORSO-SCOPE-2026-10-29.md](ARM-TORSO-SCOPE-2026-10-29.md)).
 - **Hands within 3 cm of the eyes are cut**, as in the near pass. Distant flicker from the smaller
   near plane was not reported on PreyVR-92; if it is, Near Clip Distance trades it back.
-- **After the overhaul:** physical crouching into Prey's crouch stance; the holster and medkit
-  slots on the drawn body (today they follow the head); the shadow, which keeps Prey's pose; the
+- **After the overhaul:** physical crouching into Prey's crouch stance; the shadow, which keeps Prey's pose; the
   optional no-body mode in TODO.md.

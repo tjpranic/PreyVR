@@ -1,5 +1,9 @@
 # Psychic targeting and one medkit slot
 
+> **2026-11-12: the medkit slot was removed**, with the holsters and Body Slot Feedback. `medkit_slot`
+> and `belt_hints` load as retired keys, `medkit.slot` is gone, and the psi table dropped its four medkit rows
+> (ConsumeItem, MedkitArchetype, MedkitInputConsumer, FocusAccessor). Psi Aim Hand, below, stays.
+>
 > **2026-11-07: Psi Aim Hand replaced Psychic Targeting.** The Hands tab's **Psi Aim Hand** (`psi_hand`:
 > Right, the default, or Left) replaces the Abilities tab's Original / Head / Left Controller (`psi_target`;
 > a saved Left Controller loads as Left). Since 2026-10-17 the left trigger is Prey's own psi button

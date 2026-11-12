@@ -82,10 +82,10 @@ void SettingsChecks(){
  Check(KindOf(Turn)==Kind::choice&&Choices(Turn)==std::vector<int>{0,15,30,45,60,90},"the menu offers the six turn choices");
  Check(Display(Turn,0)==L"SMOOTH"&&Display(Turn,75)==L"75 DEGREES","a command's angle reads as itself");
  Check(Defaults()[Psychoscope]==0,"gesture opt in");
- Check(Defaults()[Holsters]==0&&Defaults()[Wrist]==1,"holsters opt in; the wrist hologram is on (2026-10-07)");
- Check(Parse("version=1\nturn=45\n",parsed)&&parsed[Holsters]==0&&parsed[WristSize]==100,"old settings upgrade safely");
- Check(Defaults()[PsiHand]==0&&Defaults()[Medkit]==0,"psi aims with the right hand, the medkit slot opt in");
- Check(Valid(PsiHand,1)&&!Valid(PsiHand,2)&&!Valid(Medkit,2),"psi hand and medkit ranges");
+ Check(Defaults()[Wrist]==1,"the wrist hologram is on (2026-10-07)");
+ Check(Parse("version=1\nturn=45\n",parsed)&&parsed[WristSize]==100,"old settings upgrade safely");
+ Check(Defaults()[PsiHand]==0,"psi aims with the right hand");
+ Check(Valid(PsiHand,1)&&!Valid(PsiHand,2),"psi hand range");
  Check(KindOf(PsiHand)==Kind::choice&&Display(PsiHand,0)==L"RIGHT"&&Display(PsiHand,1)==L"LEFT"&&
        std::string(Describe(PsiHand).key)=="psi_hand","psi aim hand: a choice of right or left");
  {Values kept{};Present found{};
@@ -135,6 +135,12 @@ void SettingsChecks(){
    const std::string key(line,std::strchr(line,'=')-line);
    Check(saved.find(key)==std::string::npos,"and the next save leaves the removed settings out");
   }}
+ // The body slots, removed 2026-11-12: a file saved with them keeps everything else.
+ {Check(Parse("version=1\nholsters=1\nmedkit_slot=1\nbelt_hints=0\nwrist_size=120\n",parsed)&&parsed[WristSize]==120,
+        "a file saved with the body slots still loads, its choices kept");
+  const auto saved=Serialize(parsed);
+  Check(saved.find("holsters")==std::string::npos&&saved.find("medkit_slot")==std::string::npos&&
+        saved.find("belt_hints")==std::string::npos,"and the next save leaves the body slots out");}
  Check(Defaults()[PushStrength]==100&&Valid(PushStrength,25)&&Valid(PushStrength,200)&&!Valid(PushStrength,250),
        "push strength, 25..200 percent");
  // Object Nudges, removed 2026-10-18: a file saved with them keeps everything else.
@@ -153,7 +159,7 @@ void SettingsChecks(){
 }
 void KindChecks(){
  // Each setting is edited as what its Spec says it is.
- Check(KindOf(TwoHand)==Kind::toggle&&KindOf(DebugOverlay)==Kind::toggle&&KindOf(Holsters)==Kind::toggle,
+ Check(KindOf(TwoHand)==Kind::toggle&&KindOf(DebugOverlay)==Kind::toggle&&KindOf(Wrist)==Kind::toggle,
        "a bare 0..1 is on/off");
  Check(KindOf(HeadRelative)==Kind::choice&&KindOf(PointerHand)==Kind::choice&&KindOf(GripToggle)==Kind::choice,
        "named values are a choice, two of them included");
@@ -176,18 +182,18 @@ void KindChecks(){
 void LayoutChecks(){
  // The panel's tabs (MenuEntries): any number of rows, every setting on
  // exactly one tab, each button once, the last tab CONTROLS.
- Check(MenuPages()==8&&ControlsPage()==7,"eight tabs, the last the controls");
- {constexpr const wchar_t* names[]={L"SETUP",L"MOVEMENT",L"HANDS",L"INTERFACE",L"EQUIPMENT",L"FEEDBACK",L"ABILITIES"};
+ Check(MenuPages()==7&&ControlsPage()==6,"seven tabs, the last the controls");
+ {constexpr const wchar_t* names[]={L"SETUP",L"MOVEMENT",L"HANDS",L"INTERFACE",L"EQUIPMENT",L"FEEDBACK"};
   for(unsigned p=0;p<std::size(names);++p)Check(std::wstring(MenuPageName(p))==names[p],"setup first, then movement");}
  Check(std::wstring(MenuPageName(ControlsPage()))==L"CONTROLS"&&MenuEntries(ControlsPage()).empty(),
        "the Controls tab holds no setting: the panel lists the bindings there");
- std::array<int,Count> seen{};int recenter=0,clear=0,calibrate=0;
+ std::array<int,Count> seen{};int recenter=0,calibrate=0;
  for(unsigned p=0;p<MenuPages();++p)for(const int e:MenuEntries(p)){
-  if(e==RecenterView)++recenter;else if(e==ClearHolsterSlots)++clear;else if(e==CalibratePosture)++calibrate;
+  if(e==RecenterView)++recenter;else if(e==CalibratePosture)++calibrate;
   else{Check(e>=0&&e<static_cast<int>(Count),"entries are settings or buttons");++seen[e];}
  }
  for(unsigned i=0;i<Count;++i)Check(seen[i]==1,"every setting appears on exactly one tab");
- Check(recenter==1&&clear==1&&calibrate==1,"each button appears once");
+ Check(recenter==1&&calibrate==1,"each button appears once");
  Check(MenuEntries(MenuPages()).empty(),"past the last tab there is nothing");
  {const auto page=MenuEntries(2);const auto grip=std::find(page.begin(),page.end(),GripToggle);
   Check(page.end()-grip>=5&&grip[1]==AutoSnap&&grip[2]==AutoSnapAttach&&grip[3]==AutoBreak&&grip[4]==AutoBreakDistance,
@@ -271,8 +277,7 @@ void LayoutChecks(){
  Check(Defaults()[ArmLength]==56&&Valid(ArmLength,40)&&Valid(ArmLength,70)&&!Valid(ArmLength,39)&&!Valid(ArmLength,71)&&
        Display(ArmLength,56)==L"56 CM",
        "the arm is 56 cm by default, shoulder to wrist, 40 to 70");
- Check(MenuEntries(4)[0]==Holsters&&MenuEntries(4)[1]==ClearHolsterSlots&&MenuEntries(4)[2]==WeaponDrawAnims&&
-       MenuEntries(4)[3]==Wrist,"equipment: holsters, clearing them, the draw animations, then the wrist");
+ Check(MenuEntries(4)[0]==WeaponDrawAnims&&MenuEntries(4)[1]==Wrist,"equipment: the draw animations, then the wrist");
  Check(Defaults()[WeaponDrawAnims]==0&&KindOf(WeaponDrawAnims)==Kind::toggle&&
        std::string(Describe(WeaponDrawAnims).key)=="weapon_draw_anims","weapon draw animations are off by default, on/off");
  Check(MenuEntries(0).size()==7&&MenuEntries(0)[0]==CalibratePosture&&MenuEntries(0)[1]==RecenterView&&

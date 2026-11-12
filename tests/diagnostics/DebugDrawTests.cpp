@@ -1,7 +1,6 @@
-#include "equipment/body/BodyEquipment.h"
+#include "ui/hud/WristCard.h"
 #include "diagnostics/overlay/DebugDraw.h"
 #include "diagnostics/overlay/DebugOverlayScene.h"
-#include "equipment/body/MedkitSlot.h"
 #include "TestGeometry.h"
 #include "TestSupport.h"
 
@@ -268,42 +267,6 @@ void TestSpheresMarkersLabels()
     Require(bottomA <= topB || bottomB <= topA, "colliding labels are stacked, not overlapped");
 }
 
-void TestGestureTruth()
-{
-    // The drawn slot centre must be exactly where the gesture detects a hand.
-    std::mt19937 random(7);
-    std::uniform_real_distribution<float> angle(-3.1f, 3.1f), offset(-.5f, .5f);
-    for (int trial = 0; trial < 200; ++trial) {
-        equipment::HolsterGesture gesture;
-        const float yaw = angle(random);
-        const Pose head{AboutY(yaw), {offset(random), 1.6f + offset(random) * .2f, offset(random)}};
-        // Establish the torso with the hand away and the grip released.
-        gesture.Update(head, {head.position.x + 1, head.position.y, head.position.z}, false, true, .011f);
-        Require(gesture.BodyValid() && gesture.Armed(), "a released grip arms the gesture");
-        const int zone = trial % 2;
-        const Vec3 centre = gesture.ZoneCentre(head.position, zone);
-        // Inside by a small margin, then squeeze.
-        const Vec3 hand{centre.x + .05f, centre.y, centre.z};
-        Require(gesture.Update(head, hand, false, true, .011f) < 0, "no squeeze, no action");
-        Require(gesture.Update(head, hand, true, true, .011f) == zone, "squeezing at the drawn centre selects that slot");
-        Require(gesture.OwnsGrip(), "the slot owns the grip after selection");
-    }
-    // Just outside the drawn radius: nothing.
-    equipment::HolsterGesture gesture;
-    const Pose head{{}, {0, 1.6f, 0}};
-    gesture.Update(head, {1, 1.6f, 0}, false, true, .011f);
-    const Vec3 c = gesture.ZoneCentre(head.position, 0);
-    Require(gesture.Update(head, {c.x + equipment::HolsterGesture::Radius + .005f, c.y, c.z}, true, true, .011f) < 0,
-            "a hand outside the drawn sphere does not select");
-
-    equipment::MedkitSlot medkit;
-    medkit.Update(head, {1, 1.6f, 0}, false, false, true, .011f);
-    const Vec3 m = medkit.Zone().ZoneCentre(head.position, 0);
-    Require(Near(m.x, -.25f) && Near(m.y, 1.6f - .65f), "the medkit slot is the left hip");
-    medkit.Update(head, m, true, false, true, .011f);
-    Require(medkit.OwnsGrip() && medkit.TriggerArmed(), "selected with the trigger released: armed");
-}
-
 void TestWristMeasureMatchesVisibility()
 {
     // MeasureWrist must reproduce the visibility rule exactly.
@@ -312,12 +275,12 @@ void TestWristMeasureMatchesVisibility()
     for (int trial = 0; trial < 2000; ++trial) {
         const Pose head{Normalize(Multiply(AboutY(a(random)), AboutX(a(random) * .4f))), {0, 1.6f, 0}};
         const Pose grip{Normalize(Multiply(AboutY(a(random)), AboutX(a(random)))), {o(random), 1.2f + o(random), o(random)}};
-        const Pose wrist = equipment::WristPose(grip);
+        const Pose wrist = preyvr::wrist::WristPose(grip);
         for (bool was : {false, true}) {
-            const auto m = equipment::MeasureWrist(head, wrist);
-            const bool expected = m.distance >= .23f && m.distance <= 1.f && m.facing > equipment::WristFacingNeeded(was) &&
-                                  m.viewing > equipment::WristViewingNeeded(was);
-            Require(expected == equipment::WristVisible(head, wrist, was), "the drawn wrist metrics are the visibility rule");
+            const auto m = preyvr::wrist::MeasureWrist(head, wrist);
+            const bool expected = m.distance >= .23f && m.distance <= 1.f && m.facing > preyvr::wrist::WristFacingNeeded(was) &&
+                                  m.viewing > preyvr::wrist::WristViewingNeeded(was);
+            Require(expected == preyvr::wrist::WristVisible(head, wrist, was), "the drawn wrist metrics are the visibility rule");
         }
     }
 }
@@ -329,28 +292,19 @@ void TestSceneLayers()
     f.head = {{}, {0, 1.6f, 0}};
     f.rays[1] = {true, RayRole::Weapon, {.2f, 1.4f, -.3f}, {0, 0, -1}, {.2f, 1.4f, -3}, true, 2.7f};
     f.rays[0] = {true, RayRole::Psi, {-.2f, 1.4f, -.3f}, {0, 0, -1}, {-.2f, 1.4f, -10}, false, 9.7f};
-    f.holstersEnabled = true;
-    f.holsters[0] = Slot{true, {.25f, .95f, 0}, .14f, {.25f, .95f, .05f}, false, true, false, false, false, Notice::None, 0, "HIP R"};
-    f.holsters[1] = Slot{true, {-.2f, 1.3f, -.13f}, .14f, {.2f, 1.4f, -.3f}, false, true, false, true, false, Notice::None, 0, "CHEST L"};
     Scene scene;
     BuildOverlayScene(f, kRays, scene);
-    Require(!scene.lines.empty() && scene.spheres.empty() && scene.labels.empty(), "rays only: no slots, no text");
+    Require(!scene.lines.empty() && scene.spheres.empty() && scene.labels.empty(), "rays only: no spheres, no text");
     Require(scene.markers.size() == 3, "a hit draws a dot and a halo, a miss a ring");
-    BuildOverlayScene(f, kBody, scene);
-    Require(scene.spheres.size() == 2, "both holster slots are drawn");
-    BuildOverlayScene(f, kBody | kLabels | kStatus, scene);
-    Require(scene.labels.size() == 3, "a label per slot plus the status panel");
+    BuildOverlayScene(f, kStatus, scene);
+    Require(scene.labels.size() == 1, "the status panel is a label of its own");
     const auto status = OverlayStatusText(f, kAllLayers);
     Require(status.find("hit 2.70 m") != std::string::npos && status.find("psi") != std::string::npos,
             "the status panel reports both rays");
-    f.holstersEnabled = false;
-    BuildOverlayScene(f, kBody, scene);
-    Require(scene.spheres.empty(), "disabled holsters draw nothing");
     // The aim lasers: the rays ended on the scene, nothing of the debug view.
-    f.holstersEnabled = true;
     BuildOverlayScene(f, kLaserLayers, scene);
     Require(!scene.lines.empty() && scene.markers.size() == 3 && scene.spheres.empty() && scene.labels.empty(),
-            "the lasers draw both rays, and no slots, labels or status");
+            "the lasers draw both rays, and no spheres, labels or status");
     // Each laser line eases in from the hand; a short one over half its length.
     bool fading = true;
     for (const auto& line : scene.lines) { fading = fading && line.fadeIn == kLaserFadeIn; }
@@ -381,8 +335,8 @@ void TestDrawnLayers()
     Require(DrawnLayers(0, true, false) == (kRays | kHits), "the lasers alone: rays ended on the scene, no shots");
     Require(DrawnLayers(0, false, true) == kShots, "the shot trail alone");
     Require(DrawnLayers(kAllLayers, false, false) == kAllLayers, "the debug overlay alone: every layer, shots included");
-    Require(DrawnLayers(kBody, true, false) == (kBody | kRays | kHits), "a debug layer beside the lasers");
-    Require(DrawnLayers(kBody, true, true) == (kBody | kRays | kHits | kShots), "and beside the shot trail");
+    Require(DrawnLayers(kWrist, true, false) == (kWrist | kRays | kHits), "a debug layer beside the lasers");
+    Require(DrawnLayers(kWrist, true, true) == (kWrist | kRays | kHits | kShots), "and beside the shot trail");
     Require(DrawnLayers(kAllLayers, true, true) == kAllLayers, "all on: every layer, once");
     Require(DrawnLayers(0xFFFu, false, false) == kAllLayers, "no layer beyond the known ones");
 }
@@ -425,7 +379,7 @@ void TestArmFitLayer()
                                         armpose::ArmThickness{});
     Require(arm.clearance.Worst() < 0, "the fixture's arm is in the chest");
     Scene scene;
-    BuildOverlayScene(f, kRays | kBody | kPhysical, scene);
+    BuildOverlayScene(f, kRays | kWrist | kPhysical, scene);
     Require(scene.lines.empty() && scene.markers.empty(), "the arms against the torso are their own layer");
     BuildOverlayScene(f, kArms, scene);
     // A capsule is two rings of 24, four sides and two caps of two half circles of 12.
@@ -502,28 +456,6 @@ void TestPhysicalLayer()
     Require(scene.lines.size() == 9, "a box with a bad corner is not drawn");
 }
 
-void TestSlotColours()
-{
-    Slot s{};
-    s.valid = true;
-    s.centre = {0, 1, 0};
-    s.hand = {1, 1, 0};
-    s.armed = true;
-    Require(SlotColor(s).r == kIdle.r && SlotColor(s).b == kIdle.b, "away: idle");
-    s.hand = {.05f, 1, 0};
-    Require(SlotColor(s).g == kNear.g && SlotColor(s).b == kNear.b, "inside with a released grip: ready to squeeze");
-    s.gripPressed = true;
-    s.armed = false;
-    Require(SlotColor(s).r == kWarn.r && SlotColor(s).g == kWarn.g, "inside with the grip already held: warn, will not act");
-    s.owned = true;
-    Require(SlotColor(s).g == kActive.g && SlotColor(s).r == kActive.r, "owned: active");
-    s.notice = Notice::Denied;
-    s.noticeAge = .3f;
-    Require(SlotColor(s).r == kDenied.r && SlotColor(s).g == kDenied.g, "a fresh refusal flashes red");
-    s.noticeAge = 5;
-    Require(SlotColor(s).g == kActive.g, "an old notice no longer colours the slot");
-}
-
 }  // namespace
 
 int main()
@@ -533,14 +465,12 @@ int main()
     TestLines();
     TestFadeIn();
     TestSpheresMarkersLabels();
-    TestGestureTruth();
     TestWristMeasureMatchesVisibility();
     TestSceneLayers();
     TestDrawnLayers();
     TestShotTrail();
     TestPhysicalLayer();
     TestArmFitLayer();
-    TestSlotColours();
     std::cout << "debug_draw: all tests passed\n";
     return 0;
 }

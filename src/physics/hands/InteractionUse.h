@@ -35,10 +35,10 @@ struct ButtonInput {
     // The left hand's grab and the right hand's reload (its grip), pressed.
     bool leftPress = false, rightPress = false;
     // Another lane owns that press this frame, or would take it on this press:
-    // left = medkit slot, recentre chord, a two-hand hold not yet under way
-    // when pressed (once it is, see leftReloads); right = holster,
-    // recentre chord, carrying, and in the original layout (use.hand 0) the
-    // two-hand hold and a paired squeeze. A two-hand hold leaves reload free.
+    // left = recentre chord, a two-hand hold not yet under way when pressed
+    // (once it is, see leftReloads); right = recentre chord, carrying, and in
+    // the original layout (use.hand 0) the two-hand hold and a paired squeeze.
+    // A two-hand hold leaves reload free.
     bool leftBusy = false, rightBusy = false;
     // Y is held, so a grip squeezed now starts the recentre chord: neither press
     // starts anything. Unlike busy, it lets nothing go -- Y does not drop what

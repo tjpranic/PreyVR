@@ -242,7 +242,6 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/ui/options/VrOptionsUi.cpp
         src/ui/options/VrOptionsRuntime.cpp
         src/equipment/psi/Psychoscope.cpp
-        src/equipment/body/BodyEquipmentLane.cpp
         src/body/TorsoLane.cpp
         src/body/RoomScaleLane.cpp
         src/diagnostics/overlay/DebugOverlay.cpp
@@ -258,7 +257,6 @@ if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
         src/physics/hands/GrenadeLane.cpp
         src/body/ArmsLane.cpp
         src/diagnostics/commands/MemoryCommands.cpp
-        src/equipment/body/SlotFeedbackLane.cpp
         src/ui/hud/NativeWristTexture.cpp
         src/ui/hud/WristLane.cpp
         src/ui/hud/HudLayer.cpp
@@ -436,7 +434,7 @@ if(PREYVR_BUILD_TESTS)
     preyvr_add_test(controller_profiles tests/controls/ControllerProfilesTests.cpp)
     preyvr_add_test(action_map_walk tests/controls/ActionMapWalkTests.cpp)
     preyvr_add_test(release_gate tests/controls/ReleaseGateTests.cpp)
-    preyvr_add_test(body_equipment_contracts tests/equipment/BodyEquipmentTests.cpp TARGET preyvr_body_equipment_tests)
+    preyvr_add_test(wrist_card tests/ui/WristCardTests.cpp)
     preyvr_add_test(anim_ik tests/body/AnimIkTests.cpp)
     preyvr_add_test(hand_pose tests/body/HandPoseTests.cpp)
     preyvr_add_test(arm_pose tests/body/ArmPoseTests.cpp)
@@ -492,9 +490,6 @@ if(PREYVR_BUILD_TESTS)
     preyvr_add_test(runtime_bootstrap tests/engine/RuntimeBootstrapTests.cpp)
 
     if(PREYVR_BUILD_SMOKE_DLL AND WIN32)
-        preyvr_add_test(slot_feedback tests/equipment/SlotFeedbackTests.cpp
-            DLL
-            LIBS preyvr_core gdi32 user32)
         preyvr_add_test(psi_medkit_runtime tests/equipment/PsiMedkitRuntimeTests.cpp
             DLL
             LIBS preyvr_core minhook)

@@ -28,7 +28,7 @@ layout wherever VR leaves one free.
 | Right grip | Tap: reload (never uses what the left hand points at). Hold: holster the weapon. With the weapon holstered: draw it again | Next tab, on release (Steam Frame: next page, Prey's RT) |
 | Left trigger | Prey's psi power: hold to aim, let go to use, aimed by the hand Psi Aim Hand picks | Previous page (LT), on release; clicks instead when the laser is on the left |
 | Right trigger | Fire (hold for automatic fire and to charge the Disruptor); with a grenade: hold it, let go during a throwing motion to throw it | Clicks with the laser (default); next page (RT), on release, when the laser is on the left |
-| Left grip | Hold a long weapon's support grip; the left-hip medkit slot and the psychoscope gesture, when enabled | Previous tab, on release (Steam Frame: previous page, Prey's LT) |
+| Left grip | Hold a long weapon's support grip; the psychoscope gesture, when enabled | Previous tab, on release (Steam Frame: previous page, Prey's LT) |
 | Menu button (Touch: left; Steam Frame: right) | Tap: pause. Hold: VR options | Tap: pause / resume. Hold: VR options |
 | Menu + both grips | Reset VR view | Reset and bring the panel in front of you |
 | F11 | Enable VR or retry setup | Enable VR or retry setup |
@@ -71,8 +71,7 @@ charged throw along the view.
 
 With no weapon drawn -- holstered, or while carrying something -- both hands stay visible at the controllers
 (open; the left one closes around what it carries). Hold the right grip to holster the weapon, squeeze it again
-to draw it. Grab does nothing while the left hand holds the foregrip, at the left-hip medkit slot (whose trigger is the
-medkit's) or with Menu held for the recenter chord. `use.hand 0` restores the previous layout (right grip uses and reloads along the weapon's aim).
+to draw it. Grab does nothing while the left hand holds the foregrip or with Menu held for the recenter chord. `use.hand 0` restores the previous layout (right grip uses and reloads along the weapon's aim).
 `aim.twohand 0` disables support aiming; `aim.twohand 1` enables it (default).
 
 To equip a weapon, open inventory with **View** (Touch: **left stick click**), highlight it with the right stick, press **X** for Prey's Equip action, then **B** to return to the game. Follow the native button prompts for other items. B backs out one level at a time in nested screens.
@@ -93,7 +92,7 @@ menu you opened it from), VR Options closes.
 F10 is a desktop shortcut; `vr.options 1` is the diagnostic equivalent. Both
 work in play and in menus.
 
-Each setting is a checkbox, a choice list or a slider, on eight tabs (listed
+Each setting is a checkbox, a choice list or a slider, on seven tabs (listed
 below). The panel opens 2 metres straight ahead of where you faced, over the
 game menu if one is up. **To move it, hold the trigger with the laser on any blank part of it** --
 a setting's name or help text, empty space, not a control (the hint line says
@@ -120,8 +119,8 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   **Anti-Aliasing** (Temporal by default: blends each eye's recent frames so
   distant edges stop crawling as you move, at some cost in frame rate; SMAA is
   faster but distant edges shimmer), and **Debug Overlay (Testing)**,
-  which draws each hand's ray and target, the body slots, the wrist test and the
-  foregrip region in the world. Off by default, and separate from the aim
+  which draws each hand's ray and target, the wrist test and the foregrip region
+  in the world. Off by default, and separate from the aim
   lasers: switching it off leaves them as they are. See
   [the overlay note](DEBUG-OVERLAY-2026-10-06.md).
 - **Movement:** snap angle / smooth turning, head-relative movement, smooth-turn
@@ -192,16 +191,13 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
   layout by default, so they sit inside your view instead of at its edge) and **HUD
   Distance** (1 m by default; subtitles and tutorial cards float there too). Markers are shown only over what they mark, at its
   depth, and not at all while it is out of view.
-- **Equipment:** optional body holsters, clear holster assignments, **Weapon Draw
-  Animations**, wrist status, wrist-hologram size, the wrist tick, and the display's
+- **Equipment:** **Weapon Draw Animations**, wrist status, wrist-hologram size, the wrist tick, and the display's
   position along the forearm, height and tilt. Health, suit, psi and the equipped psi
-  power leave the HUD while the wrist status is on. Holsters default off; the wrist status defaults on.
+  power leave the HUD while the wrist status is on. The wrist status defaults on.
   Weapon Draw Animations defaults off, so a weapon is in your hand at once. On plays
   Prey's animations for taking weapons out and putting them away, and your drawn hand
   turns with the weapon as they do.
 - **Feedback:** controller feedback and its strength.
-- **Abilities:** the optional left-hip medkit slot, and body slot feedback. The
-  slot is off by default.
 - **Controls:** what every button does on the controller you hold, by the names
   SteamVR gives them: play, menus and any time. It follows SteamVR: rebind an
   action there (Settings > Controllers > Manage Controller Bindings > Prey) and the
@@ -223,34 +219,13 @@ behind it. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md).
 - Charges stick to the surface you look at, as in the game.
 
 **Psi powers:** equip a power using Prey's normal quick wheel. The **left trigger** is Prey's own psi button:
-hold it to aim the power, let go to use it. It does nothing at the left-hip medkit slot or on a weapon's
+hold it to aim the power, let go to use it. It does nothing on a weapon's
 foregrip; release the support grip before aiming. **Psi Aim Hand** on the Hands tab picks the hand that aims:
 **Right** (the default) aims where your weapon or right hand points, along the right laser; **Left** aims
 from your left index finger along the left controller's aim, and the left laser turns violet while you aim.
 In the wheel the left trigger still uses a psi hypo, whichever hand aims. The game keeps its native power
 costs, cooldowns, target filters and unlock restrictions. With Left, a cast is refused if the left
 controller loses tracking as you let go, rather than aimed with the right hand.
-
-**Medkit slot:** once enabled, bring the left controller to your left hip,
-release grip, then squeeze **left grip**. A short pulse confirms selection.
-Keep grip held and press **left trigger** to request one medkit use; you may
-move the hand away from the hip first. Release grip before another use. Prey
-checks the native inventory and whether the item can be consumed, so an empty
-inventory or full health does not force a heal. The slot uses an estimated body
-position and currently has no visible medkit prop. The slot has offline/static
-checks; native and headset acceptance remain.
-See [implementation and acceptance checks](PSI-MEDKIT-2026-09-30.md).
-
-**Holsters:** with a weapon equipped, bring the right controller to your right
-hip or across to your left chest, release grip, then squeeze. An empty slot stores
-that weapon and requests its normal stow animation. Squeeze the same slot again
-to draw it. If its weapon is already equipped, the squeeze stows it. Drawing a
-different slot switches through Prey's native equipment transition. Release
-between actions; drifting into a slot with grip held does nothing. Two-handed
-aiming, menus and recenter take priority. Clear assignments on the Equipment tab
-to bind different weapons; weapons remain in your inventory. Assignments are
-session-local, not saved. This first version uses inferred hip/chest positions,
-not tracked torso/hip hardware, and has no visible holstered weapon props.
 
 **Wrist status (hologram on the left forearm):** check it like a watch. Raise the left
 forearm and turn its back towards you, then look at it. After a moment a small
@@ -292,7 +267,7 @@ them all. `PreyVR.json` keeps only the launch settings below. Every tuning
 command, and what the menu saves, is in [the tuning reference](TUNING-COMMANDS.md).
 
 The panel has been worn in a headset (2026-10-13 and 2026-10-14); this build's
-tidy-up -- one panel, the eight tabs above, each controller's own bindings --
+tidy-up -- one panel, the tabs above, each controller's own bindings --
 has offline tests only. See [the panel's notes](VR-OPTIONS-IMGUI-2026-10-13.md)
 and, for the original card, [its validation](VR-OPTIONS-2026-09-27.md).
 

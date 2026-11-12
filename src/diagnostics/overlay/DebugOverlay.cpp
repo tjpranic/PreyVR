@@ -19,7 +19,7 @@
 #include "aim/ShotRayLane.h"
 #include "ui/options/VrOptionsRuntime.h"
 #include "controls/input/XrInput.h"
-#include "equipment/body/BodyEquipment.h"
+#include "ui/hud/WristCard.h"
 #include "diagnostics/overlay/DebugDraw.h"
 #include "diagnostics/overlay/DebugOverlayScene.h"
 #include "base/LatestSnapshot.h"
@@ -43,7 +43,6 @@ using Microsoft::WRL::ComPtr;
 namespace dd = preyvr::debugdraw;
 
 constexpr std::uint64_t kRayAgeNs = 150000000ull;    // older rays are from a previous pose
-constexpr std::uint64_t kSlotAgeNs = 250000000ull;
 constexpr std::size_t kMaxVertices = 60000;
 constexpr float kPointerRange = 3.0f;               // left pointer without a hit, metres
 
@@ -56,21 +55,13 @@ bool gLasers = false;       // VR Options "Aim lasers"; VR start switches it on
 bool gShotTrail = false;    // VR Options "Shot trail"
 
 struct RayRecord { dd::HandRay ray{}; std::uint64_t ns = 0, reference = 0; };
-struct SlotsRecord { std::array<dd::Slot, 2> slots{}; std::uint64_t ns = 0; };
-struct MedkitRecord { dd::Slot slot{}; std::uint64_t ns = 0; };
 struct ForegripRecord { dd::Foregrip grip{}; std::uint64_t ns = 0, reference = 0; };
 // The last shot, re-expressed in OpenXR space every gameplay frame so it stays
 // fixed in the world while the player moves and turns.
 struct ShotRecord { dd::ShotMark shot{}; std::uint64_t shotNs = 0, ns = 0, reference = 0; };
 LatestSnapshot<RayRecord> gRight, gLeft;
-LatestSnapshot<SlotsRecord> gHolsters;
-LatestSnapshot<MedkitRecord> gMedkit;
 LatestSnapshot<ForegripRecord> gForegrip;
 LatestSnapshot<ShotRecord> gShot;
-std::atomic<bool> gHipStored{false}, gChestStored{false};
-// Last notice per slot: 0 hip, 1 chest, 2 medkit.
-std::atomic<int> gNoticeKind[3]{0, 0, 0};
-std::atomic<std::uint64_t> gNoticeNs[3]{0, 0, 0};
 std::atomic<bool> gWristGate{false}, gWristVisible{false};
 std::atomic<std::uint64_t> gWristNs{0};
 // The hologram's own card (WristLane), when it is the one in use.
@@ -135,30 +126,6 @@ bool Hit(const GameplayPoseFrame& frame, Vec3 origin, Vec3 direction, unsigned m
     return true;
 }
 
-dd::Notice ToNotice(equipment::SlotNotice n, int& slot)
-{
-    using N = equipment::SlotNotice;
-    switch (n) {
-    case N::MedkitReady: slot = 2; return dd::Notice::Ready;
-    case N::MedkitUsed: slot = 2; return dd::Notice::Success;
-    case N::MedkitEmpty: slot = 2; return dd::Notice::Empty;
-    case N::MedkitDenied: slot = 2; return dd::Notice::Denied;
-    case N::HipStored: case N::HipDraw: slot = 0; return dd::Notice::Success;
-    case N::ChestStored: case N::ChestDraw: slot = 1; return dd::Notice::Success;
-    case N::HipDenied: slot = 0; return dd::Notice::Denied;
-    case N::ChestDenied: slot = 1; return dd::Notice::Denied;
-    default: slot = -1; return dd::Notice::None;
-    }
-}
-
-void ApplyNotice(dd::Slot& slot, int index, std::uint64_t now)
-{
-    const auto ns = gNoticeNs[index].load();
-    if (!ns || now < ns) { return; }
-    slot.notice = static_cast<dd::Notice>(gNoticeKind[index].load());
-    slot.noticeAge = static_cast<float>(now - ns) * 1e-9f;
-}
-
 // Everything the overlay shows this frame, gathered from the latest snapshots.
 dd::OverlayFrame Gather(unsigned mask)
 {
@@ -188,20 +155,6 @@ dd::OverlayFrame Gather(unsigned mask)
     if (gameplay && gLeft.TryRead(ray) && FreshSample(now, ray.ns, kRayAgeNs) && ray.reference == reference) {
         f.rays[0] = ray.ray;
     }
-    f.holstersEnabled = HolstersEnabled();
-    SlotsRecord slots{};
-    if (f.holstersEnabled && gHolsters.TryRead(slots) && FreshSample(now, slots.ns, kSlotAgeNs)) { f.holsters = slots.slots; }
-    f.holsters[0].name = "HIP R";
-    f.holsters[1].name = "CHEST L";
-    f.holsters[0].stored = gHipStored.load();
-    f.holsters[1].stored = gChestStored.load();
-    ApplyNotice(f.holsters[0], 0, now);
-    ApplyNotice(f.holsters[1], 1, now);
-    f.medkitEnabled = MedkitSlotEnabled() != 0;
-    MedkitRecord medkit{};
-    if (f.medkitEnabled && gMedkit.TryRead(medkit) && FreshSample(now, medkit.ns, kSlotAgeNs)) { f.medkit = medkit.slot; }
-    f.medkit.name = "MEDKIT";
-    ApplyNotice(f.medkit, 2, now);
     // The wrist card is recomputed here from the same pure functions the
     // layer uses; whether the layer decided to show it comes from the layer.
     f.wrist.enabled = WristDisplayEnabled();
@@ -213,13 +166,13 @@ dd::OverlayFrame Gather(unsigned mask)
         const bool fresh = FreshSample(now, gWristNs.load(), kMaxPoseAgeNs);
         f.wrist.gate = fresh && gWristGate.load();
         f.wrist.visible = fresh && gWristVisible.load();
-        f.wrist.card = equipment::WristPose(t.hands[0].gripPose);
-        const auto m = equipment::MeasureWrist(t.head, f.wrist.card);
+        f.wrist.card = wrist::WristPose(t.hands[0].gripPose);
+        const auto m = wrist::MeasureWrist(t.head, f.wrist.card);
         f.wrist.distance = m.distance;
         f.wrist.facing = m.facing;
         f.wrist.viewing = m.viewing;
-        f.wrist.facingNeeded = equipment::WristFacingNeeded(f.wrist.visible);
-        f.wrist.viewingNeeded = equipment::WristViewingNeeded(f.wrist.visible);
+        f.wrist.facingNeeded = wrist::WristFacingNeeded(f.wrist.visible);
+        f.wrist.viewingNeeded = wrist::WristViewingNeeded(f.wrist.visible);
         const auto size = wrist::Size(WristSizePercent());
         f.wrist.width = size.width;
         f.wrist.height = size.height;
@@ -887,57 +840,6 @@ void DebugOverlayArmFit(const dd::ArmFit& fit, std::uint64_t reference)
     gArmFit.Publish(record);
 }
 
-void DebugOverlayHolsters(bool live, const std::array<Vec3, 2>& centres, Vec3 hand, bool gripPressed, bool armed,
-                          bool owned)
-{
-    if (!(gMask.load(std::memory_order_relaxed) & dd::kBody)) { return; }
-    SlotsRecord record{};
-    for (int n = 0; n < 2; ++n) {
-        auto& s = record.slots[n];
-        s.valid = live && Finite(centres[n]);
-        s.centre = centres[n];
-        s.radius = equipment::HolsterGesture::Radius;
-        s.hand = hand;
-        s.gripPressed = gripPressed;
-        s.armed = armed;
-        s.owned = owned && dd::Length(dd::Sub(hand, centres[n])) <= s.radius * 1.5f;
-    }
-    record.ns = MonotonicNanoseconds();
-    gHolsters.Publish(record);
-}
-
-void DebugOverlayHolsterSlots(bool hipStored, bool chestStored)
-{
-    gHipStored.store(hipStored);
-    gChestStored.store(chestStored);
-}
-
-void DebugOverlayMedkit(bool live, Vec3 centre, Vec3 hand, bool gripPressed, bool armed, bool owned, bool triggerArmed)
-{
-    if (!(gMask.load(std::memory_order_relaxed) & dd::kBody)) { return; }
-    MedkitRecord record{};
-    auto& s = record.slot;
-    s.valid = live && Finite(centre);
-    s.centre = centre;
-    s.radius = equipment::HolsterGesture::Radius;
-    s.hand = hand;
-    s.gripPressed = gripPressed;
-    s.armed = armed;
-    s.owned = owned;
-    s.triggerArmed = triggerArmed;
-    record.ns = MonotonicNanoseconds();
-    gMedkit.Publish(record);
-}
-
-void DebugOverlayNotice(equipment::SlotNotice notice)
-{
-    int slot = -1;
-    const auto kind = ToNotice(notice, slot);
-    if (slot < 0) { return; }
-    gNoticeKind[slot].store(static_cast<int>(kind));
-    gNoticeNs[slot].store(MonotonicNanoseconds());
-}
-
 void DebugOverlayWristCard(bool gate, bool visible, const Pose& card, float width, float height, float distance,
                            float facing, float viewing, float facingNeeded, float viewingNeeded)
 {
@@ -1043,14 +945,6 @@ std::string DebugOverlayMarks()
             << Fixed(r.distance, 3) << " origin " << Point(r.origin) << projected(r.origin) << " target "
             << Point(r.target) << projected(r.target) << "\n";
     }
-    auto slot = [&](const dd::Slot& s) {
-        if (!s.valid) { return; }
-        out << "slot " << s.name << " centre " << Point(s.centre) << projected(s.centre) << " hand " << Point(s.hand)
-            << " cm " << Fixed(dd::SlotHandDistance(s) * 100, 1) << " armed " << s.armed << " owned " << s.owned
-            << " stored " << s.stored << "\n";
-    };
-    if (f.holstersEnabled) { slot(f.holsters[0]); slot(f.holsters[1]); }
-    if (f.medkitEnabled) { slot(f.medkit); }
     if (f.wrist.enabled && Finite(f.wrist.card.position)) {
         out << "wrist card " << Point(f.wrist.card.position) << projected(f.wrist.card.position) << " gate "
             << f.wrist.gate << " visible " << f.wrist.visible << " facing " << Fixed(f.wrist.facing, 3) << " viewing "

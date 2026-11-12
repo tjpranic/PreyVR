@@ -194,7 +194,7 @@ constexpr std::uint64_t kFreeGenerationBit = 1ull << 62;
 inline std::atomic<std::uint64_t> gPlayerArms{0};
 
 // Not during a cinematic: ArkPlayerInput (player+0x8E0, vtable 0x1E580E0) +0x94,
-// the gate Funk's body holsters use (BodyEquipmentLane.cpp).
+// the gate the grip draw uses too (ArmsLane.cpp).
 constexpr std::size_t kPlayerInput = engine::ArkPlayerLayout::input, kInputCinematic = engine::ArkPlayerInputLayout::cinematic;
 
 constexpr std::uintptr_t kPlayerInputVtableRva = engine::ArkPlayerInputLayout::vtableRva;
@@ -336,7 +336,7 @@ struct PoseSettings {
     unsigned armMode = 1;       // 0: the native arm, hung from the animated shoulder
     armpose::Body body{};
     // The torso filter's deadzone and relaxation are TorsoLane's
-    // (BodyTorsoSettings): one torso for the arms and the body slots.
+    // (BodyTorsoSettings): one torso for the arms and the body.
     float armKnee = 0.92f;      // exact reach up to this fraction of the stretched arm
     float poleTau = 0.06f;      // elbow pole smoothing, seconds
     armpose::WristLimits wrist{};
