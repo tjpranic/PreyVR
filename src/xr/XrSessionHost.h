@@ -136,6 +136,10 @@ bool HoldDualFirstEye(void* renderer);
 void OpenDualOverlayWindow();
 bool DualOverlayWindowOpen();
 ID3D11RenderTargetView* HeldFirstEyeTarget(ID3D11RenderTargetView* destination, const char** refusal);
+// Whether `resource` is the backbuffer the first eye was held from. Identity
+// only, read without the lock: HudLayer finds the world markers' real target
+// with it in a grav shaft (RedrawIntoHeldEye). Render thread.
+bool IsHeldBackBuffer(const void* resource);
 // While the window is open: the whole backbuffer copied into the held first eye,
 // for a draw that left nothing of the second eye's world in it (a letterboxed
 // fullscreen video, VideoOverlay.h). Only when the target still bound is that

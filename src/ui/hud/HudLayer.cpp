@@ -132,6 +132,17 @@ thread_local ID3D11DepthStencilView* redrawDepthView=nullptr;
 thread_local bool redrawn=false;
 // The movie being redrawn is DanielleMarkers: its markers move per eye (MarkerStereo.h).
 thread_local bool redrawMarkers=false;
+// **Learning the markers' real target** (LearnedRedraw): the callback started
+// with another target bound, so the native draw is watched for the backbuffer
+// bind Prey's Flash renderer makes itself. RedirectTargets keeps the first one,
+// with a copy of its stencil made at that moment.
+thread_local bool redrawLearn=false;
+thread_local bool learning=false;
+thread_local ID3D11Device* redrawDevice=nullptr;
+thread_local ID3D11RenderTargetView* learnedTarget=nullptr;
+thread_local ID3D11DepthStencilView* learnedDepth=nullptr;
+thread_local bool learnedStencil=false;
+thread_local const char* learnRefusal=nullptr;
 Capture& redrawDepth=NeverDestroyed<Capture>(); // the stencil the native draw started from; depth fields only
 Capture& nativeWrist=NeverDestroyed<Capture>();
 float nativeWristFrame[4]{}; // the wrist frame in nativeWrist's capture (wrist::Layout::rect); render thread
@@ -689,10 +700,44 @@ void DrawHudCapture(void* root,bool face){
     }
 }
 
+// A markers callback that started with another target bound (in a grav shaft,
+// $PrevFrameScaled; docs/MARKER-DEPTH-2026-10-21.md, "Grav shafts"). Prey's
+// Flash renderer still draws into the backbuffer, binding it itself, so the
+// native draw goes first, as the second eye's, with that bind watched for
+// (LearnTarget); the repeat into the held eye is made from it. The targets the
+// native draw left are kept, not the callback's starting ones: Prey's later
+// draws find them, as without the repeat.
+void LearnedRedraw(void* root) {
+    learnedTarget=nullptr;learnedDepth=nullptr;learnedStencil=false;learnRefusal=nullptr;
+    if(redrawMarkers){BeginMarkerEyes(root);ApplyMarkerEye(root,1);}
+    learning=true;
+    originalDisplay(root);
+    learning=false;
+    ID3D11RenderTargetView* held=nullptr;
+    if(!learnedTarget)learnRefusal="no_backbuffer_bind";
+    else if(learnedDepth && !learnedStencil)learnRefusal="depth_copy";
+    else held=HeldFirstEyeTarget(learnedTarget,&learnRefusal);
+    if(!held){if(redrawMarkers)RestoreMarkerEyes(root);return;}
+    std::array<ID3D11RenderTargetView*,8> after{};ID3D11DepthStencilView* afterDepth=nullptr;
+    redrawContext->OMGetRenderTargets(8,after.data(),&afterDepth);
+    activeContext=redrawContext;originalDestination=learnedTarget;originalDepth=learnedDepth;
+    activeTarget=held;activeDepthView=learnedStencil?redrawDepth.depthView.Get():nullptr;
+    originalTargets(redrawContext,1,&activeTarget,activeDepthView);
+    if(redrawMarkers)ApplyMarkerEye(root,0);
+    originalDisplay(root);
+    if(redrawMarkers)RestoreMarkerEyes(root);
+    activeContext=nullptr;originalDestination=nullptr;originalDepth=nullptr;
+    activeTarget=nullptr;activeDepthView=nullptr;
+    originalTargets(redrawContext,8,after.data(),afterDepth);
+    for(auto* view:after)if(view)view->Release();
+    if(afterDepth)afterDepth->Release();
+    redrawn=true;
+}
 // The native draw, into the frame being finished (the second eye), then
 // the same movie, same frame, into the held first eye -- starting from the
 // stencil the native draw started from, which Flash clips its viewport with.
 void RedrawDisplay(void* root) {
+    if(redrawLearn){LearnedRedraw(root);return;}
     if(redrawDepthView)CopyStencil(redrawContext,redrawFromDepth,redrawDepth);
     // The native draw is the frame's own backbuffer: the second submission's eye.
     if(redrawMarkers){BeginMarkerEyes(root);ApplyMarkerEye(root,1);}
@@ -761,8 +806,24 @@ void __fastcall ObserveElement(void* element) {
     }
     originalElement(element);
 }
+// Inside a learned native draw (LearnedRedraw): the first bind of the frame's
+// backbuffer is where the markers really go. Its stencil is copied now, before
+// Flash draws, so the repeat starts from the stencil the native draw did.
+void LearnTarget(ID3D11DeviceContext* context,ID3D11RenderTargetView* target,ID3D11DepthStencilView* ds) {
+    ComPtr<ID3D11Resource> resource;target->GetResource(&resource);
+    if(!IsHeldBackBuffer(resource.Get()))return;
+    learnedTarget=target;learnedDepth=ds;learnedStencil=false;
+    ComPtr<ID3D11Texture2D> texture;
+    if(!ds || FAILED(resource.As(&texture)))return;
+    D3D11_TEXTURE2D_DESC d{};texture->GetDesc(&d);
+    if(redrawDevice && EnsureDepthCopy(redrawDevice,ds,redrawDepth,d.Width,d.Height)) {
+        CopyStencil(context,ds,redrawDepth);learnedStencil=true;
+    }
+}
 void STDMETHODCALLTYPE RedirectTargets(ID3D11DeviceContext* context,UINT count,
         ID3D11RenderTargetView*const* targets,ID3D11DepthStencilView* ds) {
+    if(learning && !learnedTarget && context==redrawContext && count>=1 && count<=8 && targets && targets[0])
+        LearnTarget(context,targets[0],ds);
     if(context==activeContext && count==1 && targets && targets[0]==originalDestination && activeTarget) {
         auto substitute=activeTarget;
         originalTargets(context,1,&substitute,ds==originalDepth?activeDepthView:ds);
@@ -893,27 +954,40 @@ void RefuseText(TextPanel which,const char* reason) {
 // and StereoDisplay draws it twice -- natively, then into the held eye.
 // No extra outer callback, no extra Advance.
 // False leaves the movie to draw natively (and says why in the census).
+//
+// The world markers are also repeated when their callback starts with another
+// target bound (held-eye refusal `not_backbuffer`): in a grav shaft that is
+// $PrevFrameScaled, left bound by the eye's submission, while Prey's Flash
+// renderer still draws them into the backbuffer, binding it itself. Refusing them
+// left the markers in the second eye only; the repeat is made from that bind
+// (LearnedRedraw).
 bool RedrawIntoHeldEye(void* proxy,bool release,std::uintptr_t address) {
     if(!DualOverlayRedrawEnabled() || !DualOverlayWindowOpen() || activeContext || !displayInstalled)return false;
     NativeTargets native;
+    const std::string name=NameOf(address);
+    const bool markers=name=="DanielleMarkers";
     const char* refusal=nullptr;
     ID3D11RenderTargetView* held=native.single?HeldFirstEyeTarget(native.saved[0],&refusal):nullptr;
     if(!native.single)refusal="multiple_targets";
-    void* root=held?MovieRoot(proxy,PreyBase()):nullptr;
-    if(held && !root)refusal="movie_root";
-    if(root && native.ds && !EnsureDepthCopy(native.device,native.ds,redrawDepth)){root=nullptr;refusal="depth_copy";}
-    const std::string name=NameOf(address);
+    const bool learn=markers && !held && refusal && std::strcmp(refusal,"not_backbuffer")==0;
+    void* root=held||learn?MovieRoot(proxy,PreyBase()):nullptr;
+    if((held||learn) && !root)refusal="movie_root";
+    if(held && root && native.ds && !EnsureDepthCopy(native.device,native.ds,redrawDepth)){root=nullptr;refusal="depth_copy";}
     if(!root) {NoteFlashOverlay(name.c_str(),false,refusal);return false;}
-    redrawRoot=root;redrawContext=native.context.Get();redrawFrom=native.saved[0];redrawFromDepth=native.ds;
-    redrawTarget=held;redrawDepthView=native.ds?redrawDepth.depthView.Get():nullptr;redrawn=false;
-    redrawMarkers=name=="DanielleMarkers";
+    redrawRoot=root;redrawContext=native.context.Get();redrawDevice=native.device;
+    redrawFrom=native.saved[0];redrawFromDepth=native.ds;
+    redrawTarget=held;redrawDepthView=held&&native.ds?redrawDepth.depthView.Get():nullptr;redrawn=false;
+    redrawMarkers=markers;redrawLearn=learn;learnRefusal=nullptr;
     originalFlash(proxy,release);
     const bool drew=redrawn;
-    redrawRoot=nullptr;redrawContext=nullptr;redrawFrom=nullptr;redrawFromDepth=nullptr;
-    redrawTarget=nullptr;redrawDepthView=nullptr;redrawn=false;redrawMarkers=false;
-    // As the captures do: the callback ends with the targets it was entered with.
-    originalTargets(native.context.Get(),8,native.saved.data(),native.ds);
-    NoteFlashOverlay(name.c_str(),drew,drew?nullptr:"no_display");
+    const char* why=drew?nullptr:(learn&&learnRefusal?learnRefusal:"no_display");
+    redrawRoot=nullptr;redrawContext=nullptr;redrawDevice=nullptr;redrawFrom=nullptr;redrawFromDepth=nullptr;
+    redrawTarget=nullptr;redrawDepthView=nullptr;redrawn=false;redrawMarkers=false;redrawLearn=false;
+    learnedTarget=nullptr;learnedDepth=nullptr;
+    // As the captures do: the callback ends with the targets it was entered with --
+    // except a learned one, which ends as Prey's own draw (and LearnedRedraw) left them.
+    if(!learn)originalTargets(native.context.Get(),8,native.saved.data(),native.ds);
+    NoteFlashOverlay(name.c_str(),drew,why);
     return true;
 }
 void __fastcall CaptureFlash(void* proxy,bool release) {

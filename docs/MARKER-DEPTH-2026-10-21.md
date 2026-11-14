@@ -123,3 +123,53 @@ slot order and the brackets by their fixed clips, if wanted.
 5. Behind a wall: the marker shows through, at its true depth.
 6. `markers.depth 0` against `markers.depth 1`.
 7. In the status line, `moved` should climb and `unresolved` stay near 0.
+
+## Grav shafts (2026-11-14)
+
+TODO: "Objective markers display at the wrong depth when entering and exiting grav lifts." In a shaft, the
+markers were in the **right eye only**: on their objective, but with nothing in the left eye, so they could not be
+fused. **Fixed in PreyVR-156, worn OK 2026-11-14.**
+
+**Cause.**
+- While a grav shaft carries the player, its post effect runs. The shaft's `posteffect_PostProcessVFX` is read into
+  shaft `+0x170` by `0x1467940`. It is activated as the player enters (`0x14692E0` -> `0x13FE970`) and deactivated
+  as they leave (`0x146B450` -> `0x13FE880`). The movement FSM (ArkPlayer `+0x58`) is 13, 14 or 15 meanwhile
+  (`0x1468C20`).
+- With it on, each eye's submission ends by refreshing `$PrevFrameScaled` (texture global `0x2B3F6D0`, half size)
+  and leaves it bound. So the markers' native callback starts with that target bound, not the backbuffer.
+- Prey's Flash renderer binds the backbuffer itself during the draw, as on every frame, so the markers still went
+  into the second (right) eye. `HeldFirstEyeTarget` judged the callback by its starting target and refused
+  (`not_backbuffer`). The repeat into the held left eye was never made.
+
+**Fix** (HudLayer `LearnedRedraw`, `LearnTarget`; `IsHeldBackBuffer` in XrEyePair):
+- A markers callback refused as `not_backbuffer` is still redrawn. The native draw goes first, with the right eye's
+  marker shift. `RedirectTargets` keeps the first bind of the held backbuffer that draw makes, and copies its stencil
+  at that moment, before Flash draws.
+- The repeat into the held eye is made from that bind, with the left eye's shift, through the usual substitution.
+- The targets the native draw left are restored afterwards, not the callback's starting ones, so Prey's later draws
+  find what they did before.
+- If the draw makes no backbuffer bind (`no_backbuffer_bind`) or the stencil copy fails (`depth_copy`), nothing is
+  repeated. That is the old behaviour. Other movies are unchanged.
+
+**How it was found.** Three headset rounds on 2026-11-14:
+1. Run `player-20261112-191921` (PreyVR-153) had 1,482 `DanielleMarkers` refusals, all `not_backbuffer`, in bursts.
+2. PreyVR-154 logged each burst. They begin with movement state 13 and end with 1 (the shaft rides), and the starting
+   target is 1322x1322. Its fix accepted only full-frame offscreen targets. It never applied, and its premise (that
+   the markers are drawn into that target) was wrong.
+3. PreyVR-155 traced the target. It is sampled, then refreshed, in each eye's submission. After the markers'
+   callback the backbuffer is bound with a full-frame viewport, and nothing else touches the target. The wearer
+   reported "the marker only renders in the right eye", which matched.
+4. PreyVR-156: run `player-20261114-153759`, four rides, 1,036 of 1,062 shaft marker draws repeated. One ride had
+   26 draws (about 0.4 s) whose draw made no backbuffer bind; those stayed right-eye only.
+
+The 154 rule and the 155 trace were removed in the cleanup, along with the per-run logging and the
+`persistent_unresolved` check, which never fired.
+
+**Ruled out on the way:**
+- The HUD matrix: LookAt `0x1278F0` normalises, and up is the camera's own Z.
+- Any marker path outside the hooks: every producer is inside `OnPreRender`, through `0x1589270`.
+- Zoom.
+- Any HUD branch on the shaft state: Prey's only shaft test, `0x157E3F0`, is read by an equipment update.
+
+**Headset check:** ride a grav shaft up and down with an objective marker in view, closing each eye in turn. The
+marker is in both eyes, on its objective, at its depth, through entry, the ride and exit.

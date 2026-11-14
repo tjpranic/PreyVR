@@ -56,6 +56,7 @@
     Only sometimes? Can't replicate on demand.
 - The screen on the bulkhead doors between areas shows at the wrong depth
     I'm not sure if this is actually correct or if there is a depth rendering issue.
+- In-game cutscenes and transitions freeze the body IK and roomscale
 
 ### Technical Debt
 - Refactoring, simplification and consolidation
@@ -76,7 +77,6 @@
 ### HUD/UI
 - 2D marker (objective, repair etc.) position jitter a lot (?)
     They could use some smoothing.
-- Objective markers display at the wrong depth when entering and exiting grav lifts
 - Weapon wheel should open where I'm looking
 
 ### VR Options Menu
@@ -149,6 +149,8 @@
     > The glass panel behind the meters is gone, and so is the fit that stretched them to fill the card: a status effect, an equipped power or a longer bar after an upgrade used to shrink every meter. The wrist now shows one fixed region of Prey's status, with room for all of those, and Wrist Display Size (now 50-200%) is the only thing that sizes it. It no longer grows as it fades in. The status holds still when Prey sways the HUD. PreyVR-150 to PreyVR-152, worn OK 2026-11-11. See docs/WRIST-HUD-SCOPE-2026-11-11.md.
 - Psi energy shows on wrist before installing first neuromod
     > The wrist forced the psi meter on. It now asks Prey's own test, the one its HUD uses, so the meter shows from the first neuromod on, as it does in Prey, or while Prey has it open. PreyVR-150, worn OK 2026-11-11. See docs/WRIST-HUD-SCOPE-2026-11-11.md.
+- Objective markers display at the wrong depth when entering and exiting grav lifts
+    > It was one eye, not depth: in a grav shaft the markers were only in the right eye. The shaft's screen effect leaves another texture bound when the markers are drawn, and the mod judged the draw by that and skipped the left eye, though Prey still draws the markers into the frame. The left eye is now drawn from where Prey's own draw goes. PreyVR-156, worn OK 2026-11-14. See docs/MARKER-DEPTH-2026-10-21.md, "Grav shafts".
 
 ### VR Options Menu
 - Audit body holster implementation

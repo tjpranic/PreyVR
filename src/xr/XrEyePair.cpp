@@ -474,6 +474,11 @@ ID3D11RenderTargetView* HeldFirstEyeTarget(ID3D11RenderTargetView* destination, 
     return gHost.heldTargetView;
 }
 
+bool IsHeldBackBuffer(const void* resource)
+{
+    return resource != nullptr && reinterpret_cast<std::uintptr_t>(resource) == gHost.heldBackBuffer;
+}
+
 bool CopyBackBufferIntoHeldEye(const char** refusal)
 {
     const auto refuse = [&](const char* why) {
